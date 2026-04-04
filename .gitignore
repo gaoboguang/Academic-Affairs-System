@@ -9,6 +9,8 @@ __pycache__/
 .mypy_cache/
 .coverage
 htmlcov/
+*.egg-info/
+*.tsbuildinfo
 node_modules/
 dist/
 .vite/
@@ -19,6 +21,7 @@ playwright-report/
 test-results/
 data/app.db
 data/*.db
+data/*.db-*
 data/backups/*.zip
 data/exports/*
 !data/exports/.gitkeep
@@ -27,4 +30,5 @@ data/logs/*
 data/templates/*.xlsx
 data/uploads/*
 !data/uploads/.gitkeep
-
+apps/frontend/vite.config.js
+apps/frontend/vite.config.d.ts

@@ -1,1 +1,0 @@
-{"root":["./src/env.d.ts","./src/main.ts","./src/api/client.ts","./src/router/index.ts","./src/stores/reference.ts","./src/app.vue","./src/components/basecrudsection.vue","./src/components/metriccard.vue","./src/layouts/applayout.vue","./src/pages/basedatapage.vue","./src/pages/dashboardpage.vue","./src/pages/studentspage.vue","./src/pages/teacherspage.vue"],"version":"5.9.3"}
