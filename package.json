@@ -1,0 +1,13 @@
+{
+  "name": "local-edu-tool",
+  "private": true,
+  "workspaces": [
+    "apps/frontend"
+  ],
+  "scripts": {
+    "frontend:dev": "npm run dev --workspace @local-edu/frontend",
+    "frontend:build": "npm run build --workspace @local-edu/frontend",
+    "frontend:lint": "npm run lint --workspace @local-edu/frontend"
+  }
+}
+

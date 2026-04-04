@@ -1,0 +1,40 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from fastapi import APIRouter, Depends
+from fastapi.responses import FileResponse
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_db_session, get_settings
+from app.core.config import Settings
+from app.schemas.report import ReportExportPayload, ReportExportRecordRead
+from app.services import reports as service
+
+router = APIRouter(prefix="/reports", tags=["reports"])
+
+
+@router.post("/export", response_model=ReportExportRecordRead)
+def export_report(
+    payload: ReportExportPayload,
+    session: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+) -> ReportExportRecordRead:
+    return service.export_report(session, settings, payload)
+
+
+@router.get("/exports", response_model=list[ReportExportRecordRead])
+def list_report_exports(session: Session = Depends(get_db_session)) -> list[ReportExportRecordRead]:
+    return service.list_report_exports(session)
+
+
+@router.get("/exports/{export_id}/download")
+def download_report_export(
+    export_id: int,
+    session: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+) -> FileResponse:
+    record = service.get_report_export_record(session, export_id)
+    path = settings.project_root / record.file_path
+    return FileResponse(path, filename=Path(path).name)
+

@@ -1,0 +1,136 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+from openpyxl import Workbook
+
+from app.core.config import Settings
+
+
+@dataclass(frozen=True)
+class TemplateSpec:
+    filename: str
+    title: str
+    headers: list[str]
+    sample_rows: list[list[str]]
+    instructions: list[str]
+
+
+TEMPLATE_SPECS = [
+    TemplateSpec(
+        filename="students_import_template.xlsx",
+        title="学生导入模板",
+        headers=[
+            "学号",
+            "姓名",
+            "性别",
+            "出生日期",
+            "入学年份",
+            "年级",
+            "班级",
+            "学生状态",
+            "学生类别",
+            "艺体方向",
+            "联系电话",
+            "家庭住址",
+            "备注",
+        ],
+        sample_rows=[
+            ["2026001", "张三", "男", "2009-03-12", "2024", "高一", "1班", "在读", "普通生", "", "13800000001", "示例地址", ""]
+        ],
+        instructions=[
+            "学号为唯一键。",
+            "年级、班级、学生状态、学生类别、艺体方向需要先在系统基础数据中维护。",
+            "出生日期统一使用 YYYY-MM-DD 格式。",
+        ],
+    ),
+    TemplateSpec(
+        filename="teachers_import_template.xlsx",
+        title="教师导入模板",
+        headers=[
+            "工号",
+            "姓名",
+            "性别",
+            "学科",
+            "联系方式",
+            "职称",
+            "岗位",
+            "是否班主任",
+            "任教状态",
+            "入职日期",
+            "备注",
+        ],
+        sample_rows=[
+            ["T001", "李老师", "女", "语文", "13900000001", "一级教师", "语文教师", "是", "在岗", "2021-08-01", ""]
+        ],
+        instructions=[
+            "工号为唯一键。",
+            "学科、职称、岗位、任教状态需先维护。",
+            "是否班主任支持 是/否。",
+        ],
+    ),
+    TemplateSpec(
+        filename="exam_scores_import_template.xlsx",
+        title="成绩导入模板",
+        headers=["考试名称", "学号", "姓名", "班级", "科目", "分数", "缺考标记", "备注"],
+        sample_rows=[["2026届高一3月月考", "2026001", "张三", "1班", "语文", "118", "", ""]],
+        instructions=["考试需先创建。", "同一考试 + 学生 + 科目必须唯一。"],
+    ),
+    TemplateSpec(
+        filename="timetable_import_template.xlsx",
+        title="课表导入模板",
+        headers=["学期", "星期", "节次", "教师", "班级", "学科", "课程类型", "周次规则", "备注"],
+        sample_rows=[["2025-2026 下学期", "1", "1", "李老师", "1班", "语文", "正课", "全周", ""]],
+        instructions=["教师、班级、学科、课程类型需已存在。"],
+    ),
+    TemplateSpec(
+        filename="admission_records_import_template.xlsx",
+        title="录取数据导入模板",
+        headers=["年份", "省份", "批次", "院校", "专业", "最低分", "最低位次", "学生类别", "数据来源说明"],
+        sample_rows=[["2025", "广东", "本科批", "示例大学", "汉语言文学", "580", "32000", "普通", "示例"]],
+        instructions=["用于录取数据维护与升学推荐。"],
+    ),
+    TemplateSpec(
+        filename="evaluation_import_template.xlsx",
+        title="评教导入模板",
+        headers=["模板名称", "教师", "班级", "题目", "分值", "评价对象类型"],
+        sample_rows=[["通用评教", "李老师", "1班", "教学目标清晰", "5", "学生"]],
+        instructions=["用于教师评教数据导入。"],
+    ),
+    TemplateSpec(
+        filename="adviser_quant_import_template.xlsx",
+        title="班主任量化导入模板",
+        headers=["教师", "班级", "学期", "月份", "量化项", "得分", "说明"],
+        sample_rows=[["李老师", "1班", "2025-2026 下学期", "2026-03", "班级常规管理", "5", "示例"]],
+        instructions=["用于班主任量化记录导入。"],
+    ),
+]
+
+
+def _build_workbook(spec: TemplateSpec) -> Workbook:
+    workbook = Workbook()
+    intro_sheet = workbook.active
+    intro_sheet.title = "说明"
+    intro_sheet.append([spec.title])
+    for instruction in spec.instructions:
+        intro_sheet.append([instruction])
+
+    data_sheet = workbook.create_sheet("数据")
+    data_sheet.append(spec.headers)
+    for row in spec.sample_rows:
+        data_sheet.append(row)
+    return workbook
+
+
+def generate_import_templates(settings: Settings) -> list[Path]:
+    generated_paths: list[Path] = []
+    settings.templates_dir.mkdir(parents=True, exist_ok=True)
+
+    for spec in TEMPLATE_SPECS:
+        path = settings.templates_dir / spec.filename
+        workbook = _build_workbook(spec)
+        workbook.save(path)
+        generated_paths.append(path)
+
+    return generated_paths
