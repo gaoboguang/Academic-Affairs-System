@@ -10,9 +10,19 @@ from app.schemas.recommendation import (
     AdmissionRecordRead,
     CollegePayload,
     CollegeRead,
+    EmploymentDirectionPayload,
+    EmploymentDirectionRead,
+    EnrollmentPlanImportResponse,
+    EnrollmentPlanRead,
     MajorPayload,
     MajorRead,
+    MajorEmploymentMappingPayload,
+    MajorEmploymentMappingRead,
+    ProvinceVolunteerRuleBootstrapResponse,
+    ProvinceVolunteerRulePayload,
+    ProvinceVolunteerRuleRead,
     RecommendationBatchGeneratePayload,
+    RecommendationBatchGenerateResponse,
     RecommendationGeneratePayload,
     RecommendationGenerateResponse,
     RecommendationHistoryItem,
@@ -20,6 +30,11 @@ from app.schemas.recommendation import (
     RecommendationSettingsPayload,
     RecommendationSettingsRead,
     RecommendationStrategyPresetPayload,
+    VolunteerDraftPayload,
+    VolunteerDraftRead,
+    VolunteerDraftSummaryRead,
+    VolunteerWorkbenchPreviewPayload,
+    VolunteerWorkbenchPreviewResponse,
 )
 from app.services import recommendations as service
 
@@ -79,6 +94,66 @@ def update_major(
     return service.update_major(session, major_id, payload)
 
 
+@router.get("/employment-directions", response_model=list[EmploymentDirectionRead])
+def list_employment_directions(
+    keyword: str | None = Query(default=None),
+    category: str | None = Query(default=None),
+    session: Session = Depends(get_db_session),
+) -> list[EmploymentDirectionRead]:
+    return service.list_employment_directions(session, keyword=keyword, category=category)
+
+
+@router.post("/employment-directions", response_model=EmploymentDirectionRead)
+def create_employment_direction(
+    payload: EmploymentDirectionPayload,
+    session: Session = Depends(get_db_session),
+) -> EmploymentDirectionRead:
+    return service.create_employment_direction(session, payload)
+
+
+@router.put("/employment-directions/{direction_id}", response_model=EmploymentDirectionRead)
+def update_employment_direction(
+    direction_id: int,
+    payload: EmploymentDirectionPayload,
+    session: Session = Depends(get_db_session),
+) -> EmploymentDirectionRead:
+    return service.update_employment_direction(session, direction_id, payload)
+
+
+@router.get("/major-employment-maps", response_model=list[MajorEmploymentMappingRead])
+def list_major_employment_mappings(
+    major_id: int | None = Query(default=None),
+    direction_id: int | None = Query(default=None),
+    strength: str | None = Query(default=None),
+    keyword: str | None = Query(default=None),
+    session: Session = Depends(get_db_session),
+) -> list[MajorEmploymentMappingRead]:
+    return service.list_major_employment_mappings(
+        session,
+        major_id=major_id,
+        direction_id=direction_id,
+        strength=strength,
+        keyword=keyword,
+    )
+
+
+@router.post("/major-employment-maps", response_model=MajorEmploymentMappingRead)
+def create_major_employment_mapping(
+    payload: MajorEmploymentMappingPayload,
+    session: Session = Depends(get_db_session),
+) -> MajorEmploymentMappingRead:
+    return service.create_major_employment_mapping(session, payload)
+
+
+@router.put("/major-employment-maps/{mapping_id}", response_model=MajorEmploymentMappingRead)
+def update_major_employment_mapping(
+    mapping_id: int,
+    payload: MajorEmploymentMappingPayload,
+    session: Session = Depends(get_db_session),
+) -> MajorEmploymentMappingRead:
+    return service.update_major_employment_mapping(session, mapping_id, payload)
+
+
 @router.get("/admissions", response_model=list[AdmissionRecordRead])
 def list_admission_records(
     year: int | None = Query(default=None),
@@ -99,6 +174,128 @@ async def import_admission_records(
     return service.import_admissions(session, settings, filename=file.filename, content=content)
 
 
+@router.get("/enrollment-plans", response_model=list[EnrollmentPlanRead])
+def list_enrollment_plans(
+    year: int | None = Query(default=None),
+    province: str | None = Query(default=None),
+    batch: str | None = Query(default=None),
+    college_id: int | None = Query(default=None),
+    keyword: str | None = Query(default=None),
+    session: Session = Depends(get_db_session),
+) -> list[EnrollmentPlanRead]:
+    return service.list_enrollment_plans(
+        session,
+        year=year,
+        province=province,
+        batch=batch,
+        college_id=college_id,
+        keyword=keyword,
+    )
+
+
+@router.post("/enrollment-plans/import", response_model=EnrollmentPlanImportResponse)
+async def import_enrollment_plans(
+    file: UploadFile = File(...),
+    session: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+) -> EnrollmentPlanImportResponse:
+    content = await file.read()
+    return service.import_enrollment_plans(session, settings, filename=file.filename, content=content)
+
+
+@router.get("/province-volunteer-rules", response_model=list[ProvinceVolunteerRuleRead])
+def list_province_volunteer_rules(
+    province: str | None = Query(default=None),
+    year: int | None = Query(default=None),
+    exam_mode: str | None = Query(default=None),
+    candidate_type: str | None = Query(default=None),
+    session: Session = Depends(get_db_session),
+) -> list[ProvinceVolunteerRuleRead]:
+    return service.list_province_volunteer_rules(
+        session,
+        province=province,
+        year=year,
+        exam_mode=exam_mode,
+        candidate_type=candidate_type,
+    )
+
+
+@router.post("/province-volunteer-rules", response_model=ProvinceVolunteerRuleRead)
+def create_province_volunteer_rule(
+    payload: ProvinceVolunteerRulePayload,
+    session: Session = Depends(get_db_session),
+) -> ProvinceVolunteerRuleRead:
+    return service.create_province_volunteer_rule(session, payload)
+
+
+@router.post("/province-volunteer-rules/bootstrap", response_model=ProvinceVolunteerRuleBootstrapResponse)
+def bootstrap_province_volunteer_rules(
+    year: int | None = Query(default=None, ge=2020, le=2100),
+    session: Session = Depends(get_db_session),
+) -> ProvinceVolunteerRuleBootstrapResponse:
+    return service.bootstrap_province_volunteer_rules(session, year=year)
+
+
+@router.put("/province-volunteer-rules/{rule_id}", response_model=ProvinceVolunteerRuleRead)
+def update_province_volunteer_rule(
+    rule_id: int,
+    payload: ProvinceVolunteerRulePayload,
+    session: Session = Depends(get_db_session),
+) -> ProvinceVolunteerRuleRead:
+    return service.update_province_volunteer_rule(session, rule_id, payload)
+
+
+@router.post("/recommendations/volunteer-workbench/preview", response_model=VolunteerWorkbenchPreviewResponse)
+def preview_volunteer_workbench(
+    payload: VolunteerWorkbenchPreviewPayload,
+    session: Session = Depends(get_db_session),
+) -> VolunteerWorkbenchPreviewResponse:
+    return service.preview_volunteer_workbench(session, payload)
+
+
+@router.get("/recommendations/volunteer-drafts", response_model=list[VolunteerDraftSummaryRead])
+def list_volunteer_drafts(
+    student_id: int | None = Query(default=None),
+    exam_id: int | None = Query(default=None),
+    session: Session = Depends(get_db_session),
+) -> list[VolunteerDraftSummaryRead]:
+    return service.list_volunteer_drafts(session, student_id=student_id, exam_id=exam_id)
+
+
+@router.get("/recommendations/volunteer-drafts/{draft_id}", response_model=VolunteerDraftRead)
+def get_volunteer_draft_detail(
+    draft_id: int,
+    session: Session = Depends(get_db_session),
+) -> VolunteerDraftRead:
+    return service.get_volunteer_draft_detail(session, draft_id)
+
+
+@router.post("/recommendations/volunteer-drafts", response_model=VolunteerDraftRead)
+def create_volunteer_draft(
+    payload: VolunteerDraftPayload,
+    session: Session = Depends(get_db_session),
+) -> VolunteerDraftRead:
+    return service.create_volunteer_draft(session, payload)
+
+
+@router.put("/recommendations/volunteer-drafts/{draft_id}", response_model=VolunteerDraftRead)
+def update_volunteer_draft(
+    draft_id: int,
+    payload: VolunteerDraftPayload,
+    session: Session = Depends(get_db_session),
+) -> VolunteerDraftRead:
+    return service.update_volunteer_draft(session, draft_id, payload)
+
+
+@router.delete("/recommendations/volunteer-drafts/{draft_id}")
+def delete_volunteer_draft(
+    draft_id: int,
+    session: Session = Depends(get_db_session),
+) -> dict[str, str]:
+    service.delete_volunteer_draft(session, draft_id)
+    return {"message": "志愿草稿已删除"}
+
+
 @router.post("/recommendations/generate", response_model=RecommendationGenerateResponse)
 def generate_recommendations(
     payload: RecommendationGeneratePayload,
@@ -107,11 +304,11 @@ def generate_recommendations(
     return service.generate_recommendations(session, payload)
 
 
-@router.post("/recommendations/batch-generate")
+@router.post("/recommendations/batch-generate", response_model=RecommendationBatchGenerateResponse)
 def batch_generate_recommendations(
     payload: RecommendationBatchGeneratePayload,
     session: Session = Depends(get_db_session),
-) -> dict[str, object]:
+) -> RecommendationBatchGenerateResponse:
     return service.batch_generate_recommendations(session, payload)
 
 

@@ -48,6 +48,44 @@ class Major(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     colleges = relationship("CollegeMajor", back_populates="major", cascade="all, delete-orphan")
+    employment_mappings = relationship("MajorEmploymentMapping", back_populates="major", cascade="all, delete-orphan")
+
+
+class EmploymentDirection(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "employment_direction"
+
+    name: Mapped[str] = mapped_column(String(150), unique=True, nullable=False)
+    category: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    alias_names_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    common_job_types_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    common_industries_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    prefers_postgraduate: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    requires_certificate: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    requires_long_cycle: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    supports_art: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    risk_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    major_mappings = relationship("MajorEmploymentMapping", back_populates="direction", cascade="all, delete-orphan")
+
+
+class MajorEmploymentMapping(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "major_employment_mapping"
+    __table_args__ = (UniqueConstraint("major_id", "direction_id", name="uq_major_employment_mapping_core"),)
+
+    major_id: Mapped[int] = mapped_column(ForeignKey("major.id"), nullable=False)
+    direction_id: Mapped[int] = mapped_column(ForeignKey("employment_direction.id"), nullable=False)
+    strength: Mapped[str] = mapped_column(String(30), default="medium", nullable=False)
+    recommendation_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    requires_postgraduate: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    requires_certificate: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    supported_student_types_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    supports_art: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    major = relationship("Major", back_populates="employment_mappings")
+    direction = relationship("EmploymentDirection", back_populates="major_mappings")
 
 
 class CollegeMajor(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
@@ -96,6 +134,81 @@ class AdmissionRecord(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     major = relationship("Major")
 
 
+class EnrollmentPlan(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "enrollment_plan"
+    __table_args__ = (
+        UniqueConstraint(
+            "year",
+            "province",
+            "batch",
+            "exam_mode",
+            "college_id",
+            "major_group_code",
+            "major_name_snapshot",
+            "student_type",
+            name="uq_enrollment_plan_core",
+        ),
+    )
+
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    province: Mapped[str] = mapped_column(String(50), nullable=False)
+    batch: Mapped[str] = mapped_column(String(50), nullable=False)
+    exam_mode: Mapped[str] = mapped_column(String(50), nullable=False)
+    college_id: Mapped[int] = mapped_column(ForeignKey("college.id"), nullable=False)
+    major_id: Mapped[int | None] = mapped_column(ForeignKey("major.id"), nullable=True)
+    college_code_snapshot: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    major_group_code: Mapped[str] = mapped_column(String(50), default="", nullable=False)
+    major_name_snapshot: Mapped[str] = mapped_column(String(150), default="", nullable=False)
+    major_code_snapshot: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    plan_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    subject_requirement: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    tuition_fee: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    schooling_years: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    training_location: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    student_type: Mapped[str] = mapped_column(String(50), default="general", nullable=False)
+    source_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    import_batch_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    college = relationship("College")
+    major = relationship("Major")
+
+
+class ProvinceVolunteerRule(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "province_volunteer_rule"
+    __table_args__ = (
+        UniqueConstraint(
+            "province",
+            "year",
+            "exam_mode",
+            "batch",
+            "candidate_type",
+            name="uq_province_volunteer_rule_core",
+        ),
+    )
+
+    province: Mapped[str] = mapped_column(String(50), nullable=False)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    exam_mode: Mapped[str] = mapped_column(String(50), nullable=False)
+    batch: Mapped[str] = mapped_column(String(50), nullable=False)
+    candidate_type: Mapped[str] = mapped_column(String(50), default="", nullable=False)
+    batch_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_score: Mapped[int] = mapped_column(Integer, default=750, nullable=False)
+    volunteer_limit: Mapped[int] = mapped_column(Integer, nullable=False)
+    volunteer_unit_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    subject_requirement_mode: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    required_subjects_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    first_choice_subjects_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    reselect_subjects_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    score_rule_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    parallel_rule_mode: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    max_major_per_unit: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_parallel: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    allow_adjustment: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    support_collect_round: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    special_rules_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class RecommendationScheme(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     __tablename__ = "recommendation_scheme"
 
@@ -107,6 +220,68 @@ class RecommendationScheme(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     results = relationship("RecommendationResult", back_populates="scheme", cascade="all, delete-orphan")
+
+
+class VolunteerDraft(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "volunteer_draft"
+
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    student_id: Mapped[int] = mapped_column(ForeignKey("student.id"), nullable=False)
+    exam_id: Mapped[int] = mapped_column(ForeignKey("exam.id"), nullable=False)
+    province: Mapped[str] = mapped_column(String(50), nullable=False)
+    target_year: Mapped[int] = mapped_column(Integer, nullable=False)
+    batch: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    exam_mode: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    candidate_type: Mapped[str] = mapped_column(String(50), default="", nullable=False)
+    score_input_mode: Mapped[str] = mapped_column(String(50), default="actual_rank", nullable=False)
+    score_range_min: Mapped[float | None] = mapped_column(Float, nullable=True)
+    score_range_max: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rank_range_min: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rank_range_max: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reference_exam_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    use_historical_mapping: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    risk_preference: Mapped[str] = mapped_column(String(30), default="balanced", nullable=False)
+    target_regions_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    school_level_tags_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    major_keyword: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    subject_combination: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    primary_direction_id: Mapped[int | None] = mapped_column(ForeignKey("employment_direction.id"), nullable=True)
+    secondary_direction_id: Mapped[int | None] = mapped_column(ForeignKey("employment_direction.id"), nullable=True)
+    alternative_direction_id: Mapped[int | None] = mapped_column(ForeignKey("employment_direction.id"), nullable=True)
+    priority_focuses_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    preferred_industries_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    preferred_job_types_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    target_employment_cities_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    accepts_postgraduate: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    accepts_public_service: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    accepts_certificate: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    accepts_long_training: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    student_rank_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    comprehensive_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    professional_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    culture_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    rule_snapshot_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    student = relationship("Student")
+    exam = relationship("Exam")
+    primary_direction = relationship("EmploymentDirection", foreign_keys=[primary_direction_id])
+    secondary_direction = relationship("EmploymentDirection", foreign_keys=[secondary_direction_id])
+    alternative_direction = relationship("EmploymentDirection", foreign_keys=[alternative_direction_id])
+    items = relationship("VolunteerDraftItem", back_populates="draft", cascade="all, delete-orphan")
+
+
+class VolunteerDraftItem(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "volunteer_draft_item"
+    __table_args__ = (UniqueConstraint("draft_id", "sort_order", name="uq_volunteer_draft_item_order"),)
+
+    draft_id: Mapped[int] = mapped_column(ForeignKey("volunteer_draft.id"), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    plan_id: Mapped[int | None] = mapped_column(ForeignKey("enrollment_plan.id"), nullable=True)
+    candidate_snapshot_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+    draft = relationship("VolunteerDraft", back_populates="items")
+    plan = relationship("EnrollmentPlan")
 
 
 class RecommendationResult(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):

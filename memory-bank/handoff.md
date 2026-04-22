@@ -1,0 +1,645 @@
+# 交接说明
+
+## 下一次接手先做什么
+
+1. 先阅读 `AGENTS.md`、`memory-bank/project-context.md`、`memory-bank/active-context.md`。
+2. 如果任务涉及结构优化，先补看 `docs/README.md`、`docs/dev/README.md`、`scripts/README.md` 与 `handoffs/README.md`，再阅读 `docs/development_recommendations_2026-04-05.md`。
+3. 如只需要先做一轮环境收拾，直接执行 `npm run clean:local`；该命令当前只删可再生本地噪音，不会碰 `data/`、`handoffs/`、`dist/desktop`、`.venv`、`node_modules`。
+4. 本轮如继续高考志愿主线，补充阅读 `gaokao_dev_bundle_v3/gaokao_dev_doc_v3.md` 与 `gaokao_dev_bundle_v3/codex_prompt_gaokao_v3.txt`，按其 Stage A -> G 顺序推进。
+5. 根目录后端统一入口已补齐，可直接使用 `npm run backend:migrate`、`npm run backend:init-demo`、`npm run backend:test` 与 `npm run backend:dev`。
+6. 2026-04-21 已把高考 handoff 库正式并入项目运行约定：应用主库仍是 `data/app.db`，高考只读驾驶舱默认改读 `data/local_edu_tool/local_edu.sqlite3`；如需改路径，用 `LOCAL_EDU_GAOKAO_DB_PATH` 覆盖，不要把 handoff 库直接替换成应用主库。
+7. 2026-04-21 已把接管包整理到 `handoffs/2026-04-21_mac_db_handoff`；运行入口 `data/local_edu_tool/local_edu.sqlite3` 当前通过软链接指向该包内快照。若下次要继续 merge gate / audit，先确认这个入口仍指向当前主线库，再执行 handoff 包里的 `tools/`。
+8. 2026-04-21 已补后端双库读取：`/api/gaokao/*` 优先走独立 gaokao 库的 `gaokao_*` / `gaokao_policy_reference`，应用侧 `EnrollmentPlan` / `AdmissionRecord` / `ProvinceVolunteerRule` 仍从 `data/app.db` 读取。若 `/gaokao-data` 仍显示 doc baseline，优先检查 `data/local_edu_tool/local_edu.sqlite3` 是否存在、是否指到正确快照。
+9. 2026-04-21 已补统一项目体检入口：根目录可直接用 `npm run check`、`npm run check:e2e`、`npm run check:all`。本轮已实际跑过后端全量 pytest、前端 lint / vitest / build 和整份 Playwright `dashboard-smoke`，当前均通过。
+10. 2026-04-21 已修正 `tests/e2e/dashboard-smoke.spec.ts` 的共享前置：`ensureExamWithScores()` 不再依赖已删除的“新增科目”旧交互，现改为使用考试页当前“常规九科 + 保存科目配置”流程。若后续再有大面积 e2e 同时挂在考试 / 报表 / 推荐 / 志愿链，优先先看这个前置 helper 是否又和页面 UI 脱节。
+11. 2026-04-17 `MAC_MAINLINE` 已继续补完一处 Stage B 聚合解释闭环：`volunteerWorkbenchInsights.ts`、`reportInsightPresenter` 消费链与 `apps/backend/app/exporters/recommendations.py` 现已把“类别专用规则口径 + 跨年份参考样本”统一下沉到工作台边界概览、草稿打印/报表摘要和 `volunteer_draft_summary` Excel；如继续当前主线，优先补跨省口径或更多 live 规则差异在聚合输出面的说明，不要回头重做已收口的打印/导出链，也不要把已拆出的 helper 再塞回大文件。
+12. 2026-04-21 已继续完善学生导入反馈：`StudentImporter` 现会返回 `notice_preview`，学生页导入区会把“自动创建班级 / 未匹配年级 / 字典值待核对”与前三条原始错误分开展示；如继续这条线，下一步更适合补“导入前字段映射”或“更多字典值候选建议”，而不是回头再只堆后端错误文本。
+13. 2026-04-21 已修复 `/gaokao-data` 白屏：根因是 `ElAutocomplete` 未注册到全局 Element Plus 安装器；修复后已实际用本地浏览器验证页面可正常渲染。若后续再出现“单页空白但接口正常”，优先先抓浏览器 console / pageerror，不要先怀疑数据库接入。
+14. 2026-04-22 已把高考总览里的应用侧空态解释补齐：`/api/gaokao/data-overview` 现在会把 `EnrollmentPlan` / `AdmissionRecord` 的 `0` 条区分为“应用模型为空但独立 gaokao 只读表已有原始记录”和“本地只读库未暴露原始表”；`GaokaoDataPage.vue` 总览也已新增解释卡，不再只有一个 `0`。若继续这条线，下一步更适合继续把更多 review / duplicate 语义从 Windows 线 handoff 到当前页，或把同样的空态解释模式推广到更多只读板块，而不是回头重做现有读数接口。
+
+## 当前最合理的下一步
+
+- 如继续做结构优化，沿“抽纯计算/helper + 保持 facade、路由、schema 不动”的方式继续推进；当前已完成 `volunteerWorkbenchInsights.ts`、`_evaluation_batch_stats.py`、`_workload_calculation.py`，不要回头做大重构。
+- `useEvaluationQuantPage.ts` 如继续处理，优先按“模板 / 批次分析 / 量化规则 / 量化记录”再细分，而不是把逻辑堆回页面
+- `useTimetableWorkloadPage.ts` 如继续处理，优先按“导入 / 规则 / 结果”再细分，而不是把逻辑堆回页面
+- 推荐页如继续处理，优先沿 `recommendationSubmission.ts`、`useRecommendationStrategyPresets.ts`、`useRecommendationSingleComparison.ts` / `useRecommendationMultiComparison.ts` 继续收紧边界，不要再把逻辑堆回 facade
+- 高考只读驾驶舱如继续处理，优先沿 `apps/backend/app/services/gaokao.py` 和 `apps/frontend/src/pages/GaokaoDataPage.vue` 继续增强展示与友好提示；在 Windows 数据库线未冻结前，不要把 fallback 临时实现误升级成 schema 依赖。
+- 分析/导出模板统一如继续处理，优先看 `teacher_analysis` 之外还有没有必要补“对象摘要 -> 明细表”的一致性；`grade_summary` 已明确改为复用 `get_grade_analytics()`，不要再单独重算一套年级口径。
+- 如继续处理学生导入链，下一步更适合补“年级不存在 / 字典值无法识别 / 自动建班结果回显”的更友好批量提示或导入前映射，而不是回头放宽更多未知表头；当前样例里的“班级不存在”阻塞已经消除。
+- 如继续处理推荐报告解释链，下一步更适合把 live 规则差异、更多跨省/跨年份聚合说明继续下沉到 `recommendation_summary` 的同一分组结构，并评估是否需要把同样的分组标题同步到更多输出面；不要回头再拆出另一套历史对照卡片拼装逻辑。
+- 如继续处理推荐报告解释链，下一步更适合把 live 规则差异补成“边界概览”里的结构化卡片，并继续评估是否需要把同样的三段标题同步到更多输出面；不要把边界提示再混回普通风险卡。
+- 如继续处理考试板块，下一步更适合先评估学生档案是否需要正式新增 `选科组合 / 首选 / 再选` 合同字段；在此之前，考试科目配置先维持当前 `V1` 的“勾选 + 自定义满分”即可，不要让页面基于猜测去限制学生分科。
+- 2026-04-14 已修正草稿摘要的一处一致性 bug：志愿草稿打印页与报表中心 `volunteer_draft_summary` 导出前摘要，当前不会再把“未命中明确省份规则”的已选志愿误判成“通用考生规则”；如继续 Stage B 摘要链，下一步应优先补“缺少省份 / 年份 / 批次 / 模式规则”在草稿侧的更细分层提示，而不是回头重做这次已修掉的误判
+- 2026-04-14 已把同一口径补到 `volunteer_draft_summary` Excel 导出：当前“导出前摘要 / 打印页 / Excel 边界概览”三处都已能区分“缺少明确规则”和“通用类别规则口径”；如继续这条线，优先考虑如何在不改数据库结构的前提下把“缺省份 / 缺年份 / 缺批次 / 缺模式”继续细分到草稿与导出链
+- 2026-04-14 已继续完成这一步：草稿详情现在会实时复用现有规则匹配逻辑返回 `rule_alerts`，因此打印页、报表导出前摘要和 Excel“边界概览”都已能细分“缺少目标年份规则”等具体缺口，且未新增数据库结构；如继续这条线，更适合把同样的规则缺口说明继续下沉到其他输出面，而不是再停留在志愿草稿三端
+- 2026-04-15 已继续把这套信息再往输出面推进一步：草稿详情现已同时返回 `applicable_rules`，志愿草稿打印页与 `volunteer_draft_summary` Excel 导出都已新增“规则差异摘要”；当前草稿链已经具备“规则差异摘要 + 边界概览”双层说明。若继续这条线，更适合把同样的规则差异摘要下沉到推荐报告或其他输出面，而不是再回头补草稿三端自身的一致性
+- 2026-04-15 已继续把最后一个草稿输出面补齐：报表中心 `volunteer_draft_summary` 的导出前摘要现已同步展示“规则差异摘要 + 边界概览”，不再只显示边界卡片；当前草稿相关三类输出面已全部对齐。若继续这条线，优先去看推荐报告或其他报表输出面，避免继续在草稿链内部兜圈
+- 2026-04-15 已继续把“更多省份/年份边界解释”往前推一格：工作台、草稿打印页、报表中心 `volunteer_draft_summary` 导出前摘要和 Excel 现在都能提示“参考年份偏旧”，即录取样本最近年份与目标年份相差 2 年及以上时会显式提醒“排序和解释偏保守”；这一步没有新增 schema，只复用了现有 `reference_years_json`
+- 2026-04-15 已继续把同一类年份边界解释扩到推荐报告链：推荐结果输出前复核、推荐打印页、报表中心 `recommendation_summary` 导出前摘要和 Excel“风险概览”现在也会提示“参考年份偏旧”；这一步同样没有新增 schema，只复用了推荐结果快照里的 `snapshot_json.reference_years`
+- 2026-04-15 已继续把这类提示落到推荐结果逐条说明：推荐结果页和推荐打印页单条“理由”现已直接补出“参考年份偏旧”说明，不再只依赖全局风险卡；这一步仍未新增 schema，只复用了 `RecommendationHistoryItem.target_year` 与结果快照
+- 2026-04-15 已继续把这类年份解释推进到多方案对照：推荐页的单方案对比卡片和批量对照表现在都会汇总“参考年份变化”；同一院校/专业在不同方案里的最近录取样本年份变化，已经有聚合级提示，不再只能靠人工逐条对比
+- 2026-04-15 已继续把这类年份解释细化到“参考年份变化如何影响冲稳保分组”：当前单方案对比说明会直接提示有多少条“参考年份变化”同时伴随分组调整，批量对照表也已新增“年变伴随分组变”列
+- 2026-04-16 已把这套聚合解释同步到报表中心 `recommendation_summary` 导出前摘要：当前会自动选取同一学生最近可比历史方案，补“历史方案差异 / 历史方案参考变化”两类卡片，并继续复用 `recommendationComparison.ts`，没有新增后端 schema；如继续推荐对照链，下一步更适合把同类聚合解释继续下沉到推荐打印页、Excel 导出或更细的跨省/跨年份差异汇总，而不是再回头单独补报表中心文案
+- 2026-04-16 已继续把同一套聚合解释下沉到 `RecommendationPrintPage.vue`：当前推荐打印页也会自动选取同一学生最近可比历史方案，并在“风险概览”上方的摘要卡片区补“历史方案差异 / 历史方案参考变化”卡片；对照方案读取失败时会自动降级为仅展示当前方案，不会拖挂打印页主链。若继续推荐对照链，下一步更适合把同类聚合解释继续下沉到 Excel 导出或更细的跨省/跨年份差异汇总，而不是再回头单独补打印页文案
+- 2026-04-16 已继续把同一套聚合解释下沉到 `recommendation_summary` Excel 导出：当前后端 `export_recommendation_summary()` 会自动选取同一学生最近可比历史方案，并在“风险概览”sheet 追加“历史方案差异 / 历史方案参考变化”两类摘要；选择规则由 `reports.py` 在导出前完成，口径与前端一致。若继续推荐对照链，下一步更适合把这套聚合解释继续细化到“同校同专业跨省参考差异”或“同省跨年份口径变化”，而不是再回头补单页文案
+- 2026-04-16 已继续把这类聚合解释细化到“跨省口径差异”：当前前端 `recommendationComparison.ts` 与后端 exporter 的历史方案参考变化说明，若检测到当前方案和对比方案省份不同，会直接补出“当前按某省口径、对比按某省口径”的解释；报表中心、推荐打印页和 Excel“风险概览”已同步跟进。若继续推荐对照链，下一步更适合继续补“同省跨年份口径变化”的更细说明，而不是再回头补跨省提示的重复文案
+- 2026-04-16 已继续把这类聚合解释细化到“同省跨年份口径变化”：当前前端 `recommendationComparison.ts` 与后端 exporter 的历史方案参考变化说明，若检测到两版方案同省但目标年份不同，不再只提示“年份不同”，而会继续细化到“参考位次 / 最近最低位次 / 最近最低分”三类现有字段变化；推荐结果页、报表中心、推荐打印页和 Excel“风险概览”已同步跟进。若继续推荐对照链，下一步更适合把这类基于现有快照字段的细粒度解释扩到更多聚合面；在结果快照尚未显式补批次线或计划数之前，不要回头编造 unsupported 原因
+- 2026-04-16 已继续把同一条链收细到 `stale-only` 场景：当前前端 `recommendationComparison.ts` 与后端 exporter 的历史方案参考变化说明，若两版方案最近样本年份相同，但目标年份切换后“年份偏旧”判断发生变化，也会单独说明这是 `stale-only` 的口径切换；`RecommendationSchemeResultsPanel.vue` 的单方案对比卡和批量对照表现在按受影响计数展示，不会再把这类差异显示成 `0`。若继续推荐对照链，下一步更适合继续补“更多省份/模式下哪些差异应直接抬到候选级或草稿级输出面”，而不是回头重做已收口的历史对照文案
+- 2026-04-17 已继续把同一条线补到 Stage B 工作台/草稿聚合层：当前工作台“边界概览”、草稿打印页、报表中心 `volunteer_draft_summary` 导出前摘要和 Excel“边界概览”都会直接汇总“类别专用规则口径”和“跨年份参考样本”；如继续这条线，优先补“跨省口径”或更细 live 规则差异在聚合输出面的说明，而不是回头重做已经统一好的偏旧年份/通用规则口径。
+- 2026-04-17 已继续把工作台预览的 live 规则缺口摘要改成按候选数汇总：当前 `missing_rule_*` 和“已回退到通用考生规则”在工作台“边界概览”里会直接显示受影响候选数，和草稿打印/报表摘要的表达更一致；如继续这条线，优先补“跨省口径”或“已维护其他模式/批次/类别”的更结构化聚合说明，而不是回头再改泛化提示。
+- 2026-04-16 已继续修掉推荐打印页的一处口径漏传：`RecommendationPrintPage.vue` 之前在生成解释卡片时漏传当前方案 `province`，导致跨省历史方案提示不会出现在打印链；当前已通过 `buildRecommendationReportInsightOption()` 统一由推荐元数据组装解释入参，报表中心、打印页和输出前警告都走同一路径。
+- 2026-04-16 已继续统一分析导出摘要结构：`grade_summary` 导出当前为 `年级概况 -> 班级汇总 -> 学科汇总`，且直接复用 `analytics_service.get_grade_analytics()`；`teacher_analysis` 导出当前已补“任教拆分”摘要。相关回归已落在 `test_grade_analytics_and_student_attachments.py` 与 `test_exam_workflow.py`。
+- 打印优化已基本完成；多学年全景对比与复杂分析看板都已有年级 / 班级 / 教师第一轮闭环；桌面打包也已有 macOS `dir` 与 Windows `dir` / `nsis` 产物，下一步更适合继续收口应用图标、安装体验和签名策略
+- 按 `gaokao_dev_bundle_v3` 的阶段顺序，Stage B 的“全国省份规则基线装载 + 生源地 / 预估分数正式建模第一轮”、单学生主链路回归、混合生源地批量前后端回归、规则差异摘要展示、候选级差异说明第一轮、结构化规则提醒、候选命中规则上下文、录取参考口径说明和分层依据摘要都已落地；当前更合适的下一步是补更多省份/模式差异、候选级解释细化和更细的结果展示，而不是继续停留在单学生链路
+- 本次停点：工作台、草稿打印页、`volunteer_draft_summary` Excel 导出、推荐报告打印/导出，以及报表中心 `recommendation_summary` / `volunteer_draft_summary` 的“导出前摘要”已形成多层展示，且已有定向 E2E；边界概览现已额外覆盖“缺少省份规则”“按通用类别规则回退”，草稿摘要也已补“通用类别规则口径”。下一步优先补更多省份/模式差异，并评估是否把类似摘要继续同步到报表中心其他输出面
+- 本次停点补充：草稿打印页与 `volunteer_draft_summary` 导出前摘要现已继续统一“未命中明确规则”的提示口径；当前仍缺的是把这类提示进一步细分成“缺省份 / 缺年份 / 缺批次 / 缺模式”四类，而不是继续停留在通用缺口提示
+- 本次停点再补充：`volunteer_draft_summary` Excel“边界概览”与明细“边界说明”也已跟上同一口径；下一步若要继续，不必再补三端统一，直接往“缺口细分”和“更多省份/年份差异解释”推进即可
+- 本次停点再补充：草稿三端的“缺口细分”也已落地到当前可复用状态，且报表中心导出前摘要 / 打印页 / Excel 都已补“规则差异摘要”；下一步更适合把这套细分规则差异继续扩到推荐报告或工作台外的其他结果输出面，或者直接进入“更多省份/年份组合下的差异解释”
+- 本次停点再补充：年份边界解释也已从“缺少年份规则”继续扩到“参考年份偏旧”；下一步更适合继续补“更多省份/年份组合下的差异解释”，例如不同省份同校同专业的样本差异汇总，而不是再回头重做已经统一的草稿摘要链
+- 本次停点再补充：这类“参考年份偏旧”提示已同时落到草稿链和推荐报告链；下一步更适合继续补“不同省份同校同专业的参考差异汇总”或“同省跨年份口径变化”的聚合级解释，而不是再重复补同一类单点风险卡
+- 本次停点再补充：推荐结果逐条说明也已跟上这条口径；下一步更适合转向聚合级差异解释，例如多方案对照里的“同省跨年份参考变化”摘要，而不是继续堆更多单条提醒
+- 本次停点再补充：多方案对照里的“参考年份变化”与“年变伴随分组变”都已落地，且 2026-04-16 已同步到报表中心 `recommendation_summary` 导出前摘要；下一步更适合继续补推荐打印页 / Excel 导出侧的同类聚合解释，或转向更多省份/模式下的聚合差异解释，而不是再回头补单点风险文案
+- 文档同步尾项已完成一轮：`README.md` 与 `tests/README.md` 已更新到当前 Stage B 与 E2E 状态；后续如果继续推进批量场景或规则边界，记得同步更新，不要再让 README 落后于代码
+- “高考志愿报名辅助”S3 已落地学生工作台十二段闭环，S4 现已补完前三段“就业方向库 / 专业就业映射 + 学生职业意向输入 + 排序增强/结果解释第一轮”，并补了推荐报告导出增强第一轮；本次已把就业方向分组视图、定向 E2E 和真实 `alembic upgrade head` 落库验证补齐一轮
+- 如继续做后端结构优化，优先评估 `_evaluation_batches.py`、`workload.py` 与 `_recommendations_result_builder.py` 的剩余编排层，不要回退已拆出的 `_evaluation_batch_stats.py` / `_workload_calculation.py`
+- 如继续做前端产品打磨，优先补剩余高风险动作确认和关键表单前置校验
+- 本轮已补 `npm run dev` 统一开发启动入口；如只需要本地前后端同时启动，优先直接在根目录执行 `npm run dev`
+- 本轮已补推荐中心危险动作确认：学生志愿工作台现已覆盖“沿用推荐条件 / 清空工作台 / 移除志愿 / 加载历史草稿 / 载入学生偏好 / 删除草稿”，推荐生成面现已补“重置参数”确认，推荐策略面现已补“重载策略 / 应用模板”确认，推荐输出面现已补“草稿打印/导出、推荐报告打印/导出前复核”；如继续前端收口，优先沿推荐页剩余覆盖类动作和关键表单校验继续推进
+- 本轮已补推荐历史与方案对比失败回退：历史查询、查看方案、单方案对比、多方案对照在请求失败时都不会再残留旧结果，页面内已新增错误提示与重试入口；如继续前端收口，优先沿推荐页剩余局部错误态和关键表单校验继续推进
+- 根目录后端脚本现已支持透传参数；如只想跑推荐域测试，可直接用 `npm run backend:test -- apps/backend/tests/test_recommendation_workflow.py`
+- `local_edu_tool_dev_doc_v2_bundle/local_edu_tool_dev_doc_v2.md` 与 `.txt` 已在 2026-04-12 补齐非数据库章节；第 9 章数据库设计及其迁移 / 表结构条目已显式标注为并行开发线维护。若后续继续补文档，先避开数据库章节，优先同步分析引擎、推荐解释、打印导出、前端交互和测试策略部分
+- 报表中心 `ReportsPage.vue` 已在 2026-04-12 把“导出前摘要”从推荐报告 / 志愿草稿扩到 `student_analysis`、`class_analysis`、`grade_summary`、`teacher_analysis` 4 类分析报表，并已抽到 `apps/frontend/src/components/reports/reportInsights.ts`。如继续这条线，下一步更适合把同类摘要继续扩到工作量、评教和成长档案，而不是再把摘要逻辑堆回页面
+- 报表中心 `ReportsPage.vue` 已继续在 2026-04-12 把“导出前摘要”扩到 `teacher_workload`、`evaluation_summary`、`adviser_quant_summary`、`growth_summary`；当前主流导出链基本都已有导出前复核摘要。若继续这条线，下一步更适合：
+  - 评估是否把同一套摘要继续下沉到各打印页顶部，统一“页面 / 打印 / 导出前摘要”口径
+  - 为 `recommendation_summary` / `volunteer_draft_summary` 之外的报表补更细的异常态与空状态说明
+  - 视产品密度决定是否把 `reportInsights.ts` 再细分为分析 / 推荐 / 通用摘要子模块
+- `WorkloadPrintPage.vue`、`EvaluationSummaryPrintPage.vue`、`AdviserQuantPrintPage.vue`、`GrowthSummaryPrintPage.vue` 已在 2026-04-12 复用 `reportInsights.ts`，把摘要卡片下沉到打印页顶部；当前“报表中心导出前摘要 -> 对应打印页”这条口径已开始统一。若继续这条线，下一步更适合继续补学生 / 班级 / 年级 / 教师分析打印页的同类摘要，或评估是否抽一个共享打印摘要展示组件
+- `apps/frontend/src/components/reports/PrintInsightCards.vue` 已在 2026-04-12 落地，当前学生 / 班级 / 年级 / 教师分析、工作量、评教汇总、班主任量化、成长档案、推荐报告、志愿草稿 10 个打印页都已复用同一套摘要卡片组件；打印侧摘要模板已基本统一。若继续这条线，下一步更适合转向：
+  - 统一推荐 / 志愿之外的打印页空状态和错误态文案
+  - 评估是否把 `reportInsights.ts` 再按分析 / 推荐 / 其他报表子域拆分
+  - 或从打印 / 报表链收口转回其他非数据库主线
+- `ReportsPage.vue` 已在 2026-04-12 补齐导出前摘要的加载态、失败态和空态；当前摘要区不再在接口失败时静默消失，而会展示错误提示与重试按钮。报表中心这条线的基础交互已比较完整，如继续推进，更适合转到：
+  - 统一其他页面的局部错误态和空状态文案
+  - 或继续把 `loadReportInsights()` 内部按报表类型拆成更小的 loader helper，避免 `ReportsPage.vue` 再次长大
+- `apps/frontend/src/components/reports/reportInsights.ts` 已在 2026-04-12 拆成 facade + 5 个子模块：`reportInsightTypes.ts`、`reportInsightShared.ts`、`reportInsightRecommendation.ts`、`reportInsightAnalysis.ts`、`reportInsightOperations.ts`；`ReportsPage.vue` 的摘要展示层也已抽到 `ReportInsightPanel.vue`。若继续这条线，下一步更适合：
+  - 继续把 `reportInsightCards` 与 `reportInsightDescription` 这类按类型分发逻辑也迁出页面
+  - 或把类似的 loading / error / empty 状态文案继续推广到其他高频页面
+  - 不要再把摘要模板和样式塞回 `ReportsPage.vue`
+- `apps/frontend/src/components/reports/reportInsightLoader.ts` 已在 2026-04-12 落地；`ReportsPage.vue` 现已改为统一持有 `reportInsightData`，不再维护一组组分散的 `selectedRecommendationResults / selectedGrowthInsight / ...` 状态。若继续这条线，下一步更适合：
+  - 继续把报表参数依赖判断、缺项文案和 print preview path 映射抽到独立 helper
+  - 或进一步把报表参数依赖判断与 print preview path 映射收口成独立 helper
+  - 保持页面只负责表单、watcher 和动作编排
+- `apps/frontend/src/components/reports/reportInsightPresenter.ts` 已在 2026-04-12 落地；`ReportsPage.vue` 现已不再自己维护“按报表类型选择卡片 / 文案 / 摘要区显隐”的分发逻辑。若继续这条线，下一步更适合：
+  - 继续评估是否把报表类型 schema 和导出 payload 组装再收成更明确的 helper
+  - 或从报表链切回开发文档里“统一空状态、错误态、确认交互”的其他页面
+  - 不要把展示分发逻辑再塞回页面
+- `apps/frontend/src/components/reports/reportTypeConfig.ts` 已在 2026-04-12 落地；`ReportsPage.vue` 现已不再自己维护多组 `requires*` 判断、缺项文案、规则版本来源和 print preview path 分支。若继续这条线，下一步更适合：
+  - 把这套 schema 思路推广到推荐输出链和其他结果型页面
+  - 或按开发文档切回“统一空状态、错误态、确认交互”的其他页面
+  - 不要把报表规则判断重新分散回 `ReportsPage.vue`
+- `apps/frontend/src/components/recommendations/recommendationCopy.ts` 已在 2026-04-12 落地；推荐打印页、推荐结果面、志愿草稿打印页和推荐导出前复核已开始复用同一套“模拟说明 / 风险标签 / 风险概览” copy。若继续按开发文档推进，下一步更适合：
+  - 把类似的一致性收口继续扩到其他结果页的空状态、错误态和确认提示
+  - 或继续收口推荐历史 / 对比链剩余局部提示文案
+  - 避免推荐报告、草稿打印页和报表中心再次各自维护不同说法
+- `apps/frontend/src/components/reports/reportInsightRecommendation.ts` 已在 2026-04-16 继续接入推荐历史对照：`recommendation_summary` 的导出前摘要现会自动读取同一学生最近可比历史方案结果，并补“历史方案差异 / 历史方案参考变化”卡片；`ReportsPage.vue` 当前会自动选择最近历史方案并通过 `reportInsightLoader.ts` 同步加载对照结果。若继续这条线，优先考虑：
+  - 是否把同一套聚合差异解释继续下沉到 `RecommendationPrintPage.vue` 或 Excel“风险概览”
+  - 是否继续补“同校同专业跨省参考差异”或“同省跨年份口径变化”的聚合摘要
+  - 不要单独在报表中心维护另一套历史对照文案
+- `apps/frontend/src/pages/RecommendationPrintPage.vue` 已在 2026-04-16 接上同一条推荐历史对照链：当前会复用 `findNearestRecommendationCompareScheme()` 自动选择最近可比方案，并把对照结果传给 `buildRecommendationReportInsightCards()`；若对照方案接口失败，会自动回退到只展示当前方案。若继续这条线，优先考虑：
+  - 是否继续把现有“参考位次 / 最近最低位次 / 最近最低分”变化数下沉到更多聚合面
+  - 是否继续补“同校同专业跨省参考差异”或更细的同省跨年份说明
+  - 避免打印页、报表中心和导出链再次各自维护不同的历史对照口径
+- `apps/backend/app/services/reports.py` 与 `apps/backend/app/exporters/recommendations.py` 已在 2026-04-16 接上同一条导出链：`recommendation_summary` 导出前会按同学生最近可比方案自动补 `compare_scheme / compare_rows`，Excel“风险概览”sheet 现已支持“历史方案差异 / 历史方案参考变化”两类摘要；当前已通过 `apps/backend/tests/test_recommendation_exporters.py` 与 `apps/backend/tests/test_recommendation_workflow.py -k "recommendation_export or admission_import_and_recommendation_generation"` 验证。若继续这条线，优先考虑：
+  - 是否继续补“同省跨年份口径变化”的更细聚合摘要，但仅限现有快照字段已显式提供的变化
+  - 是否需要把这类聚合解释再同步到推荐结果页的多方案导出链
+  - 避免后端 exporter 与前端摘要链再次出现不同说法
+
+## 当前已确认状态
+
+- 2026-04-11 已继续补 Stage B 候选级解释细化：
+  - `apps/frontend/src/components/recommendations/volunteerWorkbench.ts` 已新增 `buildVolunteerCandidateRuleCopy()`、`buildVolunteerCandidateReferenceCopy()` 与 `buildVolunteerCandidateExplanationNotes()`
+  - `apps/frontend/src/components/recommendations/RecommendationVolunteerWorkbenchPanel.vue` 已把候选池“依据”列收成“命中规则 + 录取参考口径 + 分层依据 + 结构化解释”四层说明，显式带出“为何只命中系统基线 / 为何按兼容模式预览 / 为何同校跨省结果不同 / 为何仍需核对选科”
+  - `apps/frontend/tests/volunteer-workbench.test.ts` 已补系统基线、院校线回退、跨省口径差异与专用规则命中的 helper 回归
+  - 当前已执行 `npm run frontend:test -- tests/volunteer-workbench.test.ts` 与 `npm run frontend:build`，全部通过
+
+- 2026-04-12 已继续补推荐中心危险动作确认与启动收口：
+  - 根目录新增 `scripts/dev-local.cjs`，`package.json` 已补 `npm run dev`，`README.md` 已同步更新本地启动方式
+  - `useGaokaoVolunteerWorkspace.ts` 已补“沿用推荐条件 / 清空工作台 / 移除志愿 / 加载历史草稿 / 载入学生偏好 / 删除草稿”确认
+  - `recommendationSubmission.ts` 已新增推荐参数脏状态 helper，`useRecommendationSubmissionManager.ts` 已补“重置推荐参数”确认
+  - `recommendationStrategy.ts` 已新增策略快照与脏状态 helper，`useRecommendationStrategyManager.ts` 已补“重载策略 / 应用模板”确认
+  - `recommendationOutputGuards.ts` 已新增草稿 / 推荐报告输出前复核 helper，`useGaokaoVolunteerWorkspace.ts` 与 `useRecommendationSchemeExport.ts` 已补打印 / 导出前复核
+  - `volunteer-workbench.test.ts`、`recommendation-submission.test.ts`、`recommendation-strategy.test.ts` 与 `recommendation-output-guards.test.ts` 已补对应回归
+  - 当前已执行 `node ./scripts/dev-local.cjs --help`、`npm run frontend:test -- tests/recommendation-output-guards.test.ts tests/recommendation-strategy.test.ts tests/recommendation-submission.test.ts tests/volunteer-workbench.test.ts` 与 `npm run frontend:build`，全部通过
+
+- 2026-04-12 已继续补推荐历史 / 对比链局部错误态：
+  - `apps/frontend/src/components/recommendations/useRecommendationHistoryCollection.ts` 已补 `historyLoadError`、`selectedSchemeError` 和 `reloadSelectedScheme()`；查看新方案失败时会先清空旧结果
+  - `apps/frontend/src/components/recommendations/useRecommendationSingleComparison.ts` 已补 `compareSchemeError`
+  - `apps/frontend/src/components/recommendations/useRecommendationMultiComparison.ts` 已补 `multiCompareError`，并改为 `Promise.allSettled`，允许多方案部分成功、部分失败
+  - `apps/frontend/src/components/recommendations/RecommendationHistoryPanel.vue` 与 `RecommendationSchemeResultsPanel.vue` 已补错误提示卡片和重试按钮
+  - `apps/frontend/src/pages/RecommendationsPage.vue` 已完成接线
+  - 当前已执行 `npm run frontend:test -- tests/recommendation-output-guards.test.ts tests/recommendation-strategy.test.ts tests/recommendation-submission.test.ts tests/volunteer-workbench.test.ts` 与 `npm run frontend:build`，全部通过
+
+- 2026-04-11 已继续补 Stage B 边界概览：
+  - `apps/frontend/src/components/recommendations/volunteerWorkbench.ts` 已新增 `buildVolunteerBoundaryInsightCards()`，把 `rule_alerts` 和候选池真实命中情况收成全局概览
+  - `apps/frontend/src/components/recommendations/RecommendationVolunteerWorkbenchPanel.vue` 已新增“边界概览”区，显式统计系统基线、兼容模式、院校线回退、选科待核对和规则缺失影响范围
+  - `apps/frontend/tests/volunteer-workbench.test.ts` 已补“有回退提示 / 当前边界较清晰”两类 helper 回归
+  - 当前已执行 `npm run frontend:test -- tests/volunteer-workbench.test.ts` 与 `npm run frontend:build`，全部通过
+
+- 2026-04-11 已继续把边界摘要下沉到打印页：
+  - `apps/frontend/src/components/recommendations/volunteerWorkbench.ts` 已新增 `buildVolunteerDraftBoundaryInsightCards()`
+  - `apps/frontend/src/pages/VolunteerDraftPrintPage.vue` 已新增“边界概览”打印区，当前草稿中受系统基线、兼容模式、院校线回退和选科待核对影响的条目会在打印页显式汇总
+  - `apps/frontend/tests/volunteer-workbench.test.ts` 已补草稿边界概览 helper 回归
+  - 当前已执行 `npm run frontend:test -- tests/volunteer-workbench.test.ts` 与 `npm run frontend:build`，全部通过
+
+- 2026-04-11 已继续把边界摘要下沉到 Excel 导出：
+  - `apps/backend/app/exporters/recommendations.py` 已给 `volunteer_draft_summary` 新增“边界概览” sheet，并在明细表补出“命中规则 / 录取口径 / 边界说明”三列
+  - `apps/backend/tests/test_recommendation_workflow.py` 已补导出文件结构与内容断言
+  - 当前已执行 `npm run backend:test -- apps/backend/tests/test_recommendation_workflow.py`，全部通过
+
+- 2026-04-11 已继续补推荐报告输出解释：
+  - `apps/backend/app/exporters/recommendations.py` 已给 `recommendation_summary` 新增“风险概览” sheet
+  - `apps/frontend/src/pages/RecommendationPrintPage.vue` 已新增“风险概览”打印区
+  - `apps/backend/tests/test_recommendation_workflow.py` 已补推荐报告导出断言
+  - 当前已执行 `npm run backend:test -- apps/backend/tests/test_recommendation_workflow.py` 与 `npm run frontend:build`，全部通过
+
+- 2026-04-11 已继续补报表中心导出前摘要回归：
+  - `apps/frontend/src/pages/ReportsPage.vue` 当前已支持在 `recommendation_summary` 与 `volunteer_draft_summary` 导出前显示摘要
+  - `tests/e2e/dashboard-smoke.spec.ts` 已新增“报表中心：推荐报告与志愿草稿在导出前显示摘要”回归，覆盖从报表中心切换推荐报告 / 志愿草稿并等待摘要卡出现；用例内部改为通过接口生成推荐历史，避免依赖推荐页 UI 生成链路
+  - 当前已执行 `npm run e2e -- -g "报表中心：推荐报告与志愿草稿在导出前显示摘要" tests/e2e/dashboard-smoke.spec.ts`，通过
+
+- 2026-04-11 已继续补 Stage B 边界概览覆盖面：
+  - `apps/frontend/src/components/recommendations/volunteerWorkbench.ts` 已把 `missing_rule_province` 与 `fallback_general_candidate_rule` 纳入“边界概览”卡片
+  - `apps/frontend/tests/volunteer-workbench.test.ts` 已补“缺少省份规则 / 按通用考生规则回退”回归
+  - 当前已执行 `npm run frontend:test -- tests/volunteer-workbench.test.ts` 与 `npm run frontend:build`，全部通过
+
+- 2026-04-11 已继续把类别规则回退下沉到草稿摘要：
+  - `apps/frontend/src/components/recommendations/volunteerWorkbench.ts` 已在 `buildVolunteerDraftBoundaryInsightCards()` 中新增“草稿内含通用类别规则口径”卡片
+  - 当前志愿草稿打印页和报表中心 `volunteer_draft_summary` 导出前摘要会一起显示“按通用考生规则解释”的条目数量
+  - `apps/frontend/tests/volunteer-workbench.test.ts` 已补草稿摘要 helper 回归
+  - 当前已执行 `npm run frontend:test -- tests/volunteer-workbench.test.ts` 与 `npm run frontend:build`，全部通过
+
+- 2026-04-10 已继续收口 Stage B 批量生源地场景：
+  - `apps/backend/app/schemas/recommendation.py`、`apps/backend/app/api/routes/recommendations.py` 与 `apps/backend/app/services/_recommendations_generation.py` 已把批量推荐响应升级为结构化 `items[]`，显式返回每名学生的生源地、方案 ID 和结果数
+  - `apps/frontend/src/components/recommendations/useRecommendationSubmissionManager.ts` 已区分“自动同步省份”和“手工统一省份”；从单学生切到批量时，不再把自动带入的单学生省份误保留为批量统一省份
+  - `apps/frontend/src/components/recommendations/useRecommendationWorkflow.ts` 已把批量生成提示补成“累计方案 / 累计结果 / 覆盖生源地数”
+  - `apps/backend/tests/test_recommendation_workflow.py` 已新增“山东 / 河北混合生源地批量推荐”测试，显式断言同一院校专业在两省返回不同 `reference_rank`
+  - 当前已执行 `./.venv/bin/pytest apps/backend/tests/test_recommendation_workflow.py` 与 `npm run build --workspace @local-edu/frontend`，全部通过
+
+- 2026-04-10 已补 Stage B 第二段尾项：
+  - `tests/e2e/dashboard-smoke.spec.ts` 已新增“Stage B 主链路：生源地回退的模拟推荐可同步到工作台并保存草稿”
+  - `apps/backend/app/services/_recommendations_score_input.py` 已把 `reference_exam_name` 与 `use_historical_mapping` 一并沉到结果快照
+  - `apps/frontend/src/components/recommendations/RecommendationHistoryPanel.vue`、`apps/frontend/src/pages/RecommendationPrintPage.vue`、`apps/frontend/src/pages/VolunteerDraftPrintPage.vue` 已显式展示目标年份、分数模式和模拟说明
+  - `apps/backend/app/services/reports.py` 与 `apps/backend/app/exporters/recommendations.py` 已把推荐报告 / 志愿草稿导出概况补齐“分数模式 + 模拟说明”
+  - 当前已执行 `./.venv/bin/pytest apps/backend/tests/test_recommendation_workflow.py`、`npm run build --workspace @local-edu/frontend`、`npm run e2e -- --grep "Stage B 主链路"`，全部通过
+- 2026-04-10 已补工程化与文档同步尾项：
+  - 根目录新增 `scripts/backend-cli.cjs`，统一提供 `npm run backend:migrate`、`backend:init-demo`、`backend:test` 与 `backend:dev`
+  - `README.md` 已把 Stage B 当前状态、统一命令入口、30 条 E2E 覆盖范围与剩余重点更新到与代码一致
+  - `tests/README.md` 已同步更新到当前 Playwright 覆盖面
+- 2026-04-10 已补 Stage B 批量跨端回归尾项：
+  - `apps/frontend/src/components/recommendations/useRecommendationSubmissionManager.ts` 已修正省份自动同步的响应式时序，自动带入/自动清空不再被 watcher 误判成手工输入
+  - `tests/e2e/dashboard-smoke.spec.ts` 已新增“Stage B 批量场景：混合生源地学生可分别生成方案并写入历史”
+  - `tests/e2e/fixtures/admissions-cross-province.xlsx` 已新增跨省录取导入样例
+  - 当前已执行 `npm run e2e -- --grep "Stage B 批量场景"` 与 `npm run frontend:build`，全部通过
+- 2026-04-10 已补 Stage B 年份边界解释第一轮：
+  - `apps/backend/app/services/_recommendations_workbench.py` 已在工作台预览中显式返回“缺少年份规则 / 缺少批次规则 / 模式兼容 / 基线命中”说明
+  - `apps/frontend/src/components/recommendations/volunteerWorkbench.ts` 已避免规则泛化提示与具体边界提示重复堆叠
+  - `apps/backend/tests/test_recommendation_workflow.py` 已新增“缺少目标年份规则”回归
+  - `tests/e2e/dashboard-smoke.spec.ts` 已新增“高考志愿年份边界：缺少目标年份规则时提示人工复核”
+  - 当前已执行 `npm run backend:test -- apps/backend/tests/test_recommendation_workflow.py`、`npm run e2e -- --grep "高考志愿年份边界"` 与 `npm run frontend:build`，全部通过
+- 2026-04-10 已补 Stage B 模式兼容回退闭环：
+  - `apps/backend/app/repositories/recommendations.py` 已把 `3+1+2` 与 `物理类 / 历史类` 的兼容集合抽成统一 helper，并用于招生计划候选查询
+  - `apps/backend/app/services/_recommendations_workbench.py` 已复用同一套兼容模式定义，避免规则命中与候选池过滤不一致
+  - `apps/backend/tests/test_recommendation_workflow.py` 已新增“3+1+2 命中物理类计划”回归
+  - `tests/e2e/dashboard-smoke.spec.ts` 已新增“高考志愿模式兼容：3+1+2 可回退命中物理类规则与招生计划”
+  - 当前已执行 `npm run backend:test -- apps/backend/tests/test_recommendation_workflow.py`、`npm run e2e -- --grep "高考志愿模式兼容"` 与 `npm run frontend:build`，全部通过
+- 2026-04-10 已补 Stage B 规则差异摘要展示：
+  - `apps/frontend/src/components/recommendations/volunteerWorkbench.ts` 已新增 `buildVolunteerRuleInsightCards()`，把总分口径、志愿上限、志愿单位、平行方式、选科口径、每单位专业数、征集志愿、调剂和赋分摘要收成结构化卡片
+  - `apps/frontend/src/components/recommendations/RecommendationVolunteerWorkbenchPanel.vue` 已新增“规则差异摘要”区，当前控制规则和兼容预览规则会并排展示
+  - `apps/frontend/tests/volunteer-workbench.test.ts` 已新增对应回归，覆盖“当前规则 + 兼容规则”的结构化摘要
+  - 当前已执行 `npm run frontend:test -- tests/volunteer-workbench.test.ts` 与 `npm run frontend:build`，全部通过
+- 2026-04-10 已补 Stage B 候选级差异说明第一轮：
+  - `apps/backend/app/services/_recommendations_workbench.py` 与 `apps/backend/app/schemas/recommendation.py` 已给每条候选计划补 `match_tags_json / match_notes_json`
+  - 返回内容现已显式区分“模式精确命中 / 兼容模式命中 / 专业线参考 / 院校线参考 / 已带选科条件 / 按位次分层”等上下文
+  - `apps/frontend/src/components/recommendations/RecommendationVolunteerWorkbenchPanel.vue` 已在候选池“依据”列展示这些标签和逐条说明
+  - `apps/backend/tests/test_recommendation_workflow.py`、`apps/frontend/tests/volunteer-workbench.test.ts` 与 `npm run frontend:build` 已验证通过
+- 2026-04-10 已补 Stage B 结构化规则提醒：
+  - `apps/backend/app/services/_recommendations_workbench.py` 与 `apps/backend/app/schemas/recommendation.py` 已把年份缺失、批次缺失、类别缺失、模式兼容回退、通用规则回退与基线命中收成 `rule_alerts`
+  - `apps/frontend/src/components/recommendations/RecommendationVolunteerWorkbenchPanel.vue` 已新增“规则边界提醒”卡片区，和 `input_notes` 分开展示
+  - `apps/backend/tests/test_recommendation_workflow.py` 已补 `missing_rule_year` 与 `compatible_exam_mode_fallback` 的结构化断言
+  - 当前已执行 `npm run backend:test -- apps/backend/tests/test_recommendation_workflow.py`、`npm run frontend:test -- tests/volunteer-workbench.test.ts` 与 `npm run frontend:build`，全部通过
+- 2026-04-10 已补 Stage B 候选命中规则上下文：
+  - `apps/backend/app/services/_recommendations_workbench.py` 与 `apps/backend/app/schemas/recommendation.py` 已给候选计划补 `matched_rule_exam_mode / matched_rule_batch / matched_rule_candidate_type / matched_rule_is_baseline`
+  - `apps/frontend/src/components/recommendations/RecommendationVolunteerWorkbenchPanel.vue` 已把“命中规则：省份 / 年份 / 模式 / 批次 · 通用规则/专用规则/系统基线”展示到候选池“依据”列
+  - `apps/backend/tests/test_recommendation_workflow.py` 已补兼容模式下的候选级规则上下文回归
+  - 当前已执行 `npm run backend:test -- apps/backend/tests/test_recommendation_workflow.py`、`npm run frontend:test -- tests/volunteer-workbench.test.ts` 与 `npm run frontend:build`，全部通过
+- 2026-04-10 已补 Stage B 录取参考口径说明：
+  - `apps/backend/app/services/_recommendations_workbench.py` 与 `apps/backend/app/schemas/recommendation.py` 已给候选计划补 `reference_scope / reference_years_json / reference_record_count / reference_source_notes_json`
+  - `apps/frontend/src/components/recommendations/RecommendationVolunteerWorkbenchPanel.vue` 已把“专业线/院校线参考 + 样本年份 + 样本数 + 数据来源”展示到候选池“依据”列
+  - `apps/backend/tests/test_recommendation_workflow.py` 已补兼容模式下的录取参考口径回归
+  - 当前已执行 `npm run backend:test -- apps/backend/tests/test_recommendation_workflow.py`、`npm run frontend:test -- tests/volunteer-workbench.test.ts` 与 `npm run frontend:build`，全部通过
+- 2026-04-10 已补 Stage B 分层依据摘要：
+  - `apps/frontend/src/components/recommendations/volunteerWorkbench.ts` 已新增 `buildVolunteerCandidateLayeringCopy()`
+  - `apps/frontend/src/components/recommendations/RecommendationVolunteerWorkbenchPanel.vue` 已把“为什么是冲刺/稳妥/保底”展示到候选池“依据”列
+  - `apps/frontend/tests/volunteer-workbench.test.ts` 已补位次链路 / 分数链路回归
+  - 当前已执行 `npm run frontend:test -- tests/volunteer-workbench.test.ts` 与 `npm run frontend:build`，全部通过
+
+- 2026-04-10 已结合 `gaokao_dev_bundle_v3/gaokao_dev_doc_v3.md` 调整主线优先级：
+  - 已确认后续开发默认按 Stage A -> G 推进，而不是继续默认扩 S4 展示层
+  - `tests/e2e/dashboard-smoke.spec.ts` 已新增“推荐策略模板：可保存、应用并删除模板”和“推荐历史回放：可从历史记录重新载入已有方案”
+  - `apps/frontend/src/components/recommendations/useRecommendationSubmissionManager.ts` 已补历史列表兜底重载
+  - `apps/frontend/src/components/recommendations/useRecommendationStrategyPresets.ts` 已在保存模板后默认选中最新模板
+  - `apps/backend/alembic/versions/20260410_0011_student_career_preference_schema.py` 已修复匿名外键导致的干净库升级失败
+  - 当前已执行 `npm run test --workspace @local-edu/frontend -- --run tests/recommendations-helpers.test.ts`、`npm run build --workspace @local-edu/frontend`、`npm run e2e -- --grep "(推荐策略模板|推荐历史回放|高考志愿数据底座)"`、`./.venv/bin/pytest apps/backend/tests/test_recommendation_workflow.py`，并在 `/tmp/local-edu-tool-alembic-20260410b` 执行 `alembic upgrade head`，全部通过
+- 2026-04-10 已完成 Stage A 最后一轮收尾：
+  - `apps/frontend/src/components/recommendations/useRecommendationSchemeExport.ts` 已补导出失败明确提示
+  - `tests/e2e/dashboard-smoke.spec.ts` 已新增“推荐导出失败回退：导出报错后仍保留当前方案并可继续打印”
+  - `README.md` 已沉淀 v3 主线、Stage A 收尾结论与 Windows 产物路径
+  - 当前已执行 `npm run build --workspace @local-edu/frontend`、`npm run e2e -- --grep "(推荐主流程|推荐导出失败回退|推荐策略模板|推荐历史回放)"`、`npm run desktop:dist:win:dir`、`npm run desktop:dist:win:nsis`，全部通过
+- 2026-04-10 已完成 Stage B 第一段“全国省份规则基线装载”：
+  - 新增 `apps/backend/app/services/_recommendations_rule_baseline.py`
+  - `apps/backend/app/services/bootstrap.py` 的 `seed_reference_data()` 已自动补齐当年本科批基线规则
+  - `apps/backend/app/api/routes/recommendations.py` 已新增 `POST /api/province-volunteer-rules/bootstrap`
+  - `apps/frontend/src/components/recommendations/RecommendationVolunteerRulesPanel.vue` 与 `useGaokaoPlanningManager.ts` 已新增“一键装载全国基线”入口
+  - `apps/backend/app/services/_recommendations_workbench.py` 已把规则命中顺序改为“先考生类别专用，再模式最匹配”，避免基线规则与人工规则重复命中
+  - 当前已执行 `./.venv/bin/pytest apps/backend/tests/test_recommendation_workflow.py` 与 `npm run build --workspace @local-edu/frontend`，全部通过
+- 2026-04-10 已完成 Stage B 第二段“生源地 / 预估分数正式建模”第一轮：
+  - `apps/backend/app/models/student.py`、`apps/backend/app/schemas/student.py`、`apps/backend/app/services/students.py` 与 `apps/backend/alembic/versions/20260410_0013_student_origin_province_schema.py` 已把 `origin_province` 沉到学生主档，并补齐学生导入模板、导出和学生页展示
+  - `apps/backend/app/services/_recommendations_score_input.py` 已收口推荐 / 工作台共用的 `score_input_mode` 语义；`_recommendations_generation.py` 现支持 `target_year`、模拟分数 / 位次、参考考试、历史映射和风险偏好，并在未手填省份时回退到学生档案生源地
+  - `apps/frontend/src/components/recommendations/RecommendationGeneratePanel.vue`、`recommendationSubmission.ts` 与 `useRecommendationSubmissionManager.ts` 已补推荐中心的 `target_year + score_input_mode` 输入面；`useGaokaoVolunteerWorkspace.ts` 已把这些字段继续同步到工作台 / 草稿链路
+  - 当前已执行 `./.venv/bin/pytest apps/backend/tests/test_api_m1.py apps/backend/tests/test_student_importer.py apps/backend/tests/test_recommendation_workflow.py`、`npm run test --workspace @local-edu/frontend -- --run tests/recommendation-submission.test.ts tests/volunteer-workbench.test.ts`、`npm run build --workspace @local-edu/frontend`，并在 `/tmp/local_edu_tool_alembic_20260410c.db` 执行 `alembic upgrade head`，全部通过
+
+- 2026-04-09 已补“高考志愿”S4 第一段数据底座：
+  - `apps/backend/app/models/recommendation.py` 已新增 `EmploymentDirection` / `MajorEmploymentMapping`
+  - `apps/backend/alembic/versions/20260409_0010_employment_direction_schema.py` 已补就业方向与专业就业映射迁移
+  - `apps/backend/app/api/routes/recommendations.py` 已新增 `/api/employment-directions` 与 `/api/major-employment-maps*`
+  - `apps/frontend/src/components/recommendations/useRecommendationCareerManager.ts` 已收口就业方向库与专业就业映射动作
+  - `apps/frontend/src/pages/RecommendationsPage.vue` 已新增“就业方向库 / 专业就业映射”标签页
+  - `tests/e2e/dashboard-smoke.spec.ts` 已新增“高考志愿数据底座：可维护就业方向库和专业就业映射”流程
+  - 当前已执行 `./.venv/bin/pytest apps/backend/tests/test_recommendation_workflow.py`、`npm run frontend:build`、`npm run e2e -- tests/e2e/dashboard-smoke.spec.ts`，并在临时 SQLite 目录执行 `alembic upgrade head`，全部通过
+- 2026-04-10 已补“高考志愿”S4 第二段学生职业意向输入：
+  - `apps/backend/app/models/student.py` 已新增 `StudentCareerPreference`
+  - `apps/backend/alembic/versions/20260410_0011_student_career_preference_schema.py` 已新增学生职业意向表，并把志愿草稿扩到职业意向字段
+  - `apps/backend/app/api/routes/students.py` 已新增 `/api/students/{id}/career-preference` 的 GET / POST / PUT
+  - `apps/frontend/src/components/recommendations/RecommendationVolunteerWorkbenchPanel.vue` 已新增“职业意向输入”区
+  - `apps/frontend/src/components/recommendations/useGaokaoVolunteerWorkspace.ts` 已新增学生偏好读取、保存与带入动作
+  - `apps/frontend/src/components/recommendations/volunteerWorkbench.ts` 已新增职业意向 payload / 回填 helper，并把职业意向摘要接入工作台解释区
+  - 当前已执行 `./.venv/bin/pytest apps/backend/tests/test_recommendation_workflow.py`、`npm run test --workspace @local-edu/frontend -- --run tests/volunteer-workbench.test.ts`、`npm run frontend:build`，全部通过
+- 2026-04-10 已补“高考志愿”S4 第三段排序增强 / 结果解释第一轮：
+  - `apps/backend/app/services/_recommendations_result_builder.py` 已新增职业匹配评分、方向/行业/岗位/城市命中解释、路径接受度风险标记和统一排序 key
+  - `apps/backend/app/services/_recommendations_workbench.py` 已把工作台 preview 在同一冲稳保组内按 `career_match_score` 二次排序，并把职业匹配字段透传到 candidate / draft snapshot
+  - `apps/backend/app/services/_recommendations_generation.py` 与 `_recommendations_history.py` 已让正式推荐默认复用 `StudentCareerPreference` 做排序增强，并保持历史结果列表按职业匹配度稳定排序
+  - `apps/frontend/src/components/recommendations/volunteerWorkbench.ts` 已把志愿表“就业增强列”切到“基于当前学生目标的匹配结果”
+  - `apps/frontend/src/components/recommendations/RecommendationSchemeResultsPanel.vue` 已新增职业匹配解释块，展示匹配强度、目标方向、路径提示和风险标记
+  - `apps/backend/tests/test_recommendation_workflow.py` 与 `apps/frontend/tests/volunteer-workbench.test.ts` 已补职业匹配排序和解释回归
+  - 当前已执行 `./.venv/bin/pytest apps/backend/tests/test_recommendation_workflow.py`、`npm run test --workspace @local-edu/frontend -- --run tests/volunteer-workbench.test.ts`、`npm run frontend:build`，全部通过
+- 2026-04-10 已补“推荐报告导出增强”第一轮：
+  - `apps/backend/app/exporters/recommendations.py` 已把 `recommendation_summary` / `volunteer_draft_summary` 导出扩到“目标方向 / 可接受路径 / 职业匹配 / 对应方向 / 路径提示 / 职业说明”
+  - `apps/backend/app/services/reports.py` 已在推荐报告和志愿草稿导出时带入职业意向摘要与可接受路径摘要
+  - `apps/frontend/src/pages/RecommendationPrintPage.vue` 已新增职业意向摘要和职业路径列
+  - `apps/backend/tests/test_recommendation_workflow.py` 已补推荐报告导出 workbook 的职业路径列回归
+  - 当前已执行 `./.venv/bin/pytest apps/backend/tests/test_recommendation_workflow.py` 与 `npm run frontend:build`，全部通过
+- 2026-04-09 已补“学生志愿工作台”最小闭环：
+  - 新增 `apps/backend/app/services/_recommendations_workbench.py`
+  - `apps/backend/app/api/routes/recommendations.py` 已新增 `/api/recommendations/volunteer-workbench/preview`
+  - 新增 `apps/frontend/src/components/recommendations/useGaokaoVolunteerWorkspace.ts`
+  - 新增 `apps/frontend/src/components/recommendations/RecommendationVolunteerWorkbenchPanel.vue`
+  - `apps/frontend/src/pages/RecommendationsPage.vue` 已新增“学生志愿工作台”标签页
+  - 当前已执行 `./.venv/bin/pytest apps/backend/tests/test_recommendation_workflow.py`、`npm run test --workspace @local-edu/frontend -- --run tests/volunteer-workbench.test.ts tests/recommendation-submission.test.ts`、`npm run frontend:build`，全部通过
+- 2026-04-09 已补“学生志愿工作台”草稿持久化：
+  - 新增 `apps/backend/alembic/versions/20260409_0009_volunteer_draft_schema.py`
+  - 新增 `apps/backend/app/services/_recommendations_drafts.py`
+  - `apps/backend/app/api/routes/recommendations.py` 已新增 `/api/recommendations/volunteer-drafts` 的列表、详情、创建、更新和删除接口
+  - `apps/frontend/src/components/recommendations/useGaokaoVolunteerWorkspace.ts` 已接入草稿保存、加载和删除
+  - `apps/frontend/src/components/recommendations/RecommendationVolunteerWorkbenchPanel.vue` 已新增草稿命名和历史草稿列表
+  - 当前已执行 `./.venv/bin/pytest apps/backend/tests/test_recommendation_workflow.py`、`npm run test --workspace @local-edu/frontend -- --run tests/volunteer-workbench.test.ts tests/recommendation-submission.test.ts`、`npm run frontend:build`，并用临时 SQLite 库执行 `alembic upgrade head`，全部通过
+- 2026-04-09 已补“学生志愿工作台”打印 / 导出闭环：
+  - 新增 `apps/frontend/src/pages/VolunteerDraftPrintPage.vue`
+  - `apps/frontend/src/utils/print.ts` 与 `apps/frontend/src/router/index.ts` 已新增志愿草稿打印预览路径
+  - `apps/frontend/src/components/recommendations/useGaokaoVolunteerWorkspace.ts` 已接入当前草稿打印预览和 Excel 导出
+  - `apps/frontend/src/components/recommendations/RecommendationVolunteerWorkbenchPanel.vue` 已新增“打印预览 / 导出 Excel”入口
+  - `apps/frontend/src/pages/ReportsPage.vue` 已新增 `volunteer_draft_summary` 报表类型和草稿选择
+  - `apps/backend/tests/test_recommendation_workflow.py` 已补志愿草稿导出与下载回归
+  - 当前已执行 `./.venv/bin/pytest apps/backend/tests/test_recommendation_workflow.py`、`npm run test --workspace @local-edu/frontend -- --run tests/volunteer-workbench.test.ts tests/recommendation-submission.test.ts`、`npm run frontend:build`，全部通过
+- 2026-04-09 已补“高考志愿”主流程 E2E：
+  - 新增 `tests/e2e/fixtures/enrollment-plans-import.xlsx`
+  - `tests/e2e/dashboard-smoke.spec.ts` 已新增“招生计划导入 → 省份规则配置 → 学生志愿工作台候选池 → 草稿保存 → 打印预览 / Excel 导出 → 草稿再加载”流程
+  - 同文件中 `/recommendations` 页旧“升学推荐”标题断言已更新为当前“高考志愿”
+  - 当前已执行 `npm run e2e -- tests/e2e/dashboard-smoke.spec.ts`，16 条 Playwright 流程全部通过
+- 2026-04-09 已补报表中心志愿草稿分支 E2E：
+  - `tests/e2e/dashboard-smoke.spec.ts` 已抽出志愿草稿创建 helper，并新增“报表中心：可按志愿草稿打印预览并导出报表”流程
+  - 当前已执行 `npm run e2e -- tests/e2e/dashboard-smoke.spec.ts`，17 条 Playwright 流程全部通过
+- 2026-04-09 已补高考志愿复杂场景 E2E：
+  - `tests/e2e/dashboard-smoke.spec.ts` 已把省份规则配置 helper 收成可参数化步骤，并新增工作台上下文填充 helper
+  - 同文件已新增“高考志愿复杂筛选：关键词可缩小候选池，历史类规则下显示空状态”和“高考志愿规则校验：志愿上限和草稿名称校验生效”2 条流程
+  - 当前已执行 `npm run e2e -- tests/e2e/dashboard-smoke.spec.ts`，19 条 Playwright 流程全部通过
+- 2026-04-09 已补高考志愿解释 / 风险校验区块：
+  - `apps/frontend/src/components/recommendations/volunteerWorkbench.ts` 已新增筛选解释与风险校验 helper
+  - `apps/frontend/src/components/recommendations/useGaokaoVolunteerWorkspace.ts` 已新增 `workbenchExplanation` 与 `volunteerDraftChecks`
+  - `apps/frontend/src/components/recommendations/RecommendationVolunteerWorkbenchPanel.vue` 已新增“筛选解释 / 风险校验”区块
+  - `apps/frontend/tests/volunteer-workbench.test.ts` 已补解释摘要与风险校验单测
+  - `tests/e2e/dashboard-smoke.spec.ts` 已补高考志愿主流程中对解释区块的可见性断言
+  - 当前已执行 `npm run test --workspace @local-edu/frontend -- --run tests/volunteer-workbench.test.ts`、`npm run frontend:build`、`npm run e2e -- -g "高考志愿主流程" tests/e2e/dashboard-smoke.spec.ts`，全部通过
+- 2026-04-09 已补高考志愿冲稳保视图：
+  - `apps/frontend/src/components/recommendations/types.ts` 已新增 `VolunteerDraftViewMode` 与 `VolunteerDraftViewSection`
+  - `apps/frontend/src/components/recommendations/volunteerWorkbench.ts` 已新增 `buildVolunteerDraftViewSections`
+  - `apps/frontend/src/components/recommendations/RecommendationVolunteerWorkbenchPanel.vue` 已新增“批次顺序 / 冲稳保视图”切换和分组展示
+  - `apps/frontend/tests/volunteer-workbench.test.ts` 已补冲稳保分组 helper 单测
+  - `tests/e2e/dashboard-smoke.spec.ts` 已补主流程中的冲稳保视图切换断言
+  - 当前已执行 `npm run test --workspace @local-edu/frontend -- --run tests/volunteer-workbench.test.ts`、`npm run frontend:build`、`npm run e2e -- -g "高考志愿主流程" tests/e2e/dashboard-smoke.spec.ts`，全部通过
+- 2026-04-09 已补高考志愿代码字段显示：
+  - `apps/backend/app/schemas/recommendation.py` 与 `apps/backend/app/services/_recommendations_workbench.py` 已把 `college_code_snapshot` / `major_code_snapshot` 带入工作台 preview
+  - `apps/frontend/src/components/recommendations/RecommendationVolunteerWorkbenchPanel.vue` 已在候选池与草稿表显示院校代码 / 专业代码 / 专业组
+  - `apps/frontend/src/pages/VolunteerDraftPrintPage.vue` 与 `apps/backend/app/exporters/recommendations.py` 已在打印页和 Excel 导出补代码列
+  - `apps/backend/tests/test_recommendation_workflow.py` 与 `tests/e2e/dashboard-smoke.spec.ts` 已补代码字段回归断言
+  - 当前已执行 `./.venv/bin/pytest apps/backend/tests/test_recommendation_workflow.py`、`npm run test --workspace @local-edu/frontend -- --run tests/volunteer-workbench.test.ts`、`npm run frontend:build`、`npm run e2e -- -g "高考志愿主流程" tests/e2e/dashboard-smoke.spec.ts`，全部通过
+- 2026-04-09 已补高考志愿真实拖拽排序：
+  - `apps/frontend/src/components/recommendations/volunteerWorkbench.ts` 已新增 `reorderVolunteerDraftItem`
+  - `apps/frontend/src/components/recommendations/useGaokaoVolunteerWorkspace.ts` 已新增 `reorderVolunteerCandidate`
+  - `apps/frontend/src/components/recommendations/RecommendationVolunteerWorkbenchPanel.vue` 已在“批次顺序”视图接入原生拖拽手柄、拖放高亮和拖拽提示
+  - `apps/frontend/tests/volunteer-workbench.test.ts` 已补按目标志愿重排的 helper 单测
+  - `tests/e2e/dashboard-smoke.spec.ts` 已补“拖拽重排 → 再次保存 → 重新加载”主流程断言
+  - 当前已执行 `npm run test --workspace @local-edu/frontend -- --run tests/volunteer-workbench.test.ts`、`npm run frontend:build`、`npm run e2e -- -g "高考志愿主流程" tests/e2e/dashboard-smoke.spec.ts`，全部通过
+- 2026-04-09 已补高考志愿另存为 / 草稿对比：
+  - `apps/frontend/src/components/recommendations/types.ts` 已新增 `VolunteerDraftComparisonEntry` 与 `VolunteerDraftComparisonSummary`
+  - `apps/frontend/src/components/recommendations/volunteerWorkbench.ts` 已新增 `buildVolunteerDraftComparison`
+  - `apps/frontend/src/components/recommendations/useGaokaoVolunteerWorkspace.ts` 已新增 `saveVolunteerDraftAsNew`、对比草稿加载动作与 comparison state
+  - `apps/frontend/src/components/recommendations/RecommendationVolunteerWorkbenchPanel.vue` 已新增“另存为新草稿”按钮、草稿对比统计卡片和差异明细列
+  - `apps/frontend/tests/volunteer-workbench.test.ts` 已补草稿差异 helper 单测
+  - `tests/e2e/dashboard-smoke.spec.ts` 已新增“高考志愿草稿版本：可另存为新草稿并对比历史版本”流程
+  - 当前已执行 `npm run test --workspace @local-edu/frontend -- --run tests/volunteer-workbench.test.ts`、`npm run frontend:build`、`npm run e2e -- -g "高考志愿草稿版本" tests/e2e/dashboard-smoke.spec.ts`，全部通过
+- 2026-04-09 已补高考志愿就业增强列：
+  - `apps/backend/app/schemas/recommendation.py` 与 `apps/backend/app/services/_recommendations_workbench.py` 已在工作台 candidate snapshot 中补 `major_direction` / `career_path` / `major_note`
+  - `apps/frontend/src/components/recommendations/types.ts` 已新增就业增强列与画像类型
+  - `apps/frontend/src/components/recommendations/volunteerWorkbench.ts` 已新增 `buildVolunteerEmploymentProfile`
+  - `apps/frontend/src/components/recommendations/RecommendationVolunteerWorkbenchPanel.vue` 已在志愿表草稿区新增“就业增强列”开关，默认展示“对应就业方向 / 匹配强度”，并提供“需读研 / 需资格证 / 说明摘要”扩展列入口
+  - `apps/backend/tests/test_recommendation_workflow.py` 已补工作台 candidate snapshot 中就业画像字段断言
+  - `apps/frontend/tests/volunteer-workbench.test.ts` 已补就业画像推断 helper 单测
+  - `tests/e2e/dashboard-smoke.spec.ts` 已新增“高考志愿就业增强列：默认展示画像列并提供扩展列入口”流程
+  - 当前已执行 `./.venv/bin/pytest apps/backend/tests/test_recommendation_workflow.py`、`npm run test --workspace @local-edu/frontend -- --run tests/volunteer-workbench.test.ts`、`npm run frontend:build`、`npm run e2e -- -g "高考志愿就业增强列：默认展示画像列并提供扩展列入口" tests/e2e/dashboard-smoke.spec.ts`，全部通过
+
+- `RecommendationsPage.vue` 已完成第一轮拆分：
+  - 新增 `apps/frontend/src/components/recommendations/RecommendationSchemeResultsPanel.vue`
+  - 新增 `apps/frontend/src/components/recommendations/types.ts`
+  - 主页面中“方案结果 / 方案对比 / 批量对照”已移出
+- 2026-04-06 已重新执行 `npm run frontend:build`，构建通过。
+- 公共壳层已完成一轮收敛整改：
+  - 新增 `apps/frontend/src/layouts/navigation.ts`
+  - `AppLayout.vue` 已回到更稳的后台工具导航
+  - `DashboardPage.vue` 已回到教务概况页，不再使用任务编排式首页
+  - 导入类型与状态在首页已统一翻译成中文可读文案
+  - 公共层已移除容易造成双滚动的布局组合
+- 高复杂页面已做第二轮整改：
+  - `TimetableWorkloadPage.vue` 已补当前步骤提示，并翻译用户可见状态
+  - `EvaluationQuantPage.vue` 已补当前上下文提示，并翻译批次/规则/对象类型等字段
+  - `EvaluationQuantPage.vue` 的模板对象类型已改为下拉选择
+- `EvaluationQuantPage.vue` 已完成第一轮组件化拆分：
+  - 新增 `apps/frontend/src/components/evaluation/EvaluationTemplatesPanel.vue`
+  - 新增 `apps/frontend/src/components/evaluation/EvaluationBatchOverviewPanel.vue`
+  - 新增 `apps/frontend/src/components/evaluation/QuantRulesPanel.vue`
+  - 新增 `apps/frontend/src/components/evaluation/QuantRecordsPanel.vue`
+  - 新增 `apps/frontend/src/components/evaluation/EvaluationTemplateDialog.vue`
+  - 新增 `apps/frontend/src/components/evaluation/RuleVersionDialog.vue`
+  - 新增 `apps/frontend/src/components/evaluation/QuantRecordDialog.vue`
+  - 新增 `apps/frontend/src/components/evaluation/types.ts`
+  - 新增 `apps/frontend/src/components/evaluation/helpers.ts`
+  - `apps/frontend/src/pages/EvaluationQuantPage.vue` 已由 1891 行降到 870 行
+- `TimetableWorkloadPage.vue` 已完成第一轮组件化拆分：
+  - 新增 `apps/frontend/src/components/workload/WorkloadContextPanel.vue`
+  - 新增 `apps/frontend/src/components/workload/WorkloadTimetablePanel.vue`
+  - 新增 `apps/frontend/src/components/workload/WorkloadRulesPanel.vue`
+  - 新增 `apps/frontend/src/components/workload/WorkloadResultsPanel.vue`
+  - 新增 `apps/frontend/src/components/workload/WorkloadEntryDialog.vue`
+  - 新增 `apps/frontend/src/components/workload/WorkloadRuleVersionDialog.vue`
+  - 新增 `apps/frontend/src/components/workload/types.ts`
+  - 新增 `apps/frontend/src/components/workload/helpers.ts`
+  - `apps/frontend/src/pages/TimetableWorkloadPage.vue` 已由 1531 行降到 672 行
+- 其余高频页也已做中文化收口：
+  - `RecommendationsPage.vue` 已补当前输入上下文，推荐结果表中的分组和依据不再显示原始值
+  - `ExamsPage.vue`、`ReportsPage.vue`、`SystemToolsPage.vue`、`StudentDetailPage.vue` 已处理常见原始状态/类型字段
+  - 当前前端构建通过，且常见页面已基本去除直接暴露原始状态枚举的问题
+- 前端整体 UI 已继续规整：
+  - `apps/frontend/src/layouts/AppLayout.vue` 已统一内容宽度、侧栏滚动和顶栏对齐
+  - `apps/frontend/src/styles.css` 已统一 tabs、表格壳层、输入控件、文件输入和通用提示样式
+- 推荐页已继续拆成组件：
+  - `RecommendationGeneratePanel.vue`
+  - `RecommendationStrategyPanel.vue`
+  - `RecommendationHistoryPanel.vue`
+  - `RecommendationSchemeResultsPanel.vue`
+  - `RecommendationCollegesPanel.vue`
+  - `RecommendationMajorsPanel.vue`
+  - `RecommendationAdmissionsPanel.vue`
+  - `RecommendationCollegeDialog.vue`
+  - `RecommendationMajorDialog.vue`
+  - 当前主页面已继续降为页面装配层
+- 推荐页数据/动作逻辑已抽离：
+  - 新增 `apps/frontend/src/components/recommendations/helpers.ts`
+  - 新增 `apps/frontend/src/components/recommendations/useRecommendationsPage.ts`
+  - `apps/frontend/src/pages/RecommendationsPage.vue` 已由 1398 行降到 516 行
+- 后端推荐 service 已完成第一轮拆分：
+  - 新增 `apps/backend/app/services/_recommendations_shared.py`
+  - 新增 `apps/backend/app/services/_recommendations_catalog.py`
+  - 新增 `apps/backend/app/services/_recommendations_generation.py`
+  - 新增 `apps/backend/app/services/_recommendations_settings.py`
+  - `apps/backend/app/services/recommendations.py` 已降为兼容旧导入路径的薄入口
+- 系统层安全收口已完成：
+  - 新增 `apps/backend/app/utils/files.py`
+  - 上传分类已做白名单字符校验
+  - 报表、备份、附件和运行时文件下载已统一限制在允许目录内
+  - `health.py` 中重复定义的 `/system/templates` 已删除
+- 前端关键流程保护已补一轮：
+  - `SystemToolsPage.vue` 的数据修复动作已增加二次确认
+  - `StudentDetailPage.vue` 的附件删除已增加二次确认
+  - `useRecommendationsPage.ts` 中策略模板删除已增加二次确认
+  - `ReportsPage.vue` 已增加导出前的缺项提示与前置校验
+- 前端工程化尾项已落地：
+  - 新增 `apps/frontend/eslint.config.js`
+  - 新增 `apps/frontend/tests/navigation.test.ts`
+  - 新增 `apps/frontend/tests/recommendations-helpers.test.ts`
+  - 新增 `apps/frontend/tests/api-client.test.ts`
+  - 新增 `playwright.config.ts`
+  - 新增 `tests/e2e/dashboard-smoke.spec.ts`
+  - 新增 `scripts/run_e2e_backend.py`
+  - `apps/frontend/src/api/client.ts` 已修正默认请求头被调用方 `headers` 覆盖的问题
+  - `tests/e2e/dashboard-smoke.spec.ts` 现已覆盖 3 条跨端流程：工作台导航、学生详情链路、系统备份链路
+- 工作量页页面级逻辑已继续抽离：
+  - 新增 `apps/frontend/src/components/workload/useTimetableWorkloadPage.ts`
+  - `apps/frontend/src/pages/TimetableWorkloadPage.vue` 已进一步降为页面装配层
+- 评教页页面级逻辑已继续抽离：
+  - 新增 `apps/frontend/src/components/evaluation/useEvaluationQuantPage.ts`
+  - `apps/frontend/src/pages/EvaluationQuantPage.vue` 已进一步降为页面装配层
+- E2E 结果输出链路已补齐一轮：
+  - 新增 `tests/e2e/fixtures/scores-import.xlsx`
+  - 新增 `tests/e2e/fixtures/admissions-import.xlsx`
+  - `tests/e2e/dashboard-smoke.spec.ts` 现已覆盖 6 条跨端流程：工作台导航、学生详情链路、系统备份链路、考试到分析链路、报表导出链路、推荐生成/导出链路
+- E2E 异常回归已补一轮：
+  - 新增 `tests/e2e/fixtures/scores-invalid.xlsx`
+  - `tests/e2e/dashboard-smoke.spec.ts` 现已额外覆盖 3 条异常流程：错误成绩模板导入提示、报表缺参提示、推荐缺参提示
+- 推荐页组合逻辑已继续拆分：
+  - 新增 `apps/frontend/src/components/recommendations/useRecommendationCatalogManager.ts`
+  - 新增 `apps/frontend/src/components/recommendations/useRecommendationWorkflow.ts`
+  - `apps/frontend/src/components/recommendations/useRecommendationsPage.ts` 已收成 facade
+- 推荐页工作流已继续拆分：
+  - 新增 `apps/frontend/src/components/recommendations/useRecommendationGenerationManager.ts`
+  - 新增 `apps/frontend/src/components/recommendations/useRecommendationHistoryManager.ts`
+  - `apps/frontend/src/components/recommendations/useRecommendationWorkflow.ts` 已收成 facade
+- 推荐页历史链已继续拆分：
+  - 新增 `apps/frontend/src/components/recommendations/useRecommendationHistoryCollection.ts`
+  - 新增 `apps/frontend/src/components/recommendations/useRecommendationSchemeComparison.ts`
+  - `apps/frontend/src/components/recommendations/useRecommendationHistoryManager.ts` 已收成 facade
+- 推荐页方案对比链已继续拆分：
+  - 新增 `apps/frontend/src/components/recommendations/useRecommendationSingleComparison.ts`
+  - 新增 `apps/frontend/src/components/recommendations/useRecommendationMultiComparison.ts`
+  - 新增 `apps/frontend/src/components/recommendations/useRecommendationSchemeExport.ts`
+  - `apps/frontend/src/components/recommendations/useRecommendationSchemeComparison.ts` 已收成 facade
+- 推荐页生成链已继续拆分：
+  - 新增 `apps/frontend/src/components/recommendations/useRecommendationSubmissionManager.ts`
+  - 新增 `apps/frontend/src/components/recommendations/useRecommendationStrategyManager.ts`
+  - `apps/frontend/src/components/recommendations/useRecommendationGenerationManager.ts` 已收成 facade
+- 推荐页策略链已继续拆分：
+  - 新增 `apps/frontend/src/components/recommendations/useRecommendationStrategySettings.ts`
+  - 新增 `apps/frontend/src/components/recommendations/useRecommendationStrategyPresets.ts`
+  - `apps/frontend/src/components/recommendations/useRecommendationStrategyManager.ts` 已收成 facade
+- “高考志愿”S1 数据底座已开始落地：
+  - 新增 `apps/backend/app/importers/enrollment_plans.py`
+  - 新增 `apps/backend/app/services/_recommendations_plans.py`
+  - 新增 `apps/backend/app/services/_recommendations_rules.py`
+  - 新增 `apps/backend/alembic/versions/20260409_0008_gaokao_planning_schema.py`
+  - `apps/backend/app/models/recommendation.py` 已新增 `EnrollmentPlan` 与 `ProvinceVolunteerRule`
+  - `apps/backend/app/api/routes/recommendations.py` 已新增招生计划与省份规则接口
+  - `apps/frontend/src/components/recommendations/useGaokaoPlanningManager.ts` 已新增页内 planning facade
+  - `apps/frontend/src/components/recommendations/RecommendationEnrollmentPlansPanel.vue`、`RecommendationVolunteerRulesPanel.vue`、`RecommendationVolunteerRuleDialog.vue` 已接入 `RecommendationsPage.vue`
+  - `apps/frontend/src/layouts/navigation.ts` 已把 `/recommendations` 标签改为“高考志愿”
+- 2026-04-09 已执行 `./.venv/bin/pytest apps/backend/tests/test_recommendation_workflow.py`、`npm run test --workspace @local-edu/frontend -- --run tests/recommendations-helpers.test.ts`、`npm run frontend:build`，并使用临时 SQLite 库执行 `alembic upgrade head`，当前 S1 数据底座可用。
+- 打印优化已开始落地：
+  - 新增 `apps/frontend/src/pages/RecommendationPrintPage.vue`
+  - 新增 `apps/frontend/src/pages/GrowthSummaryPrintPage.vue`
+  - 新增 `apps/frontend/src/utils/print.ts`
+  - 推荐结果页、成长档案页、报表中心已补“打印预览”入口
+- 打印优化已继续扩到学生分析单：
+  - 新增 `apps/frontend/src/pages/StudentAnalysisPrintPage.vue`
+  - `student_analysis` 已接入报表中心打印预览
+- 打印优化已继续扩到班级/年级/教师分析：
+  - 新增 `apps/frontend/src/pages/ClassAnalysisPrintPage.vue`
+  - 新增 `apps/frontend/src/pages/GradeSummaryPrintPage.vue`
+  - 新增 `apps/frontend/src/pages/TeacherAnalysisPrintPage.vue`
+  - `class_analysis`、`grade_summary`、`teacher_analysis` 已接入报表中心打印预览
+- 打印优化已继续扩到工作量 / 评教 / 班主任量化：
+  - 新增 `apps/frontend/src/pages/WorkloadPrintPage.vue`
+  - 新增 `apps/frontend/src/pages/EvaluationSummaryPrintPage.vue`
+  - 新增 `apps/frontend/src/pages/AdviserQuantPrintPage.vue`
+  - `teacher_workload`、`evaluation_summary`、`adviser_quant_summary` 已接入报表中心打印预览
+- 多学年全景对比已开始落地：
+  - 新增 `/api/analytics/grades/{grade_id}/panorama`
+  - 新增 `apps/frontend/src/components/analytics/GradePanoramaPanel.vue`
+  - 新增 `apps/frontend/src/components/analytics/helpers.ts`
+  - 新增 `apps/frontend/src/components/analytics/types.ts`
+  - 新增 `apps/frontend/tests/analytics-panorama-helpers.test.ts`
+  - 分析中心已新增“全景对比”标签页
+  - E2E 测试后端已补两学年考试样本
+- 复杂分析看板已沿 panorama 继续增强：
+  - `apps/frontend/src/components/analytics/helpers.ts` 已新增学科攻坚 / 风险优先级派生逻辑
+  - `apps/frontend/src/components/analytics/GradePanoramaPanel.vue` 已新增学科攻坚优先级与学科风险预警两个看板区块
+  - `apps/frontend/src/pages/AnalyticsPage.vue` 已改为复用共享 `GradePanoramaResponse` 类型
+  - `tests/e2e/dashboard-smoke.spec.ts` 已补全景看板扩展断言
+- 多学年全景对比已继续扩到班级视角：
+  - 新增 `/api/analytics/classes/{class_id}/panorama`
+  - 新增 `apps/frontend/src/components/analytics/ClassPanoramaPanel.vue`
+  - 分析中心已新增“班级全景”标签页
+  - `apps/backend/tests/test_grade_analytics_and_student_attachments.py` 已补班级 panorama 断言
+  - `tests/e2e/dashboard-smoke.spec.ts` 已补班级全景断言
+- 多学年全景对比已继续扩到教师视角：
+  - 新增 `/api/analytics/teachers/{teacher_id}/panorama`
+  - 新增 `apps/frontend/src/components/analytics/TeacherPanoramaPanel.vue`
+  - 分析中心已新增“教师全景”标签页
+  - `scripts/run_e2e_backend.py` 已补上一学年的教师任教关系样例
+  - `apps/backend/tests/test_grade_analytics_and_student_attachments.py` 已补教师 panorama 断言
+  - `tests/e2e/dashboard-smoke.spec.ts` 已补教师全景断言
+- 桌面打包第一版已开始落地：
+  - 新增 `apps/desktop` Electron 桌面壳
+  - 新增 `apps/backend/app/desktop_entry.py`
+  - 根目录已新增 `desktop:dev`、`desktop:prepare`、`desktop:dist`
+  - `apps/desktop/.dist/backend/local-edu-backend-desktop` 已可生成
+  - `dist/desktop/mac/本地教务工具.app` 已可生成
+- 桌面打包第一版已继续收口：
+  - Electron 应用菜单已支持打开数据目录、导出目录和 API 文档
+  - 根目录已新增 `desktop:dist:mac`、`desktop:dist:win:dir`、`desktop:dist:win:nsis`
+  - `apps/desktop/package.json` 已补 Windows `nsis` 目标配置
+- 桌面打包第一版已继续增强体验：
+  - 已补首次启动提示
+  - 打印预览已优先在桌面内新窗口打开
+- 后端考试导入错误处理已补齐：
+  - `apps/backend/app/services/exams.py` 已把模板表头错误改为 `400` 业务错误
+  - `apps/backend/tests/test_exam_workflow.py` 已新增无效模板用例
+- 后端评教 service 已完成第一轮拆分：
+  - 新增 `apps/backend/app/services/_evaluation_shared.py`
+  - 新增 `apps/backend/app/services/_evaluation_templates.py`
+  - 新增 `apps/backend/app/services/_evaluation_batches.py`
+  - 新增 `apps/backend/app/services/_evaluation_adviser_quant.py`
+  - `apps/backend/app/services/evaluation.py` 已降为兼容旧导入路径的薄入口
+- 2026-04-06 已重新执行 `./.venv/bin/pytest apps/backend/tests`，16 个后端测试通过。
+- 2026-04-06 已重新执行 `npm run frontend:build`，评教量化页拆分后的前端构建通过。
+- 2026-04-06 已再次执行 `npm run frontend:build`，工作量页拆分与全局 UI 收敛后的前端构建通过。
+- 2026-04-06 已再次执行 `npm run frontend:build`，推荐页数据/动作逻辑抽离后的前端构建通过。
+- 2026-04-06 已再次执行 `./.venv/bin/pytest apps/backend/tests`，当前 21 个后端测试通过。
+- 2026-04-06 已再次执行 `npm run frontend:build`，前端流程保护调整后的构建通过。
+- 2026-04-06 已执行 `npm run frontend:lint`，静态检查通过。
+- 2026-04-06 已执行 `npm run frontend:test`，当前 10 个前端测试通过。
+- 2026-04-06 已再次执行 `npm run e2e`，当前 9 个 Playwright 跨端流程通过。
+- 2026-04-06 已执行 `./.venv/bin/pytest apps/backend/tests`，当前 22 个后端测试通过。
+- 2026-04-06 已再次执行 `npm run frontend:build`，推荐页组合逻辑拆分后的前端构建通过。
+- 2026-04-06 已再次执行 `npm run frontend:build`，推荐页工作流二次细分后的前端构建通过。
+- 2026-04-06 已再次执行 `npm run frontend:build`，推荐页历史链细分后的前端构建通过。
+- 2026-04-06 已再次执行 `npm run frontend:build`，推荐页方案对比链细分后的前端构建通过。
+- 2026-04-06 已再次执行 `npm run frontend:build`，推荐页生成链细分后的前端构建通过。
+- 2026-04-06 已再次执行 `npm run frontend:build`，推荐页策略链细分后的前端构建通过。
+- 2026-04-07 已再次执行 `npm run frontend:build`，打印预览页与打印入口补齐后的前端构建通过。
+- 2026-04-07 已再次执行 `npm run frontend:build`，学生成绩分析单打印预览补齐后的前端构建通过。
+- 2026-04-07 已再次执行 `npm run frontend:build`，班级/年级/教师分析打印预览补齐后的前端构建通过。
+- 2026-04-07 已再次执行 `npm run frontend:build`，工作量 / 评教 / 班主任量化打印预览补齐后的前端构建通过。
+- 2026-04-07 已执行 `./.venv/bin/pytest apps/backend/tests/test_grade_analytics_and_student_attachments.py`，多学年全景对比接口测试通过。
+- 2026-04-07 已执行 `npm run frontend:test`，当前 12 个前端测试通过。
+- 2026-04-07 已再次执行 `npm run frontend:build`，分析中心全景对比标签页构建通过。
+- 2026-04-07 已再次执行 `npm run frontend:lint`、`npm run frontend:test`、`npm run frontend:build`、`npm run e2e`，复杂分析看板增强后的前端验证通过；当前 16 个前端测试与 12 条 Playwright 流程通过。
+- 2026-04-07 已再次执行 `./.venv/bin/pytest apps/backend/tests/test_grade_analytics_and_student_attachments.py`、`npm run frontend:lint`、`npm run frontend:test`、`npm run frontend:build`、`npm run e2e`，班级全景接入后的验证通过；当前 16 个前端测试与 12 条 Playwright 流程通过。
+- 2026-04-07 已再次执行 `./.venv/bin/pytest apps/backend/tests/test_grade_analytics_and_student_attachments.py`、`npm run frontend:lint`、`npm run frontend:test`、`npm run frontend:build`、`npm run e2e`，教师全景接入后的验证通过；当前 16 个前端测试与 12 条 Playwright 流程通过。
+- 2026-04-07 已执行 `npm run desktop:prepare`，桌面后端独立二进制生成通过。
+- 2026-04-07 已执行 `npm run desktop:dist -- --dir`，桌面 `dir` 目录产物生成通过（macOS：`dist/desktop/mac/本地教务工具.app`）。
+- 2026-04-07 已再次执行 `npm run desktop:dist -- --dir`，补菜单和 Windows 目标配置后仍可生成 macOS `dir` 目录产物。
+- 2026-04-07 已再次执行 `npm run desktop:dist -- --dir`，补首次启动提示和桌面内打印预览后仍可生成 macOS `dir` 目录产物。
+- 2026-04-06 已再次执行 `npm run frontend:build`，工作量页逻辑抽离后的前端构建通过。
+- 2026-04-06 已再次执行 `npm run frontend:build`，评教页逻辑抽离后的前端构建通过。
+- README 已更新测试目录说明与验证命令，根目录 `tests/e2e` 已不再只是预留。
+- 推荐页提交链已继续收口：
+  - 新增 `apps/frontend/src/components/recommendations/recommendationSubmission.ts`
+  - 新增 `apps/frontend/tests/recommendation-submission.test.ts`
+  - `useRecommendationSubmissionManager.ts` 已只保留提交编排与结果回填
+- 推荐后端生成链已继续收口：
+  - 新增 `apps/backend/app/services/_recommendations_candidates.py`
+  - 新增 `apps/backend/app/services/_recommendations_result_builder.py`
+  - 新增 `apps/backend/app/services/_recommendations_history.py`
+  - `_recommendations_generation.py` 已主要保留工作流编排
+- 推荐域 E2E 已继续扩展：
+  - `tests/e2e/dashboard-smoke.spec.ts` 已新增推荐历史空状态、多方案对比、失败回退 3 条流程
+  - 当前整份 Playwright 冒烟文件已覆盖 15 条流程
+- 2026-04-09 已执行 `./.venv/bin/pytest apps/backend/tests/test_recommendation_workflow.py`、`npm run test --workspace @local-edu/frontend -- --run tests/recommendation-submission.test.ts tests/recommendations-helpers.test.ts`、`npm run frontend:build`、`npm run e2e -- tests/e2e/dashboard-smoke.spec.ts`，当前全部通过
+- 2026-04-12 已再次确认当前文档优先级：若 `docs/`、`gaokao_docs_bundle_v2/`、`gaokao_dev_bundle_v3/` 与 `local_edu_tool_dev_doc_v2_bundle/` 有冲突，当前按 `local_edu_tool_dev_doc_v2_bundle/local_edu_tool_dev_doc_v2.md`（文档日期 2026-04-12）为准；其中数据库章节仍属并行开发线，本轮未触碰数据库落地。
+- 2026-04-12 已把推荐中心剩余非数据库尾项收口一轮：
+  - `tests/e2e/dashboard-smoke.spec.ts` 已把推荐导出失败回退、策略模板、Stage B 单学生主链路、Stage B 批量跨省链路同步到当前确认弹窗和提示文案
+  - `openRecommendationCenter()` 测试 helper 已支持按场景选择是否自动兜底学生默认生源地，避免跨省测试被默认值污染
+  - 当前已执行 `npm run frontend:lint` 与全量 `npm run e2e`，31 条 Playwright 流程全部通过
+
+## 接手注意事项
+
+- 不要因为接入了 `rulesync` 就手改最终生成出来的 `AGENTS.md`，应优先修改 `.rulesync/rules/overview.md` 再生成。
+- 全局用户级规则来源位于 `~/.aiglobal/.rulesync/rules/overview.md`，生成目标为 `~/.codex/AGENTS.md`。
+- 全局 Codex 配置现在还包括 `Context7` MCP 和 4 个自定义 skills，新的 Codex 会话会读取这些能力。
+- 如果做了结构性改动，记得同步更新 `memory-bank/active-context.md`、`progress.md`、`decision-log.md`。
+- 如需继续改评教相关逻辑，优先改 `_evaluation_shared.py`、`_evaluation_templates.py`、`_evaluation_batches.py`、`_evaluation_adviser_quant.py`，不要再把逻辑堆回 `evaluation.py`。
+- 如需继续改评教页面，优先改 `components/evaluation/` 下的子组件；`EvaluationQuantPage.vue` 只保留页面编排和数据动作更稳。
+- 如需继续改工作量页面，优先改 `components/workload/` 下的子组件；`TimetableWorkloadPage.vue` 只保留页面编排和数据动作更稳。
+- 如需继续改推荐页面，优先改 `components/recommendations/useRecommendationsPage.ts` 和子组件，不要再把请求动作堆回 `RecommendationsPage.vue`。
+- 如需继续改推荐前端提交逻辑，优先改 `components/recommendations/recommendationSubmission.ts` 与相关 manager，不要把校验和 payload 拼装再塞回页面。
+- 如需继续改推荐后端逻辑，优先改 `_recommendations_shared.py`、`_recommendations_catalog.py`、`_recommendations_candidates.py`、`_recommendations_result_builder.py`、`_recommendations_history.py`、`_recommendations_settings.py`，不要再把逻辑堆回 `recommendations.py` 或 `_recommendations_generation.py`。
+- 如需继续改系统文件安全，优先改 `app/utils/files.py` 和 `app/services/system.py`，不要在各路由里再分散写路径拼接逻辑。
+- 用户 shell 已将裸 `codex` 包装到 `SpecStory`；如需跳过包装，可用 `codex-raw`。
+- 如果下一轮继续做“非数据库线”，更合适的切入点已从“修测试红灯”转为：继续同步推荐页其余局部错误态、确认弹窗与测试文案，并把这些变化同步到 README / `tests/README.md` / 开发文档的非数据库章节。

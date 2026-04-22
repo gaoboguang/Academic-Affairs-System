@@ -1,5 +1,9 @@
+/// <reference types="vitest/config" />
+
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
+
+const apiTarget = process.env.LOCAL_EDU_API_BASE_URL ?? "http://127.0.0.1:8000";
 
 export default defineConfig({
   plugins: [vue()],
@@ -8,10 +12,17 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8000",
+        target: apiTarget,
         changeOrigin: true,
       },
     },
+  },
+  test: {
+    globals: true,
+    environment: "node",
+    include: ["tests/**/*.test.ts"],
+    clearMocks: true,
+    restoreMocks: true,
   },
   build: {
     rollupOptions: {

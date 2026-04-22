@@ -192,3 +192,74 @@ class GradeAnalyticsResponse(BaseModel):
     subject_breakdown: list[GradeSubjectAnalyticsItem]
     score_bands: list[GradeDistributionItem]
     rank_bands: list[GradeDistributionItem]
+
+
+class GradePanoramaExamPointRead(BaseModel):
+    exam_id: int
+    exam_name: str
+    exam_date: date
+    academic_year_id: int | None = None
+    academic_year_name: str | None = None
+    semester_name: str | None = None
+    student_count: int
+    total_average: float
+    total_median: float
+    excellent_rate: float | None = None
+    top10_count: int = 0
+    top30_count: int = 0
+
+
+class GradePanoramaYearSummaryRead(BaseModel):
+    academic_year_id: int
+    academic_year_name: str
+    exam_count: int
+    average_score: float
+    average_excellent_rate: float | None = None
+    best_exam_name: str
+    latest_exam_name: str
+
+
+class GradePanoramaSubjectPointRead(BaseModel):
+    exam_id: int
+    exam_name: str
+    exam_date: date
+    academic_year_name: str | None = None
+    average_score: float
+    excellent_rate: float
+    valid_count: int
+
+
+class GradePanoramaSubjectTrendRead(BaseModel):
+    subject_id: int
+    subject_name: str
+    points: list[GradePanoramaSubjectPointRead] = Field(default_factory=list)
+
+
+class GradePanoramaResponse(BaseModel):
+    grade_id: int
+    grade_name: str
+    academic_year_count: int
+    exam_count: int
+    year_summaries: list[GradePanoramaYearSummaryRead] = Field(default_factory=list)
+    exam_points: list[GradePanoramaExamPointRead] = Field(default_factory=list)
+    subject_trends: list[GradePanoramaSubjectTrendRead] = Field(default_factory=list)
+
+
+class ClassPanoramaResponse(BaseModel):
+    class_id: int
+    class_name: str
+    academic_year_count: int
+    exam_count: int
+    year_summaries: list[GradePanoramaYearSummaryRead] = Field(default_factory=list)
+    exam_points: list[GradePanoramaExamPointRead] = Field(default_factory=list)
+    subject_trends: list[GradePanoramaSubjectTrendRead] = Field(default_factory=list)
+
+
+class TeacherPanoramaResponse(BaseModel):
+    teacher_id: int
+    teacher_name: str
+    academic_year_count: int
+    exam_count: int
+    year_summaries: list[GradePanoramaYearSummaryRead] = Field(default_factory=list)
+    exam_points: list[GradePanoramaExamPointRead] = Field(default_factory=list)
+    subject_trends: list[GradePanoramaSubjectTrendRead] = Field(default_factory=list)

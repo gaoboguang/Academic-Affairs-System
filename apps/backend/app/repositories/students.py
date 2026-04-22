@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from app.models import SchoolClass, Student, StudentAttachment
+from app.models import SchoolClass, Student, StudentAttachment, StudentCareerPreference
 
 
 def build_student_query(
@@ -64,6 +64,19 @@ def get_student(session: Session, student_id: int) -> Student | None:
             selectinload(Student.attachments).joinedload(StudentAttachment.stored_file),
         )
         .where(Student.id == student_id)
+    )
+    return session.scalar(stmt)
+
+
+def get_student_career_preference(session: Session, student_id: int) -> StudentCareerPreference | None:
+    stmt = (
+        select(StudentCareerPreference)
+        .options(
+            joinedload(StudentCareerPreference.primary_direction),
+            joinedload(StudentCareerPreference.secondary_direction),
+            joinedload(StudentCareerPreference.alternative_direction),
+        )
+        .where(StudentCareerPreference.student_id == student_id)
     )
     return session.scalar(stmt)
 

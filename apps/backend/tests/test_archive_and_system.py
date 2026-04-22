@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+from io import BytesIO
+from pathlib import Path
+
+from openpyxl import load_workbook
+
+from app.models import BackupRecord, ReportExportRecord, StoredFile
+
 
 def test_growth_archive_upload_and_report_export(client) -> None:
     upload_response = client.post(
@@ -49,6 +56,14 @@ def test_growth_archive_upload_and_report_export(client) -> None:
 
     report_download = client.get(report_payload["download_url"])
     assert report_download.status_code == 200
+    report_workbook = load_workbook(BytesIO(report_download.content))
+    insight_sheet = report_workbook["摘要概览"]
+    assert insight_sheet.cell(row=1, column=1).value == "标题"
+    insight_titles = {
+        insight_sheet.cell(row=index, column=1).value
+        for index in range(2, insight_sheet.max_row + 1)
+    }
+    assert {"成长档案整体状态", "高频成长类型", "最近一条记录"} <= insight_titles
 
 
 def test_backup_restore_roundtrip(client) -> None:
@@ -98,3 +113,106 @@ def test_backup_restore_roundtrip(client) -> None:
     restored_payload = after_restore.json()
     assert restored_payload["total"] == initial_total
     assert all(item["student_no"] != "2099001" for item in restored_payload["items"])
+
+
+def test_upload_category_rejects_path_traversal(client) -> None:
+    response = client.post(
+        "/api/files/upload",
+        data={"category": "../escape"},
+        files={"file": ("note.txt", b"bad", "text/plain")},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "上传分类不合法"
+
+
+def test_runtime_file_download_rejects_invalid_paths(client) -> None:
+    traversal_response = client.get("/api/system/files", params={"path": "../README.md"})
+    assert traversal_response.status_code == 400
+    assert traversal_response.json()["detail"] == "非法文件路径"
+
+    absolute_response = client.get("/api/system/files", params={"path": "/etc/hosts"})
+    assert absolute_response.status_code == 400
+    assert absolute_response.json()["detail"] == "非法文件路径"
+
+
+def test_report_download_rejects_absolute_db_path(client, app, tmp_path: Path) -> None:
+    external_file = tmp_path / "outside-report.xlsx"
+    external_file.write_bytes(b"report")
+
+    with app.state.db.session_scope() as session:
+        record = ReportExportRecord(
+            report_type="growth_summary",
+            report_name="测试报表",
+            params_json={},
+            file_path=str(external_file),
+            status="success",
+        )
+        session.add(record)
+        session.flush()
+        export_id = record.id
+
+    response = client.get(f"/api/reports/exports/{export_id}/download")
+    assert response.status_code == 400
+    assert response.json()["detail"] == "非法文件路径"
+
+
+def test_stored_file_download_rejects_absolute_db_path(client, app, tmp_path: Path) -> None:
+    external_file = tmp_path / "outside-upload.txt"
+    external_file.write_bytes(b"upload")
+
+    with app.state.db.session_scope() as session:
+        record = StoredFile(
+            original_filename="outside-upload.txt",
+            file_path=str(external_file),
+            content_type="text/plain",
+            file_size=external_file.stat().st_size,
+            category="general",
+        )
+        session.add(record)
+        session.flush()
+        file_id = record.id
+
+    response = client.get(f"/api/files/{file_id}")
+    assert response.status_code == 400
+    assert response.json()["detail"] == "非法文件路径"
+
+
+def test_restore_backup_rejects_absolute_db_path(client, app, tmp_path: Path) -> None:
+    external_file = tmp_path / "outside-backup.zip"
+    external_file.write_bytes(b"backup")
+
+    with app.state.db.session_scope() as session:
+        record = BackupRecord(
+            backup_name="outside-backup.zip",
+            file_path=str(external_file),
+            file_size=external_file.stat().st_size,
+            status="success",
+        )
+        session.add(record)
+        session.flush()
+        backup_id = record.id
+
+    response = client.post(
+        "/api/system/restore",
+        json={"backup_id": backup_id, "auto_backup_current": False},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "非法文件路径"
+
+
+def test_system_templates_route_returns_structured_list(client) -> None:
+    response = client.get("/api/system/templates")
+    assert response.status_code == 200
+    payload = response.json()
+    assert isinstance(payload, list)
+    assert payload
+    assert "file_name" in payload[0]
+
+
+def test_system_templates_route_is_unique(app) -> None:
+    matching_routes = [
+        route
+        for route in app.routes
+        if getattr(route, "path", None) == "/api/system/templates" and "GET" in getattr(route, "methods", set())
+    ]
+    assert len(matching_routes) == 1

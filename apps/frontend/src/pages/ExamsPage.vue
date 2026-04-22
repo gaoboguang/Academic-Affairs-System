@@ -43,7 +43,13 @@
           </template>
         </el-table-column>
         <el-table-column label="科目数" prop="subject_count" width="90" />
-        <el-table-column label="状态" prop="status" width="100" />
+        <el-table-column label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="examStatusType(row.status)" effect="light">
+              {{ formatExamStatus(row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" min-width="240" fixed="right">
           <template #default="{ row }">
             <div class="action-row compact-actions">
@@ -138,19 +144,40 @@
       @closed="handleSubjectsDialogClosed"
     >
       <div class="assignment-toolbar">
-        <el-button type="primary" @click="addSubjectRow">新增科目</el-button>
+        <div>
+          <strong>勾选本次考试涉及的科目</strong>
+          <p class="subject-selector-note">
+            语文 / 数学 / 英语 / 日语 / 俄语默认 150 分，政治 / 历史 / 地理 / 物理 / 化学 / 生物默认 100 分；下方仍可逐科改分。
+          </p>
+        </div>
+        <div class="action-row compact-actions">
+          <el-button @click="selectStandardSubjects">常规九科</el-button>
+          <el-button @click="clearSelectedSubjects">清空</el-button>
+        </div>
       </div>
-      <el-table :data="subjectRows" stripe>
+      <el-checkbox-group
+        class="subject-selector-group"
+        :model-value="selectedSubjectIds"
+        @change="handleSubjectSelectionChange"
+      >
+        <el-checkbox-button
+          v-for="subject in subjectOptions"
+          :key="subject.id"
+          :label="subject.id"
+        >
+          {{ formatSubjectOptionLabel(subject) }}
+        </el-checkbox-button>
+      </el-checkbox-group>
+      <div v-if="!subjectRows.length" class="subject-empty-state">
+        请先勾选本次考试涉及的科目，再在下方调整满分、分数线和是否计入总分。
+      </div>
+      <el-table v-else :data="subjectRows" stripe>
         <el-table-column label="学科" min-width="160">
           <template #default="{ row }">
-            <el-select v-model="row.subject_id" filterable style="width: 100%">
-              <el-option
-                v-for="subject in referenceStore.subjects"
-                :key="subject.id"
-                :label="subject.name"
-                :value="subject.id"
-              />
-            </el-select>
+            <div class="subject-cell">
+              <strong>{{ resolveSubjectName(row.subject_id) }}</strong>
+              <span>默认 {{ resolveSubjectDefaultScore(row.subject_id) }} 分</span>
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="满分" width="110">
@@ -179,8 +206,8 @@
           </template>
         </el-table-column>
         <el-table-column label="操作" width="90">
-          <template #default="{ $index }">
-            <el-button link type="danger" @click="removeSubjectRow($index)">删除</el-button>
+          <template #default="{ row }">
+            <el-button link type="danger" @click="removeSelectedSubject(row.subject_id)">移除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -221,7 +248,13 @@
         <el-table-column label="导入时间" prop="import_time" min-width="160" />
         <el-table-column label="成功" prop="success_rows" width="90" />
         <el-table-column label="失败" prop="failed_rows" width="90" />
-        <el-table-column label="状态" prop="status" width="110" />
+        <el-table-column label="状态" width="110">
+          <template #default="{ row }">
+            <el-tag :type="scoreBatchStatusType(row.status)" effect="light">
+              {{ formatScoreBatchStatus(row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
       </el-table>
     </el-dialog>
   </div>
@@ -233,6 +266,14 @@ import ElMessage from "element-plus/es/components/message/index";
 import type { UploadFile } from "element-plus";
 
 import { apiRequest, openFile, uploadFile } from "../api/client";
+import {
+  buildExamSubjectOptions,
+  getExamSubjectDefaultFullScore,
+  getStandardExamSubjectIds,
+  syncExamSubjectRows,
+  type ExamSubjectDraftRow,
+  type ExamSubjectOption,
+} from "../components/exams/examSubjectConfig";
 import { useReferenceStore } from "../stores/reference";
 
 interface ExamItem {
@@ -259,6 +300,7 @@ interface ExamListResponse {
 
 interface ExamSubjectRow {
   subject_id: number | null;
+  subject_name?: string | null;
   full_score: number;
   excellent_line: number | null;
   pass_line: number | null;
@@ -317,8 +359,14 @@ const examForm = reactive({
   is_active: true,
 });
 
-const subjectRows = ref<ExamSubjectRow[]>([]);
+const subjectRows = ref<ExamSubjectDraftRow[]>([]);
 const scoreBatches = ref<ScoreBatch[]>([]);
+const subjectOptions = computed(() => buildExamSubjectOptions(referenceStore.subjects));
+const selectedSubjectIds = computed(() =>
+  subjectRows.value
+    .map((item) => item.subject_id)
+    .filter((value): value is number => typeof value === "number"),
+);
 
 const dialogTitle = computed(() => (editingExamId.value ? "编辑考试" : "新建考试"));
 const subjectsDialogTitle = computed(() => {
@@ -329,6 +377,38 @@ const importDialogTitle = computed(() => {
   const current = exams.items.find((item) => item.id === importExamId.value);
   return current ? `导入成绩 - ${current.name}` : "导入成绩";
 });
+
+function formatExamStatus(status: string): string {
+  const mapping: Record<string, string> = {
+    draft: "草稿",
+    published: "已发布",
+    archived: "已归档",
+  };
+  return mapping[status] ?? status;
+}
+
+function examStatusType(status: string): "info" | "success" | "warning" {
+  if (status === "published") return "success";
+  if (status === "archived") return "warning";
+  return "info";
+}
+
+function formatScoreBatchStatus(status: string): string {
+  const mapping: Record<string, string> = {
+    processing: "处理中",
+    success: "成功",
+    partial_success: "部分成功",
+    failed: "失败",
+  };
+  return mapping[status] ?? status;
+}
+
+function scoreBatchStatusType(status: string): "info" | "success" | "warning" | "danger" {
+  if (status === "success") return "success";
+  if (status === "partial_success") return "warning";
+  if (status === "failed") return "danger";
+  return "info";
+}
 
 function resetExamForm(): void {
   Object.assign(examForm, {
@@ -407,20 +487,39 @@ async function submitExam(): Promise<void> {
   }
 }
 
-function addSubjectRow(): void {
-  subjectRows.value.push({
-    subject_id: null,
-    full_score: 150,
-    excellent_line: null,
-    pass_line: null,
-    is_in_total: true,
-    sort_order: subjectRows.value.length + 1,
-    is_active: true,
-  });
+function formatSubjectOptionLabel(subject: ExamSubjectOption): string {
+  return `${subject.name}（${subject.defaultFullScore} 分）`;
 }
 
-function removeSubjectRow(index: number): void {
-  subjectRows.value.splice(index, 1);
+function resolveSubjectName(subjectId: number | null): string {
+  return subjectOptions.value.find((item) => item.id === subjectId)?.name ?? "未识别学科";
+}
+
+function resolveSubjectDefaultScore(subjectId: number | null): number {
+  const subject = subjectOptions.value.find((item) => item.id === subjectId);
+  return subject?.defaultFullScore ?? getExamSubjectDefaultFullScore({ code: "", name: "" });
+}
+
+function handleSubjectSelectionChange(values: Array<string | number>): void {
+  const selectedIds = values
+    .map((item) => Number(item))
+    .filter((item) => Number.isInteger(item) && item > 0);
+  subjectRows.value = syncExamSubjectRows(selectedIds, referenceStore.subjects, subjectRows.value);
+}
+
+function selectStandardSubjects(): void {
+  handleSubjectSelectionChange(getStandardExamSubjectIds(referenceStore.subjects));
+}
+
+function clearSelectedSubjects(): void {
+  subjectRows.value = [];
+}
+
+function removeSelectedSubject(subjectId: number | null): void {
+  if (subjectId == null) {
+    return;
+  }
+  handleSubjectSelectionChange(selectedSubjectIds.value.filter((item) => item !== subjectId));
 }
 
 async function openSubjects(row: ExamItem): Promise<void> {
@@ -560,6 +659,52 @@ onMounted(async () => {
   grid-column: span 2;
 }
 
+.assignment-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.subject-selector-note {
+  margin: 6px 0 0;
+  color: #6d8194;
+  line-height: 1.6;
+}
+
+.subject-selector-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.subject-empty-state {
+  padding: 16px 18px;
+  margin-bottom: 14px;
+  border: 1px dashed rgba(123, 141, 158, 0.35);
+  border-radius: 14px;
+  color: #6d8194;
+  background: rgba(245, 249, 252, 0.82);
+  line-height: 1.7;
+}
+
+.subject-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.subject-cell strong {
+  color: #22384c;
+}
+
+.subject-cell span {
+  color: #6d8194;
+  font-size: 12px;
+}
+
 .import-row {
   margin-top: 14px;
   align-items: center;
@@ -572,6 +717,10 @@ onMounted(async () => {
 
   .span-two {
     grid-column: span 1;
+  }
+
+  .assignment-toolbar {
+    flex-direction: column;
   }
 }
 </style>

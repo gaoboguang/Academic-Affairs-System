@@ -13,7 +13,8 @@
         <div v-if="profile" class="page-chip-row">
           <span class="page-chip"><strong>当前班级</strong>{{ currentClassLabel }}</span>
           <span class="page-chip"><strong>学生状态</strong>{{ profile.student.status ?? "未标注" }}</span>
-          <span class="page-chip"><strong>学生类别</strong>{{ profile.student.student_type ?? "未标注" }}</span>
+          <span class="page-chip"><strong>学生类别</strong>{{ formatStudentType(profile.student.student_type) }}</span>
+          <span class="page-chip"><strong>生源地</strong>{{ profile.student.origin_province ?? "未维护" }}</span>
           <span class="page-chip"><strong>艺体方向</strong>{{ profile.student.art_track ?? "普通方向" }}</span>
         </div>
       </div>
@@ -95,11 +96,15 @@
               </div>
               <div class="detail-item">
                 <span>学生类别</span>
-                <strong>{{ profile.student.student_type ?? "-" }}</strong>
+                <strong>{{ formatStudentType(profile.student.student_type) }}</strong>
               </div>
               <div class="detail-item">
                 <span>艺体方向</span>
                 <strong>{{ profile.student.art_track ?? "-" }}</strong>
+              </div>
+              <div class="detail-item">
+                <span>生源地</span>
+                <strong>{{ profile.student.origin_province ?? "-" }}</strong>
               </div>
               <div class="detail-item">
                 <span>联系电话</span>
@@ -278,6 +283,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 import ElMessage from "element-plus/es/components/message/index";
+import ElMessageBox from "element-plus/es/components/message-box/index";
 import type { UploadFile } from "element-plus";
 import { useRoute, useRouter } from "vue-router";
 
@@ -302,6 +308,7 @@ interface StudentDetail {
   status?: string | null;
   student_type?: string | null;
   art_track?: string | null;
+  origin_province?: string | null;
   phone?: string | null;
   address?: string | null;
   guardians: GuardianItem[];
@@ -453,6 +460,15 @@ function formatAttachmentSource(sourceType?: string | null): string {
   return sourceType;
 }
 
+function formatStudentType(value?: string | null): string {
+  if (!value) return "未标注";
+  const mapping: Record<string, string> = {
+    general: "普通生",
+    repeat: "复读生",
+  };
+  return mapping[value] ?? value;
+}
+
 async function loadProfile(): Promise<void> {
   try {
     profile.value = await apiRequest<StudentProfile>(`/api/students/${route.params.studentId}/profile`);
@@ -490,12 +506,18 @@ async function handleAttachmentUpload(uploadFileItem: UploadFile): Promise<void>
 
 async function removeAttachment(attachmentId: number): Promise<void> {
   try {
+    await ElMessageBox.confirm(
+      "删除后附件记录将不再显示，如仍需保留请先确认是否已完成下载或归档。是否继续？",
+      "删除学生附件",
+      { type: "warning" },
+    );
     await apiRequest(`/api/students/${route.params.studentId}/attachments/${attachmentId}`, {
       method: "DELETE",
     });
     ElMessage.success("学生附件已删除");
     await loadProfile();
   } catch (error) {
+    if (error === "cancel" || error === "close") return;
     ElMessage.error((error as Error).message);
   }
 }

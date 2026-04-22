@@ -18,11 +18,17 @@ from app.models.recommendation import (
     College,
     CollegeAlias,
     CollegeMajor,
+    EmploymentDirection,
+    EnrollmentPlan,
     Major,
+    MajorEmploymentMapping,
+    ProvinceVolunteerRule,
     RecommendationResult,
     RecommendationScheme,
+    VolunteerDraft,
+    VolunteerDraftItem,
 )
-from app.models.student import Student, StudentAttachment, StudentClassHistory, StudentGuardian
+from app.models.student import Student, StudentAttachment, StudentCareerPreference, StudentClassHistory, StudentGuardian
 from app.models.system import AuditLog, BackupRecord, ConfigItem, ImportJob, ReportExportRecord, StoredFile
 from app.models.teacher import (
     ClassAdviserAssignment,
@@ -57,6 +63,8 @@ __all__ = [
     "ConfigItem",
     "DictItem",
     "DictType",
+    "EmploymentDirection",
+    "EnrollmentPlan",
     "Exam",
     "ExamSubject",
     "EvaluationBatch",
@@ -67,6 +75,7 @@ __all__ = [
     "Grade",
     "ImportJob",
     "Major",
+    "MajorEmploymentMapping",
     "ReportExportRecord",
     "RecommendationResult",
     "RecommendationScheme",
@@ -78,6 +87,7 @@ __all__ = [
     "Semester",
     "Student",
     "StudentAttachment",
+    "StudentCareerPreference",
     "StudentClassHistory",
     "StudentGrowthAttachment",
     "StudentGrowthRecord",
@@ -94,4 +104,7 @@ __all__ = [
     "WorkloadRuleItem",
     "WorkloadRuleVersion",
     "PeriodDefinition",
+    "ProvinceVolunteerRule",
+    "VolunteerDraft",
+    "VolunteerDraftItem",
 ]

@@ -5,6 +5,7 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ._recommendations_rules import bootstrap_province_volunteer_rules
 from app.models import (
     AcademicYear,
     ConfigItem,
@@ -89,6 +90,8 @@ SUBJECT_SEEDS = [
     ("chinese", "语文"),
     ("math", "数学"),
     ("english", "英语"),
+    ("japanese", "日语"),
+    ("russian", "俄语"),
     ("physics", "物理"),
     ("chemistry", "化学"),
     ("biology", "生物"),
@@ -96,6 +99,27 @@ SUBJECT_SEEDS = [
     ("history", "历史"),
     ("geography", "地理"),
 ]
+
+
+def ensure_builtin_subjects(session: Session) -> None:
+    existing_subjects = {
+        row.code: row for row in session.scalars(select(Subject)).all()
+    }
+    for index, (code, name) in enumerate(SUBJECT_SEEDS, start=1):
+        if code in existing_subjects:
+            existing_subjects[code].name = name
+            existing_subjects[code].sort_order = index
+            continue
+        session.add(
+            Subject(
+                code=code,
+                name=name,
+                category="academic",
+                sort_order=index,
+                is_in_total_default=True,
+            )
+        )
+    session.flush()
 
 
 def _upsert_dict_type(session: Session, code: str, name: str) -> DictType:
@@ -130,24 +154,7 @@ def seed_reference_data(session: Session) -> None:
                 )
             )
 
-    existing_subjects = {
-        row.code: row for row in session.scalars(select(Subject)).all()
-    }
-    for index, (code, name) in enumerate(SUBJECT_SEEDS, start=1):
-        if code in existing_subjects:
-            existing_subjects[code].name = name
-            existing_subjects[code].sort_order = index
-            continue
-        session.add(
-            Subject(
-                code=code,
-                name=name,
-                category="academic",
-                sort_order=index,
-                is_in_total_default=True,
-            )
-        )
-
+    ensure_builtin_subjects(session)
     existing_grades = {row.name: row for row in session.scalars(select(Grade)).all()}
     for index, grade_name in enumerate(["高一", "高二", "高三"], start=1):
         if grade_name in existing_grades:
@@ -175,6 +182,7 @@ def seed_reference_data(session: Session) -> None:
             )
         )
 
+    bootstrap_province_volunteer_rules(session, record_audit=False)
     session.flush()
 
     academic_year = session.scalar(

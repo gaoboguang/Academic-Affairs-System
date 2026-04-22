@@ -18,6 +18,7 @@ class ReportExportPayload(BaseModel):
     semester_id: int | None = None
     rule_version_id: int | None = None
     scheme_id: int | None = None
+    draft_id: int | None = None
 
 
 class ReportExportRecordRead(ORMModel):

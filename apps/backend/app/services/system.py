@@ -38,6 +38,7 @@ from app.schemas.system import (
     SystemTemplateRead,
 )
 from app.services.data_quality import build_data_repair_scan, execute_repair_action
+from app.utils.files import resolve_allowed_file_path, resolve_named_file_in_directory, validate_upload_category
 from app.utils.parsers import make_timestamped_filename, relative_to_project
 
 CONFIG_GROUP_TITLES = {
@@ -159,11 +160,11 @@ def list_templates(settings) -> list[SystemTemplateRead]:
 
 
 def get_template_path(settings, template_name: str) -> Path:
-    safe_name = Path(template_name).name
-    path = settings.templates_dir / safe_name
-    if not path.exists() or not path.is_file():
-        raise HTTPException(status_code=404, detail="模板文件不存在")
-    return path
+    return resolve_named_file_in_directory(
+        settings.templates_dir,
+        template_name,
+        not_found_detail="模板文件不存在",
+    )
 
 
 def get_data_repair_scan(session: Session) -> DataRepairScanRead:
@@ -194,10 +195,11 @@ def upload_file(
 ) -> StoredFileRead:
     if not filename:
         raise HTTPException(status_code=400, detail="文件名不能为空")
+    safe_category = validate_upload_category(category)
     safe_name = Path(filename).name
     suffix = Path(safe_name).suffix
     stored_name = f"{uuid4().hex}{suffix}"
-    target_dir = settings.uploads_dir / category
+    target_dir = settings.uploads_dir / safe_category
     target_dir.mkdir(parents=True, exist_ok=True)
     target_path = target_dir / stored_name
     target_path.write_bytes(content)
@@ -206,7 +208,7 @@ def upload_file(
         file_path=relative_to_project(target_path, settings.project_root),
         content_type=content_type,
         file_size=len(content),
-        category=category,
+        category=safe_category,
     )
     session.add(record)
     session.flush()
@@ -216,7 +218,7 @@ def upload_file(
         action="upload",
         target_type="stored_file",
         target_id=str(record.id),
-        detail_json={"category": category, "original_filename": safe_name},
+        detail_json={"category": safe_category, "original_filename": safe_name},
     )
     return _serialize_stored_file(record)
 
@@ -225,10 +227,12 @@ def get_file_path(session: Session, settings, file_id: int) -> Path:
     item = get_stored_file(session, file_id)
     if not item or not item.is_active:
         raise HTTPException(status_code=404, detail="文件不存在")
-    path = settings.project_root / item.file_path
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="文件不存在")
-    return path
+    return resolve_allowed_file_path(
+        item.file_path,
+        allowed_roots=[settings.uploads_dir],
+        project_root=settings.project_root,
+        not_found_detail="文件不存在",
+    )
 
 
 def create_backup(request: Request) -> BackupCreateResponse:
@@ -286,10 +290,12 @@ def restore_backup(request: Request, payload: BackupRestorePayload) -> dict[str,
         record = get_backup_record(session, payload.backup_id)
         if not record:
             raise HTTPException(status_code=404, detail="备份记录不存在")
-        backup_path = settings.project_root / record.file_path
-
-    if not backup_path.exists():
-        raise HTTPException(status_code=404, detail="备份文件不存在")
+        backup_path = resolve_allowed_file_path(
+            record.file_path,
+            allowed_roots=[settings.backups_dir],
+            project_root=settings.project_root,
+            not_found_detail="备份文件不存在",
+        )
 
     with TemporaryDirectory() as tmp_dir:
         tmp_root = Path(tmp_dir)
@@ -328,10 +334,12 @@ def get_backup_path(session: Session, settings, backup_id: int) -> Path:
     record = get_backup_record(session, backup_id)
     if not record:
         raise HTTPException(status_code=404, detail="备份记录不存在")
-    path = settings.project_root / record.file_path
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="备份文件不存在")
-    return path
+    return resolve_allowed_file_path(
+        record.file_path,
+        allowed_roots=[settings.backups_dir],
+        project_root=settings.project_root,
+        not_found_detail="备份文件不存在",
+    )
 
 
 def _serialize_config_item(item: ConfigItem) -> SystemConfigItemRead:

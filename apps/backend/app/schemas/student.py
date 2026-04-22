@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
@@ -36,6 +36,7 @@ class StudentPayload(BaseModel):
     status: str | None = None
     student_type: str | None = None
     art_track: str | None = None
+    origin_province: str | None = None
     phone: str | None = None
     address: str | None = None
     note: str | None = None
@@ -58,11 +59,48 @@ class StudentRead(ORMModel):
     status: str | None = None
     student_type: str | None = None
     art_track: str | None = None
+    origin_province: str | None = None
     phone: str | None = None
     address: str | None = None
     note: str | None = None
     is_active: bool
     guardians: list[StudentGuardianRead] = []
+
+
+class StudentCareerPreferencePayload(BaseModel):
+    primary_direction_id: int | None = None
+    secondary_direction_id: int | None = None
+    alternative_direction_id: int | None = None
+    priority_focuses_json: list[str] = Field(default_factory=list)
+    preferred_industries_json: list[str] = Field(default_factory=list)
+    preferred_job_types_json: list[str] = Field(default_factory=list)
+    target_employment_cities_json: list[str] = Field(default_factory=list)
+    accepts_postgraduate: bool = False
+    accepts_public_service: bool = False
+    accepts_certificate: bool = False
+    accepts_long_training: bool = False
+
+
+class StudentCareerPreferenceRead(ORMModel):
+    id: int
+    student_id: int
+    primary_direction_id: int | None = None
+    primary_direction_name: str | None = None
+    secondary_direction_id: int | None = None
+    secondary_direction_name: str | None = None
+    alternative_direction_id: int | None = None
+    alternative_direction_name: str | None = None
+    priority_focuses_json: list[str] = Field(default_factory=list)
+    preferred_industries_json: list[str] = Field(default_factory=list)
+    preferred_job_types_json: list[str] = Field(default_factory=list)
+    target_employment_cities_json: list[str] = Field(default_factory=list)
+    accepts_postgraduate: bool
+    accepts_public_service: bool
+    accepts_certificate: bool
+    accepts_long_training: bool
+    created_at: datetime
+    updated_at: datetime
+    is_active: bool
 
 
 class StudentListResponse(BaseModel):

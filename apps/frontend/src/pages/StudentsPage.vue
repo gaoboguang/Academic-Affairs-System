@@ -5,7 +5,7 @@
         <div class="page-eyebrow">基础台账 / 学生中心</div>
         <h2 class="page-title">学生中心</h2>
         <p class="page-subtitle">
-          当前支持学生列表、详情页、模板下载、批量导入和 Excel 导出。学生状态、类别和艺体方向都从基础字典读取。
+          当前支持学生列表、详情页、模板下载、批量导入和 Excel 导出。学生状态、类别、艺体方向和生源地会一起沉到学生主档。
         </p>
         <div class="page-chip-row">
           <span class="page-chip"><strong>学生总数</strong>{{ students.total }}</span>
@@ -82,17 +82,33 @@
       <el-alert
         v-if="importResult"
         :title="importResult.message"
-        type="success"
+        :type="importAlertType"
         show-icon
         :closable="false"
       />
+      <div v-if="importResult" class="import-feedback">
+        <p class="import-feedback-summary">{{ importSummary }}</p>
+        <p v-if="importResult.notice_preview?.length" class="import-feedback-title">本次导入提示</p>
+        <ul v-if="importResult.notice_preview?.length" class="import-feedback-list import-feedback-list-notice">
+          <li v-for="item in importResult.notice_preview" :key="item">{{ item }}</li>
+        </ul>
+        <p v-if="importResult.error_preview?.length" class="import-feedback-title">前三条错误</p>
+        <ul v-if="importResult.error_preview?.length" class="import-feedback-list">
+          <li v-for="item in importResult.error_preview" :key="item">{{ item }}</li>
+        </ul>
+        <div v-if="importResult.error_report_path" class="action-row import-feedback-actions">
+          <el-button link type="primary" @click="downloadImportErrorReport(importResult.error_report_path)">
+            下载错误报告
+          </el-button>
+        </div>
+      </div>
     </section>
 
     <section class="soft-card panel-block">
       <div class="section-head compact">
         <div>
           <h3>学生列表</h3>
-          <p>列表保留基础身份、当前班级、类别和联系方式，详情页承接更深的信息。</p>
+          <p>列表保留基础身份、当前班级、生源地和联系方式，详情页承接更深的信息。</p>
         </div>
         <span class="panel-caption">共 {{ students.total }} 条</span>
       </div>
@@ -118,6 +134,7 @@
               {{ resolveDictName("art_track", row.art_track) }}
             </template>
           </el-table-column>
+          <el-table-column label="生源地" prop="origin_province" width="100" />
           <el-table-column label="联系电话" prop="phone" min-width="130" />
           <el-table-column label="操作" width="150" fixed="right">
             <template #default="{ row }">
@@ -223,6 +240,16 @@
               />
             </el-select>
           </el-form-item>
+          <el-form-item label="生源地">
+            <el-select v-model="formState.origin_province" clearable filterable allow-create default-first-option>
+              <el-option
+                v-for="province in provinceOptions"
+                :key="province"
+                :label="province"
+                :value="province"
+              />
+            </el-select>
+          </el-form-item>
           <el-form-item label="联系电话">
             <el-input v-model="formState.phone" />
           </el-form-item>
@@ -250,6 +277,7 @@ import { useRouter } from "vue-router";
 
 import { apiRequest, openFile, uploadFile } from "../api/client";
 import { useReferenceStore } from "../stores/reference";
+import { buildImportErrorReportUrl, buildImportSummary, resolveImportAlertType } from "../utils/importFeedback";
 
 interface StudentItem {
   id: number;
@@ -261,6 +289,7 @@ interface StudentItem {
   status?: string;
   student_type?: string;
   art_track?: string;
+  origin_province?: string | null;
   phone?: string;
   note?: string;
 }
@@ -274,7 +303,13 @@ interface StudentListResponse {
 
 interface ImportResult {
   message: string;
+  total_rows?: number;
+  success_rows?: number;
+  failed_rows?: number;
+  skipped_rows?: number;
   error_report_path?: string;
+  error_preview?: string[];
+  notice_preview?: string[];
 }
 
 const referenceStore = useReferenceStore();
@@ -312,6 +347,7 @@ const formState = reactive<Record<string, unknown>>({
   status: null,
   student_type: null,
   art_track: null,
+  origin_province: null,
   phone: "",
   address: "",
   note: "",
@@ -331,6 +367,8 @@ const importStrategyLabel = computed(() => {
   };
   return mapping[importStrategy.value] ?? importStrategy.value;
 });
+const importAlertType = computed(() => (importResult.value ? resolveImportAlertType(importResult.value) : "success"));
+const importSummary = computed(() => (importResult.value ? buildImportSummary(importResult.value) : ""));
 const overviewCards = computed(() => [
   {
     label: "当前页班级",
@@ -343,6 +381,12 @@ const overviewCards = computed(() => [
     value: students.items.filter((item) => item.art_track).length,
     help: "当前结果页里已标记艺体方向的学生。",
     tone: "tone-amber",
+  },
+  {
+    label: "生源地",
+    value: students.items.filter((item) => item.origin_province).length,
+    help: "当前结果页里已维护高考生源地的学生。",
+    tone: "tone-green",
   },
   {
     label: "联系电话",
@@ -371,6 +415,7 @@ function resetForm(): void {
     status: null,
     student_type: null,
     art_track: null,
+    origin_province: null,
     phone: "",
     address: "",
     note: "",
@@ -462,14 +507,22 @@ async function handleImport(uploadFileItem: UploadFile): Promise<void> {
     return;
   }
   try {
+    importResult.value = null;
     importResult.value = await uploadFile<ImportResult>("/api/students/import", uploadFileItem.raw, {
       strategy: importStrategy.value,
     });
-    ElMessage.success(importResult.value.message);
+    ElMessage({
+      type: importResult.value.failed_rows ? "warning" : "success",
+      message: importResult.value.message,
+    });
     await Promise.all([referenceStore.loadCore(), loadStudents()]);
   } catch (error) {
     ElMessage.error((error as Error).message);
   }
+}
+
+function downloadImportErrorReport(path: string): void {
+  openFile(buildImportErrorReportUrl(path));
 }
 
 function handlePageChange(nextPage: number): void {
@@ -481,6 +534,40 @@ onMounted(async () => {
   await referenceStore.loadAll();
   await loadStudents();
 });
+
+const provinceOptions = [
+  "北京",
+  "天津",
+  "河北",
+  "山西",
+  "内蒙古",
+  "辽宁",
+  "吉林",
+  "黑龙江",
+  "上海",
+  "江苏",
+  "浙江",
+  "安徽",
+  "福建",
+  "江西",
+  "山东",
+  "河南",
+  "湖北",
+  "湖南",
+  "广东",
+  "广西",
+  "海南",
+  "重庆",
+  "四川",
+  "贵州",
+  "云南",
+  "西藏",
+  "陕西",
+  "甘肃",
+  "青海",
+  "宁夏",
+  "新疆",
+];
 </script>
 
 <style scoped>
@@ -493,6 +580,44 @@ onMounted(async () => {
 .overview-panel,
 .overview-card {
   padding: 24px;
+}
+
+.import-feedback {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(244, 248, 252, 0.9);
+  border: 1px solid rgba(145, 163, 176, 0.22);
+}
+
+.import-feedback-summary {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.import-feedback-title {
+  margin: 10px 0 0;
+  color: #1f3448;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.import-feedback-list {
+  margin: 10px 0 0;
+  padding-left: 20px;
+  color: var(--text-primary);
+}
+
+.import-feedback-list-notice {
+  color: #335d78;
+}
+
+.import-feedback-list li + li {
+  margin-top: 6px;
+}
+
+.import-feedback-actions {
+  margin-top: 8px;
 }
 
 .overview-panel {

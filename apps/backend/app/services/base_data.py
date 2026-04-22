@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models import AcademicYear, ConfigItem, DictItem, DictType, Grade, SchoolClass, Semester, Subject, Teacher
 from app.repositories import base_data as repo
+from app.services.bootstrap import ensure_builtin_subjects
 from app.schemas.base_data import (
     AcademicYearPayload,
     AcademicYearRead,
@@ -204,6 +205,7 @@ def update_class(session: Session, class_id: int, payload: ClassPayload) -> Clas
 
 
 def list_subjects(session: Session) -> list[SubjectRead]:
+    ensure_builtin_subjects(session)
     return [_serialize_subject(item) for item in repo.list_subjects(session)]
 
 
@@ -271,4 +273,3 @@ def update_dict_item(session: Session, dict_item_id: int, payload: DictItemPaylo
 
 def list_config_items(session: Session) -> list[ConfigItemRead]:
     return [ConfigItemRead.model_validate(item) for item in repo.list_config_items(session)]
-

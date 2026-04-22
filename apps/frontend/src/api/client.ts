@@ -1,10 +1,12 @@
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
   const response = await fetch(path, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
     ...init,
+    headers,
   });
 
   if (!response.ok) {
@@ -42,4 +44,3 @@ export async function uploadFile<T>(
 export function openFile(path: string): void {
   window.open(path, "_blank", "noopener,noreferrer");
 }
-

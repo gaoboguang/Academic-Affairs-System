@@ -3,6 +3,7 @@ from __future__ import annotations
 from io import BytesIO
 
 from openpyxl import Workbook
+from openpyxl import load_workbook
 
 
 def build_evaluation_workbook(rows: list[list[object]] | None = None) -> bytes:
@@ -145,6 +146,16 @@ def test_evaluation_and_adviser_quant_workflow(client) -> None:
         json={"report_type": "evaluation_summary", "batch_id": batch_id},
     )
     assert evaluation_report_response.status_code == 200
+    evaluation_download_response = client.get(evaluation_report_response.json()["download_url"])
+    assert evaluation_download_response.status_code == 200
+    evaluation_workbook = load_workbook(BytesIO(evaluation_download_response.content))
+    evaluation_insight_sheet = evaluation_workbook["摘要概览"]
+    assert evaluation_insight_sheet.cell(row=1, column=1).value == "标题"
+    evaluation_titles = {
+        evaluation_insight_sheet.cell(row=index, column=1).value
+        for index in range(2, evaluation_insight_sheet.max_row + 1)
+    }
+    assert {"评教整体状态", "当前领先教师", "需重点复核教师", "当前高频优势维度"} <= evaluation_titles
 
     quant_report_response = client.post(
         "/api/reports/export",
@@ -155,3 +166,13 @@ def test_evaluation_and_adviser_quant_workflow(client) -> None:
         },
     )
     assert quant_report_response.status_code == 200
+    quant_download_response = client.get(quant_report_response.json()["download_url"])
+    assert quant_download_response.status_code == 200
+    quant_workbook = load_workbook(BytesIO(quant_download_response.content))
+    quant_insight_sheet = quant_workbook["摘要概览"]
+    assert quant_insight_sheet.cell(row=1, column=1).value == "标题"
+    quant_titles = {
+        quant_insight_sheet.cell(row=index, column=1).value
+        for index in range(2, quant_insight_sheet.max_row + 1)
+    }
+    assert {"量化整体状态", "总分最高教师", "高频得分类别"} <= quant_titles

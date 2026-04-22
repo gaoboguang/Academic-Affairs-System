@@ -11,6 +11,7 @@ from app.api.deps import get_db_session, get_settings
 from app.core.config import Settings
 from app.schemas.archive import StudentGrowthRecordPayload, StudentGrowthRecordRead, StudentGrowthTimelineResponse
 from app.services import archive as service
+from app.utils.files import resolve_allowed_file_path
 
 router = APIRouter(prefix="/archives", tags=["growth-archive"])
 
@@ -65,6 +66,9 @@ def export_growth_summary(
     settings: Settings = Depends(get_settings),
 ) -> FileResponse:
     result = service.export_student_growth_summary(session, settings, student_id)
-    path = settings.project_root / result["file_path"]
+    path = resolve_allowed_file_path(
+        result["file_path"],
+        allowed_roots=[settings.exports_dir],
+        project_root=settings.project_root,
+    )
     return FileResponse(path, filename=Path(path).name)
-

@@ -204,7 +204,10 @@ def import_scores(
     job.started_at = datetime.now()
 
     importer = ScoreImporter(session, settings, exam)
-    result = importer.execute(filename=filename, content=content, strategy=strategy, batch=batch)
+    try:
+        result = importer.execute(filename=filename, content=content, strategy=strategy, batch=batch)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     batch.total_rows = result.total_rows
     batch.success_rows = result.success_rows

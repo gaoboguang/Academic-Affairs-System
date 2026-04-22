@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from zipfile import BadZipFile
 
 from fastapi import HTTPException, status
+from openpyxl.utils.exceptions import InvalidFileException
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
@@ -20,16 +22,25 @@ from app.models import (
     ScoreTotalSnapshot,
     Student,
     StudentAttachment,
+    StudentCareerPreference,
     StudentClassHistory,
     StudentGuardian,
     Subject,
 )
 from app.repositories.archive import list_growth_records as repo_list_growth_records
-from app.repositories.students import get_student, get_student_by_no, list_students as repo_list_students
+from app.repositories.recommendations import get_employment_direction
+from app.repositories.students import (
+    get_student,
+    get_student_by_no,
+    get_student_career_preference as repo_get_student_career_preference,
+    list_students as repo_list_students,
+)
 from app.repositories.system import create_import_job, get_stored_file, write_audit_log
 from app.schemas.student import (
     StudentAttachmentPayload,
     StudentAttachmentSummary,
+    StudentCareerPreferencePayload,
+    StudentCareerPreferenceRead,
     StudentClassHistoryRead,
     StudentExamTrendItem,
     StudentGuardianPayload,
@@ -65,11 +76,36 @@ def _serialize_student(item: Student) -> StudentRead:
         status=item.status,
         student_type=item.student_type,
         art_track=item.art_track,
+        origin_province=item.origin_province,
         phone=item.phone,
         address=item.address,
         note=item.note,
         is_active=item.is_active,
         guardians=[_serialize_guardian(guardian) for guardian in item.guardians],
+    )
+
+
+def _serialize_student_career_preference(item: StudentCareerPreference) -> StudentCareerPreferenceRead:
+    return StudentCareerPreferenceRead(
+        id=item.id,
+        student_id=item.student_id,
+        primary_direction_id=item.primary_direction_id,
+        primary_direction_name=item.primary_direction.name if item.primary_direction else None,
+        secondary_direction_id=item.secondary_direction_id,
+        secondary_direction_name=item.secondary_direction.name if item.secondary_direction else None,
+        alternative_direction_id=item.alternative_direction_id,
+        alternative_direction_name=item.alternative_direction.name if item.alternative_direction else None,
+        priority_focuses_json=item.priority_focuses_json or [],
+        preferred_industries_json=item.preferred_industries_json or [],
+        preferred_job_types_json=item.preferred_job_types_json or [],
+        target_employment_cities_json=item.target_employment_cities_json or [],
+        accepts_postgraduate=item.accepts_postgraduate,
+        accepts_public_service=item.accepts_public_service,
+        accepts_certificate=item.accepts_certificate,
+        accepts_long_training=item.accepts_long_training,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
+        is_active=item.is_active,
     )
 
 
@@ -211,6 +247,62 @@ def get_student_profile(session: Session, student_id: int) -> StudentProfileRead
     )
 
 
+def get_student_career_preference(session: Session, student_id: int) -> StudentCareerPreferenceRead | None:
+    _ensure_student_exists(session, student_id)
+    item = repo_get_student_career_preference(session, student_id)
+    return _serialize_student_career_preference(item) if item and item.is_active else None
+
+
+def create_student_career_preference(
+    session: Session,
+    student_id: int,
+    payload: StudentCareerPreferencePayload,
+) -> StudentCareerPreferenceRead:
+    _ensure_student_exists(session, student_id)
+    existing = repo_get_student_career_preference(session, student_id)
+    if existing and existing.is_active:
+        raise HTTPException(status_code=400, detail="该学生已存在职业意向")
+    item = existing or StudentCareerPreference(student_id=student_id)
+    if not existing:
+        session.add(item)
+    item.is_active = True
+    _apply_student_career_preference_payload(session, item, payload)
+    session.flush()
+    session.refresh(item)
+    write_audit_log(
+        session,
+        module="students",
+        action="create_career_preference",
+        target_type="student_career_preference",
+        target_id=str(item.id),
+        detail_json={"student_id": student_id},
+    )
+    return _serialize_student_career_preference(item)
+
+
+def update_student_career_preference(
+    session: Session,
+    student_id: int,
+    payload: StudentCareerPreferencePayload,
+) -> StudentCareerPreferenceRead:
+    _ensure_student_exists(session, student_id)
+    item = repo_get_student_career_preference(session, student_id)
+    if not item or not item.is_active:
+        raise HTTPException(status_code=404, detail="学生职业意向不存在")
+    _apply_student_career_preference_payload(session, item, payload)
+    session.flush()
+    session.refresh(item)
+    write_audit_log(
+        session,
+        module="students",
+        action="update_career_preference",
+        target_type="student_career_preference",
+        target_id=str(item.id),
+        detail_json={"student_id": student_id},
+    )
+    return _serialize_student_career_preference(item)
+
+
 def list_student_attachments(session: Session, student_id: int) -> list[StudentAttachmentSummary]:
     item = get_student(session, student_id)
     if not item:
@@ -324,6 +416,52 @@ def update_student(session: Session, student_id: int, payload: StudentPayload) -
     return _serialize_student(item)
 
 
+def _ensure_student_exists(session: Session, student_id: int) -> Student:
+    item = get_student(session, student_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="学生不存在")
+    return item
+
+
+def _apply_student_career_preference_payload(
+    session: Session,
+    item: StudentCareerPreference,
+    payload: StudentCareerPreferencePayload,
+) -> None:
+    selected_direction_ids = [
+        direction_id
+        for direction_id in [
+            payload.primary_direction_id,
+            payload.secondary_direction_id,
+            payload.alternative_direction_id,
+        ]
+        if direction_id is not None
+    ]
+    if len(selected_direction_ids) != len(set(selected_direction_ids)):
+        raise HTTPException(status_code=400, detail="首选、次选和替代就业方向不能重复")
+
+    for direction_id in selected_direction_ids:
+        direction = get_employment_direction(session, direction_id)
+        if not direction or not direction.is_active:
+            raise HTTPException(status_code=404, detail="就业方向不存在")
+
+    invalid_focuses = sorted(set(payload.priority_focuses_json) - {"stability", "salary", "interest", "long_term"})
+    if invalid_focuses:
+        raise HTTPException(status_code=400, detail=f"职业意向重点无效：{'、'.join(invalid_focuses)}")
+
+    item.primary_direction_id = payload.primary_direction_id
+    item.secondary_direction_id = payload.secondary_direction_id
+    item.alternative_direction_id = payload.alternative_direction_id
+    item.priority_focuses_json = _dedupe_strings(payload.priority_focuses_json)
+    item.preferred_industries_json = _dedupe_strings(payload.preferred_industries_json)
+    item.preferred_job_types_json = _dedupe_strings(payload.preferred_job_types_json)
+    item.target_employment_cities_json = _dedupe_strings(payload.target_employment_cities_json)
+    item.accepts_postgraduate = payload.accepts_postgraduate
+    item.accepts_public_service = payload.accepts_public_service
+    item.accepts_certificate = payload.accepts_certificate
+    item.accepts_long_training = payload.accepts_long_training
+
+
 def _apply_student_payload(
     session: Session,
     item: Student,
@@ -344,6 +482,7 @@ def _apply_student_payload(
     item.status = payload.status
     item.student_type = payload.student_type
     item.art_track = payload.art_track
+    item.origin_province = payload.origin_province
     item.phone = payload.phone
     item.address = payload.address
     item.note = payload.note
@@ -367,7 +506,10 @@ def import_students(
     job = create_import_job(session, "students", filename)
     job.started_at = datetime.now()
     importer = StudentImporter(session, settings)
-    result = importer.execute(filename=filename, content=content, strategy=strategy)
+    try:
+        result = importer.execute(filename=filename, content=content, strategy=strategy)
+    except (ValueError, InvalidFileException, BadZipFile) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     job.finished_at = datetime.now()
     job.status = "success" if result.failed_rows == 0 else "partial_success"
     job.result_json = result.model_dump()
@@ -578,6 +720,18 @@ def _collect_student_attachments(direct_attachments, growth_records) -> list[Stu
                 )
             )
     return attachments
+
+
+def _dedupe_strings(values: list[str]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        normalized = value.strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        result.append(normalized)
+    return result
 
 
 def _get_config_value(

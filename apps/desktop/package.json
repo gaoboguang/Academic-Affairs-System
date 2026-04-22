@@ -1,0 +1,65 @@
+{
+  "name": "@local-edu/desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "本地教务工具桌面壳",
+  "author": "Codex",
+  "main": "main.cjs",
+  "scripts": {
+    "dev": "node ./scripts/dev.cjs",
+    "bundle": "node ./scripts/prepare.cjs",
+    "dist": "node ./scripts/dist.cjs"
+  },
+  "devDependencies": {
+    "electron": "37.3.1",
+    "electron-builder": "26.0.12"
+  },
+  "build": {
+    "appId": "local.edu.tool.desktop",
+    "productName": "本地教务工具",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "buildResources": "buildResources",
+      "output": "../../dist/desktop"
+    },
+    "files": [
+      "main.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": ".dist/frontend",
+        "to": "frontend"
+      },
+      {
+        "from": ".dist/backend",
+        "to": "backend"
+      }
+    ],
+    "asar": true,
+    "mac": {
+      "target": [
+        "dir"
+      ]
+    },
+    "win": {
+      "target": [
+        "dir",
+        "nsis"
+      ]
+    },
+    "linux": {
+      "target": [
+        "dir"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "本地教务工具"
+    }
+  }
+}

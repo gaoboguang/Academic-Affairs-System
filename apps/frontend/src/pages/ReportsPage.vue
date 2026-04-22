@@ -12,6 +12,7 @@
           <span class="page-chip"><strong>当前类型</strong>{{ currentReportTypeLabel }}</span>
           <span class="page-chip"><strong>导出记录</strong>{{ exportRecords.length }}</span>
           <span class="page-chip"><strong>推荐方案</strong>{{ recommendationOptions.length }}</span>
+          <span class="page-chip"><strong>志愿草稿</strong>{{ volunteerDraftOptions.length }}</span>
         </div>
       </div>
       <div class="action-row">
@@ -73,6 +74,14 @@
             :value="item.scheme_id"
           />
         </el-select>
+        <el-select v-if="requiresDraft" v-model="form.draft_id" filterable placeholder="志愿草稿">
+          <el-option
+            v-for="item in volunteerDraftOptions"
+            :key="item.id"
+            :label="`${item.student_name ?? '-'} / ${item.name}`"
+            :value="item.id"
+          />
+        </el-select>
         <el-select v-if="requiresBatch" v-model="form.batch_id" filterable placeholder="评教批次">
           <el-option
             v-for="item in evaluationBatchOptions"
@@ -124,8 +133,33 @@
       </div>
       <div class="action-row toolbar-row">
         <el-button type="primary" :loading="exporting" @click="exportReport">生成报表</el-button>
+        <el-button
+          v-if="supportsPrintPreview"
+          :disabled="Boolean(missingRequiredFields.length) || !printPreviewPath"
+          @click="openPrintPreview"
+        >
+          打印预览
+        </el-button>
         <el-button @click="loadExportRecords">刷新记录</el-button>
       </div>
+      <el-alert
+        v-if="missingRequiredFields.length"
+        class="report-alert"
+        type="warning"
+        show-icon
+        :closable="false"
+        :title="`当前报表还缺少：${missingRequiredFields.join('、')}`"
+      />
+      <ReportInsightPanel
+        v-if="showReportInsightSection"
+        :description="reportInsightDescription"
+        :loading="reportInsightLoading"
+        :error="reportInsightError"
+        :loaded="reportInsightLoaded"
+        :cards="reportInsightCards"
+        :groups="reportInsightGroups"
+        @retry="reloadReportInsights"
+      />
     </section>
 
     <section class="soft-card panel-block">
@@ -138,14 +172,24 @@
       <div class="table-shell">
         <el-table :data="exportRecords" stripe>
           <el-table-column label="报表名称" prop="report_name" min-width="180" />
-          <el-table-column label="类型" prop="report_type" min-width="140" />
+          <el-table-column label="类型" min-width="140">
+            <template #default="{ row }">
+              {{ formatReportType(row.report_type) }}
+            </template>
+          </el-table-column>
           <el-table-column label="导出参数" min-width="260">
             <template #default="{ row }">
               {{ formatParams(row.params_json) }}
             </template>
           </el-table-column>
           <el-table-column label="导出时间" prop="exported_at" min-width="170" />
-          <el-table-column label="状态" prop="status" width="100" />
+          <el-table-column label="状态" width="100">
+            <template #default="{ row }">
+              <el-tag :type="exportStatusType(row.status)" effect="light">
+                {{ formatExportStatus(row.status) }}
+              </el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="操作" width="100" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="openFile(row.download_url)">下载</el-button>
@@ -163,7 +207,34 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import ElMessage from "element-plus/es/components/message/index";
 
 import { apiRequest, openFile } from "../api/client";
-import { type OptionItem, useReferenceStore } from "../stores/reference";
+import ReportInsightPanel from "../components/reports/ReportInsightPanel.vue";
+import {
+  createEmptyReportInsightDataState,
+  fetchReportInsightData,
+} from "../components/reports/reportInsightLoader";
+import {
+  buildReportInsightCards,
+  buildReportInsightGroups,
+  getReportInsightDescription,
+  shouldShowReportInsightSection,
+} from "../components/reports/reportInsightPresenter";
+import {
+  resolveRecommendationReportInsightContext,
+} from "../components/reports/reportInsights";
+import {
+  buildReportExportPayload,
+  getMissingRequiredReportFields,
+  getMissingRequiredReportFieldsMessage,
+  getReportPrintPreviewPath,
+  getReportRuleOptionScope,
+  getReportTypeLabel,
+  REPORT_TYPE_OPTIONS,
+  reportTypeUsesField,
+} from "../components/reports/reportTypeConfig";
+import {
+  type OptionItem,
+  useReferenceStore,
+} from "../stores/reference";
 
 interface ExamOption {
   id: number;
@@ -191,6 +262,12 @@ interface RecommendationOption {
   scheme_name: string;
   student_id: number;
   student_name: string;
+  province: string;
+  target_year?: number | null;
+  score_input_label?: string | null;
+  score_confidence?: string | null;
+  reference_exam_name?: string | null;
+  use_historical_mapping?: boolean;
   generated_at: string;
 }
 
@@ -198,6 +275,18 @@ interface EvaluationBatchOption {
   id: number;
   template_name?: string | null;
   semester_name?: string | null;
+}
+
+interface VolunteerDraftOption {
+  id: number;
+  name: string;
+  student_id: number;
+  student_name?: string | null;
+  exam_id: number;
+  exam_name?: string | null;
+  batch?: string | null;
+  exam_mode?: string | null;
+  item_count: number;
 }
 
 interface ExportRecord {
@@ -217,27 +306,22 @@ const teacherOptions = ref<TeacherOption[]>([]);
 const ruleVersions = ref<RuleVersion[]>([]);
 const adviserRuleVersions = ref<RuleVersion[]>([]);
 const recommendationOptions = ref<RecommendationOption[]>([]);
+const volunteerDraftOptions = ref<VolunteerDraftOption[]>([]);
 const evaluationBatchOptions = ref<EvaluationBatchOption[]>([]);
 const exportRecords = ref<ExportRecord[]>([]);
+const reportInsightData = ref(createEmptyReportInsightDataState());
+const reportInsightLoading = ref(false);
+const reportInsightLoaded = ref(false);
+const reportInsightError = ref("");
 const exporting = ref(false);
-
-const reportTypeOptions = [
-  { value: "student_analysis", label: "学生成绩分析单" },
-  { value: "class_analysis", label: "班级成绩分析报表" },
-  { value: "grade_summary", label: "年级成绩汇总表" },
-  { value: "teacher_analysis", label: "教师任教分析报表" },
-  { value: "teacher_workload", label: "教师课时与工作量报表" },
-  { value: "growth_summary", label: "学生成长档案摘要" },
-  { value: "recommendation_summary", label: "学生推荐报告" },
-  { value: "evaluation_summary", label: "评教汇总报表" },
-  { value: "adviser_quant_summary", label: "班主任量化报表" },
-];
+const reportTypeOptions = REPORT_TYPE_OPTIONS;
 
 const form = reactive({
   report_type: "student_analysis",
   exam_id: undefined as number | undefined,
   student_id: undefined as number | undefined,
   scheme_id: undefined as number | undefined,
+  draft_id: undefined as number | undefined,
   batch_id: undefined as number | undefined,
   class_id: undefined as number | undefined,
   grade_id: undefined as number | undefined,
@@ -246,25 +330,24 @@ const form = reactive({
   rule_version_id: undefined as number | undefined,
 });
 
-const requiresExam = computed(() =>
-  ["student_analysis", "class_analysis", "grade_summary", "teacher_analysis"].includes(form.report_type),
-);
-const requiresStudent = computed(() =>
-  ["student_analysis", "growth_summary"].includes(form.report_type),
-);
-const requiresClass = computed(() => form.report_type === "class_analysis");
-const requiresGrade = computed(() => form.report_type === "grade_summary");
-const requiresTeacher = computed(() => form.report_type === "teacher_analysis");
-const requiresSemester = computed(() => ["teacher_workload", "adviser_quant_summary"].includes(form.report_type));
-const optionalRuleVersion = computed(() => ["teacher_workload", "adviser_quant_summary"].includes(form.report_type));
-const requiresScheme = computed(() => form.report_type === "recommendation_summary");
-const requiresBatch = computed(() => form.report_type === "evaluation_summary");
+const requiresExam = computed(() => reportTypeUsesField(form.report_type, "exam_id"));
+const requiresStudent = computed(() => reportTypeUsesField(form.report_type, "student_id"));
+const requiresClass = computed(() => reportTypeUsesField(form.report_type, "class_id"));
+const requiresGrade = computed(() => reportTypeUsesField(form.report_type, "grade_id"));
+const requiresTeacher = computed(() => reportTypeUsesField(form.report_type, "teacher_id"));
+const requiresSemester = computed(() => reportTypeUsesField(form.report_type, "semester_id"));
+const optionalRuleVersion = computed(() => reportTypeUsesField(form.report_type, "rule_version_id"));
+const requiresScheme = computed(() => reportTypeUsesField(form.report_type, "scheme_id"));
+const requiresDraft = computed(() => reportTypeUsesField(form.report_type, "draft_id"));
+const requiresBatch = computed(() => reportTypeUsesField(form.report_type, "batch_id"));
 const currentRuleOptions = computed(() =>
-  form.report_type === "adviser_quant_summary" ? adviserRuleVersions.value : ruleVersions.value,
+  getReportRuleOptionScope(form.report_type) === "adviser" ? adviserRuleVersions.value : ruleVersions.value,
 );
-const currentReportTypeLabel = computed(
-  () => reportTypeOptions.find((item) => item.value === form.report_type)?.label ?? form.report_type,
-);
+const printPreviewPath = computed(() => getReportPrintPreviewPath(form));
+const supportsPrintPreview = computed(() => Boolean(printPreviewPath.value));
+const currentReportTypeLabel = computed(() => getReportTypeLabel(form.report_type));
+const missingRequiredFields = computed(() => getMissingRequiredReportFields(form));
+const missingRequiredFieldsMessage = computed(() => getMissingRequiredReportFieldsMessage(form));
 const overviewCards = computed(() => [
   {
     label: "考试依赖",
@@ -280,14 +363,60 @@ const overviewCards = computed(() => [
   },
   {
     label: "最近导出",
-    value: exportRecords.value[0]?.status ?? "暂无",
+    value: exportRecords.value[0] ? formatExportStatus(exportRecords.value[0].status) : "暂无",
     help: "最近一次导出记录的状态。",
     tone: "tone-slate",
   },
 ]);
+const currentRecommendationOption = computed(
+  () => recommendationOptions.value.find((item) => item.scheme_id === form.scheme_id) ?? null,
+);
+const currentRecommendationInsightContext = computed(() =>
+  resolveRecommendationReportInsightContext(recommendationOptions.value, currentRecommendationOption.value),
+);
+const reportInsightCards = computed(() =>
+  buildReportInsightCards(
+    form.report_type,
+    reportInsightData.value,
+    currentRecommendationInsightContext.value.currentOption,
+    currentRecommendationInsightContext.value.compareOption,
+  ),
+);
+const reportInsightGroups = computed(() =>
+  buildReportInsightGroups(form.report_type, reportInsightCards.value),
+);
+const reportInsightDescription = computed(() => getReportInsightDescription(form.report_type));
+const showReportInsightSection = computed(
+  () =>
+    shouldShowReportInsightSection({
+      loading: reportInsightLoading.value,
+      error: reportInsightError.value,
+      loaded: reportInsightLoaded.value,
+      cards: reportInsightCards.value,
+    }),
+);
 
 function semesterLabel(item: OptionItem): string {
   return item.academic_year_name ? `${item.academic_year_name} ${item.name}` : item.name;
+}
+
+function formatReportType(reportType: string): string {
+  return getReportTypeLabel(reportType);
+}
+
+function formatExportStatus(status: string): string {
+  const mapping: Record<string, string> = {
+    success: "成功",
+    processing: "处理中",
+    failed: "失败",
+  };
+  return mapping[status] ?? status;
+}
+
+function exportStatusType(status: string): "success" | "info" | "danger" {
+  if (status === "success") return "success";
+  if (status === "failed") return "danger";
+  return "info";
 }
 
 function formatParams(value?: Record<string, unknown> | null): string {
@@ -299,15 +428,17 @@ function formatParams(value?: Record<string, unknown> | null): string {
 
 async function loadOptions(): Promise<void> {
   await referenceStore.loadCore();
-  const [examPayload, studentPayload, teacherPayload, rulePayload, adviserRulePayload] = await Promise.all([
+  const [examPayload, studentPayload, teacherPayload, rulePayload, adviserRulePayload, draftPayload] = await Promise.all([
     apiRequest<{ items: ExamOption[] }>("/api/exams?page=1&page_size=100"),
     apiRequest<{ items: StudentOption[] }>("/api/students?page=1&page_size=200"),
     apiRequest<{ items: TeacherOption[] }>("/api/teachers?page=1&page_size=200"),
     apiRequest<RuleVersion[]>("/api/workload/rules"),
     apiRequest<RuleVersion[]>("/api/adviser-quant/rules"),
+    apiRequest<VolunteerDraftOption[]>("/api/recommendations/volunteer-drafts"),
   ]);
   recommendationOptions.value = await apiRequest<RecommendationOption[]>("/api/recommendations/history");
   evaluationBatchOptions.value = await apiRequest<EvaluationBatchOption[]>("/api/evaluation/batches");
+  volunteerDraftOptions.value = draftPayload;
   examOptions.value = examPayload.items;
   studentOptions.value = studentPayload.items;
   teacherOptions.value = teacherPayload.items;
@@ -319,19 +450,40 @@ async function loadExportRecords(): Promise<void> {
   exportRecords.value = await apiRequest<ExportRecord[]>("/api/reports/exports");
 }
 
+async function loadReportInsights(): Promise<void> {
+  reportInsightError.value = "";
+  reportInsightLoaded.value = false;
+  reportInsightData.value = createEmptyReportInsightDataState();
+  if (missingRequiredFields.value.length) {
+    reportInsightLoading.value = false;
+    return;
+  }
+  reportInsightLoading.value = true;
+  reportInsightData.value = await fetchReportInsightData(form, apiRequest, {
+    recommendationCompareSchemeId: currentRecommendationInsightContext.value.compareScheme?.scheme_id,
+  });
+  reportInsightLoading.value = false;
+  reportInsightLoaded.value = true;
+}
+
+async function reloadReportInsights(): Promise<void> {
+  try {
+    await loadReportInsights();
+    } catch (error) {
+      reportInsightError.value = (error as Error).message;
+      reportInsightLoading.value = false;
+      reportInsightLoaded.value = true;
+    }
+}
+
 async function exportReport(): Promise<void> {
   try {
+    if (missingRequiredFields.value.length) {
+      ElMessage.warning(missingRequiredFieldsMessage.value);
+      return;
+    }
     exporting.value = true;
-    const payload: Record<string, unknown> = { report_type: form.report_type };
-    if (form.exam_id) payload.exam_id = form.exam_id;
-    if (form.student_id) payload.student_id = form.student_id;
-    if (form.class_id) payload.class_id = form.class_id;
-    if (form.grade_id) payload.grade_id = form.grade_id;
-    if (form.teacher_id) payload.teacher_id = form.teacher_id;
-    if (form.semester_id) payload.semester_id = form.semester_id;
-    if (form.rule_version_id) payload.rule_version_id = form.rule_version_id;
-    if (form.scheme_id) payload.scheme_id = form.scheme_id;
-    if (form.batch_id) payload.batch_id = form.batch_id;
+    const payload = buildReportExportPayload(form);
     const result = await apiRequest<ExportRecord>("/api/reports/export", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -346,6 +498,14 @@ async function exportReport(): Promise<void> {
   }
 }
 
+function openPrintPreview(): void {
+  if (!printPreviewPath.value) {
+    ElMessage.warning(missingRequiredFieldsMessage.value);
+    return;
+  }
+  openFile(printPreviewPath.value);
+}
+
 watch(
   () => form.scheme_id,
   (schemeId) => {
@@ -355,6 +515,35 @@ watch(
       form.student_id = current.student_id;
     }
   },
+);
+
+watch(
+  () =>
+    [
+      form.report_type,
+      form.scheme_id,
+      form.draft_id,
+      form.student_id,
+      form.exam_id,
+      form.class_id,
+      form.grade_id,
+      form.teacher_id,
+      form.semester_id,
+      form.rule_version_id,
+      form.batch_id,
+      currentRecommendationInsightContext.value.compareScheme?.scheme_id,
+    ] as const,
+  async () => {
+    try {
+      await loadReportInsights();
+    } catch (error) {
+      reportInsightError.value = (error as Error).message;
+      reportInsightLoading.value = false;
+      reportInsightLoaded.value = true;
+      reportInsightData.value = createEmptyReportInsightDataState();
+    }
+  },
+  { immediate: true },
 );
 
 onMounted(async () => {
@@ -447,6 +636,10 @@ onMounted(async () => {
 }
 
 .toolbar-row {
+  margin-top: 14px;
+}
+
+.report-alert {
   margin-top: 14px;
 }
 

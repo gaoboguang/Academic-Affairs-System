@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     )
     data_dir: Path | None = None
     db_path: Path | None = None
+    gaokao_data_dir: Path | None = None
+    gaokao_db_path: Path | None = None
 
     @field_validator("allowed_origins", mode="before")
     @classmethod
@@ -41,6 +43,10 @@ class Settings(BaseSettings):
             self.data_dir = self.project_root / "data"
         if self.db_path is None:
             self.db_path = self.data_dir / "app.db"
+        if self.gaokao_data_dir is None:
+            self.gaokao_data_dir = self.data_dir / "local_edu_tool"
+        if self.gaokao_db_path is None:
+            self.gaokao_db_path = self.gaokao_data_dir / "local_edu.sqlite3"
         return self
 
     @property
@@ -75,8 +81,15 @@ class Settings(BaseSettings):
     def database_url(self) -> str:
         return f"sqlite:///{self.db_path}"
 
+    @property
+    def gaokao_database_url(self) -> str:
+        return f"sqlite:///{self.gaokao_db_path}"
+
+    @property
+    def database_path(self) -> str:
+        return str(self.db_path)
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()
-

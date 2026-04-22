@@ -9,10 +9,6 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.analytics.workload import (
     build_rule_lookup,
-    coefficient_for_entry,
-    extra_amount,
-    monthly_hours_from_weeks,
-    parse_active_weeks,
 )
 from app.core.config import Settings
 from app.exporters.workload import export_workload_results
@@ -62,6 +58,8 @@ from app.schemas.workload import (
     WorkloadRuleVersionPayload,
     WorkloadRuleVersionRead,
 )
+
+from ._workload_calculation import build_teacher_workload_computation
 
 
 DEFAULT_RULE_ITEMS = [
@@ -450,55 +448,14 @@ def calculate_workload(session: Session, payload: WorkloadCalculatePayload) -> W
     results_count = 0
     for teacher_id, teacher in teachers.items():
         teacher_entries = [entry for entry in entries if entry.teacher_id == teacher_id]
-        weekly_hours = 0.0
-        semester_hours = 0.0
-        semester_workload = 0.0
-        monthly_hours: dict[str, float] = defaultdict(float)
-        detail_rows: list[dict] = []
-
-        for entry in teacher_entries:
-            active_weeks = parse_active_weeks(entry, semester.week_count)
-            average_weekly = len(active_weeks) / semester.week_count
-            semester_periods = float(len(active_weeks))
-            coefficient, breakdown = coefficient_for_entry(entry, lookup)
-
-            weekly_hours += average_weekly
-            semester_hours += semester_periods
-            contribution = round(semester_periods * coefficient, 2)
-            semester_workload += contribution
-            for month, hours in monthly_hours_from_weeks(active_weeks, 1.0, semester.start_date).items():
-                monthly_hours[month] += hours
-            detail_rows.append(
-                {
-                    "weekday": entry.weekday,
-                    "period_no": entry.period_no,
-                    "class_name": entry.school_class.name if entry.school_class else None,
-                    "subject_name": entry.subject.name if entry.subject else None,
-                    "course_type": entry.course_type,
-                    "active_week_count": len(active_weeks),
-                    "coefficient": coefficient,
-                    "coefficient_breakdown": breakdown,
-                    "semester_contribution": contribution,
-                }
-            )
-
-        fixed_head_teacher = 0.0
-        if teacher.is_head_teacher:
-            fixed_head_teacher = lookup.fixed_map.get(("head_teacher", "true"), 0.0)
-            semester_workload += fixed_head_teacher
-
-        extra_rows = []
-        for extra in extras_by_teacher.get(teacher_id, []):
-            amount = extra_amount(extra)
-            semester_workload += amount
-            extra_rows.append(
-                {
-                    "item_name": extra.item_name,
-                    "quantity": extra.quantity,
-                    "coefficient": extra.coefficient,
-                    "amount": amount,
-                }
-            )
+        computation = build_teacher_workload_computation(
+            teacher=teacher,
+            teacher_entries=teacher_entries,
+            extras=extras_by_teacher.get(teacher_id, []),
+            lookup=lookup,
+            semester=semester,
+            batch=batch,
+        )
 
         result = get_workload_result(
             session,
@@ -506,14 +463,6 @@ def calculate_workload(session: Session, payload: WorkloadCalculatePayload) -> W
             semester_id=payload.semester_id,
             rule_version_id=payload.rule_version_id,
         )
-        snapshot = {
-            "batch_id": batch.id,
-            "batch_filename": batch.source_filename,
-            "entry_count": len(teacher_entries),
-            "head_teacher_bonus": fixed_head_teacher,
-            "details": detail_rows,
-            "extras": extra_rows,
-        }
         if result is None:
             result = TeacherWorkloadResult(
                 teacher_id=teacher_id,
@@ -521,11 +470,11 @@ def calculate_workload(session: Session, payload: WorkloadCalculatePayload) -> W
                 rule_version_id=payload.rule_version_id,
             )
             session.add(result)
-        result.weekly_hours = round(weekly_hours, 2)
-        result.monthly_hours_json = {month: round(value, 2) for month, value in sorted(monthly_hours.items())}
-        result.semester_hours = round(semester_hours, 2)
-        result.semester_workload = round(semester_workload, 2)
-        result.snapshot_json = snapshot
+        result.weekly_hours = computation.weekly_hours
+        result.monthly_hours_json = computation.monthly_hours_json
+        result.semester_hours = computation.semester_hours
+        result.semester_workload = computation.semester_workload
+        result.snapshot_json = computation.snapshot_json
         result.calculated_at = datetime.now()
         results_count += 1
 

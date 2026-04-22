@@ -4,6 +4,8 @@ from io import BytesIO
 
 from openpyxl import Workbook
 
+from app.models import Subject
+
 
 def build_teacher_import_workbook() -> bytes:
     workbook = Workbook()
@@ -51,6 +53,7 @@ def test_create_student_and_list(client) -> None:
             "status": "active",
             "student_type": "general",
             "art_track": None,
+            "origin_province": "广东",
             "phone": "13812345678",
             "address": "测试地址",
             "note": "接口测试",
@@ -63,10 +66,25 @@ def test_create_student_and_list(client) -> None:
     payload = create_response.json()
     assert payload["student_no"] == "2026999"
     assert payload["current_class_name"] == "9班"
+    assert payload["origin_province"] == "广东"
 
     list_response = client.get("/api/students?page=1&page_size=20&student_no=2026999")
     assert list_response.status_code == 200
     assert list_response.json()["total"] == 1
+
+
+def test_base_subjects_include_small_language_options(client) -> None:
+    with client.app.state.db.session_scope() as session:
+        session.query(Subject).where(Subject.code.in_(["japanese", "russian"])).delete(synchronize_session=False)
+
+    response = client.get("/api/base/subjects")
+    assert response.status_code == 200
+
+    payload = response.json()
+    subject_codes = {item["code"] for item in payload}
+    subject_names = {item["name"] for item in payload}
+    assert {"japanese", "russian"}.issubset(subject_codes)
+    assert {"日语", "俄语"}.issubset(subject_names)
 
 
 def test_import_teacher_and_create_assignment(client) -> None:
@@ -107,4 +125,3 @@ def test_import_teacher_and_create_assignment(client) -> None:
 
     assert assignment_response.status_code == 200
     assert assignment_response.json()["teacher_name"] == "测试教师"
-

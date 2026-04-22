@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.analytics.scores import calculate_rate, safe_mean, safe_median, safe_stddev
-from app.models import Exam, Grade, SchoolClass, ScoreRecord, Subject, Teacher, TeachingAssignment
+from app.models import Exam, Grade, SchoolClass, ScoreRecord, Semester, Subject, Teacher, TeachingAssignment
 from app.repositories.exams import (
     get_exam,
     get_previous_trend_exam,
@@ -17,15 +17,22 @@ from app.repositories.exams import (
 )
 from app.schemas.exam import (
     ClassAnalyticsResponse,
+    ClassPanoramaResponse,
     GradeAnalyticsResponse,
     GradeClassAnalyticsItem,
     GradeDistributionItem,
+    GradePanoramaExamPointRead,
+    GradePanoramaResponse,
+    GradePanoramaSubjectPointRead,
+    GradePanoramaSubjectTrendRead,
+    GradePanoramaYearSummaryRead,
     GradeSubjectAnalyticsItem,
     StudentAnalyticsResponse,
     StudentSubjectAnalytics,
     SubjectAggregateItem,
     TeacherAnalyticsResponse,
     TeacherAssignmentAnalytics,
+    TeacherPanoramaResponse,
 )
 
 
@@ -265,6 +272,373 @@ def get_teacher_analytics(session: Session, teacher_id: int, exam_id: int) -> Te
     )
 
 
+def get_teacher_panorama(
+    session: Session,
+    teacher_id: int,
+    academic_year_ids: list[int] | None = None,
+) -> TeacherPanoramaResponse:
+    teacher = session.get(Teacher, teacher_id)
+    if not teacher:
+        raise HTTPException(status_code=404, detail="教师不存在")
+
+    assignments = session.scalars(
+        select(TeachingAssignment)
+        .options(
+            joinedload(TeachingAssignment.school_class),
+            joinedload(TeachingAssignment.subject),
+        )
+        .where(
+            TeachingAssignment.teacher_id == teacher_id,
+            TeachingAssignment.is_active.is_(True),
+        )
+    ).all()
+    if not assignments:
+        raise HTTPException(status_code=404, detail="该教师暂无可用于全景对比的任教关系")
+
+    assignments_by_semester: dict[int, list[TeachingAssignment]] = defaultdict(list)
+    for item in assignments:
+        assignments_by_semester[item.semester_id].append(item)
+
+    exam_points: list[GradePanoramaExamPointRead] = []
+    subject_points_by_id: dict[int, list[GradePanoramaSubjectPointRead]] = defaultdict(list)
+    subject_name_by_id: dict[int, str] = {}
+
+    for exam in _list_panorama_exams(session):
+        academic_year = exam.semester.academic_year if exam.semester else None
+        if academic_year_ids and (not academic_year or academic_year.id not in academic_year_ids):
+            continue
+
+        semester_assignments = assignments_by_semester.get(exam.semester_id, [])
+        assignment_pairs = {
+            (item.class_id, item.subject_id): item
+            for item in semester_assignments
+            if item.class_id is not None and item.subject_id is not None
+        }
+        if not assignment_pairs:
+            continue
+
+        score_records = [item for item in get_score_records_for_exam(session, exam.id) if item.score is not None]
+        total_snapshot_map = {
+            item.student_id: item
+            for item in get_total_snapshots_for_exam(session, exam.id)
+            if item.student_id is not None
+        }
+        subject_meta_map = {item.subject_id: item for item in exam.subjects}
+
+        matched_scores: list[float] = []
+        teacher_student_ids: set[int] = set()
+        excellent_count = 0
+        subject_grouped_records: dict[int, list[ScoreRecord]] = defaultdict(list)
+
+        for class_id, subject_id in assignment_pairs:
+            matched = [
+                record
+                for record in score_records
+                if record.student
+                and record.student.current_class_id == class_id
+                and record.subject_id == subject_id
+                and record.score_status == "normal"
+            ]
+            if not matched:
+                continue
+
+            meta = subject_meta_map.get(subject_id)
+            for record in matched:
+                if record.score is None:
+                    continue
+                matched_scores.append(record.score)
+                teacher_student_ids.add(record.student_id)
+                subject_grouped_records[subject_id].append(record)
+                if meta and meta.excellent_line is not None and record.score >= meta.excellent_line:
+                    excellent_count += 1
+
+            subject_name_by_id.setdefault(
+                subject_id,
+                matched[0].subject.name if matched[0].subject else str(subject_id),
+            )
+
+        if not matched_scores:
+            continue
+
+        teacher_total_snapshots = [
+            total_snapshot_map[student_id]
+            for student_id in teacher_student_ids
+            if student_id in total_snapshot_map
+        ]
+        exam_points.append(
+            GradePanoramaExamPointRead(
+                exam_id=exam.id,
+                exam_name=exam.name,
+                exam_date=exam.exam_date,
+                academic_year_id=academic_year.id if academic_year else None,
+                academic_year_name=academic_year.name if academic_year else None,
+                semester_name=exam.semester.name if exam.semester else None,
+                student_count=len(teacher_student_ids),
+                total_average=safe_mean(matched_scores),
+                total_median=safe_median(matched_scores),
+                excellent_rate=calculate_rate(excellent_count, len(matched_scores)),
+                top10_count=sum(
+                    1 for item in teacher_total_snapshots if item.grade_rank is not None and item.grade_rank <= 10
+                ),
+                top30_count=sum(
+                    1 for item in teacher_total_snapshots if item.grade_rank is not None and item.grade_rank <= 30
+                ),
+            )
+        )
+
+        for subject_id, records in subject_grouped_records.items():
+            scores = [record.score for record in records if record.score is not None]
+            if not scores:
+                continue
+            meta = subject_meta_map.get(subject_id)
+            subject_points_by_id[subject_id].append(
+                GradePanoramaSubjectPointRead(
+                    exam_id=exam.id,
+                    exam_name=exam.name,
+                    exam_date=exam.exam_date,
+                    academic_year_name=academic_year.name if academic_year else None,
+                    average_score=safe_mean(scores),
+                    excellent_rate=(
+                        calculate_rate(
+                            sum(
+                                1
+                                for record in records
+                                if record.score is not None
+                                and meta
+                                and meta.excellent_line is not None
+                                and record.score >= meta.excellent_line
+                            ),
+                            len(scores),
+                        )
+                        if meta and meta.excellent_line is not None
+                        else 0.0
+                    ),
+                    valid_count=len(scores),
+                )
+            )
+
+    if not exam_points:
+        raise HTTPException(status_code=404, detail="该教师当前暂无全景对比数据")
+
+    year_grouped: dict[int, list[GradePanoramaExamPointRead]] = defaultdict(list)
+    for point in exam_points:
+        if point.academic_year_id is not None:
+            year_grouped[point.academic_year_id].append(point)
+
+    year_summaries = [
+        GradePanoramaYearSummaryRead(
+            academic_year_id=academic_year_id,
+            academic_year_name=items[0].academic_year_name or str(academic_year_id),
+            exam_count=len(items),
+            average_score=safe_mean([item.total_average for item in items]),
+            average_excellent_rate=(
+                safe_mean([item.excellent_rate for item in items if item.excellent_rate is not None])
+                if any(item.excellent_rate is not None for item in items)
+                else None
+            ),
+            best_exam_name=max(items, key=lambda item: item.total_average).exam_name,
+            latest_exam_name=max(items, key=lambda item: item.exam_date).exam_name,
+        )
+        for academic_year_id, items in sorted(year_grouped.items(), key=lambda current: current[1][0].academic_year_name or "")
+    ]
+
+    subject_trends = [
+        GradePanoramaSubjectTrendRead(
+            subject_id=subject_id,
+            subject_name=subject_name_by_id.get(subject_id, str(subject_id)),
+            points=sorted(items, key=lambda point: (point.exam_date, point.exam_id)),
+        )
+        for subject_id, items in subject_points_by_id.items()
+    ]
+    subject_trends.sort(key=lambda item: item.subject_name)
+
+    return TeacherPanoramaResponse(
+        teacher_id=teacher.id,
+        teacher_name=teacher.name,
+        academic_year_count=len(year_summaries),
+        exam_count=len(exam_points),
+        year_summaries=year_summaries,
+        exam_points=exam_points,
+        subject_trends=subject_trends,
+    )
+
+
+def get_grade_panorama(
+    session: Session,
+    grade_id: int,
+    academic_year_ids: list[int] | None = None,
+) -> GradePanoramaResponse:
+    grade = session.get(Grade, grade_id)
+    if not grade:
+        raise HTTPException(status_code=404, detail="年级不存在")
+
+    exam_points, year_summaries, subject_trends = _build_panorama_components(
+        session,
+        entity_id=grade_id,
+        academic_year_ids=academic_year_ids,
+        exam_filter=lambda exam: _exam_matches_grade_scope(exam, grade_id),
+        total_filter=_filter_grade_total_snapshots,
+        subject_filter=_filter_grade_subject_snapshots,
+    )
+
+    return GradePanoramaResponse(
+        grade_id=grade.id,
+        grade_name=grade.name,
+        academic_year_count=len(year_summaries),
+        exam_count=len(exam_points),
+        year_summaries=year_summaries,
+        exam_points=exam_points,
+        subject_trends=subject_trends,
+    )
+
+
+def get_class_panorama(
+    session: Session,
+    class_id: int,
+    academic_year_ids: list[int] | None = None,
+) -> ClassPanoramaResponse:
+    school_class = session.get(SchoolClass, class_id)
+    if not school_class:
+        raise HTTPException(status_code=404, detail="班级不存在")
+
+    exam_points, year_summaries, subject_trends = _build_panorama_components(
+        session,
+        entity_id=class_id,
+        academic_year_ids=academic_year_ids,
+        exam_filter=lambda exam: _exam_matches_grade_scope(exam, school_class.grade_id),
+        total_filter=_filter_class_total_snapshots,
+        subject_filter=_filter_class_subject_snapshots,
+    )
+
+    return ClassPanoramaResponse(
+        class_id=school_class.id,
+        class_name=school_class.name,
+        academic_year_count=len(year_summaries),
+        exam_count=len(exam_points),
+        year_summaries=year_summaries,
+        exam_points=exam_points,
+        subject_trends=subject_trends,
+    )
+
+
+def _list_panorama_exams(session: Session) -> list[Exam]:
+    return session.scalars(
+        select(Exam)
+        .options(
+            joinedload(Exam.semester).joinedload(Semester.academic_year),
+            joinedload(Exam.subjects),
+        )
+        .where(Exam.is_active.is_(True), Exam.is_trend_enabled.is_(True))
+        .order_by(Exam.exam_date.asc(), Exam.id.asc())
+    ).unique().all()
+
+
+def _build_panorama_components(
+    session: Session,
+    entity_id: int,
+    academic_year_ids: list[int] | None,
+    exam_filter,
+    total_filter,
+    subject_filter,
+):
+    exams = _list_panorama_exams(session)
+
+    exam_points: list[GradePanoramaExamPointRead] = []
+    subject_points_by_id: dict[int, list[GradePanoramaSubjectPointRead]] = defaultdict(list)
+    subject_name_by_id: dict[int, str] = {}
+
+    for exam in exams:
+        if not exam_filter(exam):
+            continue
+        academic_year = exam.semester.academic_year if exam.semester else None
+        if academic_year_ids and (not academic_year or academic_year.id not in academic_year_ids):
+            continue
+
+        total_snapshots = total_filter(get_total_snapshots_for_exam(session, exam.id), exam, entity_id)
+        if not total_snapshots:
+            continue
+        total_scores = [item.total_score for item in total_snapshots]
+        excellent_total_line = _resolve_total_excellent_line(exam)
+        excellent_rate = (
+            calculate_rate(sum(1 for item in total_snapshots if item.total_score >= excellent_total_line), len(total_snapshots))
+            if excellent_total_line is not None
+            else None
+        )
+        exam_points.append(
+            GradePanoramaExamPointRead(
+                exam_id=exam.id,
+                exam_name=exam.name,
+                exam_date=exam.exam_date,
+                academic_year_id=academic_year.id if academic_year else None,
+                academic_year_name=academic_year.name if academic_year else None,
+                semester_name=exam.semester.name if exam.semester else None,
+                student_count=len(total_snapshots),
+                total_average=safe_mean(total_scores),
+                total_median=safe_median(total_scores),
+                excellent_rate=excellent_rate,
+                top10_count=sum(1 for item in total_snapshots if item.grade_rank is not None and item.grade_rank <= 10),
+                top30_count=sum(1 for item in total_snapshots if item.grade_rank is not None and item.grade_rank <= 30),
+            )
+        )
+
+        subject_snapshots = subject_filter(get_subject_snapshots_for_exam(session, exam.id), exam, entity_id)
+        grouped_subjects: dict[int, list] = defaultdict(list)
+        for item in subject_snapshots:
+            grouped_subjects[item.subject_id].append(item)
+        for subject_id, items in grouped_subjects.items():
+            scores = [item.score for item in items if item.score is not None]
+            if not scores:
+                continue
+            subject_name_by_id.setdefault(
+                subject_id,
+                items[0].subject.name if items[0].subject else str(subject_id),
+            )
+            subject_points_by_id[subject_id].append(
+                GradePanoramaSubjectPointRead(
+                    exam_id=exam.id,
+                    exam_name=exam.name,
+                    exam_date=exam.exam_date,
+                    academic_year_name=academic_year.name if academic_year else None,
+                    average_score=safe_mean(scores),
+                    excellent_rate=calculate_rate(sum(1 for item in items if item.excellent_flag), len(scores)),
+                    valid_count=len(scores),
+                )
+            )
+
+    if not exam_points:
+        raise HTTPException(status_code=404, detail="当前条件下暂无全景对比数据")
+
+    year_grouped: dict[int, list[GradePanoramaExamPointRead]] = defaultdict(list)
+    for point in exam_points:
+        if point.academic_year_id is not None:
+            year_grouped[point.academic_year_id].append(point)
+
+    year_summaries = [
+        GradePanoramaYearSummaryRead(
+            academic_year_id=academic_year_id,
+            academic_year_name=items[0].academic_year_name or str(academic_year_id),
+            exam_count=len(items),
+            average_score=safe_mean([item.total_average for item in items]),
+            average_excellent_rate=safe_mean([item.excellent_rate for item in items if item.excellent_rate is not None]) if any(item.excellent_rate is not None for item in items) else None,
+            best_exam_name=max(items, key=lambda item: item.total_average).exam_name,
+            latest_exam_name=max(items, key=lambda item: item.exam_date).exam_name,
+        )
+        for academic_year_id, items in sorted(year_grouped.items(), key=lambda current: current[1][0].academic_year_name or "")
+    ]
+
+    subject_trends = [
+        GradePanoramaSubjectTrendRead(
+            subject_id=subject_id,
+            subject_name=subject_name_by_id.get(subject_id, str(subject_id)),
+            points=sorted(items, key=lambda point: (point.exam_date, point.exam_id)),
+        )
+        for subject_id, items in subject_points_by_id.items()
+    ]
+    subject_trends.sort(key=lambda item: item.subject_name)
+
+    return exam_points, year_summaries, subject_trends
+
+
 def get_grade_analytics(session: Session, grade_id: int, exam_id: int) -> GradeAnalyticsResponse:
     exam = get_exam(session, exam_id)
     grade = session.get(Grade, grade_id)
@@ -417,3 +791,46 @@ def _build_rank_bands(total_snapshots) -> list[GradeDistributionItem]:
         else:
             counters["50名后"] += 1
     return [GradeDistributionItem(label=label, count=count) for label, count in counters.items()]
+
+
+def _filter_grade_total_snapshots(total_snapshots, exam: Exam, grade_id: int):
+    scope = exam.grade_scope_json or []
+    if scope and len(scope) == 1 and scope[0] == grade_id:
+        return [item for item in total_snapshots if item.student_id is not None]
+    return [
+        item
+        for item in total_snapshots
+        if item.student and item.student.current_grade_id == grade_id
+    ]
+
+
+def _filter_grade_subject_snapshots(subject_snapshots, exam: Exam | None, grade_id: int):
+    scope = exam.grade_scope_json if exam else []
+    if scope and len(scope) == 1 and scope[0] == grade_id:
+        return [item for item in subject_snapshots if item.score is not None]
+    return [
+        item
+        for item in subject_snapshots
+        if item.student and item.student.current_grade_id == grade_id and item.score is not None
+    ]
+
+
+def _filter_class_total_snapshots(total_snapshots, exam: Exam, class_id: int):
+    return [
+        item
+        for item in total_snapshots
+        if item.student and item.student.current_class_id == class_id
+    ]
+
+
+def _filter_class_subject_snapshots(subject_snapshots, exam: Exam | None, class_id: int):
+    return [
+        item
+        for item in subject_snapshots
+        if item.student and item.student.current_class_id == class_id and item.score is not None
+    ]
+
+
+def _exam_matches_grade_scope(exam: Exam, grade_id: int) -> bool:
+    scope = exam.grade_scope_json or []
+    return not scope or grade_id in scope

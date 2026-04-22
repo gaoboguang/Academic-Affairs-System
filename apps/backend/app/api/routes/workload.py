@@ -24,6 +24,7 @@ from app.schemas.workload import (
     WorkloadRuleVersionRead,
 )
 from app.services import workload as service
+from app.utils.files import resolve_allowed_file_path
 
 router = APIRouter(tags=["workload"])
 
@@ -144,6 +145,9 @@ def export_workload_results(
     settings: Settings = Depends(get_settings),
 ) -> FileResponse:
     result = service.export_workload(session, settings, semester_id=semester_id, rule_version_id=rule_version_id)
-    path = settings.project_root / result["file_path"]
+    path = resolve_allowed_file_path(
+        result["file_path"],
+        allowed_roots=[settings.exports_dir],
+        project_root=settings.project_root,
+    )
     return FileResponse(path, filename=Path(path).name)
-

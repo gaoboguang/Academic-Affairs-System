@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from collections import defaultdict
+from datetime import datetime
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.analytics.scores import calculate_rate, safe_mean, safe_median
 from app.exporters.archive import export_growth_summary
-from app.exporters.recommendations import export_recommendation_summary
+from app.exporters.recommendations import export_recommendation_summary, export_volunteer_draft_summary
 from app.exporters.reports import (
     export_adviser_quant_summary_report,
     export_class_analysis_report,
@@ -17,9 +16,12 @@ from app.exporters.reports import (
     export_teacher_analysis_report,
 )
 from app.exporters.workload import export_workload_results
-from app.models import RecommendationScheme, ReportExportRecord, Student, Subject
-from app.repositories.exams import get_exam, get_subject_snapshots_for_exam, get_total_snapshots_for_exam
+from app.models import RecommendationScheme, ReportExportRecord, Student
+from app.repositories.exams import get_exam
+from app.repositories.recommendations import get_employment_direction
+from app.repositories.students import get_student_career_preference as repo_get_student_career_preference
 from app.repositories.system import get_report_export, list_report_exports as repo_list_report_exports, write_audit_log
+from app.schemas.recommendation import RecommendationHistoryItem
 from app.schemas.report import ReportExportPayload, ReportExportRecordRead
 from app.services import analytics as analytics_service
 from app.services import archive as archive_service
@@ -36,6 +38,7 @@ REPORT_TYPE_NAME_MAP = {
     "teacher_workload": "教师课时与工作量报表",
     "growth_summary": "学生成长档案摘要",
     "recommendation_summary": "学生推荐报告",
+    "volunteer_draft_summary": "学生志愿草稿",
     "evaluation_summary": "评教汇总报表",
     "adviser_quant_summary": "班主任量化报表",
 }
@@ -157,8 +160,33 @@ def _export_report_file(session: Session, settings, payload: ReportExportPayload
         if not rows:
             raise HTTPException(status_code=404, detail="当前推荐方案暂无结果")
         first = rows[0]
+        export_student_id = payload.student_id or first.student_id
         exam = get_exam(session, first.exam_id)
         scheme = session.get(RecommendationScheme, payload.scheme_id)
+        preference = repo_get_student_career_preference(session, export_student_id) if export_student_id else None
+        snapshot = first.snapshot_json if isinstance(first.snapshot_json, dict) else {}
+        compare_scheme = None
+        compare_rows: list[dict[str, object]] = []
+        if export_student_id:
+            history = recommendation_service.list_recommendation_history(session, student_id=export_student_id)
+            current_history = next((item for item in history if item.scheme_id == payload.scheme_id), None)
+            compare_history = _find_nearest_recommendation_compare_scheme(history, current_history)
+            if compare_history:
+                compare_scheme = {
+                    "scheme_id": compare_history.scheme_id,
+                    "scheme_name": compare_history.scheme_name,
+                    "generated_at": compare_history.generated_at,
+                    "province": compare_history.province,
+                    "target_year": compare_history.target_year,
+                }
+                compare_rows = [
+                    item.model_dump(mode="json")
+                    for item in recommendation_service.list_scheme_results(
+                        session,
+                        compare_history.scheme_id,
+                        student_id=export_student_id,
+                    )
+                ]
         return export_recommendation_summary(
             settings,
             {
@@ -166,8 +194,96 @@ def _export_report_file(session: Session, settings, payload: ReportExportPayload
                 "student_name": first.student_name,
                 "exam_name": exam.name if exam else first.exam_id,
                 "province": scheme.province if scheme else first.snapshot_json.get("province") if first.snapshot_json else None,
+                "target_year": scheme.target_year if scheme else snapshot.get("target_year"),
+                "score_input_label": snapshot.get("score_input_label")
+                or _score_input_mode_label(snapshot.get("score_input_mode")),
+                "simulation_note": _build_simulation_note(
+                    score_confidence=snapshot.get("score_confidence"),
+                    reference_exam_name=snapshot.get("reference_exam_name"),
+                    use_historical_mapping=snapshot.get("use_historical_mapping"),
+                ),
+                "target_direction_summary": _build_preference_direction_summary(
+                    session,
+                    preference.primary_direction_id if preference else None,
+                    preference.primary_direction.name if preference and preference.primary_direction else None,
+                    preference.secondary_direction_id if preference else None,
+                    preference.secondary_direction.name if preference and preference.secondary_direction else None,
+                    preference.alternative_direction_id if preference else None,
+                    preference.alternative_direction.name if preference and preference.alternative_direction else None,
+                )
+                or _build_result_direction_summary([item.model_dump(mode="json") for item in rows]),
+                "accepted_path_summary": _build_accepted_path_summary(
+                    accepts_postgraduate=preference.accepts_postgraduate if preference else False,
+                    accepts_public_service=preference.accepts_public_service if preference else False,
+                    accepts_certificate=preference.accepts_certificate if preference else False,
+                    accepts_long_training=preference.accepts_long_training if preference else False,
+                ),
+                "compare_scheme": compare_scheme,
+                "compare_rows": compare_rows,
             },
             [item.model_dump(mode="json") for item in rows],
+        )
+
+    if payload.report_type == "volunteer_draft_summary":
+        if not payload.draft_id:
+            raise HTTPException(status_code=400, detail="学生志愿草稿需要草稿参数")
+        draft = recommendation_service.get_volunteer_draft_detail(session, payload.draft_id)
+        if not draft.items:
+            raise HTTPException(status_code=404, detail="当前志愿草稿暂无内容")
+        selected_rule = draft.selected_rule
+        rule_label = None
+        if selected_rule:
+            rule_label = f"{selected_rule.batch} / {selected_rule.exam_mode} / {selected_rule.volunteer_unit_type} / 上限 {selected_rule.volunteer_limit}"
+        return export_volunteer_draft_summary(
+            settings,
+            {
+                "draft_name": draft.name,
+                "student_name": draft.student_name,
+                "exam_name": draft.exam_name,
+                "province": draft.province,
+                "target_year": draft.target_year,
+                "batch": draft.batch,
+                "exam_mode": draft.exam_mode,
+                "score_input_label": _score_input_mode_label(draft.score_input_mode),
+                "simulation_note": _build_simulation_note(
+                    score_confidence=_score_confidence_by_mode(draft.score_input_mode),
+                    reference_exam_name=draft.reference_exam_name,
+                    use_historical_mapping=draft.use_historical_mapping,
+                ),
+                "target_direction_summary": _build_preference_direction_summary(
+                    session,
+                    draft.primary_direction_id,
+                    None,
+                    draft.secondary_direction_id,
+                    None,
+                    draft.alternative_direction_id,
+                    None,
+                )
+                or _build_result_direction_summary(
+                    [
+                        {
+                            "matched_direction_names_json": item.candidate.matched_direction_names_json,
+                        }
+                        for item in draft.items
+                    ]
+                ),
+                "accepted_path_summary": _build_accepted_path_summary(
+                    accepts_postgraduate=draft.accepts_postgraduate,
+                    accepts_public_service=draft.accepts_public_service,
+                    accepts_certificate=draft.accepts_certificate,
+                    accepts_long_training=draft.accepts_long_training,
+                ),
+                "rule_label": rule_label,
+                "rule_alerts": [item.model_dump(mode="json") for item in draft.rule_alerts],
+                "note": draft.note,
+            },
+            [
+                {
+                    "order": item.order,
+                    **item.candidate.model_dump(mode="json"),
+                }
+                for item in draft.items
+            ],
         )
 
     if payload.report_type == "evaluation_summary":
@@ -227,58 +343,152 @@ def _export_report_file(session: Session, settings, payload: ReportExportPayload
     raise HTTPException(status_code=400, detail="不支持的报表类型")
 
 
+def _build_preference_direction_summary(
+    session: Session,
+    primary_direction_id: int | None,
+    primary_direction_name: str | None,
+    secondary_direction_id: int | None,
+    secondary_direction_name: str | None,
+    alternative_direction_id: int | None,
+    alternative_direction_name: str | None,
+) -> str | None:
+    segments: list[str] = []
+    for label, direction_id, direction_name in [
+        ("首选", primary_direction_id, primary_direction_name),
+        ("次选", secondary_direction_id, secondary_direction_name),
+        ("替代", alternative_direction_id, alternative_direction_name),
+    ]:
+        if direction_id is None:
+            continue
+        current_name = direction_name
+        if not current_name:
+            direction = get_employment_direction(session, direction_id)
+            current_name = direction.name if direction and direction.is_active else f"方向 {direction_id}"
+        segments.append(f"{label}：{current_name}")
+    return " / ".join(segments) or None
+
+
+def _find_nearest_recommendation_compare_scheme(
+    history: list[RecommendationHistoryItem],
+    current: RecommendationHistoryItem | None,
+) -> RecommendationHistoryItem | None:
+    if not current:
+        return None
+
+    return min(
+        (
+            item
+            for item in history
+            if item.student_id == current.student_id and item.scheme_id != current.scheme_id
+        ),
+        key=lambda item: (
+            _get_generated_at_distance(item.generated_at, current.generated_at),
+            -item.generated_at.timestamp(),
+        ),
+        default=None,
+    )
+
+
+def _get_generated_at_distance(value: datetime, target: datetime) -> float:
+    return abs((value - target).total_seconds())
+
+
+def _build_result_direction_summary(rows: list[dict[str, object]]) -> str | None:
+    direction_names: list[str] = []
+    for row in rows:
+        current = row.get("matched_direction_names_json")
+        if not isinstance(current, list):
+            continue
+        for item in current:
+            if isinstance(item, str) and item.strip() and item.strip() not in direction_names:
+                direction_names.append(item.strip())
+    return " / ".join(direction_names) or None
+
+
+def _build_accepted_path_summary(
+    *,
+    accepts_postgraduate: bool,
+    accepts_public_service: bool,
+    accepts_certificate: bool,
+    accepts_long_training: bool,
+) -> str | None:
+    accepted: list[str] = []
+    if accepts_postgraduate:
+        accepted.append("接受读研路径")
+    if accepts_public_service:
+        accepted.append("接受考公/考编路径")
+    if accepts_certificate:
+        accepted.append("接受资格证路径")
+    if accepts_long_training:
+        accepted.append("接受长培养周期")
+    return " / ".join(accepted) or None
+
+
+def _score_input_mode_label(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    labels = {
+        "actual_rank": "正式位次",
+        "actual_score": "正式分数",
+        "estimated_score": "预估分数",
+        "estimated_score_and_rank": "预估分数 + 预估位次",
+        "score_range": "分数区间",
+        "rank_range": "位次区间",
+    }
+    current = value.strip()
+    return labels.get(current, current or None)
+
+
+def _score_confidence_by_mode(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    mapping = {
+        "actual_rank": "official",
+        "actual_score": "score_only",
+        "estimated_score": "estimated",
+        "estimated_score_and_rank": "estimated",
+        "score_range": "range_estimated",
+        "rank_range": "range_estimated",
+    }
+    return mapping.get(value.strip())
+
+
+def _build_simulation_note(
+    *,
+    score_confidence: object,
+    reference_exam_name: object,
+    use_historical_mapping: object,
+) -> str | None:
+    segments: list[str] = []
+    if isinstance(score_confidence, str) and score_confidence in {"estimated", "range_estimated", "score_only"}:
+        confidence_labels = {
+            "estimated": "当前结果为模拟测算",
+            "range_estimated": "当前结果为区间模拟测算",
+            "score_only": "当前结果按分数模式测算",
+        }
+        label = confidence_labels.get(score_confidence)
+        if label:
+            segments.append(label)
+    if isinstance(reference_exam_name, str) and reference_exam_name.strip():
+        segments.append(f"参考考试：{reference_exam_name.strip()}")
+    if use_historical_mapping is True:
+        segments.append("已启用历史映射")
+    return " / ".join(segments) or None
+
+
 def _export_grade_summary(session: Session, settings, exam_id: int, grade_id: int) -> str:
-    exam = get_exam(session, exam_id)
-    if not exam:
-        raise HTTPException(status_code=404, detail="考试不存在")
-    total_snapshots = [
-        item
-        for item in get_total_snapshots_for_exam(session, exam_id)
-        if item.student and item.student.current_grade_id == grade_id
-    ]
-    if not total_snapshots:
-        raise HTTPException(status_code=404, detail="该年级暂无总分数据")
-
-    class_group: dict[int, list] = defaultdict(list)
-    for item in total_snapshots:
-        if item.student and item.student.current_class_id:
-            class_group[item.student.current_class_id].append(item)
-
-    summary_rows: list[dict[str, object]] = []
-    for items in class_group.values():
-        scores = [item.total_score for item in items]
-        summary_rows.append(
-            {
-                "class_name": items[0].student.current_class.name if items[0].student and items[0].student.current_class else "未分班",
-                "student_count": len(items),
-                "average_score": safe_mean(scores),
-                "median_score": safe_median(scores),
-                "max_score": max(scores),
-                "min_score": min(scores),
-            }
-        )
-    summary_rows.sort(key=lambda item: item["class_name"] or "")
-
-    subject_snapshots = [
-        item
-        for item in get_subject_snapshots_for_exam(session, exam_id)
-        if item.student and item.student.current_grade_id == grade_id and item.score is not None
-    ]
-    subject_map = {subject.id: subject.name for subject in session.query(Subject).all()}
-    grouped_subjects: dict[int, list] = defaultdict(list)
-    for item in subject_snapshots:
-        grouped_subjects[item.subject_id].append(item)
-    subject_rows = []
-    for subject_id, items in grouped_subjects.items():
-        scores = [item.score for item in items if item.score is not None]
-        subject_rows.append(
-            {
-                "subject_name": subject_map.get(subject_id, str(subject_id)),
-                "valid_count": len(scores),
-                "average_score": safe_mean(scores),
-                "excellent_rate": calculate_rate(sum(1 for item in items if item.excellent_flag), len(scores)),
-                "pass_rate": calculate_rate(sum(1 for item in items if item.pass_flag), len(scores)),
-            }
-        )
-    subject_rows.sort(key=lambda item: item["subject_name"])
-    return export_grade_summary_report(settings, summary_rows, subject_rows, f"{exam.name} 年级汇总")
+    analytics = analytics_service.get_grade_analytics(session, grade_id, exam_id)
+    return export_grade_summary_report(
+        settings,
+        {
+            "exam_name": analytics.exam_name,
+            "grade_name": analytics.grade_name,
+            "student_count": analytics.student_count,
+            "total_average": analytics.total_average,
+            "total_median": analytics.total_median,
+            "excellent_rate": analytics.excellent_rate,
+        },
+        [item.model_dump(mode="json") for item in analytics.class_breakdown],
+        [item.model_dump(mode="json") for item in analytics.subject_breakdown],
+        f"{analytics.exam_name} 年级汇总",
+    )

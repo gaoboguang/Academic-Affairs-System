@@ -3,6 +3,7 @@ from __future__ import annotations
 from io import BytesIO
 
 from openpyxl import Workbook
+from openpyxl import load_workbook
 
 
 def build_timetable_workbook(*rows: list[object]) -> bytes:
@@ -161,3 +162,11 @@ def test_workload_calculation_and_export(client) -> None:
     )
     assert export_response.status_code == 200
     assert "teacher_workload_export" in export_response.headers["content-disposition"]
+    export_workbook = load_workbook(BytesIO(export_response.content))
+    insight_sheet = export_workbook["摘要概览"]
+    assert insight_sheet.cell(row=1, column=1).value == "标题"
+    insight_titles = {
+        insight_sheet.cell(row=index, column=1).value
+        for index in range(2, insight_sheet.max_row + 1)
+    }
+    assert {"工作量整体状态", "工作量最高教师"} <= insight_titles

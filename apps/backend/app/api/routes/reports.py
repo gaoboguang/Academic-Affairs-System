@@ -10,6 +10,7 @@ from app.api.deps import get_db_session, get_settings
 from app.core.config import Settings
 from app.schemas.report import ReportExportPayload, ReportExportRecordRead
 from app.services import reports as service
+from app.utils.files import resolve_allowed_file_path
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -35,6 +36,9 @@ def download_report_export(
     settings: Settings = Depends(get_settings),
 ) -> FileResponse:
     record = service.get_report_export_record(session, export_id)
-    path = settings.project_root / record.file_path
+    path = resolve_allowed_file_path(
+        record.file_path,
+        allowed_roots=[settings.exports_dir],
+        project_root=settings.project_root,
+    )
     return FileResponse(path, filename=Path(path).name)
-

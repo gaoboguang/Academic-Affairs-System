@@ -21,6 +21,7 @@ def export_students(settings: Settings, rows: list[dict[str, object]]) -> str:
         "学生状态",
         "学生类别",
         "艺体方向",
+        "生源地省份",
         "联系电话",
         "家庭住址",
         "备注",
@@ -37,6 +38,7 @@ def export_students(settings: Settings, rows: list[dict[str, object]]) -> str:
                 row.get("status"),
                 row.get("student_type"),
                 row.get("art_track"),
+                row.get("origin_province"),
                 row.get("phone"),
                 row.get("address"),
                 row.get("note"),
@@ -47,4 +49,3 @@ def export_students(settings: Settings, rows: list[dict[str, object]]) -> str:
     path = settings.exports_dir / filename
     workbook.save(path)
     return relative_to_project(path, settings.project_root)
-

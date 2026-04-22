@@ -17,11 +17,16 @@ dist/
 .idea/
 .vscode/
 coverage/
+handoffs/*
+!handoffs/README.md
 playwright-report/
 test-results/
+.specstory/
+apps/desktop/.dist/
 data/app.db
 data/*.db
 data/*.db-*
+data/local_edu_tool/
 data/backups/*.zip
 data/exports/*
 !data/exports/.gitkeep

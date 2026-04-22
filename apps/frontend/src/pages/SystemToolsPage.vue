@@ -190,7 +190,13 @@
                 </template>
               </el-table-column>
               <el-table-column label="创建时间" prop="created_at" min-width="170" />
-              <el-table-column label="状态" prop="status" width="100" />
+              <el-table-column label="状态" width="100">
+                <template #default="{ row }">
+                  <el-tag :type="backupStatusType(row.status)" effect="light">
+                    {{ formatBackupStatus(row.status) }}
+                  </el-tag>
+                </template>
+              </el-table-column>
               <el-table-column label="操作" width="180" fixed="right">
                 <template #default="{ row }">
                   <el-button link type="primary" @click="openFile(row.download_url)">下载</el-button>
@@ -220,7 +226,7 @@
               <el-table-column label="动作" prop="action" width="160" />
               <el-table-column label="目标" min-width="140">
                 <template #default="{ row }">
-                  {{ row.target_type ?? "-" }} / {{ row.target_id ?? "-" }}
+                  {{ formatAuditTargetType(row.target_type) }} / {{ row.target_id ?? "-" }}
                 </template>
               </el-table-column>
               <el-table-column label="详情" min-width="260">
@@ -347,6 +353,37 @@ const overviewCards = computed(() => [
   },
 ]);
 
+function formatBackupStatus(status: string): string {
+  const mapping: Record<string, string> = {
+    success: "成功",
+    processing: "处理中",
+    failed: "失败",
+  };
+  return mapping[status] ?? status;
+}
+
+function backupStatusType(status: string): "success" | "info" | "danger" {
+  if (status === "success") return "success";
+  if (status === "failed") return "danger";
+  return "info";
+}
+
+function formatAuditTargetType(targetType?: string | null): string {
+  if (!targetType) return "-";
+  const mapping: Record<string, string> = {
+    config_item: "配置项",
+    backup_record: "备份记录",
+    import_job: "导入任务",
+    student: "学生",
+    teacher: "教师",
+    exam: "考试",
+    recommendation_scheme: "推荐方案",
+    evaluation_batch: "评教批次",
+    workload_result: "工作量结果",
+  };
+  return mapping[targetType] ?? targetType;
+}
+
 function formatBytes(size: number): string {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
@@ -432,6 +469,12 @@ async function saveGroup(group: ConfigGroup): Promise<void> {
 
 async function executeRepair(actionCode: string): Promise<void> {
   try {
+    const action = repairScan.value?.actions.find((item) => item.code === actionCode);
+    await ElMessageBox.confirm(
+      `${action?.description ?? "该修复会直接调整当前数据。"} 建议先确认最近备份可用。是否继续？`,
+      `执行修复：${action?.title ?? actionCode}`,
+      { type: "warning" },
+    );
     repairingAction.value = actionCode;
     const result = await apiRequest<{ message: string }>("/api/system/data-repair/execute", {
       method: "POST",
@@ -440,6 +483,7 @@ async function executeRepair(actionCode: string): Promise<void> {
     ElMessage.success(result.message);
     await Promise.all([loadRepairScan(), loadAuditLogs()]);
   } catch (error) {
+    if (error === "cancel" || error === "close") return;
     ElMessage.error((error as Error).message);
   } finally {
     repairingAction.value = null;

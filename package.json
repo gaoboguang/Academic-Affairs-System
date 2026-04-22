@@ -2,12 +2,33 @@
   "name": "local-edu-tool",
   "private": true,
   "workspaces": [
+    "apps/desktop",
     "apps/frontend"
   ],
   "scripts": {
+    "dev": "node ./scripts/dev-local.cjs",
+    "clean:local": "node ./scripts/clean-local.cjs",
+    "backend:dev": "node ./scripts/backend-cli.cjs dev",
+    "backend:migrate": "node ./scripts/backend-cli.cjs migrate",
+    "backend:init-demo": "node ./scripts/backend-cli.cjs init-demo",
+    "backend:test": "node ./scripts/backend-cli.cjs test",
+    "check": "npm run backend:test && npm run frontend:lint && npm run frontend:test && npm run frontend:build",
+    "check:e2e": "npm run e2e -- tests/e2e/dashboard-smoke.spec.ts",
+    "check:all": "npm run check && npm run check:e2e",
     "frontend:dev": "npm run dev --workspace @local-edu/frontend",
     "frontend:build": "npm run build --workspace @local-edu/frontend",
-    "frontend:lint": "npm run lint --workspace @local-edu/frontend"
+    "frontend:lint": "npm run lint --workspace @local-edu/frontend",
+    "frontend:test": "npm run test --workspace @local-edu/frontend -- --run",
+    "desktop:dev": "npm run dev --workspace @local-edu/desktop",
+    "desktop:prepare": "npm run bundle --workspace @local-edu/desktop",
+    "desktop:dist": "npm run dist --workspace @local-edu/desktop --",
+    "desktop:dist:mac": "npm run desktop:dist -- --mac dir",
+    "desktop:dist:win:dir": "npm run desktop:dist -- --win dir",
+    "desktop:dist:win:nsis": "npm run desktop:dist -- --win nsis",
+    "e2e": "playwright test",
+    "e2e:install": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1"
   }
 }
-

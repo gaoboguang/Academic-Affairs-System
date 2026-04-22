@@ -282,6 +282,45 @@
           </div>
         </section>
       </el-tab-pane>
+
+      <el-tab-pane label="全景对比">
+        <GradePanoramaPanel
+          v-model:selected-grade-id="selectedPanoramaGradeId"
+          v-model:selected-academic-year-ids="selectedPanoramaAcademicYearIds"
+          :grades="referenceStore.grades"
+          :academic-years="referenceStore.academicYears"
+          :panorama="gradePanorama"
+          :loading="loadingGradePanorama"
+          @load="loadGradePanorama"
+          @reset="resetGradePanoramaFilters"
+        />
+      </el-tab-pane>
+
+      <el-tab-pane label="班级全景">
+        <ClassPanoramaPanel
+          v-model:selected-class-id="selectedPanoramaClassId"
+          v-model:selected-academic-year-ids="selectedClassPanoramaAcademicYearIds"
+          :classes="referenceStore.classes"
+          :academic-years="referenceStore.academicYears"
+          :panorama="classPanorama"
+          :loading="loadingClassPanorama"
+          @load="loadClassPanorama"
+          @reset="resetClassPanoramaFilters"
+        />
+      </el-tab-pane>
+
+      <el-tab-pane label="教师全景">
+        <TeacherPanoramaPanel
+          v-model:selected-teacher-id="selectedPanoramaTeacherId"
+          v-model:selected-academic-year-ids="selectedTeacherPanoramaAcademicYearIds"
+          :teachers="teacherOptions"
+          :academic-years="referenceStore.academicYears"
+          :panorama="teacherPanorama"
+          :loading="loadingTeacherPanorama"
+          @load="loadTeacherPanorama"
+          @reset="resetTeacherPanoramaFilters"
+        />
+      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
@@ -291,6 +330,14 @@ import { computed, onMounted, ref } from "vue";
 import ElMessage from "element-plus/es/components/message/index";
 
 import { apiRequest } from "../api/client";
+import ClassPanoramaPanel from "../components/analytics/ClassPanoramaPanel.vue";
+import GradePanoramaPanel from "../components/analytics/GradePanoramaPanel.vue";
+import TeacherPanoramaPanel from "../components/analytics/TeacherPanoramaPanel.vue";
+import type {
+  ClassPanoramaResponse,
+  GradePanoramaResponse,
+  TeacherPanoramaResponse,
+} from "../components/analytics/types";
 import { useReferenceStore } from "../stores/reference";
 
 interface ExamOption {
@@ -319,11 +366,23 @@ const selectedStudentId = ref<number | null>(null);
 const selectedClassId = ref<number | null>(null);
 const selectedGradeId = ref<number | null>(null);
 const selectedTeacherId = ref<number | null>(null);
+const selectedPanoramaGradeId = ref<number | null>(null);
+const selectedPanoramaAcademicYearIds = ref<number[]>([]);
+const selectedPanoramaClassId = ref<number | null>(null);
+const selectedClassPanoramaAcademicYearIds = ref<number[]>([]);
+const selectedPanoramaTeacherId = ref<number | null>(null);
+const selectedTeacherPanoramaAcademicYearIds = ref<number[]>([]);
+const loadingGradePanorama = ref(false);
+const loadingClassPanorama = ref(false);
+const loadingTeacherPanorama = ref(false);
 
 const studentAnalytics = ref<any>(null);
 const classAnalytics = ref<any>(null);
 const gradeAnalytics = ref<any>(null);
 const teacherAnalytics = ref<any>(null);
+const gradePanorama = ref<GradePanoramaResponse | null>(null);
+const classPanorama = ref<ClassPanoramaResponse | null>(null);
+const teacherPanorama = ref<TeacherPanoramaResponse | null>(null);
 const selectedExamName = computed(
   () => examOptions.value.find((item) => item.id === selectedExamId.value)?.name ?? "未选择考试",
 );
@@ -358,6 +417,15 @@ async function loadOptions(): Promise<void> {
   examOptions.value = examPayload.items;
   studentOptions.value = studentPayload.items;
   teacherOptions.value = teacherPayload.items;
+  if (!selectedPanoramaGradeId.value && referenceStore.grades.length) {
+    selectedPanoramaGradeId.value = referenceStore.grades[0].id;
+  }
+  if (!selectedPanoramaClassId.value && referenceStore.classes.length) {
+    selectedPanoramaClassId.value = referenceStore.classes[0].id;
+  }
+  if (!selectedPanoramaTeacherId.value && teacherOptions.value.length) {
+    selectedPanoramaTeacherId.value = teacherOptions.value[0].id;
+  }
 }
 
 async function loadStudentAnalytics(): Promise<void> {
@@ -396,16 +464,105 @@ async function loadGradeAnalytics(): Promise<void> {
   }
 }
 
+async function loadGradePanorama(): Promise<void> {
+  if (!selectedPanoramaGradeId.value) return;
+  try {
+    loadingGradePanorama.value = true;
+    const query = new URLSearchParams();
+    selectedPanoramaAcademicYearIds.value.forEach((item) => {
+      query.append("academic_year_ids", String(item));
+    });
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    gradePanorama.value = await apiRequest<GradePanoramaResponse>(
+      `/api/analytics/grades/${selectedPanoramaGradeId.value}/panorama${suffix}`,
+    );
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  } finally {
+    loadingGradePanorama.value = false;
+  }
+}
+
+async function loadClassPanorama(): Promise<void> {
+  if (!selectedPanoramaClassId.value) return;
+  try {
+    loadingClassPanorama.value = true;
+    const query = new URLSearchParams();
+    selectedClassPanoramaAcademicYearIds.value.forEach((item) => {
+      query.append("academic_year_ids", String(item));
+    });
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    classPanorama.value = await apiRequest<ClassPanoramaResponse>(
+      `/api/analytics/classes/${selectedPanoramaClassId.value}/panorama${suffix}`,
+    );
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  } finally {
+    loadingClassPanorama.value = false;
+  }
+}
+
+async function loadTeacherPanorama(): Promise<void> {
+  if (!selectedPanoramaTeacherId.value) return;
+  try {
+    loadingTeacherPanorama.value = true;
+    const query = new URLSearchParams();
+    selectedTeacherPanoramaAcademicYearIds.value.forEach((item) => {
+      query.append("academic_year_ids", String(item));
+    });
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    teacherPanorama.value = await apiRequest<TeacherPanoramaResponse>(
+      `/api/analytics/teachers/${selectedPanoramaTeacherId.value}/panorama${suffix}`,
+    );
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  } finally {
+    loadingTeacherPanorama.value = false;
+  }
+}
+
+function resetGradePanoramaFilters(): void {
+  selectedPanoramaAcademicYearIds.value = [];
+  gradePanorama.value = null;
+  if (!selectedPanoramaGradeId.value && referenceStore.grades.length) {
+    selectedPanoramaGradeId.value = referenceStore.grades[0].id;
+  }
+}
+
+function resetClassPanoramaFilters(): void {
+  selectedClassPanoramaAcademicYearIds.value = [];
+  classPanorama.value = null;
+  if (!selectedPanoramaClassId.value && referenceStore.classes.length) {
+    selectedPanoramaClassId.value = referenceStore.classes[0].id;
+  }
+}
+
+function resetTeacherPanoramaFilters(): void {
+  selectedTeacherPanoramaAcademicYearIds.value = [];
+  teacherPanorama.value = null;
+  if (!selectedPanoramaTeacherId.value && teacherOptions.value.length) {
+    selectedPanoramaTeacherId.value = teacherOptions.value[0].id;
+  }
+}
+
 function resetAnalyticsState(): void {
   studentAnalytics.value = null;
   classAnalytics.value = null;
   gradeAnalytics.value = null;
   teacherAnalytics.value = null;
+  gradePanorama.value = null;
+  classPanorama.value = null;
+  teacherPanorama.value = null;
 }
 
 onMounted(async () => {
   try {
     await loadOptions();
+    await Promise.all([
+      selectedPanoramaGradeId.value ? loadGradePanorama() : Promise.resolve(),
+      selectedPanoramaClassId.value ? loadClassPanorama() : Promise.resolve(),
+      selectedPanoramaTeacherId.value ? loadTeacherPanorama() : Promise.resolve(),
+    ]);
   } catch (error) {
     ElMessage.error((error as Error).message);
   }

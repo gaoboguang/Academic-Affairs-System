@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ORMModel(BaseModel):
@@ -19,5 +19,6 @@ class ImportResult(BaseModel):
     failed_rows: int
     skipped_rows: int = 0
     error_report_path: str | None = None
+    error_preview: list[str] = Field(default_factory=list)
+    notice_preview: list[str] = Field(default_factory=list)
     message: str
-

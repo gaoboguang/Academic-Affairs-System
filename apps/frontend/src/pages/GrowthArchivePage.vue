@@ -16,6 +16,7 @@
       </div>
       <div class="action-row">
         <el-button :disabled="!selectedStudentId" @click="exportSummary">导出档案摘要</el-button>
+        <el-button :disabled="!selectedStudentId" @click="openPrintPreview">打印预览</el-button>
         <el-button type="primary" :disabled="!selectedStudentId" @click="openCreateDialog">新增记录</el-button>
       </div>
     </header>
@@ -211,6 +212,7 @@ import ElMessage from "element-plus/es/components/message/index";
 import ElMessageBox from "element-plus/es/components/message-box/index";
 
 import { apiRequest, openFile, uploadFile } from "../api/client";
+import { growthSummaryPrintPreviewPath } from "../utils/print";
 
 interface StudentOption {
   id: number;
@@ -481,6 +483,11 @@ async function deleteRecord(recordId: number): Promise<void> {
 function exportSummary(): void {
   if (!selectedStudentId.value) return;
   openFile(`/api/archives/students/${selectedStudentId.value}/summary/export`);
+}
+
+function openPrintPreview(): void {
+  if (!selectedStudentId.value) return;
+  openFile(growthSummaryPrintPreviewPath(selectedStudentId.value));
 }
 
 onMounted(async () => {

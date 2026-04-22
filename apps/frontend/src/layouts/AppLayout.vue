@@ -3,62 +3,57 @@
     <aside class="side-panel">
       <div class="brand-block">
         <div class="brand-row">
-          <div class="brand-mark">EDU</div>
-          <div>
-            <span class="brand-tag">高中教务系统</span>
+          <div class="brand-mark">教</div>
+          <div class="brand-copy">
             <h1>本地教务工具</h1>
+            <p>面向高中场景的本地单机教务管理与分析工具。</p>
           </div>
         </div>
-        <p>围绕学生、教师、考试、分析与报表，覆盖学校日常教务管理的核心流程。</p>
-        <div class="brand-pills">
-          <span>学生档案</span>
-          <span>教学分析</span>
-          <span>升学辅助</span>
+        <div class="brand-meta">
+          <span>本地运行</span>
+          <span>单用户</span>
+          <span>离线优先</span>
         </div>
       </div>
-      <div class="shell-note">
-        <strong>使用顺序</strong>
-        <p>先维护基础数据，再导入成绩与课表，最后进入分析、推荐、量化与报表输出。</p>
-      </div>
+
       <div class="nav-sections">
-        <section v-for="section in navSections" :key="section.title" class="nav-section">
-          <div class="nav-section-title">{{ section.title }}</div>
-          <el-menu
-            :default-active="activeMenuPath"
-            class="nav-menu"
-            @select="handleSelect"
-          >
-            <el-menu-item
+        <section v-for="section in navSections" :key="section.id" class="nav-section">
+          <div class="nav-section-head">
+            <strong>{{ section.title }}</strong>
+            <p>{{ section.summary }}</p>
+          </div>
+          <div class="nav-link-list">
+            <button
               v-for="item in section.items"
               :key="item.path"
-              :index="item.path"
+              type="button"
+              class="nav-link"
+              :class="{ active: activeMenuPath === item.path }"
+              @click="handleSelect(item.path)"
             >
               <component :is="item.icon" class="menu-icon" />
               <span>{{ item.label }}</span>
-            </el-menu-item>
-          </el-menu>
+            </button>
+          </div>
         </section>
       </div>
-      <div class="side-footer">
-        <div class="side-footer-label">操作建议</div>
-        <strong>先维护，再计算</strong>
-        <div class="side-footer-meta">基础台账准确后，分析、量化、推荐和报表结果才可靠。</div>
-      </div>
     </aside>
+
     <main class="content-panel">
       <div class="content-topbar">
         <div class="content-topbar-copy">
-          <span class="content-topbar-label">{{ activeSectionTitle }}</span>
-          <strong>{{ activeItemLabel }}</strong>
+          <span class="content-topbar-label">{{ activeNavItem.sectionTitle }}</span>
+          <strong>{{ activeNavItem.label }}</strong>
+          <p>{{ activeNavItem.description }}</p>
         </div>
-        <div class="content-topbar-tags">
-          <span v-for="tag in activeTagItems" :key="tag">{{ tag }}</span>
+        <div class="content-topbar-hint">
+          <span>使用提示</span>
+          <p>{{ activeNavItem.helper }}</p>
         </div>
       </div>
+
       <div class="content-stage">
-        <div class="content-stage-inner">
-          <RouterView />
-        </div>
+        <RouterView />
       </div>
     </main>
   </div>
@@ -66,84 +61,19 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import {
-  DataAnalysis,
-  Document,
-  EditPen,
-  Files,
-  Histogram,
-  HomeFilled,
-  Notebook,
-  Reading,
-  School,
-  Setting,
-  Tickets,
-  UserFilled,
-} from "@element-plus/icons-vue";
 import { useRoute, useRouter } from "vue-router";
+
+import { navSections, resolveNavItem } from "./navigation";
 
 const route = useRoute();
 const router = useRouter();
-const activeMenuPath = computed(() => {
-  if (route.path.startsWith("/students/")) return "/students";
-  if (route.path.startsWith("/teachers/")) return "/teachers";
-  return route.path;
-});
 
-const navSections = [
-  {
-    title: "基础台账",
-    items: [
-      { path: "/", label: "工作台", icon: HomeFilled },
-      { path: "/base-data", label: "基础数据", icon: Files },
-      { path: "/students", label: "学生中心", icon: UserFilled },
-      { path: "/growth-archive", label: "成长档案", icon: Notebook },
-      { path: "/teachers", label: "教师中心", icon: Reading },
-    ],
-  },
-  {
-    title: "教学分析",
-    items: [
-      { path: "/exams", label: "考试成绩", icon: EditPen },
-      { path: "/analytics", label: "分析中心", icon: DataAnalysis },
-      { path: "/workload", label: "课表工作量", icon: Histogram },
-      { path: "/evaluation-quant", label: "评教量化", icon: Tickets },
-    ],
-  },
-  {
-    title: "升学与系统",
-    items: [
-      { path: "/recommendations", label: "升学推荐", icon: School },
-      { path: "/reports", label: "报表中心", icon: Document },
-      { path: "/system-tools", label: "系统设置", icon: Setting },
-    ],
-  },
-];
-
-const flatNavItems = navSections.flatMap((section) =>
-  section.items.map((item) => ({
-    ...item,
-    sectionTitle: section.title,
-  })),
-);
-
-const activeNavItem = computed(
-  () => flatNavItems.find((item) => item.path === activeMenuPath.value) ?? flatNavItems[0],
-);
-
-const activeSectionTitle = computed(() => activeNavItem.value.sectionTitle);
-const activeItemLabel = computed(() => activeNavItem.value.label);
-const activeTagItems = computed(() => {
-  const tagMap: Record<string, string[]> = {
-    基础台账: ["主数据维护", "档案管理", "关系台账"],
-    教学分析: ["过程记录", "结果分析", "量化汇总"],
-    升学与系统: ["升学推荐", "报表导出", "系统安全"],
-  };
-  return tagMap[activeSectionTitle.value] ?? ["业务流程", "数据校验", "结果输出"];
-});
+const activeNavItem = computed(() => resolveNavItem(route.path));
+const activeMenuPath = computed(() => activeNavItem.value.path);
 
 function handleSelect(path: string): void {
-  router.push(path);
+  if (path === route.path) return;
+  void router.push(path);
 }
 </script>
 
@@ -151,193 +81,166 @@ function handleSelect(path: string): void {
 .layout-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
-  gap: 20px;
+  grid-template-columns: 252px minmax(0, 1fr);
+  gap: 18px;
   padding: 18px;
+  max-width: 1680px;
+  margin: 0 auto;
 }
 
 .side-panel {
-  padding: 24px 18px 18px;
   display: flex;
   flex-direction: column;
   gap: 18px;
-  border-radius: 30px;
-  background:
-    radial-gradient(circle at top right, rgba(252, 208, 148, 0.18), transparent 28%),
-    radial-gradient(circle at bottom left, rgba(78, 125, 161, 0.18), transparent 28%),
-    linear-gradient(180deg, #102030 0%, #14283c 48%, #18314a 100%);
-  color: #f2f6fb;
-  box-shadow: 0 26px 70px rgba(19, 30, 45, 0.28);
+  padding: 20px 16px;
+  border-radius: 24px;
+  background: linear-gradient(180deg, #1f3548 0%, #233b50 100%);
+  color: #eef4fa;
+  box-shadow: 0 18px 42px rgba(26, 43, 62, 0.16);
   position: sticky;
   top: 18px;
-  height: calc(100vh - 36px);
+  max-height: calc(100vh - 36px);
+  overflow: hidden;
+}
+
+.brand-block {
+  padding: 4px 4px 0;
 }
 
 .brand-row {
   display: flex;
-  align-items: center;
-  gap: 14px;
+  align-items: flex-start;
+  gap: 12px;
 }
 
 .brand-mark {
-  width: 48px;
-  height: 48px;
+  width: 42px;
+  height: 42px;
   display: grid;
   place-items: center;
-  border-radius: 16px;
-  background: linear-gradient(135deg, rgba(244, 172, 94, 0.95), rgba(255, 225, 182, 0.92));
-  color: #132536;
-  font-size: 14px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f0c58d, #f7e2bf);
+  color: #20364a;
+  font-size: 18px;
   font-weight: 800;
-  letter-spacing: 0.12em;
 }
 
-.brand-block h1 {
+.brand-copy h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 760;
+}
+
+.brand-copy p {
   margin: 6px 0 0;
-  font-size: 28px;
-  font-family: "IBM Plex Sans", "PingFang SC", "Noto Sans SC", sans-serif;
-  letter-spacing: 0.03em;
+  color: rgba(224, 233, 241, 0.74);
+  line-height: 1.55;
+  font-size: 13px;
 }
 
-.brand-block p {
-  margin: 10px 0 0;
-  color: rgba(225, 233, 242, 0.72);
-  line-height: 1.6;
-}
-
-.brand-pills {
+.brand-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 16px;
+  margin-top: 14px;
 }
 
-.brand-pills span {
-  padding: 8px 12px;
+.brand-meta span {
+  padding: 6px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.08);
-  color: rgba(239, 245, 252, 0.84);
+  color: rgba(236, 243, 249, 0.86);
   font-size: 12px;
-  letter-spacing: 0.06em;
-}
-
-.brand-tag {
-  display: inline-flex;
-  color: rgba(247, 210, 163, 0.88);
-  font-size: 11px;
-  letter-spacing: 0.18em;
-}
-
-.shell-note {
-  padding: 16px;
-  border-radius: 22px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04));
-}
-
-.shell-note strong {
-  display: block;
-  color: #ffffff;
-  font-size: 14px;
-}
-
-.shell-note p {
-  margin: 8px 0 0;
-  color: rgba(220, 230, 240, 0.76);
-  line-height: 1.6;
-  font-size: 13px;
 }
 
 .nav-sections {
   display: grid;
-  gap: 14px;
+  gap: 16px;
+  min-height: 0;
   overflow: auto;
-  padding-right: 4px;
+  padding-right: 2px;
 }
 
 .nav-section {
   display: grid;
+  gap: 10px;
+}
+
+.nav-section-head {
+  padding: 0 4px;
+}
+
+.nav-section-head strong {
+  color: rgba(245, 249, 252, 0.96);
+  font-size: 13px;
+}
+
+.nav-section-head p {
+  margin: 6px 0 0;
+  color: rgba(198, 211, 223, 0.64);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.nav-link-list {
+  display: grid;
   gap: 8px;
 }
 
-.nav-section-title {
-  padding: 0 14px;
-  color: rgba(198, 210, 224, 0.56);
-  font-size: 12px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(236, 243, 249, 0.86);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
 }
 
-.nav-menu {
-  border-right: none;
-  background: transparent;
+.nav-link:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
-.nav-menu :deep(.el-menu-item) {
-  margin-bottom: 4px;
-  border-radius: 16px;
-  color: rgba(238, 245, 252, 0.82);
-  font-size: 14px;
-  height: 46px;
-  line-height: 46px;
-  gap: 12px;
-  padding: 0 14px !important;
-}
-
-.nav-menu :deep(.el-menu-item.is-active) {
-  background: linear-gradient(135deg, rgba(244, 172, 94, 0.2), rgba(246, 207, 157, 0.12));
+.nav-link.active {
+  background: linear-gradient(135deg, rgba(240, 197, 141, 0.18), rgba(255, 255, 255, 0.1));
+  border-color: rgba(240, 197, 141, 0.24);
   color: #ffffff;
-  box-shadow: inset 0 0 0 1px rgba(244, 196, 135, 0.18);
 }
 
 .menu-icon {
-  width: 17px;
-  height: 17px;
-  flex: 0 0 17px;
-}
-
-.side-footer {
-  margin-top: auto;
-  padding: 14px 16px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(228, 236, 244, 0.84);
-}
-
-.side-footer-label {
-  color: rgba(200, 211, 223, 0.6);
-  font-size: 12px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.side-footer-meta {
-  margin-top: 6px;
-  color: rgba(200, 211, 223, 0.7);
-  font-size: 13px;
-  line-height: 1.5;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
 }
 
 .content-panel {
   min-width: 0;
   display: grid;
   align-content: start;
-  gap: 14px;
+  gap: 18px;
 }
 
 .content-topbar {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  padding: 14px 18px;
-  border-radius: 24px;
-  border: 1px solid rgba(120, 138, 156, 0.14);
-  background: rgba(255, 255, 255, 0.56);
+  padding: 18px 20px;
+  border-radius: 22px;
+  border: 1px solid rgba(112, 127, 141, 0.12);
+  background: rgba(255, 255, 255, 0.68);
   box-shadow: 0 10px 24px rgba(35, 56, 81, 0.05);
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(8px);
+  width: 100%;
+  max-width: 1480px;
+  margin: 0 auto;
 }
 
 .content-topbar-copy {
@@ -347,51 +250,54 @@ function handleSelect(path: string): void {
 
 .content-topbar-label {
   color: #72859a;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
 .content-topbar-copy strong {
   color: #1e3448;
-  font-size: 18px;
+  font-size: 22px;
 }
 
-.content-topbar-tags {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
+.content-topbar-copy p {
+  margin: 0;
+  color: #65798b;
+  line-height: 1.55;
 }
 
-.content-topbar-tags span {
-  padding: 7px 10px;
-  border-radius: 999px;
-  background: rgba(245, 249, 252, 0.96);
-  border: 1px solid rgba(120, 138, 156, 0.12);
-  color: #5f768a;
-  font-size: 12px;
+.content-topbar-hint {
+  max-width: 320px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(250, 251, 253, 0.88);
+  border: 1px solid rgba(112, 127, 141, 0.12);
+}
+
+.content-topbar-hint span {
+  color: #7a8c9b;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.content-topbar-hint p {
+  margin: 8px 0 0;
+  color: #617486;
+  line-height: 1.55;
+  font-size: 13px;
 }
 
 .content-stage {
-  min-height: calc(100vh - 112px);
-  padding: 10px;
-  border-radius: 32px;
-  border: 1px solid rgba(120, 138, 156, 0.16);
-  background:
-    radial-gradient(circle at top left, rgba(176, 219, 245, 0.24), transparent 26%),
-    radial-gradient(circle at top right, rgba(255, 233, 206, 0.5), transparent 22%),
-    linear-gradient(180deg, rgba(252, 253, 255, 0.88) 0%, rgba(245, 248, 252, 0.92) 100%);
-  box-shadow: 0 24px 60px rgba(35, 56, 81, 0.08);
-  backdrop-filter: blur(12px);
-}
-
-.content-stage-inner {
-  min-height: 100%;
-  padding: 18px;
-  border-radius: 26px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.48), rgba(255, 255, 255, 0.24));
+  min-width: 0;
+  width: 100%;
+  max-width: 1480px;
+  margin: 0 auto;
+  display: grid;
+  align-content: start;
+  gap: 18px;
 }
 
 @media (max-width: 960px) {
@@ -399,27 +305,25 @@ function handleSelect(path: string): void {
     grid-template-columns: 1fr;
   }
 
-  .side-panel {
-    position: static;
-    height: auto;
-  }
-
   .content-topbar {
     flex-direction: column;
-    align-items: flex-start;
   }
 
-  .content-topbar-tags {
-    justify-content: flex-start;
+  .content-topbar-hint {
+    max-width: none;
+    width: 100%;
   }
+}
 
-  .content-stage {
-    min-height: auto;
-    padding: 8px;
-  }
-
-  .content-stage-inner {
+@media (max-width: 640px) {
+  .layout-shell {
     padding: 12px;
+    gap: 12px;
+  }
+
+  .side-panel,
+  .content-topbar {
+    border-radius: 18px;
   }
 }
 </style>

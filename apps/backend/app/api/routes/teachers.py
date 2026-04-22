@@ -19,6 +19,7 @@ from app.schemas.teacher import (
     TeachingAssignmentRead,
 )
 from app.services import teachers as service
+from app.utils.files import resolve_allowed_file_path
 
 router = APIRouter(prefix="/teachers", tags=["teachers"])
 
@@ -82,7 +83,11 @@ def export_teachers(
     settings: Settings = Depends(get_settings),
 ) -> FileResponse:
     result = service.export_teachers(session, settings)
-    path = settings.project_root / result["file_path"]
+    path = resolve_allowed_file_path(
+        result["file_path"],
+        allowed_roots=[settings.exports_dir],
+        project_root=settings.project_root,
+    )
     return FileResponse(path, filename=Path(path).name)
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from sqlalchemy import Select, and_, desc, func, select
+from sqlalchemy import Select, and_, desc, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models import (
@@ -10,10 +10,25 @@ from app.models import (
     College,
     CollegeAlias,
     CollegeMajor,
+    EmploymentDirection,
+    EnrollmentPlan,
     Major,
+    MajorEmploymentMapping,
+    ProvinceVolunteerRule,
     RecommendationResult,
     RecommendationScheme,
+    VolunteerDraft,
+    VolunteerDraftItem,
 )
+
+
+def build_compatible_exam_modes(exam_mode: str) -> tuple[str, ...]:
+    compatible_modes = {exam_mode}
+    if exam_mode in {"物理类", "历史类"}:
+        compatible_modes.add("3+1+2")
+    elif exam_mode == "3+1+2":
+        compatible_modes.update({"物理类", "历史类"})
+    return tuple(sorted(compatible_modes))
 
 
 def build_college_query(
@@ -85,6 +100,115 @@ def get_major_by_name(session: Session, name: str) -> Major | None:
     return session.scalar(select(Major).where(Major.name == name))
 
 
+def list_employment_directions(
+    session: Session,
+    *,
+    keyword: str | None = None,
+    category: str | None = None,
+) -> Sequence[EmploymentDirection]:
+    stmt = select(EmploymentDirection).where(EmploymentDirection.is_active.is_(True))
+    if keyword:
+        stmt = stmt.where(EmploymentDirection.name.contains(keyword))
+    if category:
+        stmt = stmt.where(EmploymentDirection.category == category)
+    stmt = stmt.order_by(EmploymentDirection.name, EmploymentDirection.id)
+    return session.scalars(stmt).all()
+
+
+def get_employment_direction(session: Session, direction_id: int) -> EmploymentDirection | None:
+    return session.get(EmploymentDirection, direction_id)
+
+
+def get_employment_direction_by_name(session: Session, name: str) -> EmploymentDirection | None:
+    return session.scalar(select(EmploymentDirection).where(EmploymentDirection.name == name))
+
+
+def list_major_employment_mappings(
+    session: Session,
+    *,
+    major_id: int | None = None,
+    direction_id: int | None = None,
+    strength: str | None = None,
+    keyword: str | None = None,
+) -> Sequence[MajorEmploymentMapping]:
+    stmt = (
+        select(MajorEmploymentMapping)
+        .options(
+            joinedload(MajorEmploymentMapping.major),
+            joinedload(MajorEmploymentMapping.direction),
+        )
+        .where(MajorEmploymentMapping.is_active.is_(True))
+    )
+    conditions = []
+    if major_id:
+        conditions.append(MajorEmploymentMapping.major_id == major_id)
+    if direction_id:
+        conditions.append(MajorEmploymentMapping.direction_id == direction_id)
+    if strength:
+        conditions.append(MajorEmploymentMapping.strength == strength)
+    if keyword:
+        conditions.append(
+            or_(
+                MajorEmploymentMapping.major.has(Major.name.contains(keyword)),
+                MajorEmploymentMapping.direction.has(EmploymentDirection.name.contains(keyword)),
+            )
+        )
+    if conditions:
+        stmt = stmt.where(and_(*conditions))
+    stmt = stmt.order_by(MajorEmploymentMapping.strength, MajorEmploymentMapping.id.desc())
+    return session.scalars(stmt).unique().all()
+
+
+def list_major_employment_mappings_for_majors(
+    session: Session,
+    *,
+    major_ids: list[int],
+    direction_ids: list[int] | None = None,
+) -> Sequence[MajorEmploymentMapping]:
+    if not major_ids:
+        return []
+    stmt = (
+        select(MajorEmploymentMapping)
+        .options(
+            joinedload(MajorEmploymentMapping.major),
+            joinedload(MajorEmploymentMapping.direction),
+        )
+        .where(
+            MajorEmploymentMapping.is_active.is_(True),
+            MajorEmploymentMapping.major_id.in_(sorted(set(major_ids))),
+        )
+    )
+    if direction_ids:
+        stmt = stmt.where(MajorEmploymentMapping.direction_id.in_(sorted(set(direction_ids))))
+    stmt = stmt.order_by(MajorEmploymentMapping.major_id, MajorEmploymentMapping.id.desc())
+    return session.scalars(stmt).unique().all()
+
+
+def get_major_employment_mapping(session: Session, mapping_id: int) -> MajorEmploymentMapping | None:
+    stmt = (
+        select(MajorEmploymentMapping)
+        .options(
+            joinedload(MajorEmploymentMapping.major),
+            joinedload(MajorEmploymentMapping.direction),
+        )
+        .where(MajorEmploymentMapping.id == mapping_id)
+    )
+    return session.scalar(stmt)
+
+
+def get_major_employment_mapping_by_key(
+    session: Session,
+    *,
+    major_id: int,
+    direction_id: int,
+) -> MajorEmploymentMapping | None:
+    stmt = select(MajorEmploymentMapping).where(
+        MajorEmploymentMapping.major_id == major_id,
+        MajorEmploymentMapping.direction_id == direction_id,
+    )
+    return session.scalar(stmt)
+
+
 def ensure_college_major(session: Session, college_id: int, major_id: int) -> CollegeMajor:
     stmt = select(CollegeMajor).where(
         CollegeMajor.college_id == college_id,
@@ -150,11 +274,85 @@ def get_admission_record_by_key(
     return session.scalar(stmt)
 
 
+def list_enrollment_plans(
+    session: Session,
+    *,
+    year: int | None = None,
+    province: str | None = None,
+    batch: str | None = None,
+    college_id: int | None = None,
+    keyword: str | None = None,
+) -> Sequence[EnrollmentPlan]:
+    stmt = (
+        select(EnrollmentPlan)
+        .options(
+            joinedload(EnrollmentPlan.college),
+            joinedload(EnrollmentPlan.major),
+        )
+        .where(EnrollmentPlan.is_active.is_(True))
+    )
+    conditions = []
+    if year:
+        conditions.append(EnrollmentPlan.year == year)
+    if province:
+        conditions.append(EnrollmentPlan.province == province)
+    if batch:
+        conditions.append(EnrollmentPlan.batch == batch)
+    if college_id:
+        conditions.append(EnrollmentPlan.college_id == college_id)
+    if keyword:
+        conditions.append(
+            or_(
+                EnrollmentPlan.college.has(College.name.contains(keyword)),
+                EnrollmentPlan.major.has(Major.name.contains(keyword)),
+                EnrollmentPlan.major_name_snapshot.contains(keyword),
+                EnrollmentPlan.major_group_code.contains(keyword),
+            )
+        )
+    if conditions:
+        stmt = stmt.where(and_(*conditions))
+    stmt = stmt.order_by(
+        desc(EnrollmentPlan.year),
+        EnrollmentPlan.province,
+        EnrollmentPlan.batch,
+        EnrollmentPlan.college_id,
+        EnrollmentPlan.major_group_code,
+        EnrollmentPlan.id,
+    )
+    return session.scalars(stmt).unique().all()
+
+
+def get_enrollment_plan_by_key(
+    session: Session,
+    *,
+    year: int,
+    province: str,
+    batch: str,
+    exam_mode: str,
+    college_id: int,
+    major_group_code: str,
+    major_name_snapshot: str,
+    student_type: str,
+) -> EnrollmentPlan | None:
+    stmt = select(EnrollmentPlan).where(
+        EnrollmentPlan.year == year,
+        EnrollmentPlan.province == province,
+        EnrollmentPlan.batch == batch,
+        EnrollmentPlan.exam_mode == exam_mode,
+        EnrollmentPlan.college_id == college_id,
+        EnrollmentPlan.major_group_code == major_group_code,
+        EnrollmentPlan.major_name_snapshot == major_name_snapshot,
+        EnrollmentPlan.student_type == student_type,
+    )
+    return session.scalar(stmt)
+
+
 def list_admission_candidates(
     session: Session,
     *,
     province: str,
     student_type: str,
+    batch: str | None = None,
     subject_requirement: str | None = None,
 ) -> Sequence[AdmissionRecord]:
     stmt = (
@@ -168,6 +366,8 @@ def list_admission_candidates(
             AdmissionRecord.is_active.is_(True),
         )
     )
+    if batch:
+        stmt = stmt.where(AdmissionRecord.batch == batch)
     if student_type == "general":
         stmt = stmt.where(AdmissionRecord.student_type.in_(["general", "common", ""]))
     else:
@@ -179,6 +379,165 @@ def list_admission_candidates(
         )
     stmt = stmt.order_by(desc(AdmissionRecord.year), AdmissionRecord.college_id, AdmissionRecord.major_id)
     return session.scalars(stmt).unique().all()
+
+
+def list_enrollment_plan_candidates(
+    session: Session,
+    *,
+    year: int,
+    province: str,
+    student_type: str,
+    batch: str | None = None,
+    exam_mode: str | None = None,
+    subject_requirement: str | None = None,
+) -> Sequence[EnrollmentPlan]:
+    stmt = (
+        select(EnrollmentPlan)
+        .options(
+            joinedload(EnrollmentPlan.college).joinedload(College.aliases),
+            joinedload(EnrollmentPlan.major),
+        )
+        .where(
+            EnrollmentPlan.year == year,
+            EnrollmentPlan.province == province,
+            EnrollmentPlan.is_active.is_(True),
+        )
+    )
+    if batch:
+        stmt = stmt.where(EnrollmentPlan.batch == batch)
+    if exam_mode:
+        stmt = stmt.where(EnrollmentPlan.exam_mode.in_(build_compatible_exam_modes(exam_mode)))
+    if student_type == "general":
+        stmt = stmt.where(EnrollmentPlan.student_type.in_(["general", "common", ""]))
+    else:
+        stmt = stmt.where(EnrollmentPlan.student_type != "general")
+    if subject_requirement:
+        stmt = stmt.where(
+            (EnrollmentPlan.subject_requirement.is_(None))
+            | (EnrollmentPlan.subject_requirement.contains(subject_requirement))
+        )
+    stmt = stmt.order_by(
+        EnrollmentPlan.batch,
+        EnrollmentPlan.exam_mode,
+        EnrollmentPlan.college_id,
+        EnrollmentPlan.major_group_code,
+        EnrollmentPlan.id,
+    )
+    return session.scalars(stmt).unique().all()
+
+
+def list_province_volunteer_rules(
+    session: Session,
+    *,
+    province: str | None = None,
+    year: int | None = None,
+    exam_mode: str | None = None,
+    candidate_type: str | None = None,
+) -> Sequence[ProvinceVolunteerRule]:
+    stmt = select(ProvinceVolunteerRule).where(ProvinceVolunteerRule.is_active.is_(True))
+    conditions = []
+    if province:
+        conditions.append(ProvinceVolunteerRule.province == province)
+    if year:
+        conditions.append(ProvinceVolunteerRule.year == year)
+    if exam_mode:
+        conditions.append(ProvinceVolunteerRule.exam_mode == exam_mode)
+    if candidate_type is not None:
+        conditions.append(ProvinceVolunteerRule.candidate_type == candidate_type)
+    if conditions:
+        stmt = stmt.where(and_(*conditions))
+    stmt = stmt.order_by(
+        desc(ProvinceVolunteerRule.year),
+        ProvinceVolunteerRule.province,
+        ProvinceVolunteerRule.exam_mode,
+        ProvinceVolunteerRule.candidate_type,
+        ProvinceVolunteerRule.batch_order.is_(None),
+        ProvinceVolunteerRule.batch_order,
+        ProvinceVolunteerRule.batch,
+        ProvinceVolunteerRule.id,
+    )
+    return session.scalars(stmt).all()
+
+
+def get_province_volunteer_rule(session: Session, rule_id: int) -> ProvinceVolunteerRule | None:
+    return session.get(ProvinceVolunteerRule, rule_id)
+
+
+def get_province_volunteer_rule_by_key(
+    session: Session,
+    *,
+    province: str,
+    year: int,
+    exam_mode: str,
+    batch: str,
+    candidate_type: str,
+) -> ProvinceVolunteerRule | None:
+    stmt = select(ProvinceVolunteerRule).where(
+        ProvinceVolunteerRule.province == province,
+        ProvinceVolunteerRule.year == year,
+        ProvinceVolunteerRule.exam_mode == exam_mode,
+        ProvinceVolunteerRule.batch == batch,
+        ProvinceVolunteerRule.candidate_type == candidate_type,
+    )
+    return session.scalar(stmt)
+
+
+def list_volunteer_drafts(
+    session: Session,
+    *,
+    student_id: int | None = None,
+    exam_id: int | None = None,
+) -> Sequence[VolunteerDraft]:
+    stmt = (
+        select(VolunteerDraft)
+        .options(
+            joinedload(VolunteerDraft.student),
+            joinedload(VolunteerDraft.exam),
+            joinedload(VolunteerDraft.items),
+        )
+        .where(VolunteerDraft.is_active.is_(True))
+    )
+    if student_id:
+        stmt = stmt.where(VolunteerDraft.student_id == student_id)
+    if exam_id:
+        stmt = stmt.where(VolunteerDraft.exam_id == exam_id)
+    stmt = stmt.order_by(desc(VolunteerDraft.updated_at), desc(VolunteerDraft.id))
+    return session.scalars(stmt).unique().all()
+
+
+def get_volunteer_draft(session: Session, draft_id: int) -> VolunteerDraft | None:
+    stmt = (
+        select(VolunteerDraft)
+        .options(
+            joinedload(VolunteerDraft.student),
+            joinedload(VolunteerDraft.exam),
+            joinedload(VolunteerDraft.items),
+        )
+        .where(VolunteerDraft.id == draft_id)
+    )
+    return session.scalar(stmt)
+
+
+def replace_volunteer_draft_items(
+    session: Session,
+    draft: VolunteerDraft,
+    *,
+    items: list[tuple[int, int | None, dict]],
+) -> None:
+    for item in list(draft.items):
+        session.delete(item)
+    session.flush()
+
+    draft.items = []
+    for order, plan_id, candidate_snapshot_json in items:
+        draft.items.append(
+            VolunteerDraftItem(
+                sort_order=order,
+                plan_id=plan_id,
+                candidate_snapshot_json=candidate_snapshot_json,
+            )
+        )
+    session.flush()
 
 
 def get_scheme(session: Session, scheme_id: int) -> RecommendationScheme | None:

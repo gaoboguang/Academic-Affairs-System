@@ -17,3 +17,11 @@ def get_db_session(request: Request) -> Generator[Session, None, None]:
     with db.session_scope() as session:
         yield session
 
+
+def get_gaokao_db_session(request: Request) -> Generator[Session | None, None, None]:
+    db = getattr(request.app.state, "gaokao_db", None)
+    if db is None:
+        yield None
+        return
+    with db.session_scope() as session:
+        yield session

@@ -11,15 +11,76 @@ const TeachersPage = () => import("../pages/TeachersPage.vue");
 const TeacherDetailPage = () => import("../pages/TeacherDetailPage.vue");
 const ExamsPage = () => import("../pages/ExamsPage.vue");
 const AnalyticsPage = () => import("../pages/AnalyticsPage.vue");
+const GaokaoDataPage = () => import("../pages/GaokaoDataPage.vue");
 const TimetableWorkloadPage = () => import("../pages/TimetableWorkloadPage.vue");
 const EvaluationQuantPage = () => import("../pages/EvaluationQuantPage.vue");
 const ReportsPage = () => import("../pages/ReportsPage.vue");
 const RecommendationsPage = () => import("../pages/RecommendationsPage.vue");
 const SystemToolsPage = () => import("../pages/SystemToolsPage.vue");
+const RecommendationPrintPage = () => import("../pages/RecommendationPrintPage.vue");
+const GrowthSummaryPrintPage = () => import("../pages/GrowthSummaryPrintPage.vue");
+const StudentAnalysisPrintPage = () => import("../pages/StudentAnalysisPrintPage.vue");
+const ClassAnalysisPrintPage = () => import("../pages/ClassAnalysisPrintPage.vue");
+const GradeSummaryPrintPage = () => import("../pages/GradeSummaryPrintPage.vue");
+const TeacherAnalysisPrintPage = () => import("../pages/TeacherAnalysisPrintPage.vue");
+const WorkloadPrintPage = () => import("../pages/WorkloadPrintPage.vue");
+const EvaluationSummaryPrintPage = () => import("../pages/EvaluationSummaryPrintPage.vue");
+const AdviserQuantPrintPage = () => import("../pages/AdviserQuantPrintPage.vue");
+const VolunteerDraftPrintPage = () => import("../pages/VolunteerDraftPrintPage.vue");
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
+    {
+      path: "/print/recommendations/:studentId/:schemeId",
+      name: "recommendation-print",
+      component: RecommendationPrintPage,
+    },
+    {
+      path: "/print/student-analysis/:studentId/:examId",
+      name: "student-analysis-print",
+      component: StudentAnalysisPrintPage,
+    },
+    {
+      path: "/print/class-analysis/:classId/:examId",
+      name: "class-analysis-print",
+      component: ClassAnalysisPrintPage,
+    },
+    {
+      path: "/print/grade-summary/:gradeId/:examId",
+      name: "grade-summary-print",
+      component: GradeSummaryPrintPage,
+    },
+    {
+      path: "/print/teacher-analysis/:teacherId/:examId",
+      name: "teacher-analysis-print",
+      component: TeacherAnalysisPrintPage,
+    },
+    {
+      path: "/print/workload/:semesterId",
+      name: "workload-print",
+      component: WorkloadPrintPage,
+    },
+    {
+      path: "/print/evaluation-summary/:batchId",
+      name: "evaluation-summary-print",
+      component: EvaluationSummaryPrintPage,
+    },
+    {
+      path: "/print/adviser-quant/:semesterId",
+      name: "adviser-quant-print",
+      component: AdviserQuantPrintPage,
+    },
+    {
+      path: "/print/growth-summary/:studentId",
+      name: "growth-summary-print",
+      component: GrowthSummaryPrintPage,
+    },
+    {
+      path: "/print/volunteer-drafts/:draftId",
+      name: "volunteer-draft-print",
+      component: VolunteerDraftPrintPage,
+    },
     {
       path: "/",
       component: AppLayout,
@@ -68,6 +129,11 @@ const router = createRouter({
           path: "analytics",
           name: "analytics",
           component: AnalyticsPage,
+        },
+        {
+          path: "gaokao-data",
+          name: "gaokao-data",
+          component: GaokaoDataPage,
         },
         {
           path: "workload",

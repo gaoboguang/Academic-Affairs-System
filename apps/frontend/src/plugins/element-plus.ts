@@ -1,5 +1,6 @@
 import type { App, Component } from "vue";
 import ElAlert from "element-plus/es/components/alert/index";
+import ElAutocomplete from "element-plus/es/components/autocomplete/index";
 import ElButton from "element-plus/es/components/button/index";
 import ElDatePicker from "element-plus/es/components/date-picker/index";
 import ElDialog from "element-plus/es/components/dialog/index";
@@ -20,6 +21,7 @@ import ElUpload from "element-plus/es/components/upload/index";
 
 const components: Component[] = [
   ElAlert,
+  ElAutocomplete,
   ElButton,
   ElDatePicker,
   ElDialog,

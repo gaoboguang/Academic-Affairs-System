@@ -11,12 +11,15 @@ from app.core.config import Settings
 from app.schemas.student import (
     StudentAttachmentPayload,
     StudentAttachmentSummary,
+    StudentCareerPreferencePayload,
+    StudentCareerPreferenceRead,
     StudentListResponse,
     StudentPayload,
     StudentProfileRead,
     StudentRead,
 )
 from app.services import students as service
+from app.utils.files import resolve_allowed_file_path
 
 router = APIRouter(prefix="/students", tags=["students"])
 
@@ -84,7 +87,11 @@ def export_students(
     settings: Settings = Depends(get_settings),
 ) -> FileResponse:
     result = service.export_students(session, settings)
-    path = settings.project_root / result["file_path"]
+    path = resolve_allowed_file_path(
+        result["file_path"],
+        allowed_roots=[settings.exports_dir],
+        project_root=settings.project_root,
+    )
     return FileResponse(path, filename=Path(path).name)
 
 
@@ -94,6 +101,32 @@ def get_student_profile(
     session: Session = Depends(get_db_session),
 ) -> StudentProfileRead:
     return service.get_student_profile(session, student_id)
+
+
+@router.get("/{student_id}/career-preference", response_model=StudentCareerPreferenceRead | None)
+def get_student_career_preference(
+    student_id: int,
+    session: Session = Depends(get_db_session),
+) -> StudentCareerPreferenceRead | None:
+    return service.get_student_career_preference(session, student_id)
+
+
+@router.post("/{student_id}/career-preference", response_model=StudentCareerPreferenceRead)
+def create_student_career_preference(
+    student_id: int,
+    payload: StudentCareerPreferencePayload,
+    session: Session = Depends(get_db_session),
+) -> StudentCareerPreferenceRead:
+    return service.create_student_career_preference(session, student_id, payload)
+
+
+@router.put("/{student_id}/career-preference", response_model=StudentCareerPreferenceRead)
+def update_student_career_preference(
+    student_id: int,
+    payload: StudentCareerPreferencePayload,
+    session: Session = Depends(get_db_session),
+) -> StudentCareerPreferenceRead:
+    return service.update_student_career_preference(session, student_id, payload)
 
 
 @router.get("/{student_id}/attachments", response_model=list[StudentAttachmentSummary])
