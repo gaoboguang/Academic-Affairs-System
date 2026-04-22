@@ -239,6 +239,10 @@
   - `/api/gaokao/data-overview` 里的 `EnrollmentPlan` / `AdmissionRecord` 当前会区分“应用模型为空但独立 gaokao 只读表已有原始记录”和“连只读原始表也未暴露”两种状态
   - `GaokaoDataPage.vue` 总览现已把“应用侧招生计划 / 录取结果”空态做成解释卡，不再只显示 `0`
   - 当前已新增后端定向回归与前端 `gaokao-overview` helper 单测，验证“partial / waiting”两种解释链
+- 2026-04-22 已继续补高考审阅页的来源语义：
+  - `apps/backend/app/services/gaokao.py` 现已把 `source_title / source_url` 纳入重复组 / 同名组的 `comparison_fields`
+  - `GaokaoDataPage.vue` 组内对照表已新增“来源”列，直接显示来源标题和来源链接
+  - 当前审阅页已不再只看官网 / 招生网 / 章程，也能直接看来源差异
 - 2026-04-21 已把 `2026-04-21_mac_db_handoff` 并入项目但保持双库边界：应用主库继续使用 `data/app.db`，高考只读驾驶舱默认改读 `data/local_edu_tool/local_edu.sqlite3`，避免直接拿 handoff 库替换现有业务库。
 - 当前 `/api/gaokao/*` 已支持独立 `LOCAL_EDU_GAOKAO_DB_PATH`；若该库存在，则优先读取其中的 `gaokao_*` / `gaokao_policy_reference` 等表，缺失时才回退到同步板基线或现有应用模型。
 - 2026-04-21 已把 handoff 包整理到 `handoffs/2026-04-21_mac_db_handoff`；项目运行入口保留在 `data/local_edu_tool/local_edu.sqlite3`，当前通过软链接指向 handoff 快照。

@@ -381,6 +381,7 @@
                               <th>官方站</th>
                               <th>招生网</th>
                               <th>章程</th>
+                              <th>来源</th>
                               <th>更新</th>
                             </tr>
                           </thead>
@@ -403,6 +404,12 @@
                               <td>{{ formatGroupCompareCell(member.official_site) }}</td>
                               <td>{{ formatGroupCompareCell(member.recruit_site) }}</td>
                               <td>{{ formatGroupChapterCell(member) }}</td>
+                              <td>
+                                <div class="group-source-cell">
+                                  <strong>{{ member.source_title || "待补齐" }}</strong>
+                                  <span class="mono-text">{{ formatGroupSourceUrlCell(member.source_url) }}</span>
+                                </div>
+                              </td>
                               <td>{{ member.updated_at || "待补齐" }}</td>
                             </tr>
                           </tbody>
@@ -463,6 +470,7 @@
                               <th>官方站</th>
                               <th>招生网</th>
                               <th>章程</th>
+                              <th>来源</th>
                               <th>更新</th>
                             </tr>
                           </thead>
@@ -485,6 +493,12 @@
                               <td>{{ formatGroupCompareCell(member.official_site) }}</td>
                               <td>{{ formatGroupCompareCell(member.recruit_site) }}</td>
                               <td>{{ formatGroupChapterCell(member) }}</td>
+                              <td>
+                                <div class="group-source-cell">
+                                  <strong>{{ member.source_title || "待补齐" }}</strong>
+                                  <span class="mono-text">{{ formatGroupSourceUrlCell(member.source_url) }}</span>
+                                </div>
+                              </td>
                               <td>{{ member.updated_at || "待补齐" }}</td>
                             </tr>
                           </tbody>
@@ -766,6 +780,7 @@ interface GaokaoReviewGroupMember {
   fallback_url?: string | null;
   effective_chapter_url?: string | null;
   source_title?: string | null;
+  source_url?: string | null;
   updated_at?: string | null;
   priority_code?: string | null;
   priority_label?: string | null;
@@ -1175,6 +1190,17 @@ function formatGroupCompareCell(value?: string | null): string {
   }
 }
 
+function formatGroupSourceUrlCell(value?: string | null): string {
+  if (!value) return "待补齐";
+  try {
+    const parsed = new URL(value);
+    const pathname = parsed.pathname === "/" ? "" : parsed.pathname.replace(/\/$/, "");
+    return `${parsed.host}${pathname}`;
+  } catch {
+    return value;
+  }
+}
+
 function formatGroupChapterCell(member: GaokaoReviewGroupMember): string {
   const chapterValue = member.chapter_url || member.fallback_url || member.effective_chapter_url;
   if (!chapterValue) return "待补齐";
@@ -1401,6 +1427,17 @@ onMounted(async () => {
   color: #1d3348;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.group-source-cell {
+  display: grid;
+  gap: 4px;
+}
+
+.group-source-cell strong {
+  color: #1f354a;
+  font-weight: 600;
+  line-height: 1.5;
 }
 
 .evidence-panel {

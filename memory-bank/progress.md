@@ -8,6 +8,13 @@
 
 ## 2026-04-22 新增
 
+- 已继续推进高考数据驾驶舱审阅语义下沉：
+  - `apps/backend/app/services/gaokao.py` 的重复组 / 同名组对照字段现已补 `source_title`、`source_url`
+  - 审阅页组级 `comparison_fields` 当前会继续比较“来源标题 / 来源链接”，不再只停留在官网、招生网、章程入口
+  - `apps/frontend/src/pages/GaokaoDataPage.vue` 的组内对照表已新增“来源”列，直接展示来源标题和来源链接
+  - 已执行 `./.venv/bin/pytest apps/backend/tests/test_gaokao_api.py -q`，`11 passed`
+  - 已执行 `npm run frontend:build`，通过
+
 - 已把此前积压的主线改动正式提交：
   - 当前 `main` 已新增提交 `33dca81 feat: land current local edu tool mainline`
   - 本次确认未提交内容并不是 `data/*.db` 这类运行数据库文件，而是一整批前后端功能、Alembic 迁移、桌面壳、测试、文档和脚本

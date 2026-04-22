@@ -17,6 +17,7 @@
 13. 2026-04-21 已修复 `/gaokao-data` 白屏：根因是 `ElAutocomplete` 未注册到全局 Element Plus 安装器；修复后已实际用本地浏览器验证页面可正常渲染。若后续再出现“单页空白但接口正常”，优先先抓浏览器 console / pageerror，不要先怀疑数据库接入。
 14. 2026-04-22 已把高考总览里的应用侧空态解释补齐：`/api/gaokao/data-overview` 现在会把 `EnrollmentPlan` / `AdmissionRecord` 的 `0` 条区分为“应用模型为空但独立 gaokao 只读表已有原始记录”和“本地只读库未暴露原始表”；`GaokaoDataPage.vue` 总览也已新增解释卡，不再只有一个 `0`。若继续这条线，下一步更适合继续把更多 review / duplicate 语义从 Windows 线 handoff 到当前页，或把同样的空态解释模式推广到更多只读板块，而不是回头重做现有读数接口。
 15. 2026-04-22 已把此前积压的大批主线改动正式落成提交：当前 `main` 新增 `33dca81 feat: land current local edu tool mainline`。本轮还重新执行了 `npm run check:all`，结果为后端 `54 passed`、前端 `lint` / `111 passed` / `build` 通过、Playwright `31 passed`。如果下一次接手先想确认主线是否稳，直接从这个提交往后看即可。
+16. 2026-04-22 已继续把 review / duplicate 语义往驾驶舱审阅页下沉：重复组 / 同名组的 `comparison_fields` 现已补 `source_title / source_url`，`GaokaoDataPage.vue` 的组内对照表也已新增“来源”列，能直接看来源标题和来源链接差异。若继续这条线，下一步更适合把 `source_title / source_url` 差异进一步汇总成更明确的冲突提示，或补更多 retrieval / review 状态说明，而不是回头重复扩总览。
 
 ## 当前最合理的下一步
 

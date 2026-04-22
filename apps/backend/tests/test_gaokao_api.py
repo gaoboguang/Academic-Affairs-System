@@ -319,6 +319,8 @@ def test_gaokao_review_summary_and_evidence_use_live_rc1_tables(client, app) -> 
     assert compare_field_map["official_site"]["status"] == "partial"
     assert compare_field_map["recruit_site"]["missing_total"] == 1
     assert compare_field_map["effective_chapter_url"]["missing_total"] == 1
+    assert compare_field_map["source_title"]["status"] == "partial"
+    assert compare_field_map["source_url"]["status"] == "partial"
     duplicate_member_ids = {
         item["college_id"]
         for item in review_payload["duplicate_groups"][0]["member_items"]
@@ -329,6 +331,7 @@ def test_gaokao_review_summary_and_evidence_use_live_rc1_tables(client, app) -> 
         for item in review_payload["duplicate_groups"][0]["member_items"]
     }
     assert duplicate_member_map[101]["effective_chapter_url"] == "https://chapter.example/sd"
+    assert duplicate_member_map[101]["source_url"] == "https://source.example/sd"
     assert review_payload["priority_groups"][0]["key"] == "dup-1"
     assert any("命中 1 所学校" in item for item in review_payload["highlights"])
 
@@ -422,8 +425,14 @@ def test_gaokao_review_summary_supports_priority_sort_and_focus_filters(client, 
     assert default_payload["priority_groups"][0]["group_type"] == "duplicate"
     assert default_payload["priority_groups"][0]["high_priority_member_total"] == 1
     assert default_payload["priority_groups"][0]["missing_recruit_site_total"] == 1
-    assert default_payload["priority_groups"][0]["comparison_fields"][0]["title"] == "省份"
-    assert default_payload["priority_groups"][0]["comparison_fields"][0]["summary"] == "已对齐：山东"
+    priority_compare_field_map = {
+        item["key"]: item
+        for item in default_payload["priority_groups"][0]["comparison_fields"]
+    }
+    assert priority_compare_field_map["province"]["title"] == "省份"
+    assert priority_compare_field_map["province"]["summary"] == "已对齐：山东"
+    assert priority_compare_field_map["source_title"]["summary"] == "已对齐：山东来源 102"
+    assert priority_compare_field_map["source_url"]["summary"] == "已对齐：source.example/102"
     assert quick_filter_map["all"]["count"] == 3
     assert quick_filter_map["high_priority"]["count"] == 1
     assert quick_filter_map["missing_chapter"]["count"] == 2

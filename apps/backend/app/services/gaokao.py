@@ -1574,6 +1574,7 @@ def _build_review_group_member(item: GaokaoReviewItemRead) -> GaokaoReviewGroupM
         fallback_url=item.fallback_url,
         effective_chapter_url=item.chapter_url or item.fallback_url,
         source_title=item.source_title,
+        source_url=item.source_url,
         updated_at=item.updated_at,
         priority_code=item.priority_code,
         priority_label=item.priority_label,
@@ -1590,7 +1591,9 @@ def _build_review_group_comparison_fields(
         ("college_code", "院校代码", "text"),
         ("official_site", "官方站", "site"),
         ("recruit_site", "招生网", "site"),
-        ("effective_chapter_url", "章程入口", "site"),
+        ("effective_chapter_url", "章程入口", "url"),
+        ("source_title", "来源标题", "text"),
+        ("source_url", "来源链接", "url"),
     )
     comparison_fields: list[GaokaoReviewGroupComparisonFieldRead] = []
     for key, title, value_kind in field_configs:
@@ -1650,13 +1653,18 @@ def _normalize_review_group_compare_value(value: str | None, *, value_kind: str)
     cleaned_value = _clean_text(value)
     if not cleaned_value:
         return None
-    if value_kind != "site":
+    if value_kind == "text":
         return cleaned_value
 
     parsed = urlparse(cleaned_value)
-    if parsed.netloc:
+    if not parsed.netloc:
+        return cleaned_value
+
+    if value_kind == "site":
         return parsed.netloc
-    return cleaned_value
+
+    normalized_path = parsed.path.rstrip("/")
+    return f"{parsed.netloc}{normalized_path}" if normalized_path else parsed.netloc
 
 
 def _build_review_group_priority_score(
