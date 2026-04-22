@@ -8,6 +8,15 @@
 
 ## 2026-04-22 新增
 
+- 已把此前积压的主线改动正式提交：
+  - 当前 `main` 已新增提交 `33dca81 feat: land current local edu tool mainline`
+  - 本次确认未提交内容并不是 `data/*.db` 这类运行数据库文件，而是一整批前后端功能、Alembic 迁移、桌面壳、测试、文档和脚本
+  - 已重新执行根目录 `npm run check:all`，当前结果为后端 `54 passed`、前端 `lint` 通过、前端 `111 passed`、Playwright `31 passed`
+- 已补一档更深的仓库瘦身入口并完成一次实际清理：
+  - `package.json` 已新增 `npm run clean:slim`，内部调用 `scripts/clean-local.cjs --artifacts`
+  - `clean:slim` 当前会在 `clean:local` 基础上额外清理 `apps/frontend/dist`、`apps/frontend/node_modules/.vite`、`apps/desktop/.dist` 与 `dist/desktop`
+  - 本轮已实际删除桌面打包产物、前端构建产物和本地噪音，仓库体积约从 `2.2G` 降到 `1.4G`
+
 - 已把高考总览里的应用侧空态解释补齐：
   - `apps/backend/app/services/gaokao.py` 现会把 `EnrollmentPlan` / `AdmissionRecord` 的 `0` 条状态细分为“应用侧为空但独立 gaokao 只读表已有原始数据”和“本地只读库未暴露原始表”
   - `apps/frontend/src/pages/GaokaoDataPage.vue` 已新增总览解释卡，直接展示“应用侧招生计划 / 录取结果”为何仍是 `0`

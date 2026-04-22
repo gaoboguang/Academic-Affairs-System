@@ -2,6 +2,19 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const repoRoot = path.resolve(__dirname, "..");
+const args = new Set(process.argv.slice(2));
+const includeArtifacts = args.has("--artifacts");
+
+if (args.has("--help")) {
+  console.log("Usage: node ./scripts/clean-local.cjs [--artifacts]");
+  console.log("");
+  console.log("Default:");
+  console.log("  Remove local noise like .DS_Store, __pycache__, .pytest_cache.");
+  console.log("");
+  console.log("Options:");
+  console.log("  --artifacts   Also remove reproducible build outputs like frontend/dist");
+  process.exit(0);
+}
 
 const removableNames = new Set([
   ".DS_Store",
@@ -24,11 +37,28 @@ const skippedDirNames = new Set([
   "node_modules",
 ]);
 
+const removableArtifactPaths = [
+  "apps/frontend/dist",
+  "apps/frontend/node_modules/.vite",
+  "apps/desktop/.dist",
+  "dist/desktop",
+];
+
 const removed = [];
 
 function shouldRemove(name) {
   if (removableNames.has(name)) return true;
   return removableSuffixes.some((suffix) => name.endsWith(suffix));
+}
+
+function removeRelativePath(relativePath) {
+  const targetPath = path.join(repoRoot, relativePath);
+  if (!fs.existsSync(targetPath)) {
+    return;
+  }
+
+  fs.rmSync(targetPath, { recursive: true, force: true });
+  removed.push(relativePath);
 }
 
 function walk(currentPath) {
@@ -51,6 +81,12 @@ function walk(currentPath) {
 
       walk(entryPath);
     }
+  }
+}
+
+if (includeArtifacts) {
+  for (const relativePath of removableArtifactPaths) {
+    removeRelativePath(relativePath);
   }
 }
 

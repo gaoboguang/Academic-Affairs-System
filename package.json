@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "node ./scripts/dev-local.cjs",
     "clean:local": "node ./scripts/clean-local.cjs",
+    "clean:slim": "node ./scripts/clean-local.cjs --artifacts",
     "backend:dev": "node ./scripts/backend-cli.cjs dev",
     "backend:migrate": "node ./scripts/backend-cli.cjs migrate",
     "backend:init-demo": "node ./scripts/backend-cli.cjs init-demo",

@@ -213,6 +213,13 @@
   - 新增 `scripts/clean-local.cjs`
   - 当前只清理明确可再生的本地噪音：`.DS_Store`、`__pycache__`、`.pytest_cache`、`*.egg-info`、`test-results`、`playwright-report`
   - 明确保留 `data/` 主库与导出、`handoffs/` 接管包、`dist/desktop`、`.venv`、`node_modules`
+- 2026-04-22 已补更深一档的瘦身入口 `npm run clean:slim`：
+  - `scripts/clean-local.cjs` 现支持 `--artifacts`
+  - 当前会在 `clean:local` 基础上额外删除 `apps/frontend/dist`、`apps/frontend/node_modules/.vite`、`apps/desktop/.dist` 与 `dist/desktop`
+  - 已实际执行一轮，仓库体积约从 `2.2G` 降到 `1.4G`
+- 2026-04-22 已把此前积压的主线改动正式落成提交：
+  - 当前 `main` 已新增提交 `33dca81 feat: land current local edu tool mainline`
+  - 本轮已重新执行 `npm run check:all`，后端 `54 passed`、前端 `111 passed`、Playwright `31 passed`
 - 2026-04-21 已继续收学生导入反馈：
   - 后端 `StudentImporter` 现会返回 `notice_preview`
   - 当前会聚合展示“已自动创建班级”“未匹配年级”“学生状态/类别/艺体方向待核对”等高频提示，不再只给原始逐行错误

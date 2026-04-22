@@ -8,6 +8,8 @@
   同时拉起前后端开发服务，内部调用 `scripts/dev-local.cjs`。
 - `npm run clean:local`
   清理仓库内明确可再生的本地噪音，如 `.DS_Store`、`__pycache__`、`.pytest_cache`、`*.egg-info`、`test-results`。
+- `npm run clean:slim`
+  在 `clean:local` 基础上，额外清理可再生构建产物，如 `apps/frontend/dist`、`apps/desktop/.dist`、`dist/desktop`。
 - `npm run backend:dev`
 - `npm run backend:migrate`
 - `npm run backend:init-demo`

@@ -9,7 +9,7 @@
 - 想先搞清楚顶层目录和文档入口：
   看 [`docs/README.md`](./docs/README.md)、[`scripts/README.md`](./scripts/README.md)、[`handoffs/README.md`](./handoffs/README.md)
 - 只想知道怎么运行和验证：
-  直接用 `npm run dev`、`npm run clean:local`、`npm run check`、`npm run check:all`
+  直接用 `npm run dev`、`npm run clean:local`、`npm run clean:slim`、`npm run check`、`npm run check:all`
 - 只想看测试布局：
   看 [`tests/README.md`](./tests/README.md)
 - 想找项目级规则来源：
@@ -138,6 +138,7 @@ npm run frontend:dev
 
 ```bash
 npm run clean:local
+npm run clean:slim
 npm run backend:migrate
 npm run backend:init-demo
 npm run backend:test

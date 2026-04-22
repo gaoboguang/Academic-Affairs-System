@@ -4,7 +4,7 @@
 
 1. 先阅读 `AGENTS.md`、`memory-bank/project-context.md`、`memory-bank/active-context.md`。
 2. 如果任务涉及结构优化，先补看 `docs/README.md`、`docs/dev/README.md`、`scripts/README.md` 与 `handoffs/README.md`，再阅读 `docs/development_recommendations_2026-04-05.md`。
-3. 如只需要先做一轮环境收拾，直接执行 `npm run clean:local`；该命令当前只删可再生本地噪音，不会碰 `data/`、`handoffs/`、`dist/desktop`、`.venv`、`node_modules`。
+3. 如只需要先做一轮环境收拾，直接执行 `npm run clean:local`；该命令当前只删可再生本地噪音，不会碰 `data/`、`handoffs/`、`.venv`、`node_modules`。如需要进一步给仓库瘦身，执行 `npm run clean:slim`，它会额外清掉 `apps/frontend/dist`、`apps/frontend/node_modules/.vite`、`apps/desktop/.dist` 与 `dist/desktop` 这类可再生产物。
 4. 本轮如继续高考志愿主线，补充阅读 `gaokao_dev_bundle_v3/gaokao_dev_doc_v3.md` 与 `gaokao_dev_bundle_v3/codex_prompt_gaokao_v3.txt`，按其 Stage A -> G 顺序推进。
 5. 根目录后端统一入口已补齐，可直接使用 `npm run backend:migrate`、`npm run backend:init-demo`、`npm run backend:test` 与 `npm run backend:dev`。
 6. 2026-04-21 已把高考 handoff 库正式并入项目运行约定：应用主库仍是 `data/app.db`，高考只读驾驶舱默认改读 `data/local_edu_tool/local_edu.sqlite3`；如需改路径，用 `LOCAL_EDU_GAOKAO_DB_PATH` 覆盖，不要把 handoff 库直接替换成应用主库。
@@ -16,6 +16,7 @@
 12. 2026-04-21 已继续完善学生导入反馈：`StudentImporter` 现会返回 `notice_preview`，学生页导入区会把“自动创建班级 / 未匹配年级 / 字典值待核对”与前三条原始错误分开展示；如继续这条线，下一步更适合补“导入前字段映射”或“更多字典值候选建议”，而不是回头再只堆后端错误文本。
 13. 2026-04-21 已修复 `/gaokao-data` 白屏：根因是 `ElAutocomplete` 未注册到全局 Element Plus 安装器；修复后已实际用本地浏览器验证页面可正常渲染。若后续再出现“单页空白但接口正常”，优先先抓浏览器 console / pageerror，不要先怀疑数据库接入。
 14. 2026-04-22 已把高考总览里的应用侧空态解释补齐：`/api/gaokao/data-overview` 现在会把 `EnrollmentPlan` / `AdmissionRecord` 的 `0` 条区分为“应用模型为空但独立 gaokao 只读表已有原始记录”和“本地只读库未暴露原始表”；`GaokaoDataPage.vue` 总览也已新增解释卡，不再只有一个 `0`。若继续这条线，下一步更适合继续把更多 review / duplicate 语义从 Windows 线 handoff 到当前页，或把同样的空态解释模式推广到更多只读板块，而不是回头重做现有读数接口。
+15. 2026-04-22 已把此前积压的大批主线改动正式落成提交：当前 `main` 新增 `33dca81 feat: land current local edu tool mainline`。本轮还重新执行了 `npm run check:all`，结果为后端 `54 passed`、前端 `lint` / `111 passed` / `build` 通过、Playwright `31 passed`。如果下一次接手先想确认主线是否稳，直接从这个提交往后看即可。
 
 ## 当前最合理的下一步
 
