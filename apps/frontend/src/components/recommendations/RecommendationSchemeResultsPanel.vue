@@ -99,6 +99,10 @@
                 <dt>近年数据</dt>
                 <dd>{{ formatReferenceYears(item.snapshot_json) }}</dd>
               </div>
+              <div>
+                <dt>参考口径</dt>
+                <dd>{{ formatReferenceCopy(item) }}</dd>
+              </div>
             </dl>
             <div v-if="hasCareerMatch(item)" class="career-match-card">
               <div class="career-match-head">
@@ -145,6 +149,9 @@
                 </el-tag>
               </div>
             </div>
+            <p v-if="formatBoundaryNotes(item).length" class="reference-copy">
+              {{ formatBoundaryNotes(item).join(" ") }}
+            </p>
             <p class="reason-copy">{{ formatRecommendationReason(item) }}</p>
             <div class="tag-cluster">
               <el-tag
@@ -364,9 +371,14 @@
           {{ formatScoreBasis(row.score_basis) }}
         </template>
       </el-table-column>
+      <el-table-column label="参考口径" min-width="220">
+        <template #default="{ row }">
+          {{ formatReferenceCopy(row) }}
+        </template>
+      </el-table-column>
       <el-table-column label="理由" min-width="320">
         <template #default="{ row }">
-          {{ formatRecommendationReason(row) }}
+          {{ [formatRecommendationReason(row), ...formatBoundaryNotes(row)].filter(Boolean).join(" ") }}
         </template>
       </el-table-column>
     </el-table>
@@ -380,7 +392,11 @@ import {
   buildRecommendationSchemeComparison,
   type RecommendationSchemeComparisonSummary,
 } from "./recommendationComparison";
-import { buildRecommendationStaleReferenceNote, getRecommendationRiskFlagText } from "./recommendationCopy";
+import {
+  buildRecommendationBoundaryNotes,
+  buildRecommendationReferenceCopy,
+  getRecommendationRiskFlagText,
+} from "./recommendationCopy";
 import type { RecommendationHistoryItem, RecommendationResult, ResultGroupKey } from "./types";
 
 interface MultiSchemeComparisonRow {
@@ -515,12 +531,15 @@ function formatReferenceYears(snapshot?: Record<string, unknown> | null): string
 }
 
 function formatRecommendationReason(item: RecommendationResult): string {
-  const segments = [item.reason_text?.trim() || "暂无理由说明"];
-  const staleReferenceNote = buildRecommendationStaleReferenceNote(item.snapshot_json ?? null, props.schemeMeta?.target_year);
-  if (staleReferenceNote) {
-    segments.push(staleReferenceNote);
-  }
-  return segments.join(" ");
+  return item.reason_text?.trim() || "暂无理由说明";
+}
+
+function formatReferenceCopy(item: RecommendationResult): string {
+  return buildRecommendationReferenceCopy(item) ?? "-";
+}
+
+function formatBoundaryNotes(item: RecommendationResult): string[] {
+  return buildRecommendationBoundaryNotes(item, props.schemeMeta?.target_year);
 }
 
 function resultGroupLabel(resultType?: ResultGroupKey): string {
@@ -544,6 +563,8 @@ function formatScoreBasis(value: string): string {
     rank: "位次",
     score: "分数",
     comprehensive_score: "综合分",
+    culture_score: "文化分",
+    plan_only: "计划清单",
   };
   return mapping[value] ?? value;
 }

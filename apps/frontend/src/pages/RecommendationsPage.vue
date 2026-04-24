@@ -17,6 +17,9 @@
         <el-button @click="downloadEnrollmentPlanTemplate">计划模板下载</el-button>
         <el-button @click="activeTab = 'enrollment-plans'">查看计划库</el-button>
         <el-button @click="activeTab = 'volunteer-rules'">维护省份规则</el-button>
+        <el-button @click="activeTab = 'special-type-rules'">特殊类型规则</el-button>
+        <el-button @click="activeTab = 'score-transform-rules'">赋分规则</el-button>
+        <el-button @click="activeTab = 'subject-requirements'">选科字典</el-button>
         <el-button @click="activeTab = 'volunteer-workbench'">学生工作台</el-button>
         <el-button type="primary" @click="activeTab = 'recommendations'">生成推荐</el-button>
       </div>
@@ -146,6 +149,7 @@
           :province-options="provinceOptions"
           :batch-options="batchOptions"
           :college-options="collegeDirectory"
+          :student-type-options="recommendationStudentTypeOptions"
           :enrollment-plan-import-result="enrollmentPlanImportResult"
           @download-template="downloadEnrollmentPlanTemplate"
           @import="handleEnrollmentPlanImport"
@@ -161,6 +165,7 @@
           :admission-year-options="admissionYearOptions"
           :province-options="provinceOptions"
           :college-options="collegeDirectory"
+          :student-type-options="recommendationStudentTypeOptions"
           :admission-import-result="admissionImportResult"
           @download-template="downloadAdmissionTemplate"
           @import="handleAdmissionImport"
@@ -183,6 +188,48 @@
           @reset="resetVolunteerRuleFilters"
           @create="openCreateVolunteerRule"
           @edit="openEditVolunteerRule"
+        />
+      </el-tab-pane>
+
+      <el-tab-pane label="特殊类型规则" name="special-type-rules">
+        <RecommendationSpecialTypeRulesPanel
+          :rules="specialTypeRules"
+          :filters="specialTypeRuleFilters"
+          :bootstrapping="bootstrappingSpecialTypeRules"
+          :year-options="specialTypeRuleYearOptions"
+          :province-options="provinceOptions"
+          :student-type-options="recommendationStudentTypeOptions"
+          @load="loadSpecialTypeRules"
+          @bootstrap="bootstrapSpecialTypeRules"
+          @reset="resetSpecialTypeRuleFilters"
+        />
+      </el-tab-pane>
+
+      <el-tab-pane label="赋分规则" name="score-transform-rules">
+        <RecommendationScoreTransformRulesPanel
+          :rules="provinceScoreTransformRules"
+          :filters="scoreTransformRuleFilters"
+          :bootstrapping="bootstrappingScoreTransformRules"
+          :year-options="scoreTransformRuleYearOptions"
+          :province-options="provinceOptions"
+          :exam-mode-options="examModeOptions"
+          @load="loadProvinceScoreTransformRules"
+          @bootstrap="bootstrapProvinceScoreTransformRules"
+          @reset="resetScoreTransformRuleFilters"
+        />
+      </el-tab-pane>
+
+      <el-tab-pane label="选科字典" name="subject-requirements">
+        <RecommendationSubjectRequirementDictsPanel
+          :dicts="subjectRequirementDicts"
+          :filters="subjectRequirementDictFilters"
+          :bootstrapping="bootstrappingSubjectRequirementDicts"
+          :year-options="subjectRequirementDictYearOptions"
+          :province-options="provinceOptions"
+          :exam-mode-options="examModeOptions"
+          @load="loadSubjectRequirementDicts"
+          @bootstrap="bootstrapSubjectRequirementDicts"
+          @reset="resetSubjectRequirementDictFilters"
         />
       </el-tab-pane>
 
@@ -391,8 +438,11 @@ import RecommendationMajorDialog from "../components/recommendations/Recommendat
 import RecommendationMajorEmploymentMappingDialog from "../components/recommendations/RecommendationMajorEmploymentMappingDialog.vue";
 import RecommendationMajorEmploymentMappingsPanel from "../components/recommendations/RecommendationMajorEmploymentMappingsPanel.vue";
 import RecommendationMajorsPanel from "../components/recommendations/RecommendationMajorsPanel.vue";
+import RecommendationScoreTransformRulesPanel from "../components/recommendations/RecommendationScoreTransformRulesPanel.vue";
 import RecommendationSchemeResultsPanel from "../components/recommendations/RecommendationSchemeResultsPanel.vue";
+import RecommendationSpecialTypeRulesPanel from "../components/recommendations/RecommendationSpecialTypeRulesPanel.vue";
 import RecommendationStrategyPanel from "../components/recommendations/RecommendationStrategyPanel.vue";
+import RecommendationSubjectRequirementDictsPanel from "../components/recommendations/RecommendationSubjectRequirementDictsPanel.vue";
 import RecommendationVolunteerRuleDialog from "../components/recommendations/RecommendationVolunteerRuleDialog.vue";
 import RecommendationVolunteerRulesPanel from "../components/recommendations/RecommendationVolunteerRulesPanel.vue";
 import RecommendationVolunteerWorkbenchPanel from "../components/recommendations/RecommendationVolunteerWorkbenchPanel.vue";
@@ -407,6 +457,9 @@ const {
   admissions,
   applyStrategyPresetWithConfirm,
   batchOptions,
+  bootstrapProvinceScoreTransformRules,
+  bootstrapSpecialTypeRules,
+  bootstrapSubjectRequirementDicts,
   collegeDialogTitle,
   collegeDialogVisible,
   collegeDirectory,
@@ -470,7 +523,10 @@ const {
   loadHistory,
   loadMajorEmploymentMappings,
   loadMajors,
+  loadProvinceScoreTransformRules,
   loadProvinceVolunteerRules,
+  loadSpecialTypeRules,
+  loadSubjectRequirementDicts,
   loadVolunteerDraftComparison,
   loadVolunteerDraftDetail,
   loadVolunteerDrafts,
@@ -509,13 +565,18 @@ const {
   exportingScheme,
   planYearOptions,
   provinceOptions,
+  provinceScoreTransformRules,
   provinceVolunteerRules,
   bootstrapProvinceVolunteerRules,
+  bootstrappingScoreTransformRules,
+  bootstrappingSpecialTypeRules,
+  bootstrappingSubjectRequirementDicts,
   bootstrappingVolunteerRules,
   recommendationForm,
   recommendationGuideCards,
   recommendationModeHint,
   recommendationModeLabel,
+  recommendationStudentTypeOptions,
   recommendationSettings,
   resetAdmissionFilters,
   resetCollegeFilters,
@@ -525,6 +586,9 @@ const {
   resetMajorFilters,
   resetMajorEmploymentMappingFilters,
   resetRecommendationForm,
+  resetScoreTransformRuleFilters,
+  resetSpecialTypeRuleFilters,
+  resetSubjectRequirementDictFilters,
   resetVolunteerWorkbench,
   resetVolunteerRuleFilters,
   remainingVolunteerSlots,
@@ -549,9 +613,17 @@ const {
   selectedSchemeError,
   selectedSchemeResults,
   selectedStrategyPresetId,
+  scoreTransformRuleFilters,
+  scoreTransformRuleYearOptions,
   specialRuleOptions,
+  specialTypeRuleFilters,
+  specialTypeRuleYearOptions,
+  specialTypeRules,
   studentOptions,
   studentCareerPreference,
+  subjectRequirementDictFilters,
+  subjectRequirementDictYearOptions,
+  subjectRequirementDicts,
   subjectRequirementModeOptions,
   strategyCards,
   strategyPresetForm,

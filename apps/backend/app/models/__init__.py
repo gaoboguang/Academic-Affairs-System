@@ -22,9 +22,12 @@ from app.models.recommendation import (
     EnrollmentPlan,
     Major,
     MajorEmploymentMapping,
+    ProvinceScoreTransformRule,
     ProvinceVolunteerRule,
     RecommendationResult,
     RecommendationScheme,
+    SpecialTypeRule,
+    SubjectRequirementDict,
     VolunteerDraft,
     VolunteerDraftItem,
 )
@@ -104,7 +107,10 @@ __all__ = [
     "WorkloadRuleItem",
     "WorkloadRuleVersion",
     "PeriodDefinition",
+    "ProvinceScoreTransformRule",
     "ProvinceVolunteerRule",
+    "SpecialTypeRule",
+    "SubjectRequirementDict",
     "VolunteerDraft",
     "VolunteerDraftItem",
 ]

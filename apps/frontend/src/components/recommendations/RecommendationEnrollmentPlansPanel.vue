@@ -41,6 +41,9 @@
       <el-select v-model="filters.college_id" clearable filterable placeholder="院校">
         <el-option v-for="college in collegeOptions" :key="college.id" :label="college.name" :value="college.id" />
       </el-select>
+      <el-select v-model="filters.student_type" clearable filterable placeholder="学生类别">
+        <el-option v-for="item in studentTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+      </el-select>
       <el-input v-model="filters.keyword" placeholder="按院校 / 专业 / 专业组筛选" />
     </div>
 
@@ -92,6 +95,7 @@ interface EnrollmentPlanFiltersState {
   province: string;
   batch: string;
   college_id?: number;
+  student_type: string;
   keyword: string;
 }
 
@@ -102,6 +106,7 @@ defineProps<{
   provinceOptions: string[];
   batchOptions: string[];
   collegeOptions: CollegeItem[];
+  studentTypeOptions: Array<{ value: string; label: string }>;
   enrollmentPlanImportResult: EnrollmentPlanImportResponse | null;
 }>();
 
@@ -131,6 +136,9 @@ function formatStudentType(value?: string | null): string {
     art: "艺体生",
     sports: "体育生",
     repeat: "复读生",
+    spring_exam: "春季高考",
+    independent_recruitment: "单独招生",
+    comprehensive_evaluation: "综合评价招生",
   };
   return mapping[value] ?? value;
 }

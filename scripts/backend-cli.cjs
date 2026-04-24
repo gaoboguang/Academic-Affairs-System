@@ -59,6 +59,11 @@ function printUsage() {
 支持命令:
   dev        启动后端开发服务
   migrate    执行 Alembic 迁移
+  merge-handoff  把 handoff 高考原始表并入主库
+  materialize-gaokao  把 raw 高考表整理到业务表
+  bootstrap-special-types  装载山东特殊类型规则字典
+  data-health  检查 data/app.db 的 P0 数据健康状态
+  p0-check  执行 P0 本地交付验收
   init-demo  初始化模板、基础数据和演示数据
   test       运行后端测试
 `);
@@ -95,6 +100,46 @@ switch (command) {
       "请先创建 `.venv` 并安装后端依赖，例如运行 `./scripts/dev.sh` 或手工执行 `pip install -e \"./apps/backend[dev]\"`。",
     );
     run(python, ["scripts/init_data.py", "--demo", ...extraArgs]);
+    break;
+  }
+  case "merge-handoff": {
+    const python = requireExecutable(
+      "python",
+      "请先创建 `.venv` 并安装后端依赖，例如运行 `./scripts/dev.sh` 或手工执行 `pip install -e \"./apps/backend[dev]\"`。",
+    );
+    run(python, ["scripts/merge_handoff_gaokao_db.py", ...extraArgs]);
+    break;
+  }
+  case "materialize-gaokao": {
+    const python = requireExecutable(
+      "python",
+      "请先创建 `.venv` 并安装后端依赖，例如运行 `./scripts/dev.sh` 或手工执行 `pip install -e \"./apps/backend[dev]\"`。",
+    );
+    run(python, ["scripts/materialize_gaokao_structured_data.py", ...extraArgs]);
+    break;
+  }
+  case "bootstrap-special-types": {
+    const python = requireExecutable(
+      "python",
+      "请先创建 `.venv` 并安装后端依赖，例如运行 `./scripts/dev.sh` 或手工执行 `pip install -e \"./apps/backend[dev]\"`。",
+    );
+    run(python, ["scripts/bootstrap_special_type_rules.py", ...extraArgs]);
+    break;
+  }
+  case "data-health": {
+    const python = requireExecutable(
+      "python",
+      "请先创建 `.venv` 并安装后端依赖，例如运行 `./scripts/dev.sh` 或手工执行 `pip install -e \"./apps/backend[dev]\"`。",
+    );
+    run(python, ["scripts/check_data_health.py", ...extraArgs]);
+    break;
+  }
+  case "p0-check": {
+    const python = requireExecutable(
+      "python",
+      "请先创建 `.venv` 并安装后端依赖，例如运行 `./scripts/dev.sh` 或手工执行 `pip install -e \"./apps/backend[dev]\"`。",
+    );
+    run(python, ["scripts/p0_delivery_check.py", ...extraArgs]);
     break;
   }
   case "test": {

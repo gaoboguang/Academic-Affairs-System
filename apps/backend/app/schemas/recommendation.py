@@ -94,6 +94,12 @@ class EmploymentDirectionRead(ORMModel):
     is_active: bool
 
 
+class EmploymentDirectionBootstrapResponse(BaseModel):
+    total_count: int
+    created_count: int
+    skipped_count: int
+
+
 class MajorEmploymentMappingPayload(BaseModel):
     major_id: int
     direction_id: int
@@ -122,6 +128,13 @@ class MajorEmploymentMappingRead(ORMModel):
     supports_art: bool
     note: str | None = None
     is_active: bool
+
+
+class MajorEmploymentMappingBootstrapResponse(BaseModel):
+    major_total_count: int
+    matched_major_count: int
+    created_count: int
+    skipped_count: int
 
 
 class AdmissionRecordRead(ORMModel):
@@ -237,6 +250,120 @@ class ProvinceVolunteerRuleBootstrapResponse(BaseModel):
     skipped_count: int
 
 
+class ProvinceScoreTransformRulePayload(BaseModel):
+    province: str
+    year: int
+    exam_mode: str = ""
+    subject_code: str | None = None
+    subject_name: str
+    score_mode: str
+    sort_order: int | None = None
+    grade_table_json: list[dict[str, object]] = Field(default_factory=list)
+    formula_json: dict[str, object] = Field(default_factory=dict)
+    source_note: str | None = None
+    note: str | None = None
+    is_active: bool = True
+
+
+class ProvinceScoreTransformRuleRead(ORMModel):
+    id: int
+    province: str
+    year: int
+    exam_mode: str = ""
+    subject_code: str | None = None
+    subject_name: str
+    score_mode: str
+    sort_order: int | None = None
+    grade_table_json: list[dict[str, object]] = Field(default_factory=list)
+    formula_json: dict[str, object] = Field(default_factory=dict)
+    source_note: str | None = None
+    note: str | None = None
+    is_active: bool
+
+
+class ProvinceScoreTransformRuleBootstrapResponse(BaseModel):
+    year: int
+    total_count: int
+    created_count: int
+    skipped_count: int
+
+
+class SubjectRequirementDictPayload(BaseModel):
+    province: str
+    year: int
+    exam_mode: str = ""
+    requirement_code: str
+    requirement_text: str
+    match_mode: str
+    sort_order: int | None = None
+    normalized_subjects_json: list[str] = Field(default_factory=list)
+    source_note: str | None = None
+    note: str | None = None
+    is_active: bool = True
+
+
+class SubjectRequirementDictRead(ORMModel):
+    id: int
+    province: str
+    year: int
+    exam_mode: str = ""
+    requirement_code: str
+    requirement_text: str
+    match_mode: str
+    sort_order: int | None = None
+    normalized_subjects_json: list[str] = Field(default_factory=list)
+    source_note: str | None = None
+    note: str | None = None
+    is_active: bool
+
+
+class SubjectRequirementDictBootstrapResponse(BaseModel):
+    year: int
+    total_count: int
+    created_count: int
+    skipped_count: int
+
+
+class SpecialTypeRulePayload(BaseModel):
+    province: str
+    year: int
+    student_type: str
+    category_code: str
+    category_label: str
+    sort_order: int | None = None
+    match_keywords_json: list[str] = Field(default_factory=list)
+    review_notes_json: list[str] = Field(default_factory=list)
+    priority_bonus: int = 0
+    priority_notes_json: list[str] = Field(default_factory=list)
+    source_note: str | None = None
+    note: str | None = None
+    is_active: bool = True
+
+
+class SpecialTypeRuleRead(ORMModel):
+    id: int
+    province: str
+    year: int
+    student_type: str
+    category_code: str
+    category_label: str
+    sort_order: int | None = None
+    match_keywords_json: list[str] = Field(default_factory=list)
+    review_notes_json: list[str] = Field(default_factory=list)
+    priority_bonus: int
+    priority_notes_json: list[str] = Field(default_factory=list)
+    source_note: str | None = None
+    note: str | None = None
+    is_active: bool
+
+
+class SpecialTypeRuleBootstrapResponse(BaseModel):
+    year: int
+    total_count: int
+    created_count: int
+    skipped_count: int
+
+
 class VolunteerWorkbenchPreviewPayload(BaseModel):
     student_id: int
     exam_id: int
@@ -307,6 +434,11 @@ class VolunteerWorkbenchCandidateRead(BaseModel):
     reference_years_json: list[int] = Field(default_factory=list)
     reference_record_count: int = 0
     reference_source_notes_json: list[str] = Field(default_factory=list)
+    fallback_priority_score: float | None = None
+    fallback_priority_label: str | None = None
+    fallback_priority_notes_json: list[str] = Field(default_factory=list)
+    fallback_category_label: str | None = None
+    fallback_review_notes_json: list[str] = Field(default_factory=list)
     ratio: float | None = None
     career_match_score: float | None = None
     career_match_strength: str | None = None
@@ -320,6 +452,18 @@ class VolunteerWorkbenchCandidateRead(BaseModel):
     matched_rule_batch: str | None = None
     matched_rule_candidate_type: str | None = None
     matched_rule_is_baseline: bool = False
+    chapter_url: str | None = None
+    chapter_review_status: str | None = None
+    chapter_retrieval_status: str | None = None
+    chapter_campus_note: str | None = None
+    chapter_other_risk_note: str | None = None
+    chapter_language_requirement: str | None = None
+    chapter_single_subject_requirement: str | None = None
+    chapter_gender_requirement: str | None = None
+    chapter_height_requirement: str | None = None
+    chapter_vision_requirement: str | None = None
+    chapter_color_vision_requirement: str | None = None
+    chapter_physical_exam_requirement: str | None = None
     match_tags_json: list[str] = Field(default_factory=list)
     match_notes_json: list[str] = Field(default_factory=list)
     reason_text: str
@@ -519,6 +663,15 @@ class RecommendationResultRead(ORMModel):
     reference_rank: int | None = None
     student_rank: int | None = None
     score_basis: str
+    reference_scope: str | None = None
+    reference_years_json: list[int] = Field(default_factory=list)
+    reference_record_count: int = 0
+    reference_source_notes_json: list[str] = Field(default_factory=list)
+    fallback_priority_score: float | None = None
+    fallback_priority_label: str | None = None
+    fallback_priority_notes_json: list[str] = Field(default_factory=list)
+    fallback_category_label: str | None = None
+    fallback_review_notes_json: list[str] = Field(default_factory=list)
     ratio: float | None = None
     career_match_score: float | None = None
     career_match_strength: str | None = None

@@ -19,6 +19,12 @@ export const RECOMMENDATION_PATH_MISMATCH_FLAGS = [
 const RECOMMENDATION_RISK_FLAG_LABELS: Record<string, string> = {
   sample_insufficient: "样本不足",
   rank_missing: "缺少位次，分数参考",
+  general_reference_fallback: "缺少专门录取结果，按普通类参考",
+  score_line_reference_only: "缺少专门录取结果，按省控线初筛",
+  cross_year_score_line_reference: "省控线按跨年份参考",
+  plan_only_reference: "缺少专门结果，仅按计划清单初筛",
+  chapter_pending_review: "章程待补链",
+  chapter_special_requirement: "章程限制已提取",
   art_recommendation: "艺体推荐",
   track_unconfirmed: "艺体方向待确认",
   manual_formula_check: "需人工核对招生章程",
@@ -94,6 +100,82 @@ export function buildRecommendationStaleReferenceNote(
     return null;
   }
   return `当前录取参考最近只到 ${Math.max(...referenceYears)} 年，与 ${targetYear} 目标年相差 ${gap} 年；若近一年数据尚未补齐，排序和解释会偏保守。`;
+}
+
+export function formatRecommendationReferenceScope(scope?: string | null): string {
+  if (scope === "college") return "院校线参考";
+  if (scope === "score_line") return "省控线参考";
+  if (scope === "plan_only") return "计划清单初筛";
+  if (scope === "major") return "专业线参考";
+  return "参考口径待补";
+}
+
+export function buildRecommendationReferenceCopy(item: RecommendationResult): string | null {
+  if (!item.reference_scope && !item.reference_record_count) {
+    return null;
+  }
+  const scopeLabel = formatRecommendationReferenceScope(item.reference_scope);
+  const yearLabel = item.reference_years_json.length ? `${item.reference_years_json.join(" / ")} 年` : "年份待补";
+  const sampleLabel = item.reference_scope === "score_line"
+    ? "省级控制线口径"
+    : item.reference_scope === "plan_only"
+      ? "当年计划口径"
+      : `${item.reference_record_count} 条样本`;
+  const sourceLabel = item.reference_source_notes_json.length
+    ? `来源：${item.reference_source_notes_json.join("；")}`
+    : null;
+  return [scopeLabel, yearLabel, sampleLabel, sourceLabel].filter(Boolean).join(" · ");
+}
+
+export function buildRecommendationFallbackPriorityCopy(item: RecommendationResult): string | null {
+  const label = item.fallback_priority_label?.trim();
+  if (!label || item.fallback_priority_score === null || item.fallback_priority_score === undefined) {
+    return null;
+  }
+  const notes = item.fallback_priority_notes_json?.filter(Boolean) ?? [];
+  const category = item.fallback_category_label?.trim();
+  const reviewNotes = item.fallback_review_notes_json?.filter(Boolean) ?? [];
+  const detailParts = [
+    category ? `细分类别：${category}` : null,
+    notes.length ? notes.join("；") : null,
+    reviewNotes.length ? `核对清单：${reviewNotes.join("；")}` : null,
+  ].filter(Boolean);
+  const detailText = detailParts.length ? `：${detailParts.join("；")}` : "";
+  return `初筛优先级：${label}（${item.fallback_priority_score}）${detailText}`;
+}
+
+export function buildRecommendationBoundaryNotes(
+  item: RecommendationResult,
+  targetYear?: number | null,
+): string[] {
+  const notes: string[] = [];
+  if (item.reference_scope === "college" && item.major_id) {
+    notes.push("当前专业缺少专业线，先回退到院校线参考；同校不同专业结果仍可能继续变化。");
+  }
+  if (item.reference_scope === "score_line") {
+    notes.push("当前结果只按省级控制线做资格初筛，不能直接视作院校或专业录取把握。");
+  }
+  if (item.reference_scope === "plan_only") {
+    notes.push("当前结果只按当年招生计划清单做方向性初筛，不能直接作为冲稳保或录取把握判断。");
+  }
+  const priorityCopy = buildRecommendationFallbackPriorityCopy(item);
+  if (priorityCopy) {
+    notes.push(priorityCopy);
+  }
+  const snapshot = item.snapshot_json ?? null;
+  if (typeof snapshot?.batch_dict_note === "string" && snapshot.batch_dict_note.trim()) {
+    notes.push(`批次词典：${snapshot.batch_dict_note.trim()}`);
+  }
+  if (typeof snapshot?.province_policy_summary === "string" && snapshot.province_policy_summary.trim()) {
+    notes.push(`政策摘要：${snapshot.province_policy_summary.trim()}`);
+  } else if (typeof snapshot?.province_policy_title === "string" && snapshot.province_policy_title.trim()) {
+    notes.push(`省级政策：${snapshot.province_policy_title.trim()}`);
+  }
+  const staleNote = buildRecommendationStaleReferenceNote(item.snapshot_json ?? null, targetYear);
+  if (staleNote) {
+    notes.push(staleNote);
+  }
+  return notes;
 }
 
 export function getRecommendationReferenceYearGap(

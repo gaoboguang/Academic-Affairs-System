@@ -205,6 +205,65 @@
 
 ## 当前重点
 
+- 2026-04-24 已新增交付版后续开发计划：
+  - `docs/development_plan_to_delivery_2026-04-24.md` 是当前从“继续补数据库/高考志愿主线”推进到“可交付投入使用”的计划入口
+  - 当前文档明确山东考生为唯一近期生源地范围，重点是全国高校在山东招生数据、数据质量看板、普通类推荐可用、特殊类型安全初筛、备份恢复和 Windows 交付验证
+  - 下一轮最适合直接落地的是数据健康检查命令和高考数据页“山东覆盖率”看板，而不是继续无目标地堆页面
+- 2026-04-24 已落地 P0 第一段“数据健康检查 + 会改库脚本前后摘要”：
+  - 新增 `npm run backend:data-health`，读取 `data/app.db` 并输出核心表数量、山东年份覆盖、考生类型覆盖和 P0 缺口摘要；支持 `-- --json`
+  - 当前真实主库健康检查结果：核心表缺失 0、空表 0、需关注表 2、P0 缺口 6 条；缺口集中在特殊类型专门录取结果、2024 招生计划完整性、一分一段 2020-2023、省控线 2020-2023、政策参考偏少、章程待复核
+  - `backend:merge-handoff`、`backend:materialize-gaokao` 现在都会输出执行前后的健康摘要；`backend:bootstrap-special-types` 默认先备份主库再写规则，并同样输出前后摘要
+  - README、`scripts/README.md` 和交付计划验收清单已同步该入口
+- 2026-04-24 已继续把数据健康检查接到高考数据页：
+  - 新增 `/api/gaokao/data-health`，直接复用 `data_health.py`
+  - `/gaokao-data` 新增“山东覆盖”页签，展示核心表缺失/空表/需关注表/P0 缺口、健康检查摘要、核心表状态、山东年份与考生类型覆盖
+  - 当前已执行 `npm run backend:test -- apps/backend/tests/test_gaokao_api.py apps/backend/tests/test_data_health.py -q`，`15 passed`
+- 2026-04-24 已按交付计划补阶段一覆盖矩阵与导入审计能力：
+  - `data_health.py` 现在输出 `expected_years`、`missing_years`、按年明细、考生类型分布、批次/口径分布和 `audit_summary`
+  - `/gaokao-data` 的“山东覆盖”页签可展开查看按年份 / 类别 / 批次的覆盖矩阵，并展示当前记录数、疑似重复、冲突、待人工复核和缺口说明
+  - 当前真实主库仍保留数据缺口：招生计划缺 2021-2023，一分一段和省控线缺 2020-2023，特殊类型专门录取结果缺失且只能初筛，政策参考偏少，章程待复核 1748 条
+- 2026-04-24 已继续推进阶段二规则核对入口：
+  - `/recommendations` 在“特殊类型规则”之外，新增“赋分规则”和“选科字典”页签，分别查看 `province_score_transform_rule` 与 `subject_requirement_dict`
+  - `useGaokaoPlanningManager.ts` 已接入两类规则的列表、筛选、bootstrap、统计与重置；`useRecommendationsPage.ts` 对三类规则字典采用页签懒加载，避免拖慢推荐主流程
+  - 推荐页学生选项加载从 200 条提高到 1000 条，后端 `/api/students` 同步放宽 `page_size` 上限，避免较大本地库里推荐/志愿页漏掉学生
+  - 已执行 `npm run frontend:build`、`npm run backend:test -- apps/backend/tests/test_recommendation_workflow.py -q -k 'bootstrap_province_score_transform_rules or bootstrap_subject_requirement_dicts or special_type_rule_dictionary_bootstrap_and_list'`（`3 passed`）、`npm run e2e -- --grep "高考志愿主流程" tests/e2e/dashboard-smoke.spec.ts`（`1 passed`）、`git diff --check` 和 `npm run backend:p0-check -- --json`（`ok: true`，备份 `data/backups/p0_delivery_backup_20260424_111319.zip`）
+- 2026-04-24 已完成 P0 安全底座一次性验收入口：
+  - 新增 `npm run backend:p0-check`，执行数据健康、SQLite 完整性、P0 备份包生成、备份结构校验、临时恢复、恢复库二次健康检查和恢复后 FastAPI 启动检查
+  - 新增 `docs/p0_delivery_runbook_2026-04-24.md`，沉淀 P0 验收、备份恢复、启动检查和当前 6 条数据缺口
+  - 当前已执行 `npm run backend:p0-check -- --json`，结果 `ok: true`；最新备份包 `data/backups/p0_delivery_backup_20260424_103604.zip`
+  - 当前已执行 `npm run frontend:build` 与 `git diff --check`，通过
+- 2026-04-24 已继续完善 P0 特殊类型规则交付：
+  - `/recommendations` 新增“特殊类型规则”页签，读取 `/api/special-type-rules`
+  - 页面可按年份、省份、考生类型筛选，展示规则总数、覆盖年份、考生类型、待核类别、匹配关键词、核对清单、初筛优先级和来源备注
+  - 页面可触发 `/api/special-type-rules/bootstrap` 装载山东基线，仍由后端规则表承担事实来源
+  - 当前已执行 `npm run frontend:build`、`npm run backend:test -- apps/backend/tests/test_recommendation_workflow.py -q -k special_type_rule_dictionary_bootstrap_and_list` 和 `npm run backend:p0-check -- --json`，均通过；最新 P0 备份包为 `data/backups/p0_delivery_backup_20260424_103604.zip`
+
+- 2026-04-23 已继续补“山东特殊类型录取结果缺口”的第二参考源：
+  - 新增 `apps/backend/app/services/_recommendations_score_lines.py`
+  - 当前会优先读取主库 raw `gaokao_score_line`，为 `art / sports` 在缺少专门录取结果时提供“省控线资格参考”
+  - 工作台预览和正式推荐生成都已接入这条 fallback；当前结果会显式标记 `score_line_reference_only`，跨目标年份回退时再标 `cross_year_score_line_reference`
+  - 当前策略是“只做资格初筛，不把省控线误包装成院校录取把握”，因此这类结果统一保持强风险提示
+- 2026-04-23 已继续补“无专门录取结果、也无可用省控线”场景的兜底：
+  - 当前 `spring_exam / independent_recruitment / comprehensive_evaluation` 已新增“计划清单初筛” fallback
+  - 这条链当前基于当年 `enrollment_plan`、省份规则、章程链和职业匹配做方向性初筛，显式标记 `plan_only_reference`
+  - 当前这条 fallback 已下沉到工作台、正式推荐结果、导出摘要和打印链，但仍保持强风险提示，不把“计划存在”伪装成定量录取把握
+- 2026-04-24 已继续把特殊类型 fallback 从“平铺可见”推进到“按初筛优先级排序”：
+  - 新增 `apps/backend/app/services/_recommendations_fallback_priority.py`
+  - `score_line / plan_only` fallback 现在会基于省控线可用性、批次顺序、计划数、院校层次、职业匹配和章程状态生成 `fallback_priority_score / label / notes`
+  - 工作台候选池、正式推荐结果、推荐结果页和推荐打印页都会展示初筛优先级；后端排序也会优先读取该分数，避免特殊类型结果只按院校名平铺
+  - 该优先级只是“先看谁”的工作流排序，不等同于录取把握，仍必须保留 `score_line_reference_only` / `plan_only_reference` 风险提示
+- 2026-04-24 已继续把初筛优先级细化到特殊类型类别：
+  - `fallback_priority` 当前会额外输出 `fallback_category_label / fallback_review_notes_json`
+  - 已能识别示例类别：`艺术音乐类`、`艺术美术设计类`、`综评工科方向`、`单招技术技能方向`、`春考信息技术类 / 设备制造类 / 医药护理类 / 财经商贸类` 等
+  - 艺体省控线 fallback 会按“高出省控线多少分”继续加权；春考/综评/单招计划清单 fallback 会补对应报名、校测、技能类别、章程和填报规则核对清单
+  - 这些字段已进入工作台候选、正式推荐结果、推荐结果页和打印页说明
+- 2026-04-24 已把特殊类型类别识别从启发式代码升级为应用侧规则字典：
+  - 新增 `special_type_rule` 表和迁移 `20260424_0015`
+  - 新增 `apps/backend/app/services/_recommendations_special_type_rules.py`，当前集中维护山东春考、综评、单招、艺术、体育的细分类别、关键词、核对清单和优先级加成
+  - `data/app.db` 已实际迁移到 `20260424_0015`，并写入 2025/2026 两年共 `62` 条山东特殊类型规则
+  - 新增 `npm run backend:bootstrap-special-types -- --year 2025 --year 2026`，后续可重复幂等补齐该规则字典
+  - `fallback_priority` 现在通过规则表上下文输出类别、核对清单和排序加权；若没有命中具体类别，会回退到“待核”类别并保留人工复核提示
+
 - 2026-04-21 已做一轮顶层导航整理：
   - 新增 `docs/README.md`、`docs/dev/README.md`、`scripts/README.md`、`handoffs/README.md`
   - 根 `README.md` 已补“快速导航”，先把“源码 / 运行产物 / handoff / 历史 bundle / 当前开发说明”的入口分开
@@ -243,6 +302,47 @@
   - `apps/backend/app/services/gaokao.py` 现已把 `source_title / source_url` 纳入重复组 / 同名组的 `comparison_fields`
   - `GaokaoDataPage.vue` 组内对照表已新增“来源”列，直接显示来源标题和来源链接
   - 当前审阅页已不再只看官网 / 招生网 / 章程，也能直接看来源差异
+- 2026-04-22 已继续补应用侧 Stage B 规则库：
+  - `apps/backend/app/models/recommendation.py` 已新增 `ProvinceScoreTransformRule` 与 `SubjectRequirementDict`
+  - 已新增 Alembic `20260422_0014_stage_b_rule_dictionary_schema.py`
+  - `apps/backend/app/api/routes/recommendations.py` 已补两类规则表的 list / create / update / bootstrap 接口
+  - `seed_reference_data()` 现会同步初始化这两类基线规则
+  - `apps/backend/app/services/gaokao.py` 的山东监控在缺少原始 `gaokao_score_transform_rule` / `gaokao_subject_requirement_dict` 时，现会回退到应用侧这两类表
+  - 当前已执行 `./.venv/bin/pytest apps/backend/tests/test_recommendation_workflow.py apps/backend/tests/test_gaokao_api.py -q`，`19 passed`
+  - 当前已执行临时库 `alembic upgrade head`，可升到 `20260422_0014`
+- 2026-04-22 已把 handoff 高考原始表正式并入 `data/app.db`：
+  - 已新增 `scripts/merge_handoff_gaokao_db.py` 与根命令 `npm run backend:merge-handoff`
+  - 当前会把 `gaokao_*`、`data_import_*`、`score_rank_segment` 从 handoff 快照同步进主库，并自动先备份 `data/app.db`
+  - 真实主库已执行一轮迁移 + 并库：`gaokao_college=3344`、`gaokao_admission_plan=6895`、`gaokao_admission_result=178343`、`gaokao_subject_requirement=180788`
+  - 真实主库也已补齐应用侧规则基线：`province_score_transform_rule=438`、`subject_requirement_dict=292`
+  - `apps/backend/app/main.py` 现会在检测到 `data/app.db` 已嵌入 raw 高考表时优先走单库，不再强依赖独立 `local_edu.sqlite3`
+- 2026-04-22 已继续把 raw 高考表整理进业务表：
+  - 已新增 `apps/backend/app/utils/gaokao_materialize.py` 与 `scripts/materialize_gaokao_structured_data.py`
+  - 根目录已补 `npm run backend:materialize-gaokao`
+  - 当前已对真实 `data/app.db` 物化扩展链路：`college=3455`、`college_alias=377`、`major=13959`、`admission_record=170385`、`enrollment_plan=6338`、`college_major=60761`
+  - 当前 `enrollment_plan` 已继续纳入 `春季高考=960`、`艺术类=383`、`单独招生=132`、`综合评价招生=86`、`体育类=64`
+  - 当前 `admission_record` 仍只有 `general=170385`，根因是 raw `gaokao_admission_result` 本身当前就是普通类口径，不是物化脚本漏掉
+- 2026-04-22 已继续把特殊类型接进消费链：
+  - `录取库 / 招生计划库` 当前都支持按 `student_type` 过滤
+  - 仓库内推荐候选筛选已改成精确类别匹配，不再把所有“非普通类”混查
+  - `detect_student_type()` 已修正：`sports` 学生不再被误判成泛化 `art`
+  - `spring_exam / independent_recruitment / comprehensive_evaluation` 当前在缺少专门录取结果时，会显式回退参考普通类录取结果，并带风险标记与摘要说明
+  - 当前最直接可用的范围是：录取库展示、招生计划库展示、工作台/推荐候选筛选
+- 2026-04-23 已继续补山东专用规则基线：
+  - `province_volunteer_rule` 当前真实主库总数为 `81`
+  - 山东 2026 年已补普通类常规/提前/专科/专项、春季高考、本专科、艺术类、体育类、单独招生、综合评价招生等批次专用规则
+  - 当前 `province_volunteer_rule / province_score_transform_rule / subject_requirement_dict` 都已覆盖 `2025` 和 `2026`
+  - 当前仍未补齐的是这些规则的官方逐条精细字段和更多省份同类规则；山东已先能命中专用规则
+- 2026-04-23 已继续补职业方向内容底座：
+  - 真实主库当前 `employment_direction=14`、`major_employment_mapping=12975`
+  - 软件平台工程、数据智能分析、智能制造、医疗健康、教育教学、财经审计、传媒设计、法政公共治理、物流运营、建筑工程、农业食品、国际商务、艺术创作、体育健康等方向已可直接用于职业匹配
+  - 当前映射仍属第一轮基线，优先按专业名称/类别建立，后续还需要继续清洗过宽或过泛的映射
+- 2026-04-23 已继续补山东章程限制链：
+  - 工作台候选当前已下沉 `chapter_url / chapter_review_status / chapter_retrieval_status / chapter_campus_note / chapter_other_risk_note`
+  - 正式推荐结果链当前也会把章程链接、校区备注和风险备注沉到 `snapshot_json / reason_text / risk_flags_json`
+  - 当前已新增 `chapter_pending_review` 风险标记，报表摘要和风险标签可直接消费
+  - 语言要求、单科要求、性别要求、身高、视力/色觉、体检要求这批字段当前也已打通到工作台候选与正式推荐结果
+  - 推荐报告和志愿草稿的导出/打印面现在都能直接带出章程链接、状态、校区备注和章程备注
 - 2026-04-21 已把 `2026-04-21_mac_db_handoff` 并入项目但保持双库边界：应用主库继续使用 `data/app.db`，高考只读驾驶舱默认改读 `data/local_edu_tool/local_edu.sqlite3`，避免直接拿 handoff 库替换现有业务库。
 - 当前 `/api/gaokao/*` 已支持独立 `LOCAL_EDU_GAOKAO_DB_PATH`；若该库存在，则优先读取其中的 `gaokao_*` / `gaokao_policy_reference` 等表，缺失时才回退到同步板基线或现有应用模型。
 - 2026-04-21 已把 handoff 包整理到 `handoffs/2026-04-21_mac_db_handoff`；项目运行入口保留在 `data/local_edu_tool/local_edu.sqlite3`，当前通过软链接指向 handoff 快照。

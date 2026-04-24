@@ -20,7 +20,11 @@ def resolve_score_input_context(
     snapshot_rank: int | None,
 ) -> dict[str, object]:
     mode = (score_input_mode or "actual_rank").strip() or "actual_rank"
-    score_value = _first_defined(comprehensive_score, culture_score, total_score)
+    score_value, score_source = _resolve_score_value(
+        comprehensive_score=comprehensive_score,
+        culture_score=culture_score,
+        total_score=total_score,
+    )
     effective_rank = student_rank_override or snapshot_rank
     notes: list[str] = []
     confidence = "official"
@@ -40,6 +44,7 @@ def resolve_score_input_context(
             "confidence": confidence,
             "reference_exam_name": normalized_reference_exam_name,
             "use_historical_mapping": use_historical_mapping,
+            "score_source": score_source,
             "notes": notes,
         }
 
@@ -56,6 +61,7 @@ def resolve_score_input_context(
             "confidence": "score_only",
             "reference_exam_name": normalized_reference_exam_name,
             "use_historical_mapping": use_historical_mapping,
+            "score_source": score_source,
             "notes": notes,
         }
 
@@ -74,6 +80,7 @@ def resolve_score_input_context(
             "confidence": "estimated",
             "reference_exam_name": normalized_reference_exam_name,
             "use_historical_mapping": use_historical_mapping,
+            "score_source": score_source,
             "notes": notes,
         }
 
@@ -92,6 +99,7 @@ def resolve_score_input_context(
             "confidence": "estimated",
             "reference_exam_name": normalized_reference_exam_name,
             "use_historical_mapping": use_historical_mapping,
+            "score_source": score_source,
             "notes": notes,
         }
 
@@ -120,6 +128,7 @@ def resolve_score_input_context(
             "confidence": "range_estimated",
             "reference_exam_name": normalized_reference_exam_name,
             "use_historical_mapping": use_historical_mapping,
+            "score_source": score_source,
             "notes": notes,
         }
 
@@ -148,6 +157,7 @@ def resolve_score_input_context(
             "confidence": "range_estimated",
             "reference_exam_name": normalized_reference_exam_name,
             "use_historical_mapping": use_historical_mapping,
+            "score_source": score_source,
             "notes": notes,
         }
 
@@ -172,6 +182,7 @@ def apply_input_context_to_evaluation(evaluation: dict[str, object], input_conte
             "score_confidence": input_context.get("confidence"),
             "reference_exam_name": input_context.get("reference_exam_name"),
             "use_historical_mapping": input_context.get("use_historical_mapping"),
+            "score_source": input_context.get("score_source"),
             "input_notes": notes,
         }
     )
@@ -183,6 +194,19 @@ def _first_defined(*values: float | None) -> float | None:
         if value is not None:
             return value
     return None
+
+
+def _resolve_score_value(
+    *,
+    comprehensive_score: float | None,
+    culture_score: float | None,
+    total_score: float,
+) -> tuple[float | None, str]:
+    if comprehensive_score is not None:
+        return comprehensive_score, "comprehensive_score"
+    if culture_score is not None:
+        return culture_score, "culture_score"
+    return total_score, "total_score"
 
 
 def _pick_range_value(lower: float, upper: float, risk_preference: str | None, *, reverse: bool) -> float:

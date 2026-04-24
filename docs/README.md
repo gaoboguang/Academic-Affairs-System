@@ -8,7 +8,11 @@
    项目规格与产品边界的主入口。
 2. [`development_recommendations_2026-04-05.md`](./development_recommendations_2026-04-05.md)
    仓库结构优化建议，适合做整理、拆分、工程化时先看。
-3. [`dev/README.md`](./dev/README.md)
+3. [`development_plan_to_delivery_2026-04-24.md`](./development_plan_to_delivery_2026-04-24.md)
+   按当前进度整理的交付版后续开发计划，适合继续推进到投入使用前先看。
+4. [`p0_delivery_runbook_2026-04-24.md`](./p0_delivery_runbook_2026-04-24.md)
+   P0 本地交付验收手册，覆盖数据健康、备份恢复、恢复后启动和当前已知缺口。
+5. [`dev/README.md`](./dev/README.md)
    当前开发主线、分工文档和 prompt 的索引。
 
 ## 当前仍在用的文档
@@ -17,6 +21,10 @@
   本地教务工具的规格说明，优先级最高。
 - [`development_recommendations_2026-04-05.md`](./development_recommendations_2026-04-05.md)
   针对“仓库开始变乱”后的结构化建议。
+- [`development_plan_to_delivery_2026-04-24.md`](./development_plan_to_delivery_2026-04-24.md)
+  当前高考志愿主线到交付可用的后续计划和验收标准。
+- [`p0_delivery_runbook_2026-04-24.md`](./p0_delivery_runbook_2026-04-24.md)
+  当前 P0 安全底座验收步骤和恢复演练入口。
 - [`dev/`](./dev/)
   当前工作流文档和阶段计划。
 - [`../tests/README.md`](../tests/README.md)
@@ -40,7 +48,7 @@
 - 想做结构整理：
   先看 `development_recommendations_2026-04-05.md`，再看 `dev/README.md`。
 - 想继续高考主线：
-  优先看 `gaokao_dev_bundle_v3/`，不要先扎进旧 bundle。
+  先看 `development_plan_to_delivery_2026-04-24.md`，再看 `gaokao_dev_bundle_v3/`，不要先扎进旧 bundle。
 - 想判断文档是不是历史遗留：
   先看这里的索引，再决定要不要进具体 bundle。
 

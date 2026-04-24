@@ -10,9 +10,12 @@ from app.core.bootstrap import ensure_runtime_directories
 from app.core.config import Settings, get_settings
 from app.db.session import DatabaseManager
 from app.exporters.templates import generate_import_templates
+from app.utils.gaokao_sync import app_db_has_embedded_gaokao_tables
 
 
 def _build_optional_gaokao_db_manager(settings: Settings) -> DatabaseManager | None:
+    if app_db_has_embedded_gaokao_tables(settings.db_path):
+        return None
     gaokao_db_path = settings.gaokao_db_path
     if gaokao_db_path is None or not gaokao_db_path.exists():
         return None

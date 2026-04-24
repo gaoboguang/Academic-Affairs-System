@@ -12,6 +12,7 @@
           <span class="page-chip"><strong>数据来源</strong>{{ formatSourceMode(overview.source_mode) }}</span>
           <span class="page-chip"><strong>学校总数</strong>{{ overview.school_total || "-" }}</span>
           <span class="page-chip"><strong>山东监控</strong>{{ shandongMonitor.sections.length }}</span>
+          <span class="page-chip"><strong>P0 缺口</strong>{{ dataHealth.gaps.length }}</span>
         </div>
       </div>
       <div class="action-row">
@@ -153,6 +154,176 @@
               </ul>
             </article>
           </div>
+        </section>
+      </el-tab-pane>
+
+      <el-tab-pane label="山东覆盖" name="coverage">
+        <section class="metric-grid">
+          <MetricCard label="核心表缺失" :value="dataHealthSummary.missing" help-text="健康检查里未找到的核心表数量。" />
+          <MetricCard label="空表" :value="dataHealthSummary.empty" help-text="核心表存在但当前没有记录的数量。" />
+          <MetricCard label="需关注表" :value="dataHealthSummary.gap" help-text="有数据但明显存在交付缺口的表。" />
+          <MetricCard label="P0 缺口" :value="dataHealth.gaps.length" help-text="按交付计划 P0 规则自动识别出的数据缺口。" />
+        </section>
+
+        <section class="dashboard-grid">
+          <article class="soft-card panel-block">
+            <div class="section-head compact">
+              <div>
+                <h3>健康检查摘要</h3>
+                <p>直接复用本地命令 `backend:data-health` 的结构化结果，方便补数据前后对照。</p>
+              </div>
+              <el-tag :type="dataHealth.gaps.length ? 'warning' : 'success'" effect="light">
+                {{ dataHealth.summary || "待检查" }}
+              </el-tag>
+            </div>
+            <div class="overview-copy">
+              <div class="overview-highlight">
+                <strong>{{ dataHealth.schema_version || "未迁移" }}</strong>
+                <span>{{ dataHealth.generated_at || "待检查" }}</span>
+              </div>
+              <p>主库：{{ dataHealth.db_path || "待确认" }}</p>
+            </div>
+            <ul v-if="dataHealth.gaps.length" class="health-gap-list">
+              <li v-for="gap in dataHealth.gaps" :key="gap">{{ gap }}</li>
+            </ul>
+            <el-empty v-else description="当前未发现 P0 规则内的明显缺口" />
+          </article>
+
+          <article class="soft-card panel-block">
+            <div class="section-head compact">
+              <div>
+                <h3>核心表状态</h3>
+                <p>先看哪些表已经有数据，哪些表虽然有数据但仍不足以支撑交付。</p>
+              </div>
+            </div>
+            <div class="table-shell">
+              <el-table :data="dataHealth.tables" stripe>
+                <el-table-column label="表" prop="label" min-width="180" />
+                <el-table-column label="记录数" prop="count" width="110" />
+                <el-table-column label="状态" width="110">
+                  <template #default="{ row }">
+                    <el-tag :type="statusTagType(row.status)" effect="light">{{ formatMonitorStatus(row.status) }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="说明" min-width="240">
+                  <template #default="{ row }">
+                    {{ row.notes?.join("；") || "-" }}
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+          </article>
+        </section>
+
+        <section class="soft-card panel-block">
+          <div class="section-head">
+            <div>
+              <h3>山东年份与类型覆盖</h3>
+              <p>按年份、数据域和考生类型查看当前主库能支撑哪些推荐口径。</p>
+            </div>
+          </div>
+          <div class="table-shell">
+            <el-table :data="dataHealth.coverage" stripe>
+              <el-table-column type="expand" width="44">
+                <template #default="{ row }">
+                  <div class="coverage-detail-table">
+                    <el-table :data="row.year_breakdown" size="small" stripe>
+                      <el-table-column label="年份" prop="year" width="90" />
+                      <el-table-column label="总量" prop="total" width="100" />
+                      <el-table-column label="类型 / 状态" min-width="220">
+                        <template #default="{ row: yearRow }">
+                          {{ formatDistribution(yearRow.student_types, "无分类") }}
+                        </template>
+                      </el-table-column>
+                      <el-table-column label="批次 / 口径" min-width="220">
+                        <template #default="{ row: yearRow }">
+                          {{ formatDistribution(yearRow.batches, "无批次") }}
+                        </template>
+                      </el-table-column>
+                      <el-table-column label="状态" width="110">
+                        <template #default="{ row: yearRow }">
+                          <el-tag :type="statusTagType(yearRow.status)" effect="light">
+                            {{ formatMonitorStatus(yearRow.status) }}
+                          </el-tag>
+                        </template>
+                      </el-table-column>
+                    </el-table>
+                    <el-empty v-if="!row.year_breakdown.length" description="暂无按年明细" />
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="数据域" prop="label" min-width="180" />
+              <el-table-column label="总量" prop="total" width="110" />
+              <el-table-column label="年份覆盖" min-width="180">
+                <template #default="{ row }">
+                  {{ formatYearList(row.years) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="缺少年份" min-width="160">
+                <template #default="{ row }">
+                  {{ formatYearList(row.missing_years) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="考生类型 / 状态分布" min-width="320">
+                <template #default="{ row }">
+                  <div class="health-type-tags">
+                    <el-tag
+                      v-for="item in row.student_types"
+                      :key="`${row.key}_${item.key}`"
+                      size="small"
+                      effect="light"
+                    >
+                      {{ item.key }}：{{ item.count }}
+                    </el-tag>
+                    <span v-if="!row.student_types.length" class="table-muted">无分类</span>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="批次 / 口径分布" min-width="260">
+                <template #default="{ row }">
+                  {{ formatDistribution(row.batch_distribution, "无批次") }}
+                </template>
+              </el-table-column>
+              <el-table-column label="状态" width="110">
+                <template #default="{ row }">
+                  <el-tag :type="statusTagType(row.status)" effect="light">{{ formatMonitorStatus(row.status) }}</el-tag>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </section>
+
+        <section class="soft-card panel-block">
+          <div class="section-head">
+            <div>
+              <h3>数据导入审计摘要</h3>
+              <p>覆盖阶段一要求的新增、更新、重复、冲突与待复核摘要，补数据前后可直接对照。</p>
+            </div>
+          </div>
+          <div class="table-shell">
+            <el-table :data="dataHealth.audit_summary" stripe>
+              <el-table-column label="数据域" prop="label" min-width="180" />
+              <el-table-column label="状态" width="110">
+                <template #default="{ row }">
+                  <el-tag :type="statusTagType(row.status)" effect="light">{{ formatMonitorStatus(row.status) }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="新增" prop="created" width="90" />
+              <el-table-column label="更新/当前" prop="updated" width="110" />
+              <el-table-column label="重复" prop="duplicates" width="90" />
+              <el-table-column label="冲突" prop="conflicts" width="90" />
+              <el-table-column label="待复核" prop="pending_review" width="100" />
+              <el-table-column label="说明" min-width="280">
+                <template #default="{ row }">
+                  <ul v-if="row.notes?.length" class="audit-note-list">
+                    <li v-for="note in row.notes" :key="note">{{ note }}</li>
+                  </ul>
+                  <span v-else class="table-muted">无</span>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+          <el-empty v-if="!dataHealth.audit_summary.length" description="暂无审计摘要" />
         </section>
       </el-tab-pane>
 
@@ -726,6 +897,65 @@ interface GaokaoImportBatch {
   finished_at?: string | null;
 }
 
+interface GaokaoDataHealthTable {
+  key: string;
+  label: string;
+  count: number;
+  status: string;
+  notes: string[];
+}
+
+interface GaokaoDataHealthType {
+  key: string;
+  count: number;
+}
+
+interface GaokaoDataHealthYearBreakdown {
+  year: number;
+  total: number;
+  student_types: GaokaoDataHealthType[];
+  batches: GaokaoDataHealthType[];
+  status: string;
+}
+
+interface GaokaoDataHealthCoverage {
+  key: string;
+  label: string;
+  status: string;
+  total: number;
+  years: number[];
+  missing_years: number[];
+  student_types: GaokaoDataHealthType[];
+  batch_distribution: GaokaoDataHealthType[];
+  year_breakdown: GaokaoDataHealthYearBreakdown[];
+}
+
+interface GaokaoDataAuditItem {
+  key: string;
+  label: string;
+  status: string;
+  created: number;
+  updated: number;
+  duplicates: number;
+  conflicts: number;
+  pending_review: number;
+  notes: string[];
+}
+
+interface GaokaoDataHealth {
+  db_path: string;
+  exists: boolean;
+  generated_at: string;
+  schema_version?: string | null;
+  province: string;
+  expected_years: number[];
+  tables: GaokaoDataHealthTable[];
+  coverage: GaokaoDataHealthCoverage[];
+  audit_summary: GaokaoDataAuditItem[];
+  gaps: string[];
+  summary: string;
+}
+
 interface GaokaoReviewBucket {
   code: string;
   title: string;
@@ -891,6 +1121,19 @@ const overview = reactive<GaokaoDataOverview>({
 });
 
 const importBatches = ref<GaokaoImportBatch[]>([]);
+const dataHealth = reactive<GaokaoDataHealth>({
+  db_path: "",
+  exists: false,
+  generated_at: "",
+  schema_version: null,
+  province: "山东",
+  expected_years: [],
+  tables: [],
+  coverage: [],
+  audit_summary: [],
+  gaps: [],
+  summary: "",
+});
 const reviewSummary = reactive<GaokaoReviewSummary>({
   source_available: false,
   source_mode: "doc_baseline",
@@ -925,9 +1168,20 @@ const activeReviewQuickFilter = computed(() => {
   return reviewSummary.quick_filters.find((item) => item.code === reviewSummary.active_focus) ?? null;
 });
 const overviewGapCards = computed<GaokaoOverviewGapCard[]>(() => buildGaokaoOverviewGapCards(overview.core_tables));
+const dataHealthSummary = computed(() => {
+  return dataHealth.tables.reduce(
+    (summary, item) => {
+      if (item.status === "missing") summary.missing += 1;
+      if (item.status === "empty") summary.empty += 1;
+      if (item.status === "gap") summary.gap += 1;
+      return summary;
+    },
+    { missing: 0, empty: 0, gap: 0 },
+  );
+});
 
 async function reloadAll(): Promise<void> {
-  await Promise.all([loadOverview(), loadImportBatches(), loadReviewSummary(), loadShandongMonitor()]);
+  await Promise.all([loadOverview(), loadDataHealth(), loadImportBatches(), loadReviewSummary(), loadShandongMonitor()]);
 }
 
 async function loadOverview(): Promise<void> {
@@ -937,6 +1191,11 @@ async function loadOverview(): Promise<void> {
 
 async function loadImportBatches(): Promise<void> {
   importBatches.value = await apiRequest<GaokaoImportBatch[]>("/api/gaokao/import-batches");
+}
+
+async function loadDataHealth(): Promise<void> {
+  const payload = await apiRequest<GaokaoDataHealth>("/api/gaokao/data-health");
+  Object.assign(dataHealth, payload);
 }
 
 async function loadReviewSummary(): Promise<void> {
@@ -1103,20 +1362,32 @@ function formatStatus(value?: string | null): string {
 
 function formatMonitorStatus(value?: string | null): string {
   const mapping: Record<string, string> = {
+    ok: "正常",
+    gap: "需关注",
+    missing: "缺失",
     ready: "已接入",
     partial: "部分可用",
     waiting: "待 handoff",
     empty: "暂无数据",
+    no_year_column: "缺年份列",
   };
   return (value ? mapping[value] : null) ?? "待确认";
 }
 
 function statusTagType(value?: string | null): "success" | "info" | "warning" | "danger" | undefined {
-  if (["ready", "success"].includes(value ?? "")) return "success";
-  if (["partial", "processing"].includes(value ?? "")) return "warning";
-  if (["waiting", "frozen"].includes(value ?? "")) return "info";
-  if (["failed"].includes(value ?? "")) return "danger";
+  if (["ok", "ready", "success"].includes(value ?? "")) return "success";
+  if (["gap", "partial", "processing", "no_year_column"].includes(value ?? "")) return "warning";
+  if (["waiting", "frozen", "empty"].includes(value ?? "")) return "info";
+  if (["failed", "missing"].includes(value ?? "")) return "danger";
   return undefined;
+}
+
+function formatYearList(years?: number[]): string {
+  return years?.length ? years.join("、") : "无";
+}
+
+function formatDistribution(items?: GaokaoDataHealthType[], emptyText = "无"): string {
+  return items?.length ? items.map((item) => `${item.key}：${item.count}`).join("；") : emptyText;
 }
 
 function formatReviewFilter(value?: string | null): string {
@@ -1521,6 +1792,42 @@ onMounted(async () => {
   border-radius: 18px;
   border: 1px solid rgba(204, 174, 96, 0.28);
   background: linear-gradient(180deg, rgba(255, 250, 240, 0.96), rgba(255, 255, 255, 0.92));
+}
+
+.health-gap-list {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.health-gap-list li {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 246, 232, 0.95);
+  color: #775d2c;
+  line-height: 1.55;
+}
+
+.health-type-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.coverage-detail-table {
+  padding: 12px 18px;
+  background: rgba(247, 250, 252, 0.9);
+}
+
+.audit-note-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  color: #667c90;
+  line-height: 1.5;
 }
 
 .monitor-card-head {

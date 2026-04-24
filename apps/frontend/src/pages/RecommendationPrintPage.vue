@@ -96,12 +96,14 @@
               <th>参考位次</th>
               <th>学生位次</th>
               <th>依据</th>
+              <th>参考口径</th>
               <th>职业匹配</th>
               <th>对应方向</th>
               <th>路径提示</th>
               <th>职业说明</th>
               <th>理由</th>
               <th>风险提示</th>
+              <th>章程/备注</th>
             </tr>
           </thead>
           <tbody>
@@ -111,12 +113,14 @@
               <td>{{ item.reference_rank ?? "-" }}</td>
               <td>{{ item.student_rank ?? "-" }}</td>
               <td>{{ item.ratio !== null && item.ratio !== undefined ? `比值 ${item.ratio}` : formatScoreBasis(item.score_basis) }}</td>
+              <td>{{ formatReferenceCopy(item) }}</td>
               <td>{{ formatCareerMatch(item) }}</td>
               <td>{{ formatMatchedDirections(item) }}</td>
               <td>{{ formatPathHints(item) }}</td>
               <td>{{ item.career_match_summary || "-" }}</td>
-              <td>{{ formatRecommendationReason(item) }}</td>
+              <td>{{ [formatRecommendationReason(item), ...formatBoundaryNotes(item)].filter(Boolean).join(" ") }}</td>
               <td>{{ formatRiskFlags(item.risk_flags_json) }}</td>
+              <td>{{ formatChapterNotes(item.snapshot_json) }}</td>
             </tr>
           </tbody>
         </table>
@@ -132,6 +136,8 @@ import { useRoute } from "vue-router";
 
 import { apiRequest } from "../api/client";
 import {
+  buildRecommendationBoundaryNotes,
+  buildRecommendationReferenceCopy,
   buildRecommendationStaleReferenceNote,
   buildRecommendationSimulationNote,
   formatRecommendationRiskFlags,
@@ -265,6 +271,8 @@ function formatScoreBasis(value: string): string {
     rank: "位次",
     score: "分数",
     comprehensive_score: "综合分",
+    culture_score: "文化分",
+    plan_only: "计划清单",
   };
   return mapping[value] ?? value;
 }
@@ -280,6 +288,50 @@ function formatRecommendationReason(item: RecommendationResult): string {
     segments.push(staleReferenceNote);
   }
   return segments.join(" ");
+}
+
+function formatReferenceCopy(item: RecommendationResult): string {
+  return buildRecommendationReferenceCopy(item) ?? "-";
+}
+
+function formatBoundaryNotes(item: RecommendationResult): string[] {
+  return buildRecommendationBoundaryNotes(item, schemeMeta.value?.target_year);
+}
+
+function formatChapterNotes(snapshot?: Record<string, unknown> | null): string {
+  if (!snapshot) return "-";
+  const segments: string[] = [];
+  if (typeof snapshot.chapter_url === "string" && snapshot.chapter_url.trim()) {
+    segments.push(`章程：${snapshot.chapter_url.trim()}`);
+  }
+  if (typeof snapshot.chapter_campus_note === "string" && snapshot.chapter_campus_note.trim()) {
+    segments.push(`校区：${snapshot.chapter_campus_note.trim()}`);
+  }
+  if (typeof snapshot.chapter_other_risk_note === "string" && snapshot.chapter_other_risk_note.trim()) {
+    segments.push(`备注：${snapshot.chapter_other_risk_note.trim()}`);
+  }
+  if (typeof snapshot.chapter_language_requirement === "string" && snapshot.chapter_language_requirement.trim()) {
+    segments.push(`语言：${snapshot.chapter_language_requirement.trim()}`);
+  }
+  if (typeof snapshot.chapter_single_subject_requirement === "string" && snapshot.chapter_single_subject_requirement.trim()) {
+    segments.push(`单科：${snapshot.chapter_single_subject_requirement.trim()}`);
+  }
+  if (typeof snapshot.chapter_gender_requirement === "string" && snapshot.chapter_gender_requirement.trim()) {
+    segments.push(`性别：${snapshot.chapter_gender_requirement.trim()}`);
+  }
+  if (typeof snapshot.chapter_height_requirement === "string" && snapshot.chapter_height_requirement.trim()) {
+    segments.push(`身高：${snapshot.chapter_height_requirement.trim()}`);
+  }
+  if (typeof snapshot.chapter_vision_requirement === "string" && snapshot.chapter_vision_requirement.trim()) {
+    segments.push(`视力：${snapshot.chapter_vision_requirement.trim()}`);
+  }
+  if (typeof snapshot.chapter_color_vision_requirement === "string" && snapshot.chapter_color_vision_requirement.trim()) {
+    segments.push(`色觉：${snapshot.chapter_color_vision_requirement.trim()}`);
+  }
+  if (typeof snapshot.chapter_physical_exam_requirement === "string" && snapshot.chapter_physical_exam_requirement.trim()) {
+    segments.push(`体检：${snapshot.chapter_physical_exam_requirement.trim()}`);
+  }
+  return segments.join(" / ") || "-";
 }
 
 function formatCareerMatch(item: RecommendationResult): string {

@@ -12,24 +12,35 @@ from app.schemas.recommendation import (
     CollegeRead,
     EmploymentDirectionPayload,
     EmploymentDirectionRead,
+    EmploymentDirectionBootstrapResponse,
     EnrollmentPlanImportResponse,
     EnrollmentPlanRead,
     MajorPayload,
     MajorRead,
     MajorEmploymentMappingPayload,
     MajorEmploymentMappingRead,
+    MajorEmploymentMappingBootstrapResponse,
     ProvinceVolunteerRuleBootstrapResponse,
     ProvinceVolunteerRulePayload,
     ProvinceVolunteerRuleRead,
+    ProvinceScoreTransformRuleBootstrapResponse,
+    ProvinceScoreTransformRulePayload,
+    ProvinceScoreTransformRuleRead,
     RecommendationBatchGeneratePayload,
     RecommendationBatchGenerateResponse,
     RecommendationGeneratePayload,
     RecommendationGenerateResponse,
     RecommendationHistoryItem,
+    SubjectRequirementDictBootstrapResponse,
+    SubjectRequirementDictPayload,
+    SubjectRequirementDictRead,
     RecommendationResultRead,
     RecommendationSettingsPayload,
     RecommendationSettingsRead,
     RecommendationStrategyPresetPayload,
+    SpecialTypeRuleBootstrapResponse,
+    SpecialTypeRulePayload,
+    SpecialTypeRuleRead,
     VolunteerDraftPayload,
     VolunteerDraftRead,
     VolunteerDraftSummaryRead,
@@ -111,6 +122,13 @@ def create_employment_direction(
     return service.create_employment_direction(session, payload)
 
 
+@router.post("/employment-directions/bootstrap", response_model=EmploymentDirectionBootstrapResponse)
+def bootstrap_employment_directions(
+    session: Session = Depends(get_db_session),
+) -> EmploymentDirectionBootstrapResponse:
+    return service.bootstrap_employment_directions(session)
+
+
 @router.put("/employment-directions/{direction_id}", response_model=EmploymentDirectionRead)
 def update_employment_direction(
     direction_id: int,
@@ -145,6 +163,13 @@ def create_major_employment_mapping(
     return service.create_major_employment_mapping(session, payload)
 
 
+@router.post("/major-employment-maps/bootstrap", response_model=MajorEmploymentMappingBootstrapResponse)
+def bootstrap_major_employment_mappings(
+    session: Session = Depends(get_db_session),
+) -> MajorEmploymentMappingBootstrapResponse:
+    return service.bootstrap_major_employment_mappings(session)
+
+
 @router.put("/major-employment-maps/{mapping_id}", response_model=MajorEmploymentMappingRead)
 def update_major_employment_mapping(
     mapping_id: int,
@@ -159,9 +184,16 @@ def list_admission_records(
     year: int | None = Query(default=None),
     province: str | None = Query(default=None),
     college_id: int | None = Query(default=None),
+    student_type: str | None = Query(default=None),
     session: Session = Depends(get_db_session),
 ) -> list[AdmissionRecordRead]:
-    return service.list_admission_records(session, year=year, province=province, college_id=college_id)
+    return service.list_admission_records(
+        session,
+        year=year,
+        province=province,
+        college_id=college_id,
+        student_type=student_type,
+    )
 
 
 @router.post("/admissions/import", response_model=AdmissionImportResponse)
@@ -180,6 +212,7 @@ def list_enrollment_plans(
     province: str | None = Query(default=None),
     batch: str | None = Query(default=None),
     college_id: int | None = Query(default=None),
+    student_type: str | None = Query(default=None),
     keyword: str | None = Query(default=None),
     session: Session = Depends(get_db_session),
 ) -> list[EnrollmentPlanRead]:
@@ -189,6 +222,7 @@ def list_enrollment_plans(
         province=province,
         batch=batch,
         college_id=college_id,
+        student_type=student_type,
         keyword=keyword,
     )
 
@@ -243,6 +277,130 @@ def update_province_volunteer_rule(
     session: Session = Depends(get_db_session),
 ) -> ProvinceVolunteerRuleRead:
     return service.update_province_volunteer_rule(session, rule_id, payload)
+
+
+@router.get("/province-score-transform-rules", response_model=list[ProvinceScoreTransformRuleRead])
+def list_province_score_transform_rules(
+    province: str | None = Query(default=None),
+    year: int | None = Query(default=None),
+    exam_mode: str | None = Query(default=None),
+    subject_name: str | None = Query(default=None),
+    session: Session = Depends(get_db_session),
+) -> list[ProvinceScoreTransformRuleRead]:
+    return service.list_province_score_transform_rules(
+        session,
+        province=province,
+        year=year,
+        exam_mode=exam_mode,
+        subject_name=subject_name,
+    )
+
+
+@router.post("/province-score-transform-rules", response_model=ProvinceScoreTransformRuleRead)
+def create_province_score_transform_rule(
+    payload: ProvinceScoreTransformRulePayload,
+    session: Session = Depends(get_db_session),
+) -> ProvinceScoreTransformRuleRead:
+    return service.create_province_score_transform_rule(session, payload)
+
+
+@router.post("/province-score-transform-rules/bootstrap", response_model=ProvinceScoreTransformRuleBootstrapResponse)
+def bootstrap_province_score_transform_rules(
+    year: int | None = Query(default=None, ge=2020, le=2100),
+    session: Session = Depends(get_db_session),
+) -> ProvinceScoreTransformRuleBootstrapResponse:
+    return service.bootstrap_province_score_transform_rules(session, year=year)
+
+
+@router.put("/province-score-transform-rules/{rule_id}", response_model=ProvinceScoreTransformRuleRead)
+def update_province_score_transform_rule(
+    rule_id: int,
+    payload: ProvinceScoreTransformRulePayload,
+    session: Session = Depends(get_db_session),
+) -> ProvinceScoreTransformRuleRead:
+    return service.update_province_score_transform_rule(session, rule_id, payload)
+
+
+@router.get("/subject-requirement-dicts", response_model=list[SubjectRequirementDictRead])
+def list_subject_requirement_dicts(
+    province: str | None = Query(default=None),
+    year: int | None = Query(default=None),
+    exam_mode: str | None = Query(default=None),
+    requirement_code: str | None = Query(default=None),
+    session: Session = Depends(get_db_session),
+) -> list[SubjectRequirementDictRead]:
+    return service.list_subject_requirement_dicts(
+        session,
+        province=province,
+        year=year,
+        exam_mode=exam_mode,
+        requirement_code=requirement_code,
+    )
+
+
+@router.post("/subject-requirement-dicts", response_model=SubjectRequirementDictRead)
+def create_subject_requirement_dict(
+    payload: SubjectRequirementDictPayload,
+    session: Session = Depends(get_db_session),
+) -> SubjectRequirementDictRead:
+    return service.create_subject_requirement_dict(session, payload)
+
+
+@router.post("/subject-requirement-dicts/bootstrap", response_model=SubjectRequirementDictBootstrapResponse)
+def bootstrap_subject_requirement_dicts(
+    year: int | None = Query(default=None, ge=2020, le=2100),
+    session: Session = Depends(get_db_session),
+) -> SubjectRequirementDictBootstrapResponse:
+    return service.bootstrap_subject_requirement_dicts(session, year=year)
+
+
+@router.put("/subject-requirement-dicts/{dict_id}", response_model=SubjectRequirementDictRead)
+def update_subject_requirement_dict(
+    dict_id: int,
+    payload: SubjectRequirementDictPayload,
+    session: Session = Depends(get_db_session),
+) -> SubjectRequirementDictRead:
+    return service.update_subject_requirement_dict(session, dict_id, payload)
+
+
+@router.get("/special-type-rules", response_model=list[SpecialTypeRuleRead])
+def list_special_type_rules(
+    province: str | None = Query(default=None),
+    year: int | None = Query(default=None),
+    student_type: str | None = Query(default=None),
+    session: Session = Depends(get_db_session),
+) -> list[SpecialTypeRuleRead]:
+    return service.list_special_type_rules(
+        session,
+        province=province,
+        year=year,
+        student_type=student_type,
+    )
+
+
+@router.post("/special-type-rules", response_model=SpecialTypeRuleRead)
+def create_special_type_rule(
+    payload: SpecialTypeRulePayload,
+    session: Session = Depends(get_db_session),
+) -> SpecialTypeRuleRead:
+    return service.create_special_type_rule(session, payload)
+
+
+@router.post("/special-type-rules/bootstrap", response_model=SpecialTypeRuleBootstrapResponse)
+def bootstrap_special_type_rules(
+    year: int | None = Query(default=None, ge=2020, le=2100),
+    session: Session = Depends(get_db_session),
+) -> SpecialTypeRuleBootstrapResponse:
+    return service.bootstrap_special_type_rules(session, year=year)
+
+
+@router.put("/special-type-rules/{rule_id}", response_model=SpecialTypeRuleRead)
+def update_special_type_rule(
+    rule_id: int,
+    payload: SpecialTypeRulePayload,
+    session: Session = Depends(get_db_session),
+) -> SpecialTypeRuleRead:
+    return service.update_special_type_rule(session, rule_id, payload)
 
 
 @router.post("/recommendations/volunteer-workbench/preview", response_model=VolunteerWorkbenchPreviewResponse)

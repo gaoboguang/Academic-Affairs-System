@@ -33,6 +33,65 @@ class GaokaoDataOverviewRead(BaseModel):
     core_tables: list[GaokaoTableStatRead] = Field(default_factory=list)
 
 
+class GaokaoDataHealthTableRead(BaseModel):
+    key: str
+    label: str
+    count: int = 0
+    status: str = "empty"
+    notes: list[str] = Field(default_factory=list)
+
+
+class GaokaoDataHealthTypeRead(BaseModel):
+    key: str
+    count: int = 0
+
+
+class GaokaoDataHealthYearBreakdownRead(BaseModel):
+    year: int
+    total: int = 0
+    student_types: list[GaokaoDataHealthTypeRead] = Field(default_factory=list)
+    batches: list[GaokaoDataHealthTypeRead] = Field(default_factory=list)
+    status: str = "empty"
+
+
+class GaokaoDataHealthCoverageRead(BaseModel):
+    key: str
+    label: str
+    status: str = "empty"
+    total: int = 0
+    years: list[int] = Field(default_factory=list)
+    missing_years: list[int] = Field(default_factory=list)
+    student_types: list[GaokaoDataHealthTypeRead] = Field(default_factory=list)
+    batch_distribution: list[GaokaoDataHealthTypeRead] = Field(default_factory=list)
+    year_breakdown: list[GaokaoDataHealthYearBreakdownRead] = Field(default_factory=list)
+
+
+class GaokaoDataAuditItemRead(BaseModel):
+    key: str
+    label: str
+    status: str = "empty"
+    created: int = 0
+    updated: int = 0
+    duplicates: int = 0
+    conflicts: int = 0
+    pending_review: int = 0
+    notes: list[str] = Field(default_factory=list)
+
+
+class GaokaoDataHealthRead(BaseModel):
+    db_path: str
+    exists: bool
+    generated_at: str
+    schema_version: str | None = None
+    province: str = "山东"
+    expected_years: list[int] = Field(default_factory=list)
+    tables: list[GaokaoDataHealthTableRead] = Field(default_factory=list)
+    coverage: list[GaokaoDataHealthCoverageRead] = Field(default_factory=list)
+    audit_summary: list[GaokaoDataAuditItemRead] = Field(default_factory=list)
+    gaps: list[str] = Field(default_factory=list)
+    summary: str
+
+
 class GaokaoImportBatchRead(BaseModel):
     id: str
     batch_name: str

@@ -1,15 +1,28 @@
 #!/usr/bin/env node
 
 const { spawn } = require("node:child_process");
+const http = require("node:http");
 const net = require("node:net");
 
 const isWindows = process.platform === "win32";
 const npmCommand = isWindows ? "npm.cmd" : "npm";
 const childProcesses = [];
 const defaultHost = "127.0.0.1";
-const defaultPorts = [
-  { name: "frontend", port: 5173 },
-  { name: "backend", port: 8000 },
+const services = [
+  {
+    name: "backend",
+    port: 8000,
+    healthPath: "/api/system/health",
+    startArgs: ["run", "backend:dev"],
+    url: "http://127.0.0.1:8000",
+  },
+  {
+    name: "frontend",
+    port: 5173,
+    healthPath: "/",
+    startArgs: ["run", "frontend:dev"],
+    url: "http://127.0.0.1:5173",
+  },
 ];
 
 function printUsage() {
@@ -87,9 +100,38 @@ function checkPortAvailability(host, port) {
   });
 }
 
+function checkHttpHealth(host, port, path) {
+  return new Promise((resolve) => {
+    const request = http.get(
+      {
+        host,
+        port,
+        path,
+        timeout: 1000,
+      },
+      (response) => {
+        response.resume();
+        resolve({
+          ok: Boolean(response.statusCode && response.statusCode >= 200 && response.statusCode < 400),
+          statusCode: response.statusCode,
+          message: null,
+        });
+      },
+    );
+
+    request.on("timeout", () => {
+      request.destroy();
+      resolve({ ok: false, statusCode: null, message: "健康检查超时" });
+    });
+    request.on("error", (error) => {
+      resolve({ ok: false, statusCode: null, message: error.message });
+    });
+  });
+}
+
 function formatPortError(serviceName, portInfo) {
   if (portInfo.code === "EADDRINUSE") {
-    return `[${serviceName}] 端口 ${defaultHost}:${portInfo.port} 已被占用。请先关闭现有进程，或直接复用当前已启动的服务。`;
+    return `[${serviceName}] 端口 ${defaultHost}:${portInfo.port} 已被占用，但健康检查未通过。请先关闭占用进程，或检查该端口上的服务日志。`;
   }
   if (portInfo.code === "EPERM") {
     return `[${serviceName}] 当前上下文没有权限监听 ${defaultHost}:${portInfo.port}。请换一个启动上下文，或改为单独启动前后端。`;
@@ -97,23 +139,38 @@ function formatPortError(serviceName, portInfo) {
   return `[${serviceName}] 无法监听 ${defaultHost}:${portInfo.port}：${portInfo.message || portInfo.code || "未知错误"}`;
 }
 
-async function preflightPorts() {
+async function preflightServices() {
   const results = await Promise.all(
-    defaultPorts.map(async (item) => ({
-      ...item,
-      ...(await checkPortAvailability(defaultHost, item.port)),
-    })),
+    services.map(async (item) => {
+      const health = await checkHttpHealth(defaultHost, item.port, item.healthPath);
+      if (health.ok) {
+        return {
+          ...item,
+          ok: true,
+          running: true,
+          code: null,
+          message: null,
+        };
+      }
+
+      const port = await checkPortAvailability(defaultHost, item.port);
+      return {
+        ...item,
+        ...port,
+        running: false,
+      };
+    }),
   );
   const failed = results.filter((item) => !item.ok);
   if (!failed.length) {
-    return true;
+    return results;
   }
 
   console.error("启动前检查失败：");
   for (const item of failed) {
     console.error(formatPortError(item.name, item));
   }
-  return false;
+  return null;
 }
 
 async function main() {
@@ -121,13 +178,25 @@ async function main() {
   console.log(`前端默认地址: http://${defaultHost}:5173`);
   console.log(`后端默认地址: http://${defaultHost}:8000`);
 
-  const portsReady = await preflightPorts();
-  if (!portsReady) {
+  const serviceStates = await preflightServices();
+  if (!serviceStates) {
     process.exit(1);
   }
 
-  spawnNamedProcess("backend", ["run", "backend:dev"]);
-  spawnNamedProcess("frontend", ["run", "frontend:dev"]);
+  const runningServices = serviceStates.filter((item) => item.running);
+  for (const item of runningServices) {
+    console.log(`[${item.name}] 已在运行，复用 ${item.url}`);
+  }
+
+  const servicesToStart = serviceStates.filter((item) => !item.running);
+  if (!servicesToStart.length) {
+    console.log("前后端服务均已可用，无需重复启动。");
+    return;
+  }
+
+  for (const item of servicesToStart) {
+    spawnNamedProcess(item.name, item.startArgs);
+  }
 }
 
 main().catch((error) => {

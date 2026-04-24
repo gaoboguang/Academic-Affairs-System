@@ -159,17 +159,27 @@ class AdmissionImporter:
         mapping = {
             "普通": ("general", None),
             "普通生": ("general", None),
+            "普通类": ("general", None),
             "general": ("general", None),
             "艺体": ("art", None),
             "艺体生": ("art", None),
+            "艺术类": ("art", None),
             "art": ("art", None),
+            "美术类": ("art", "art"),
             "美术": ("art", "art"),
+            "体育类": ("sports", "sports"),
             "体育": ("sports", "sports"),
+            "音乐类": ("art", "music"),
             "音乐": ("art", "music"),
+            "舞蹈类": ("art", "dance"),
             "舞蹈": ("art", "dance"),
+            "传媒类": ("art", "media"),
             "传媒": ("art", "media"),
+            "春季高考": ("spring_exam", None),
+            "单独招生": ("independent_recruitment", None),
+            "综合评价招生": ("comprehensive_evaluation", None),
         }
         if normalized in mapping:
             student_type, art_track = mapping[normalized]
             return NormalizedStudentCategory(student_type=student_type, art_track=art_track)
-        return NormalizedStudentCategory(student_type="general", art_track=None)
+        return NormalizedStudentCategory(student_type=value.strip(), art_track=None)

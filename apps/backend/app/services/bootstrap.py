@@ -5,7 +5,12 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ._recommendations_rules import bootstrap_province_volunteer_rules
+from ._recommendations_rules import (
+    bootstrap_province_score_transform_rules,
+    bootstrap_province_volunteer_rules,
+    bootstrap_special_type_rules,
+    bootstrap_subject_requirement_dicts,
+)
 from app.models import (
     AcademicYear,
     ConfigItem,
@@ -183,6 +188,9 @@ def seed_reference_data(session: Session) -> None:
         )
 
     bootstrap_province_volunteer_rules(session, record_audit=False)
+    bootstrap_province_score_transform_rules(session, record_audit=False)
+    bootstrap_subject_requirement_dicts(session, record_audit=False)
+    bootstrap_special_type_rules(session, record_audit=False)
     session.flush()
 
     academic_year = session.scalar(

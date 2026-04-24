@@ -3,7 +3,14 @@ import ElMessage from "element-plus/es/components/message/index";
 import type { UploadFile } from "element-plus";
 
 import { apiRequest, openFile, uploadFile } from "../../api/client";
-import { baseSchoolLevelOptions, createCollegeForm, createMajorForm, provinceOptions, uniqueStrings } from "./helpers";
+import {
+  baseSchoolLevelOptions,
+  createCollegeForm,
+  createMajorForm,
+  provinceOptions,
+  recommendationStudentTypeOptions,
+  uniqueStrings,
+} from "./helpers";
 import type {
   AdmissionFiltersState,
   AdmissionImportResponse,
@@ -48,8 +55,9 @@ export function useRecommendationCatalogManager() {
 
   const admissionFilters = reactive<AdmissionFiltersState>({
     year: undefined,
-    province: "",
+    province: "山东",
     college_id: undefined,
+    student_type: "",
   });
 
   const collegeForm = reactive<CollegePayload>(createCollegeForm());
@@ -121,6 +129,7 @@ export function useRecommendationCatalogManager() {
       if (admissionFilters.year) query.set("year", String(admissionFilters.year));
       if (admissionFilters.province) query.set("province", admissionFilters.province);
       if (admissionFilters.college_id) query.set("college_id", String(admissionFilters.college_id));
+      if (admissionFilters.student_type) query.set("student_type", admissionFilters.student_type);
       admissions.value = await apiRequest<AdmissionRecord[]>(`/api/admissions?${query.toString()}`);
     } catch (error) {
       reportError(error);
@@ -142,8 +151,9 @@ export function useRecommendationCatalogManager() {
 
   function resetAdmissionFilters(): void {
     admissionFilters.year = undefined;
-    admissionFilters.province = "";
+    admissionFilters.province = "山东";
     admissionFilters.college_id = undefined;
+    admissionFilters.student_type = "";
     void loadAdmissions();
   }
 
@@ -264,6 +274,7 @@ export function useRecommendationCatalogManager() {
     admissionImportResult,
     admissionYearOptions,
     admissions,
+    recommendationStudentTypeOptions,
     collegeDialogTitle,
     collegeDialogVisible,
     collegeDirectory,

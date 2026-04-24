@@ -13,7 +13,7 @@ export function createRecommendationForm(): RecommendationFormState {
     student_ids: [],
     exam_id: undefined,
     target_year: new Date().getFullYear(),
-    province: "",
+    province: "山东",
     target_regions_json: [],
     school_level_tags_json: [],
     major_keyword: "",

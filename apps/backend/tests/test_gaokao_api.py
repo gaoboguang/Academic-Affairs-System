@@ -1,12 +1,20 @@
 from __future__ import annotations
 
+import sqlite3
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from app.core.bootstrap import ensure_runtime_directories
 from app.core.config import Settings
 from app.main import create_app
-from app.models import AdmissionRecord, College, EnrollmentPlan, ImportJob, Major, ProvinceVolunteerRule
+from app.models import (
+    AdmissionRecord,
+    College,
+    EnrollmentPlan,
+    ImportJob,
+    Major,
+    ProvinceVolunteerRule,
+)
 from app.models import Base
 
 
@@ -22,6 +30,18 @@ def test_gaokao_data_overview_falls_back_to_sync_board_baseline(client) -> None:
     assert payload["chapter_url_covered"] == 172
     assert payload["duplicate_group_total"] == 4
     assert payload["same_name_cross_site_group_total"] == 2
+
+
+def test_gaokao_data_health_endpoint_returns_p0_summary(client) -> None:
+    response = client.get("/api/gaokao/data-health")
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert payload["exists"] is True
+    assert payload["province"] == "山东"
+    assert "P0 缺口" in payload["summary"]
+    assert any(item["key"] == "enrollment_plan" for item in payload["coverage"])
+    assert any(item["key"] == "admission_record" for item in payload["tables"])
 
 
 def test_gaokao_data_overview_uses_separate_gaokao_db_when_configured(tmp_path) -> None:
@@ -113,6 +133,61 @@ def test_gaokao_data_overview_uses_separate_gaokao_db_when_configured(tmp_path) 
         app.state.db.dispose()
         if app.state.gaokao_db is not None:
             app.state.gaokao_db.dispose()
+
+
+def test_create_app_prefers_embedded_gaokao_tables_over_external_snapshot(tmp_path) -> None:
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    app_db_path = data_dir / "app.db"
+    gaokao_db_path = data_dir / "local_edu_tool" / "local_edu.sqlite3"
+    gaokao_db_path.parent.mkdir(parents=True, exist_ok=True)
+    gaokao_db_path.touch()
+
+    with sqlite3.connect(app_db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE gaokao_college (
+                id INTEGER PRIMARY KEY,
+                college_code TEXT,
+                name TEXT,
+                province TEXT,
+                recruit_site TEXT,
+                updated_at TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO gaokao_college (
+                id, college_code, name, province, recruit_site, updated_at
+            ) VALUES
+                (301, 'GK301', '嵌入式高考表学校', '山东', 'https://recruit.example/301', '2026-04-22 16:10:00')
+            """
+        )
+
+    settings = Settings(
+        data_dir=data_dir,
+        db_path=app_db_path,
+        gaokao_db_path=gaokao_db_path,
+        allowed_origins=["http://127.0.0.1:5173"],
+        debug=False,
+    )
+    app = create_app(settings)
+    ensure_runtime_directories(settings)
+    Base.metadata.create_all(app.state.db.engine)
+
+    assert app.state.gaokao_db is None
+
+    try:
+        with TestClient(app) as client:
+            response = client.get("/api/gaokao/data-overview")
+            assert response.status_code == 200
+            payload = response.json()
+            assert payload["source_mode"] == "db_rc1_live"
+            assert payload["school_total"] == 1
+            assert payload["recruit_site_covered"] == 1
+    finally:
+        app.state.db.dispose()
 
 
 def test_gaokao_data_overview_marks_app_tables_partial_when_raw_tables_have_data(tmp_path) -> None:
@@ -570,21 +645,23 @@ def test_gaokao_shandong_monitor_uses_current_models_as_fallback(client, app) ->
                 is_active=True,
             )
         )
-
     response = client.get("/api/gaokao/shandong-monitor")
     assert response.status_code == 200
     payload = response.json()
     section_map = {item["key"]: item for item in payload["sections"]}
 
     assert payload["province"] == "山东"
-    assert payload["ready_section_total"] == 4
-    assert payload["gap_section_total"] == 2
-    assert any("山东分数线 / 赋分规则" in item for item in payload["priority_notes"])
+    assert payload["ready_section_total"] == 5
+    assert payload["gap_section_total"] == 1
+    assert any("山东一分一段" in item for item in payload["priority_notes"])
     assert section_map["province_rules"]["record_total"] >= 1
     assert section_map["province_rules"]["status"] == "ready"
+    assert section_map["score_transform_rules"]["record_total"] >= 1
+    assert section_map["score_transform_rules"]["status"] == "ready"
     assert section_map["enrollment_plans"]["record_total"] >= 1
     assert section_map["enrollment_plans"]["latest_batch_label"] == "sd-plan-batch-001"
     assert section_map["subject_requirements"]["record_total"] >= 1
+    assert section_map["subject_requirements"]["status"] == "ready"
     assert section_map["admission_results"]["record_total"] >= 1
 
 

@@ -209,6 +209,81 @@ class ProvinceVolunteerRule(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class ProvinceScoreTransformRule(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "province_score_transform_rule"
+    __table_args__ = (
+        UniqueConstraint(
+            "province",
+            "year",
+            "exam_mode",
+            "subject_name",
+            name="uq_province_score_transform_rule_core",
+        ),
+    )
+
+    province: Mapped[str] = mapped_column(String(50), nullable=False)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    exam_mode: Mapped[str] = mapped_column(String(50), nullable=False, default="")
+    subject_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    subject_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    score_mode: Mapped[str] = mapped_column(String(30), nullable=False)
+    sort_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    grade_table_json: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
+    formula_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    source_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class SubjectRequirementDict(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "subject_requirement_dict"
+    __table_args__ = (
+        UniqueConstraint(
+            "province",
+            "year",
+            "exam_mode",
+            "requirement_code",
+            name="uq_subject_requirement_dict_core",
+        ),
+    )
+
+    province: Mapped[str] = mapped_column(String(50), nullable=False)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    exam_mode: Mapped[str] = mapped_column(String(50), nullable=False, default="")
+    requirement_code: Mapped[str] = mapped_column(String(100), nullable=False)
+    requirement_text: Mapped[str] = mapped_column(String(150), nullable=False)
+    match_mode: Mapped[str] = mapped_column(String(50), nullable=False)
+    sort_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    normalized_subjects_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    source_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class SpecialTypeRule(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "special_type_rule"
+    __table_args__ = (
+        UniqueConstraint(
+            "province",
+            "year",
+            "student_type",
+            "category_code",
+            name="uq_special_type_rule_core",
+        ),
+    )
+
+    province: Mapped[str] = mapped_column(String(50), nullable=False)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    student_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    category_code: Mapped[str] = mapped_column(String(100), nullable=False)
+    category_label: Mapped[str] = mapped_column(String(100), nullable=False)
+    sort_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    match_keywords_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    review_notes_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    priority_bonus: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    priority_notes_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    source_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class RecommendationScheme(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     __tablename__ = "recommendation_scheme"
 

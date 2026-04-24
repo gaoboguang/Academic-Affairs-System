@@ -55,6 +55,9 @@ export const gaokaoCandidateTypeOptions = [
   { value: "music", label: "音乐类" },
   { value: "dance", label: "舞蹈类" },
   { value: "media", label: "传媒类" },
+  { value: "spring_exam", label: "春季高考" },
+  { value: "independent_recruitment", label: "单独招生" },
+  { value: "comprehensive_evaluation", label: "综合评价招生" },
 ];
 
 export const scoreInputModeOptions = [
@@ -120,6 +123,9 @@ export const recommendationStudentTypeOptions = [
   { value: "repeat", label: "复读生" },
   { value: "art", label: "艺体生" },
   { value: "sports", label: "体育生" },
+  { value: "spring_exam", label: "春季高考" },
+  { value: "independent_recruitment", label: "单独招生" },
+  { value: "comprehensive_evaluation", label: "综合评价招生" },
 ];
 
 export function createCollegeForm(): CollegePayload {
@@ -194,22 +200,22 @@ export function createMajorEmploymentMappingForm(): MajorEmploymentMappingPayloa
 
 export function createProvinceVolunteerRuleForm(): ProvinceVolunteerRulePayload {
   return {
-    province: "广东",
+    province: "山东",
     year: new Date().getFullYear(),
-    exam_mode: "3+1+2",
+    exam_mode: "3+3",
     batch: "",
     candidate_type: "",
     batch_order: undefined,
     total_score: 750,
-    volunteer_limit: 45,
-    volunteer_unit_type: "院校专业组",
-    subject_requirement_mode: "first_choice_reselect",
-    required_subjects_json: [],
-    first_choice_subjects_json: ["物理", "历史"],
-    reselect_subjects_json: ["化学", "生物", "政治", "地理"],
+    volunteer_limit: 96,
+    volunteer_unit_type: "专业",
+    subject_requirement_mode: "unified_subject_requirement",
+    required_subjects_json: ["物理", "化学", "生物", "政治", "历史", "地理"],
+    first_choice_subjects_json: [],
+    reselect_subjects_json: [],
     score_rule_summary: null,
-    parallel_rule_mode: "group_parallel",
-    max_major_per_unit: 6,
+    parallel_rule_mode: "major_parallel",
+    max_major_per_unit: undefined,
     is_parallel: true,
     allow_adjustment: true,
     support_collect_round: false,

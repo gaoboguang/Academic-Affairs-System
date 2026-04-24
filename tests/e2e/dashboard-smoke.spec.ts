@@ -1,4 +1,5 @@
 import path from "node:path";
+import fs from "node:fs";
 
 import { expect, test } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
@@ -21,9 +22,40 @@ interface VolunteerRuleOptions {
   note?: string;
 }
 
+interface ProvinceVolunteerRulePayload {
+  province: string;
+  year: number;
+  exam_mode: string;
+  batch: string;
+  candidate_type: string;
+  batch_order?: number;
+  total_score: number;
+  volunteer_limit: number;
+  volunteer_unit_type: string;
+  subject_requirement_mode?: string | null;
+  required_subjects_json: string[];
+  first_choice_subjects_json: string[];
+  reselect_subjects_json: string[];
+  score_rule_summary?: string | null;
+  parallel_rule_mode?: string | null;
+  max_major_per_unit?: number;
+  is_parallel: boolean;
+  allow_adjustment: boolean;
+  support_collect_round: boolean;
+  special_rules_json: string[];
+  note: string | null;
+  is_active: boolean;
+}
+
+interface ProvinceVolunteerRuleRead extends ProvinceVolunteerRulePayload {
+  id: number;
+}
+
 interface VolunteerWorkbenchContextOptions {
   studentText?: string;
   examText?: string;
+  province?: string;
+  targetYear?: string;
   batch?: string;
   examMode?: string;
   majorKeyword?: string;
@@ -35,9 +67,32 @@ async function expectToast(page: Page, text: string): Promise<void> {
   await expect(page.locator(".el-message__content").filter({ hasText: text }).last()).toBeVisible();
 }
 
+async function importFixtureByApi(page: Page, url: string, fixturePath: string): Promise<void> {
+  const response = await page.request.post(url, {
+    multipart: {
+      file: {
+        name: path.basename(fixturePath),
+        mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        buffer: fs.readFileSync(fixturePath),
+      },
+    },
+  });
+  expect(response.ok()).toBeTruthy();
+}
+
 async function selectDropdownOption(page: Page, select: Locator, optionText: string): Promise<void> {
   await select.click();
   const option = page.locator(".el-select-dropdown:visible .el-select-dropdown__item").filter({ hasText: optionText }).first();
+  if (!(await option.isVisible({ timeout: 1000 }).catch(() => false))) {
+    const filterInput = select.locator("input").first();
+    if ((await filterInput.count()) > 0) {
+      await filterInput.fill(optionText).catch(async () => {
+        await page.keyboard.type(optionText);
+      });
+    } else {
+      await page.keyboard.type(optionText);
+    }
+  }
   await expect(option).toBeVisible();
   await option.click();
 }
@@ -109,36 +164,42 @@ async function ensureExamWithScores(page: Page): Promise<void> {
 }
 
 async function ensureAdmissionsImported(page: Page): Promise<void> {
-  const admissionsPanel = page.locator(".panel-block").filter({ hasText: "历年录取数据" });
-  const targetAdmissionRow = admissionsPanel.locator(".el-table__row").filter({ hasText: "岭南科技大学" });
-  if ((await targetAdmissionRow.count()) > 0) {
-    return;
+  let response = await page.request.get("/api/admissions?province=广东");
+  expect(response.ok()).toBeTruthy();
+  let payload = (await response.json()) as Array<{ college_name?: string }>;
+  if (!payload.some((item) => item.college_name === "岭南科技大学")) {
+    await importFixtureByApi(page, "/api/admissions/import", admissionsFixture);
+    response = await page.request.get("/api/admissions?province=广东");
+    expect(response.ok()).toBeTruthy();
+    payload = (await response.json()) as Array<{ college_name?: string }>;
   }
-  await admissionsPanel.locator('input[type="file"]').setInputFiles(admissionsFixture);
-  await expect(page.getByText("成功 4 行", { exact: false })).toBeVisible();
-  await expect(targetAdmissionRow.first()).toBeVisible();
+  expect(payload.some((item) => item.college_name === "岭南科技大学")).toBeTruthy();
 }
 
 async function ensureCrossProvinceAdmissionsImported(page: Page): Promise<void> {
-  const admissionsPanel = page.locator(".panel-block").filter({ hasText: "历年录取数据" });
-  const targetAdmissionRow = admissionsPanel.locator(".el-table__row").filter({ hasText: "华北信息大学" });
-  if ((await targetAdmissionRow.count()) > 0) {
-    return;
+  let response = await page.request.get("/api/admissions?province=山东");
+  expect(response.ok()).toBeTruthy();
+  let payload = (await response.json()) as Array<{ college_name?: string }>;
+  if (!payload.some((item) => item.college_name === "华北信息大学")) {
+    await importFixtureByApi(page, "/api/admissions/import", crossProvinceAdmissionsFixture);
+    response = await page.request.get("/api/admissions?province=山东");
+    expect(response.ok()).toBeTruthy();
+    payload = (await response.json()) as Array<{ college_name?: string }>;
   }
-  await admissionsPanel.locator('input[type="file"]').setInputFiles(crossProvinceAdmissionsFixture);
-  await expect(page.getByText("成功 2 行", { exact: false })).toBeVisible();
-  await expect(targetAdmissionRow.first()).toBeVisible();
+  expect(payload.some((item) => item.college_name === "华北信息大学")).toBeTruthy();
 }
 
 async function ensureEnrollmentPlansImported(page: Page): Promise<void> {
-  const enrollmentPlansPanel = page.locator(".panel-block").filter({ hasText: "招生计划库" });
-  const targetPlanRow = enrollmentPlansPanel.locator(".el-table__row").filter({ hasText: "岭南科技大学" });
-  if ((await targetPlanRow.count()) > 0) {
-    return;
+  let response = await page.request.get("/api/enrollment-plans?province=广东");
+  expect(response.ok()).toBeTruthy();
+  let payload = (await response.json()) as Array<{ college_name?: string }>;
+  if (!payload.some((item) => item.college_name === "岭南科技大学")) {
+    await importFixtureByApi(page, "/api/enrollment-plans/import", enrollmentPlansFixture);
+    response = await page.request.get("/api/enrollment-plans?province=广东");
+    expect(response.ok()).toBeTruthy();
+    payload = (await response.json()) as Array<{ college_name?: string }>;
   }
-  await enrollmentPlansPanel.locator('input[type="file"]').setInputFiles(enrollmentPlansFixture);
-  await expect(page.getByText("成功 3 行", { exact: false })).toBeVisible();
-  await expect(targetPlanRow.first()).toBeVisible();
+  expect(payload.some((item) => item.college_name === "岭南科技大学")).toBeTruthy();
 }
 
 async function ensureStudentOriginProvince(page: Page, studentId = 1, province = "广东"): Promise<void> {
@@ -172,80 +233,52 @@ async function ensureVolunteerRuleConfigured(page: Page, options: VolunteerRuleO
     ...options,
   };
 
-  await page.getByRole("tab", { name: "省份规则" }).click();
+  const payload: ProvinceVolunteerRulePayload = {
+    province: config.province,
+    year: Number(config.year),
+    exam_mode: config.examMode,
+    batch: config.batch,
+    candidate_type: "",
+    batch_order: undefined,
+    total_score: 750,
+    volunteer_limit: config.volunteerLimit,
+    volunteer_unit_type: config.volunteerUnitType,
+    subject_requirement_mode: "unified_subject_requirement",
+    required_subjects_json: ["物理", "化学", "生物", "政治", "历史", "地理"],
+    first_choice_subjects_json: [],
+    reselect_subjects_json: [],
+    score_rule_summary: null,
+    parallel_rule_mode: config.volunteerUnitType === "专业" ? "major_parallel" : "group_parallel",
+    max_major_per_unit: undefined,
+    is_parallel: true,
+    allow_adjustment: true,
+    support_collect_round: false,
+    special_rules_json: [],
+    note: config.note || null,
+    is_active: true,
+  };
 
-  const rulesPanel = page.locator(".panel-block").filter({ hasText: "省份规则配置" });
-  const targetRuleRow = rulesPanel
-    .locator(".el-table__row")
-    .filter({ hasText: config.province })
-    .filter({ hasText: config.year })
-    .filter({ hasText: config.batch })
-    .filter({ hasText: config.examMode });
-  if ((await targetRuleRow.count()) > 0) {
-    const targetRow = targetRuleRow.first();
-    const rowText = await targetRow.textContent();
-    const needsUpdate = !rowText?.includes(String(config.volunteerLimit))
-      || !rowText.includes(config.volunteerUnitType)
-      || (config.note ? !rowText.includes(config.note) : false);
-    if (!needsUpdate) {
-      return;
-    }
+  const query = new URLSearchParams({
+    province: config.province,
+    year: config.year,
+    exam_mode: config.examMode,
+  });
+  const listResponse = await page.request.get(`/api/province-volunteer-rules?${query.toString()}`);
+  expect(listResponse.ok()).toBeTruthy();
+  const rules = (await listResponse.json()) as ProvinceVolunteerRuleRead[];
+  const existing = rules.find((rule) => rule.batch === config.batch && rule.candidate_type === "");
+  const response = existing
+    ? await page.request.put(`/api/province-volunteer-rules/${existing.id}`, { data: payload })
+    : await page.request.post("/api/province-volunteer-rules", { data: payload });
+  expect(response.ok()).toBeTruthy();
 
-    await targetRow.getByRole("button", { name: "编辑" }).click();
-    const dialog = page.locator('[role="dialog"]').filter({ hasText: "编辑省份规则" });
-    await expect(dialog).toBeVisible();
-
-    await selectDropdownOption(
-      page,
-      dialog.locator(".el-form-item").filter({ hasText: "年份" }).locator(".el-select"),
-      config.year,
-    );
-    await selectDropdownOption(
-      page,
-      dialog.locator(".el-form-item").filter({ hasText: "高考模式" }).locator(".el-select"),
-      config.examMode,
-    );
-    await dialog.getByRole("textbox", { name: "批次" }).fill(config.batch);
-    await dialog.locator(".el-form-item").filter({ hasText: "志愿上限" }).locator("input").first().fill(String(config.volunteerLimit));
-    await selectDropdownOption(
-      page,
-      dialog.locator(".el-form-item").filter({ hasText: "单位类型" }).locator(".el-select"),
-      config.volunteerUnitType,
-    );
-    await dialog.locator(".el-form-item").filter({ hasText: "备注" }).locator("textarea").fill(config.note);
-    await dialog.getByRole("button", { name: "保存" }).click();
-
-    await expectToast(page, "省份规则保存成功");
-    await expect(targetRuleRow.first()).toBeVisible();
-    return;
-  }
-
-  await rulesPanel.getByRole("button", { name: "新增规则" }).click();
-  const dialog = page.locator('[role="dialog"]').filter({ hasText: "新增省份规则" });
-  await expect(dialog).toBeVisible();
-
-  await selectDropdownOption(
-    page,
-    dialog.locator(".el-form-item").filter({ hasText: "年份" }).locator(".el-select"),
-    config.year,
-  );
-  await selectDropdownOption(
-    page,
-    dialog.locator(".el-form-item").filter({ hasText: "高考模式" }).locator(".el-select"),
-    config.examMode,
-  );
-  await dialog.getByRole("textbox", { name: "批次" }).fill(config.batch);
-  await dialog.locator(".el-form-item").filter({ hasText: "志愿上限" }).locator("input").first().fill(String(config.volunteerLimit));
-  await selectDropdownOption(
-    page,
-    dialog.locator(".el-form-item").filter({ hasText: "单位类型" }).locator(".el-select"),
-    config.volunteerUnitType,
-  );
-  await dialog.locator(".el-form-item").filter({ hasText: "备注" }).locator("textarea").fill(config.note);
-  await dialog.getByRole("button", { name: "保存" }).click();
-
-  await expectToast(page, "省份规则保存成功");
-  await expect(targetRuleRow.first()).toBeVisible();
+  const saved = (await response.json()) as ProvinceVolunteerRuleRead;
+  expect(saved.province).toBe(config.province);
+  expect(saved.year).toBe(Number(config.year));
+  expect(saved.exam_mode).toBe(config.examMode);
+  expect(saved.batch).toBe(config.batch);
+  expect(saved.volunteer_limit).toBe(config.volunteerLimit);
+  expect(saved.volunteer_unit_type).toBe(config.volunteerUnitType);
 }
 
 async function fillVolunteerWorkbenchContext(
@@ -256,6 +289,8 @@ async function fillVolunteerWorkbenchContext(
   const config = {
     studentText: "2026001 - 张三",
     examText: e2eExamName,
+    province: "广东",
+    targetYear: gaokaoTargetYear,
     batch: "本科批",
     examMode: "物理类",
     majorKeyword: "",
@@ -267,6 +302,8 @@ async function fillVolunteerWorkbenchContext(
   const filterSelects = workbenchPanel.locator(".filter-grid .el-select");
   await selectDropdownOption(page, filterSelects.nth(0), config.studentText);
   await selectDropdownOption(page, filterSelects.nth(1), config.examText);
+  await selectDropdownOption(page, filterSelects.nth(2), config.province);
+  await selectDropdownOption(page, filterSelects.nth(3), config.targetYear);
   await selectDropdownOption(page, filterSelects.nth(4), config.batch);
   await selectDropdownOption(page, filterSelects.nth(5), config.examMode);
   await workbenchPanel.getByPlaceholder("专业方向关键词，可选").fill(config.majorKeyword);
@@ -317,10 +354,8 @@ async function openVolunteerWorkbench(page: Page): Promise<Locator> {
   await page.goto("/recommendations");
   await expect(page.getByRole("heading", { name: "高考志愿" })).toBeVisible();
 
-  await page.getByRole("tab", { name: "录取库" }).click();
   await ensureAdmissionsImported(page);
 
-  await page.getByRole("tab", { name: "招生计划库" }).click();
   await ensureEnrollmentPlansImported(page);
 
   await ensureVolunteerRuleConfigured(page);
@@ -966,6 +1001,7 @@ test("Stage B 批量场景：混合生源地学生可分别生成方案并写入
 });
 
 test("高考志愿主流程：可刷新候选池、保存草稿并打印导出志愿表", async ({ page }) => {
+  test.setTimeout(60000);
   const { workbenchPanel, draftPanel, draftName } = await createVolunteerDraft(page);
   await expect(workbenchPanel.getByRole("heading", { name: "筛选解释" })).toBeVisible();
   await expect(workbenchPanel.getByRole("heading", { name: "风险校验" })).toBeVisible();

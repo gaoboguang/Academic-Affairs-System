@@ -123,6 +123,7 @@
               <th>参考位次</th>
               <th>依据</th>
               <th>风险提示</th>
+              <th>章程/备注</th>
             </tr>
           </thead>
           <tbody>
@@ -138,6 +139,7 @@
               <td>{{ item.candidate.reference_rank ?? item.candidate.latest_min_rank ?? "-" }}</td>
               <td>{{ formatScoreBasis(item.candidate.score_basis) }}</td>
               <td>{{ formatRiskFlags(item.candidate.risk_flags_json) }}</td>
+              <td>{{ formatChapterNotes(item.candidate) }}</td>
             </tr>
           </tbody>
         </table>
@@ -214,6 +216,41 @@ function formatScoreBasis(value: string): string {
 
 function formatRiskFlags(flags?: string[] | null): string {
   return formatRecommendationRiskFlags(flags);
+}
+
+function formatChapterNotes(candidate: VolunteerDraftDetail["items"][number]["candidate"]): string {
+  const segments: string[] = [];
+  if (candidate.chapter_url?.trim()) {
+    segments.push(`章程：${candidate.chapter_url.trim()}`);
+  }
+  if (candidate.chapter_campus_note?.trim()) {
+    segments.push(`校区：${candidate.chapter_campus_note.trim()}`);
+  }
+  if (candidate.chapter_other_risk_note?.trim()) {
+    segments.push(`备注：${candidate.chapter_other_risk_note.trim()}`);
+  }
+  if (candidate.chapter_language_requirement?.trim()) {
+    segments.push(`语言：${candidate.chapter_language_requirement.trim()}`);
+  }
+  if (candidate.chapter_single_subject_requirement?.trim()) {
+    segments.push(`单科：${candidate.chapter_single_subject_requirement.trim()}`);
+  }
+  if (candidate.chapter_gender_requirement?.trim()) {
+    segments.push(`性别：${candidate.chapter_gender_requirement.trim()}`);
+  }
+  if (candidate.chapter_height_requirement?.trim()) {
+    segments.push(`身高：${candidate.chapter_height_requirement.trim()}`);
+  }
+  if (candidate.chapter_vision_requirement?.trim()) {
+    segments.push(`视力：${candidate.chapter_vision_requirement.trim()}`);
+  }
+  if (candidate.chapter_color_vision_requirement?.trim()) {
+    segments.push(`色觉：${candidate.chapter_color_vision_requirement.trim()}`);
+  }
+  if (candidate.chapter_physical_exam_requirement?.trim()) {
+    segments.push(`体检：${candidate.chapter_physical_exam_requirement.trim()}`);
+  }
+  return segments.join(" / ") || "-";
 }
 
 function formatScoreInputMode(value: string): string {

@@ -26,6 +26,12 @@ const RECOMMENDATION_BOUNDARY_CARD_KEYS = new Set([
   "simulation",
   "sample_insufficient",
   "rank_missing",
+  "general_reference_fallback",
+  "score_line_reference_only",
+  "cross_year_score_line_reference",
+  "plan_only_reference",
+  "chapter_pending_review",
+  "chapter_special_requirement",
   "manual_formula_check",
   "stale_reference_years",
   "stable",
@@ -197,6 +203,82 @@ export function buildRecommendationReportInsightCards(
       title: "缺少位次口径",
       summary: `${rankMissingCount} 条结果已改按分数参考`,
       detail: "位次口径不完整时，结果稳定性会低于标准位次链路，建议后续用正式位次复核。",
+      tone: "warning",
+    });
+  }
+
+  const generalReferenceFallbackCount = results.filter((item) =>
+    item.risk_flags_json?.includes("general_reference_fallback"),
+  ).length;
+  if (generalReferenceFallbackCount) {
+    cards.push({
+      key: "general_reference_fallback",
+      title: "普通类录取参考回退",
+      summary: `${generalReferenceFallbackCount} 条结果当前按普通类录取结果参考`,
+      detail: "这类结果更适合先做方向性筛选；正式填报前仍需结合该类别自己的录取口径、公告和批次规则再复核。",
+      tone: "warning",
+    });
+  }
+
+  const scoreLineReferenceCount = results.filter((item) =>
+    item.risk_flags_json?.includes("score_line_reference_only"),
+  ).length;
+  if (scoreLineReferenceCount) {
+    cards.push({
+      key: "score_line_reference_only",
+      title: "省控线资格参考",
+      summary: `${scoreLineReferenceCount} 条结果当前仅按山东省控线做初筛`,
+      detail: "这类结果说明当前缺少该类别专门录取结果，只能先按省级控制线判断是否具备基本资格，不能直接视作院校或专业录取把握。",
+      tone: "warning",
+    });
+  }
+
+  const crossYearScoreLineCount = results.filter((item) =>
+    item.risk_flags_json?.includes("cross_year_score_line_reference"),
+  ).length;
+  if (crossYearScoreLineCount) {
+    cards.push({
+      key: "cross_year_score_line_reference",
+      title: "省控线跨年份参考",
+      summary: `${crossYearScoreLineCount} 条结果当前按跨年份省控线参考`,
+      detail: "目标年份的官方控制线尚未补齐时，系统会先按最近可用年份做资格初筛；正式填报前应以当年山东官方分数线为准。",
+      tone: "warning",
+    });
+  }
+
+  const planOnlyReferenceCount = results.filter((item) =>
+    item.risk_flags_json?.includes("plan_only_reference"),
+  ).length;
+  if (planOnlyReferenceCount) {
+    cards.push({
+      key: "plan_only_reference",
+      title: "计划清单初筛",
+      summary: `${planOnlyReferenceCount} 条结果当前仅按当年招生计划做方向性初筛`,
+      detail: "这类结果说明当前缺少该类别专门录取结果，也没有可直接复用的官方控制线；正式填报前必须结合该类别公告、章程和后续结果再复核。",
+      tone: "warning",
+    });
+  }
+
+  const chapterPendingCount = results.filter((item) => item.risk_flags_json?.includes("chapter_pending_review")).length;
+  if (chapterPendingCount) {
+    cards.push({
+      key: "chapter_pending_review",
+      title: "章程待补链",
+      summary: `${chapterPendingCount} 条结果对应学校章程仍待补链`,
+      detail: "这类结果在正式填报前建议优先核对学校招生章程，尤其关注校区、身体条件、单科和其他限制说明。",
+      tone: "warning",
+    });
+  }
+
+  const chapterSpecialRequirementCount = results.filter((item) =>
+    item.risk_flags_json?.includes("chapter_special_requirement"),
+  ).length;
+  if (chapterSpecialRequirementCount) {
+    cards.push({
+      key: "chapter_special_requirement",
+      title: "章程限制已提取",
+      summary: `${chapterSpecialRequirementCount} 条结果已提取章程限制条件`,
+      detail: "这类结果已经抽出语言、单科、性别、体检或视力等限制说明，正式填报前应逐条核对是否满足。",
       tone: "warning",
     });
   }

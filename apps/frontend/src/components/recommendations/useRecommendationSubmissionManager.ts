@@ -81,7 +81,7 @@ export function useRecommendationSubmissionManager(options: SubmissionManagerOpt
   async function loadStudentAndExamOptions(): Promise<void> {
     await referenceStore.loadCore();
     const [studentPayload, examPayload] = await Promise.all([
-      apiRequest<{ items: StudentOption[] }>("/api/students?page=1&page_size=200"),
+      apiRequest<{ items: StudentOption[] }>("/api/students?page=1&page_size=1000"),
       apiRequest<{ items: ExamOption[] }>("/api/exams?page=1&page_size=200"),
     ]);
     studentOptions.value = studentPayload.items;

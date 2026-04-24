@@ -10,6 +10,8 @@
   看 [`docs/README.md`](./docs/README.md)、[`scripts/README.md`](./scripts/README.md)、[`handoffs/README.md`](./handoffs/README.md)
 - 只想知道怎么运行和验证：
   直接用 `npm run dev`、`npm run clean:local`、`npm run clean:slim`、`npm run check`、`npm run check:all`
+- 只想做 P0 交付验收：
+  直接用 `npm run backend:p0-check`，步骤说明见 [`docs/p0_delivery_runbook_2026-04-24.md`](./docs/p0_delivery_runbook_2026-04-24.md)
 - 只想看测试布局：
   看 [`tests/README.md`](./tests/README.md)
 - 想找项目级规则来源：
@@ -27,6 +29,13 @@
 
 - 旧推荐中心已具备院校库、专业库、录取库、普通生/艺体生推荐、策略模板、历史回放、推荐报告导出与定向 E2E
 - `/recommendations` 已升级为“高考志愿”工作台形态，当前已落地招生计划库、省份规则、就业方向库、专业就业映射、学生志愿工作台、志愿草稿打印/导出、职业意向输入与职业匹配解释第一轮
+- 应用侧 Stage B 规则库已继续补齐：当前 `data/app.db` 已新增 `province_score_transform_rule` 与 `subject_requirement_dict` 两类规则表，后端已补 CRUD / bootstrap 接口，`/api/gaokao/shandong-monitor` 在缺少原始 `gaokao_*` 表时也可回退到这两类应用侧规则表做只读展示
+- 2026-04-22 已继续把嵌入主库的原始高考表整理到项目业务表：当前 `data/app.db` 内已物化 `college=3455`、`major=13959`、`admission_record=170385`、`enrollment_plan=6338`、`college_major=60761`；其中招生计划已继续纳入 `春季高考 / 艺术类 / 单独招生 / 综合评价招生 / 体育类`，录取结果仍主要是普通类，因为当前 raw 结果源本身就是普通类口径
+- 2026-04-22 已继续把这批类型接进消费链：录取库 / 招生计划库当前都支持按 `student_type` 过滤；推荐候选筛选也已改成“精确类别匹配”，不会再把 `spring_exam / art / sports / independent_recruitment / comprehensive_evaluation` 混成一类
+- 2026-04-22 已继续补特殊类型参考链：`spring_exam / independent_recruitment / comprehensive_evaluation` 在缺少专门录取结果时，当前会显式回退参考普通类录取结果，并带风险标记与说明；`art / sports` 仍保持艺体口径，不会和这三类混用
+- 2026-04-23 已继续补山东专用规则基线：`province_volunteer_rule` 当前已增至 81 条，山东 2026 年常见普通类批次、春季高考、艺术类、体育类、单独招生、综合评价招生等批次都有专用规则可命中，减少了工作台对通用规则的依赖
+- 2026-04-23 已把山东规则补到双年份：当前 `province_volunteer_rule / province_score_transform_rule / subject_requirement_dict` 都已同时覆盖 `2025` 和 `2026`，页面默认切到山东后不再只命中一个未来年份基线
+- 2026-04-23 已把职业方向和专业就业映射从空库补到可用：当前 `employment_direction=14`、`major_employment_mapping=12975`，职业匹配、工作台职业意向和推荐解释不再是空白底座
 - `volunteer_draft_summary` 的导出前摘要、Excel“边界概览”与志愿草稿打印页已继续统一：草稿详情现在会实时复用现有规则匹配逻辑返回 `rule_alerts + applicable_rules`，未命中明确省份规则的草稿不会再误判成“通用考生规则”，并可继续细分到缺省份/年份/批次/模式等规则缺口；当前报表中心导出前摘要、草稿打印页和 Excel 都已能展示“规则差异摘要”
 - Stage B 工作台预览的聚合口径又和草稿链再对齐了一步：当前工作台“边界概览”里的 `missing_rule_*` 和“已回退到通用考生规则”也会按候选数量汇总，不再只停留在泛化提示；页面、草稿打印/报表摘要和 Excel 现在对这类 live 规则缺口的表达更一致
 - Stage B 的年份边界解释又补了一层：当前候选池、草稿打印页、报表中心 `volunteer_draft_summary` 导出前摘要和 Excel“边界概览”都会显式提示“参考年份偏旧”，当录取样本最近年份与目标年份相差 2 年及以上时，会提醒排序和解释偏保守
@@ -36,6 +45,11 @@
 - 推荐页的单方案对比与批量对照已继续补齐聚合级“参考年份变化”解释：同一院校/专业在不同方案里的最近录取样本年份变化会被单独汇总，且会进一步提示其中有多少条同时伴随冲稳保分组变化，批量对照表也可直接查看“年变伴随分组变”
 - 推荐历史对照页又补了一层年份边界解释：当前不仅会汇总“参考样本年份切换”，也会单独识别“最近样本年份没变，但在新目标年份下已变成偏旧样本”的 `stale-only` 场景；单方案对比卡、批量对照表、打印页、报表中心摘要和 Excel“风险概览”都会按同一口径解释
 - `/gaokao-data` 已新增高考数据只读驾驶舱第一版：当前可查看数据总览、数据审阅、院校证据页和山东首期监控；后端已补 `/api/gaokao/data-overview`、`/import-batches`、`/review-summary`、`/college-evidence/{college_id}`、`/shandong-monitor`，现在会优先读取独立高考主线库 `data/local_edu_tool/local_edu.sqlite3`，缺失时再回退到 sync board 基线或现有应用模型
+- 2026-04-22 已把 handoff 的 `gaokao_*` 原始表、`data_import_error_log`、`score_rank_segment` 并入 `data/app.db`；当前若主库已嵌入这些 raw 表，应用会优先直接走单库，`data/local_edu_tool/local_edu.sqlite3` 则退到同步来源 / fallback 角色
+- 2026-04-24 已补 P0 数据健康检查入口和页面看板：`npm run backend:data-health` 与 `/api/gaokao/data-health` 会读取 `data/app.db`，输出核心表数量、山东年份覆盖、考生类型覆盖和缺口摘要；`/gaokao-data` 已新增“山东覆盖”页签，并库、物化、特殊类型规则初始化脚本现在都会输出执行前后的健康摘要，特殊类型规则初始化默认先备份主库
+- 2026-04-24 已补阶段一覆盖矩阵和审计摘要：`backend:data-health -- --json` 现在返回山东按年份 / 类别 / 批次的覆盖明细、缺少年份和 `audit_summary`；`/gaokao-data` 的“山东覆盖”页签可展开查看按年矩阵，并显示当前记录数、疑似重复、冲突、待人工复核和特殊类型“仅可做初筛”等缺口
+- 2026-04-24 已继续把 P0 特殊类型规则字典接到前端：`/recommendations` 新增“特殊类型规则”页签，可查看山东春考、综评、单招、艺术、体育等规则的细分类别、匹配关键词、核对清单、初筛优先级和来源备注，并可从页面触发山东基线装载
+- 2026-04-24 已开始落地阶段二规则核对入口：`/recommendations` 现新增“赋分规则”和“选科字典”页签，能查看 `province_score_transform_rule` 与 `subject_requirement_dict` 的省份、年份、模式、赋分科目、等级表、折算公式、标准化选科和来源备注；三类规则字典均按页签懒加载，避免拖慢推荐主流程
 - 系统安全与输出链继续收口：备份恢复路径已纳入允许目录校验；推荐打印页 / 报表中心已统一通过共享 helper 组装推荐解释入参，跨省历史方案差异不会再在打印链路丢失；`grade_summary` 与 `teacher_analysis` Excel 导出也已补齐和打印页一致的摘要结构
 - 高复杂模块继续按“小步抽 helper”收口：Stage B 工作台边界/规则摘要已拆到 `apps/frontend/src/components/recommendations/volunteerWorkbenchInsights.ts`，评教批次统计已拆到 `apps/backend/app/services/_evaluation_batch_stats.py`，工作量逐教师计算已拆到 `apps/backend/app/services/_workload_calculation.py`；现有接口、页面入口和导出链保持不变
 - 当前开发顺序以 [`gaokao_dev_bundle_v3/gaokao_dev_doc_v3.md`](./gaokao_dev_bundle_v3/gaokao_dev_doc_v3.md) 为准：Stage A 已基本收尾，Stage B 的“全国省份规则基线装载”和“生源地 / 预估分数正式建模”第一轮已落地，批量混合生源地前端跨端回归、“缺少年份规则”解释和 `3+1+2 -> 物理类/历史类` 模式兼容回退也已补齐，下一步优先补更多省份/年份边界和结果解释细化
@@ -63,10 +77,13 @@ local-edu-tool/
 ## 数据库约定
 
 - 应用主库默认仍是 `data/app.db`
-- 高考主线只读库默认读取 `data/local_edu_tool/local_edu.sqlite3`
+- 2026-04-22 起，若 `data/app.db` 内已经嵌入 `gaokao_*` 原始表、`data_import_batch`、`score_rank_segment` 等 handoff 表，应用会优先直接走单库，不再强依赖独立高考库
+- `data/local_edu_tool/local_edu.sqlite3` 现在更适合作为 handoff 同步来源和 fallback 输入，而不是唯一运行库
 - 如需改高考库位置，可设置 `LOCAL_EDU_GAOKAO_DB_PATH=/绝对路径/local_edu.sqlite3`
 - 当前接管包已整理到 `handoffs/2026-04-21_mac_db_handoff`
-- `data/local_edu_tool/local_edu.sqlite3` 可以指向 handoff 包内快照；本仓库当前即按这个入口接入
+- `data/local_edu_tool/local_edu.sqlite3` 当前可以指向 handoff 包内快照；如需把其原始高考表并入主库，执行 `npm run backend:merge-handoff`
+- `data/backups/` 是主库备份目录。`backend:merge-handoff`、`backend:materialize-gaokao` 默认会先备份主库；`backend:bootstrap-special-types` 也会在写入规则前备份，除非显式传入 `-- --no-backup`
+- 交付前或补数据前先执行 `npm run backend:data-health`；需要机器可读结果时执行 `npm run backend:data-health -- --json`。该 JSON 同时包含阶段一覆盖矩阵和导入审计摘要，可用于补数据前后对照
 
 ## 开发环境
 
@@ -83,6 +100,10 @@ local-edu-tool/
 ```bash
 npm run dev
 ```
+
+如果你在 macOS 上更希望直接双击启动，也可以在仓库根目录双击：
+
+[`start-local-edu.command`](./start-local-edu.command)
 
 它会在根目录同时启动前后端开发服务，默认地址仍是：
 
@@ -140,6 +161,11 @@ npm run frontend:dev
 npm run clean:local
 npm run clean:slim
 npm run backend:migrate
+npm run backend:merge-handoff
+npm run backend:materialize-gaokao
+npm run backend:bootstrap-special-types -- --year 2025 --year 2026
+npm run backend:data-health
+npm run backend:p0-check
 npm run backend:init-demo
 npm run backend:test
 npm run backend:dev

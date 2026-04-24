@@ -232,7 +232,7 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
 
   function performVolunteerWorkbenchReset(): void {
     Object.assign(volunteerWorkbenchForm, createVolunteerWorkbenchForm(), {
-      province: volunteerWorkbenchForm.province || options.recommendationForm.province || "广东",
+      province: volunteerWorkbenchForm.province || options.recommendationForm.province || "山东",
       target_year: workbenchYearOptions.value[0] ?? new Date().getFullYear(),
     });
     workbenchPreview.value = null;

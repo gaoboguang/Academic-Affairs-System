@@ -139,6 +139,9 @@ function formatCandidateType(value: string): string {
     music: "音乐类",
     dance: "舞蹈类",
     media: "传媒类",
+    spring_exam: "春季高考",
+    independent_recruitment: "单独招生",
+    comprehensive_evaluation: "综合评价招生",
   };
   return labels[value] ?? value;
 }

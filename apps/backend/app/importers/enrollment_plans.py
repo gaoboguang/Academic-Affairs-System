@@ -192,13 +192,20 @@ class EnrollmentPlanImporter:
         mapping = {
             "普通": "general",
             "普通生": "general",
+            "普通类": "general",
             "general": "general",
             "艺体": "art",
             "艺体生": "art",
+            "艺术类": "art",
             "art": "art",
+            "美术类": "art",
             "美术": "art",
+            "体育类": "sports",
             "体育": "sports",
             "复读": "repeat",
             "复读生": "repeat",
+            "春季高考": "spring_exam",
+            "单独招生": "independent_recruitment",
+            "综合评价招生": "comprehensive_evaluation",
         }
         return NormalizedPlanCategory(student_type=mapping.get(normalized, value.strip()))

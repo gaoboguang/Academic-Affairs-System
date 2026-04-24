@@ -38,6 +38,9 @@
       <el-select v-model="filters.college_id" clearable filterable placeholder="院校">
         <el-option v-for="college in collegeOptions" :key="college.id" :label="college.name" :value="college.id" />
       </el-select>
+      <el-select v-model="filters.student_type" clearable filterable placeholder="学生类别">
+        <el-option v-for="item in studentTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+      </el-select>
     </div>
 
     <div class="action-row toolbar-row">
@@ -74,6 +77,7 @@ interface AdmissionFiltersState {
   year?: number;
   province: string;
   college_id?: number;
+  student_type: string;
 }
 
 interface AdmissionImportResponse {
@@ -90,6 +94,7 @@ defineProps<{
   admissionYearOptions: number[];
   provinceOptions: string[];
   collegeOptions: CollegeItem[];
+  studentTypeOptions: Array<{ value: string; label: string }>;
   admissionImportResult: AdmissionImportResponse | null;
 }>();
 
@@ -109,6 +114,11 @@ function formatStudentType(value?: string | null): string {
   const mapping: Record<string, string> = {
     general: "普通生",
     repeat: "复读生",
+    art: "艺体生",
+    sports: "体育生",
+    spring_exam: "春季高考",
+    independent_recruitment: "单独招生",
+    comprehensive_evaluation: "综合评价招生",
   };
   return mapping[value] ?? value;
 }

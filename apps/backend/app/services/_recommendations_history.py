@@ -65,6 +65,7 @@ def list_scheme_results(session: Session, scheme_id: int, student_id: int | None
             reference_rank=item.reference_rank,
             college_name=item.college_name,
             major_name=item.major_name,
+            fallback_priority_score=item.fallback_priority_score,
         )
     )
     return items

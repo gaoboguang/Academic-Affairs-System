@@ -1,4 +1,4 @@
-import { computed, onMounted } from "vue";
+import { computed, onMounted, watch } from "vue";
 import ElMessage from "element-plus/es/components/message/index";
 
 import { provinceOptions } from "./helpers";
@@ -43,6 +43,8 @@ export function useRecommendationsPage() {
       planningCards[0],
       workflowCards[2],
       planningCards[1],
+      planningCards[2],
+      planningCards[3],
       workflowCards[3],
     ].filter(Boolean);
   });
@@ -71,6 +73,21 @@ export function useRecommendationsPage() {
       ElMessage.error((error as Error).message);
     }
   });
+
+  watch(
+    () => workflow.activeTab.value,
+    (tab) => {
+      if (tab === "special-type-rules" && !planning.specialTypeRules.value.length) {
+        void planning.loadSpecialTypeRules();
+      }
+      if (tab === "score-transform-rules" && !planning.provinceScoreTransformRules.value.length) {
+        void planning.loadProvinceScoreTransformRules();
+      }
+      if (tab === "subject-requirements" && !planning.subjectRequirementDicts.value.length) {
+        void planning.loadSubjectRequirementDicts();
+      }
+    },
+  );
 
   return {
     ...catalog,

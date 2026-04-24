@@ -27,7 +27,9 @@ data/app.db
 data/*.db
 data/*.db-*
 data/local_edu_tool/
+data/backups/*
 data/backups/*.zip
+!data/backups/.gitkeep
 data/exports/*
 !data/exports/.gitkeep
 data/logs/*

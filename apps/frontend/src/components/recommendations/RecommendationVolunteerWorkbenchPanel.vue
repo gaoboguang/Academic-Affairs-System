@@ -490,6 +490,24 @@
                 <div v-if="buildVolunteerCandidateReferenceCopy(row)" class="match-reference-copy">
                   {{ buildVolunteerCandidateReferenceCopy(row) }}
                 </div>
+                <div v-if="row.fallback_priority_label" class="match-reference-copy">
+                  初筛优先级：{{ row.fallback_priority_label }}
+                  <span v-if="row.fallback_priority_score !== null && row.fallback_priority_score !== undefined">
+                    · {{ row.fallback_priority_score }}
+                  </span>
+                  <span v-if="row.fallback_priority_notes_json?.length">
+                    · {{ row.fallback_priority_notes_json.join("；") }}
+                  </span>
+                  <span v-if="row.fallback_category_label"> · {{ row.fallback_category_label }}</span>
+                  <span v-if="row.fallback_review_notes_json?.length">
+                    · 核对：{{ row.fallback_review_notes_json.join("；") }}
+                  </span>
+                </div>
+                <div v-if="row.chapter_url || row.chapter_campus_note || row.chapter_review_status" class="match-reference-copy">
+                  <a v-if="row.chapter_url" :href="row.chapter_url" target="_blank" rel="noreferrer">查看招生章程</a>
+                  <span v-else>招生章程待补链</span>
+                  <span v-if="row.chapter_campus_note"> · {{ row.chapter_campus_note }}</span>
+                </div>
                 <div class="match-layering-copy">
                   {{ buildVolunteerCandidateLayeringCopy(row) }}
                 </div>
@@ -1172,9 +1190,15 @@ function formatRiskFlag(value: string): string {
   const mapping: Record<string, string> = {
     sample_insufficient: "样本不足",
     rank_missing: "缺少位次，分数参考",
+    general_reference_fallback: "缺少专门录取结果，按普通类参考",
+    score_line_reference_only: "缺少专门录取结果，按省控线初筛",
+    cross_year_score_line_reference: "省控线按跨年份参考",
+    plan_only_reference: "缺少专门结果，仅按计划清单初筛",
     art_recommendation: "艺体推荐",
     track_unconfirmed: "艺体方向待确认",
     manual_formula_check: "需人工核对招生章程",
+    chapter_pending_review: "章程待补链",
+    chapter_special_requirement: "章程限制已提取",
     whitelist_override: "白名单放宽",
     major_baseline_missing: "专业线缺失，按院校线参考",
     subject_requirement_check: "需复核选科要求",

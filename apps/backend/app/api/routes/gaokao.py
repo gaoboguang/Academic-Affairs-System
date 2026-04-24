@@ -8,12 +8,14 @@ from app.core.config import Settings
 from app.schemas.gaokao import (
     GaokaoCollegeEvidenceRead,
     GaokaoCollegeOptionRead,
+    GaokaoDataHealthRead,
     GaokaoDataOverviewRead,
     GaokaoImportBatchRead,
     GaokaoReviewSummaryRead,
     GaokaoShandongMonitorRead,
 )
 from app.services import gaokao as service
+from app.utils.data_health import build_data_health_report
 
 router = APIRouter(prefix="/gaokao", tags=["gaokao"])
 
@@ -25,6 +27,16 @@ def get_data_overview(
     settings: Settings = Depends(get_settings),
 ) -> GaokaoDataOverviewRead:
     return service.get_data_overview(session, gaokao_session, settings)
+
+
+@router.get("/data-health", response_model=GaokaoDataHealthRead)
+def get_data_health(
+    province: str = Query(default="山东"),
+    settings: Settings = Depends(get_settings),
+) -> GaokaoDataHealthRead:
+    return GaokaoDataHealthRead.model_validate(
+        build_data_health_report(settings.db_path, province=province)
+    )
 
 
 @router.get("/import-batches", response_model=list[GaokaoImportBatchRead])

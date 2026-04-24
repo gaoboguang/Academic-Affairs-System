@@ -61,6 +61,10 @@ def export_recommendation_summary(settings: Settings, meta: dict[str, object], r
             "职业说明",
             "理由",
             "风险提示",
+            "章程链接",
+            "章程状态",
+            "校区备注",
+            "章程备注",
         ]
     )
     for row in rows:
@@ -79,6 +83,10 @@ def export_recommendation_summary(settings: Settings, meta: dict[str, object], r
                 row.get("career_match_summary"),
                 row.get("reason_text"),
                 ",".join(row.get("risk_flags_json") or []),
+                _read_snapshot_value(row, "chapter_url"),
+                _read_snapshot_value(row, "chapter_review_status"),
+                _read_snapshot_value(row, "chapter_campus_note"),
+                _read_snapshot_value(row, "chapter_other_risk_note"),
             ]
         )
 
@@ -167,6 +175,10 @@ def export_volunteer_draft_summary(settings: Settings, meta: dict[str, object], 
             "职业说明",
             "理由",
             "风险提示",
+            "章程链接",
+            "章程状态",
+            "校区备注",
+            "章程备注",
         ]
     )
     for row in rows:
@@ -195,6 +207,10 @@ def export_volunteer_draft_summary(settings: Settings, meta: dict[str, object], 
                 row.get("career_match_summary"),
                 row.get("reason_text"),
                 ",".join(row.get("risk_flags_json") or []),
+                row.get("chapter_url"),
+                row.get("chapter_review_status"),
+                row.get("chapter_campus_note"),
+                row.get("chapter_other_risk_note"),
             ]
         )
 
@@ -213,6 +229,13 @@ def _build_path_hint(row: dict[str, object]) -> str:
     if row.get("requires_long_training_path") is True:
         hints.append("长培养周期")
     return " / ".join(hints)
+
+
+def _read_snapshot_value(row: dict[str, object], key: str) -> object:
+    snapshot = row.get("snapshot_json")
+    if isinstance(snapshot, dict):
+        return snapshot.get(key)
+    return None
 
 
 def _build_candidate_rule_copy(row: dict[str, object]) -> str | None:
@@ -237,10 +260,22 @@ def _build_candidate_rule_copy(row: dict[str, object]) -> str | None:
 def _build_candidate_reference_copy(row: dict[str, object]) -> str | None:
     if not row.get("reference_scope") and not row.get("reference_record_count"):
         return None
-    scope_label = "院校线参考" if row.get("reference_scope") == "college" else "专业线参考"
+    if row.get("reference_scope") == "college":
+        scope_label = "院校线参考"
+    elif row.get("reference_scope") == "score_line":
+        scope_label = "省控线参考"
+    elif row.get("reference_scope") == "plan_only":
+        scope_label = "计划清单参考"
+    else:
+        scope_label = "专业线参考"
     reference_years = row.get("reference_years_json") or []
     year_label = f"{' / '.join(str(item) for item in reference_years)} 年" if reference_years else "年份待补"
-    sample_label = f"{row.get('reference_record_count') or 0} 条样本"
+    if row.get("reference_scope") == "score_line":
+        sample_label = "省级控制线口径"
+    elif row.get("reference_scope") == "plan_only":
+        sample_label = "当年计划口径"
+    else:
+        sample_label = f"{row.get('reference_record_count') or 0} 条样本"
     source_notes = row.get("reference_source_notes_json") or []
     source_label = f"来源：{'；'.join(str(item) for item in source_notes if item)}" if source_notes else None
     return " · ".join(str(item) for item in [scope_label, year_label, sample_label, source_label] if item)
@@ -281,6 +316,12 @@ def _build_candidate_boundary_notes(row: dict[str, object], rule_alerts: list[di
 
     if row.get("reference_scope") == "college" and row.get("major_id") is not None:
         notes.append("当前专业缺少专业线，先回退到院校线参考；同校不同专业结果仍可能变化。")
+
+    if row.get("reference_scope") == "score_line":
+        notes.append("当前结果只按省级控制线做资格初筛，不能直接视作院校或专业录取把握。")
+
+    if row.get("reference_scope") == "plan_only":
+        notes.append("当前结果只按当年招生计划清单做方向性初筛，不能直接作为冲稳保或录取把握判断。")
 
     if (row.get("reference_record_count") or 0) > 0 and row.get("province"):
         reference_years = row.get("reference_years_json") or []
@@ -353,6 +394,7 @@ def _build_volunteer_draft_boundary_rows(
         "missing_rule_batch": "当前缺少目标批次规则支撑",
         "missing_rule_candidate_type": "当前缺少类别专用规则支撑",
         "missing_rule_exam_mode": "当前缺少目标模式规则支撑",
+        "fallback_general_reference_data": "当前缺少该类别专门录取结果，已回退参考普通类录取结果",
     }
     appended_missing_rule = False
     if missing_rule_count:
@@ -402,6 +444,46 @@ def _build_volunteer_draft_boundary_rows(
                     if fallback_alert
                     else "这通常表示该省该年尚未配置更细的类别专用规则；若后续补齐普通类、艺术类等专用规则，候选解释和排序可能变化。"
                 ),
+            }
+        )
+
+    general_reference_fallback_count = sum(
+        1 for row in rows if "general_reference_fallback" in {str(item) for item in row.get("risk_flags_json") or [] if item}
+    )
+    if general_reference_fallback_count:
+        fallback_alert = _pick_rule_alert(rule_alerts, ["fallback_general_reference_data"])
+        results.append(
+            {
+                "key": "general_reference_fallback",
+                "title": str(fallback_alert.get("title") if fallback_alert else "普通类录取参考回退"),
+                "summary": f"{general_reference_fallback_count} 条已选志愿当前按普通类录取结果参考",
+                "detail": str(
+                    fallback_alert.get("detail")
+                    if fallback_alert
+                    else "这类结果适合先做方向性筛选；正式填报前仍需结合该类别自己的录取口径、公告和批次规则再复核。"
+                ),
+            }
+        )
+
+    score_line_reference_count = sum(1 for row in rows if row.get("reference_scope") == "score_line")
+    if score_line_reference_count:
+        results.append(
+            {
+                "key": "score_line_reference",
+                "title": "省控线初筛",
+                "summary": f"{score_line_reference_count} 条已选志愿当前仅按省控线做资格参考",
+                "detail": "这类结果说明当前缺少该类别专门录取结果，只能先按山东省控线筛掉明显不满足线的计划；正式填报前仍需逐校核对录取与章程口径。",
+            }
+        )
+
+    plan_only_reference_count = sum(1 for row in rows if row.get("reference_scope") == "plan_only")
+    if plan_only_reference_count:
+        results.append(
+            {
+                "key": "plan_only_reference",
+                "title": "计划清单初筛",
+                "summary": f"{plan_only_reference_count} 条已选志愿当前仅按当年招生计划做方向性初筛",
+                "detail": "这类结果说明当前缺少该类别专门录取结果，也没有可直接复用的官方控制线；正式填报前必须结合该类别公告、章程和后续结果再复核。",
             }
         )
 
@@ -692,6 +774,9 @@ def _format_candidate_type_label(value: object) -> str:
         "music": "音乐类",
         "dance": "舞蹈类",
         "media": "传媒类",
+        "spring_exam": "春季高考",
+        "independent_recruitment": "单独招生",
+        "comprehensive_evaluation": "综合评价招生",
     }
     return labels.get(normalized, normalized)
 
@@ -762,6 +847,38 @@ def _build_recommendation_risk_rows(meta: dict[str, object], rows: list[dict[str
                 "title": "缺少位次口径",
                 "summary": f"{rank_missing_count} 条结果已改按分数参考",
                 "detail": "位次口径不完整时，结果稳定性会低于标准位次链路，建议后续用正式位次复核。",
+            }
+        )
+
+    general_reference_fallback_count = sum(
+        1 for row in rows if "general_reference_fallback" in {str(item) for item in row.get("risk_flags_json") or [] if item}
+    )
+    if general_reference_fallback_count:
+        results.append(
+            {
+                "title": "普通类录取参考回退",
+                "summary": f"{general_reference_fallback_count} 条结果当前按普通类录取结果参考",
+                "detail": "这类结果适合先做方向性筛选，正式填报前仍需结合该类别自己的录取口径、公告和批次规则再复核。",
+            }
+        )
+
+    score_line_reference_count = sum(1 for row in rows if row.get("reference_scope") == "score_line")
+    if score_line_reference_count:
+        results.append(
+            {
+                "title": "省控线资格参考",
+                "summary": f"{score_line_reference_count} 条结果当前仅按山东省控线做初筛",
+                "detail": "这类结果说明当前缺少该类别专门录取结果，只能先按省级控制线判断是否具备基本资格，不能直接视作院校或专业录取把握。",
+            }
+        )
+
+    plan_only_reference_count = sum(1 for row in rows if row.get("reference_scope") == "plan_only")
+    if plan_only_reference_count:
+        results.append(
+            {
+                "title": "计划清单初筛",
+                "summary": f"{plan_only_reference_count} 条结果当前仅按当年招生计划做方向性初筛",
+                "detail": "这类结果说明当前缺少该类别专门录取结果，也没有可直接复用的官方控制线；正式填报前必须结合该类别公告、章程和后续结果再复核。",
             }
         )
 
@@ -1010,6 +1127,8 @@ def _build_recommendation_risk_group_label(title: object) -> str:
         "模拟结果",
         "样本不足",
         "缺少位次口径",
+        "省控线资格参考",
+        "计划清单初筛",
         "需人工复核",
         "参考年份偏旧",
         "当前结果边界较清晰",

@@ -106,6 +106,9 @@ const candidateTypeLabels: Record<string, string> = {
   music: "音乐类",
   dance: "舞蹈类",
   media: "传媒类",
+  spring_exam: "春季高考",
+  independent_recruitment: "单独招生",
+  comprehensive_evaluation: "综合评价招生",
 };
 
 const riskPreferenceLabels: Record<string, string> = {
@@ -124,7 +127,7 @@ export function createVolunteerWorkbenchForm(): VolunteerWorkbenchFormState {
   return {
     student_id: undefined,
     exam_id: undefined,
-    province: "广东",
+    province: "山东",
     target_year: new Date().getFullYear(),
     batch: "",
     exam_mode: "",
@@ -513,9 +516,19 @@ export function buildVolunteerCandidateReferenceCopy(candidate: VolunteerWorkben
   if (!candidate.reference_scope && !candidate.reference_record_count) {
     return null;
   }
-  const scopeLabel = candidate.reference_scope === "college" ? "院校线参考" : "专业线参考";
+  const scopeLabel = candidate.reference_scope === "college"
+    ? "院校线参考"
+    : candidate.reference_scope === "score_line"
+      ? "省控线参考"
+      : candidate.reference_scope === "plan_only"
+        ? "计划清单参考"
+      : "专业线参考";
   const yearLabel = candidate.reference_years_json.length ? `${candidate.reference_years_json.join(" / ")} 年` : "年份待补";
-  const sampleLabel = `${candidate.reference_record_count} 条样本`;
+  const sampleLabel = candidate.reference_scope === "score_line"
+    ? "省级控制线口径"
+    : candidate.reference_scope === "plan_only"
+      ? "当年计划口径"
+      : `${candidate.reference_record_count} 条样本`;
   const sourceLabel = candidate.reference_source_notes_json.length
     ? `来源：${candidate.reference_source_notes_json.join("；")}`
     : null;
@@ -540,6 +553,14 @@ export function buildVolunteerCandidateExplanationNotes(candidate: VolunteerWork
 
   if (candidate.reference_scope === "college" && candidate.major_id) {
     notes.push("当前专业缺少专业线，先回退到院校线参考；同校不同专业结果仍可能继续变化。");
+  }
+
+  if (candidate.reference_scope === "score_line") {
+    notes.push("当前结果只按省级控制线做资格初筛，不能直接视作院校或专业录取把握。");
+  }
+
+  if (candidate.reference_scope === "plan_only") {
+    notes.push("当前结果只按当年招生计划清单做方向性初筛，不能直接作为冲稳保或录取把握判断。");
   }
 
   if (candidate.reference_record_count > 0 && candidate.province.trim()) {

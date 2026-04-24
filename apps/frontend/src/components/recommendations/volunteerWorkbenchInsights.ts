@@ -29,6 +29,9 @@ const candidateTypeLabels: Record<string, string> = {
   music: "音乐类",
   dance: "舞蹈类",
   media: "传媒类",
+  spring_exam: "春季高考",
+  independent_recruitment: "单独招生",
+  comprehensive_evaluation: "综合评价招生",
 };
 
 export function buildVolunteerRuleInsightCards(
@@ -165,6 +168,28 @@ export function buildVolunteerBoundaryInsightCards(
       title: "院校线回退",
       summary: `${collegeFallbackCount} 条候选缺少专业线，只能先按院校线参考`,
       detail: "这类计划更适合做方向性参考，同校不同专业的真实录取差异仍需人工复核。",
+      tone: "warning",
+    });
+  }
+
+  const scoreLineReferenceCount = candidates.filter((item) => item.reference_scope === "score_line").length;
+  if (scoreLineReferenceCount) {
+    cards.push({
+      key: "score_line_reference",
+      title: "省控线初筛",
+      summary: `${scoreLineReferenceCount} 条候选当前仅按省控线做资格参考`,
+      detail: "这类结果说明当前缺少该类别专门录取结果，只能先按山东控制线筛掉明显不满足线的计划；正式填报前仍需逐校核对录取与章程口径。",
+      tone: "warning",
+    });
+  }
+
+  const planOnlyReferenceCount = candidates.filter((item) => item.reference_scope === "plan_only").length;
+  if (planOnlyReferenceCount) {
+    cards.push({
+      key: "plan_only_reference",
+      title: "计划清单初筛",
+      summary: `${planOnlyReferenceCount} 条候选当前仅按当年招生计划做方向性初筛`,
+      detail: "这类结果说明当前缺少该类别专门录取结果，也没有可直接复用的官方控制线；正式填报前必须结合该类别公告、章程和后续结果再复核。",
       tone: "warning",
     });
   }

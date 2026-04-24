@@ -10,8 +10,9 @@
 ## 使用前先知道
 
 - 应用主库仍是 `data/app.db`。
-- 高考只读驾驶舱默认读取 `data/local_edu_tool/local_edu.sqlite3`。
-- `data/local_edu_tool/local_edu.sqlite3` 当前可以指向 handoff 包内快照，但不要把 handoff 包里的数据库直接当成应用主库替换。
+- `data/local_edu_tool/local_edu.sqlite3` 当前仍可指向 handoff 包内快照，但从 2026-04-22 起，它更适合作为“同步来源 / fallback 输入”。
+- 若已执行 `npm run backend:merge-handoff` 把 handoff 的 `gaokao_*` 原始表并入 `data/app.db`，应用会优先走单库，不再强依赖独立高考库。
+- 不要把 handoff 包里的数据库直接当成应用主库替换；优先走“并入 app.db”而不是“替换 app.db”。
 
 ## 建议阅读顺序
 

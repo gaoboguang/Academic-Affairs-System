@@ -20,6 +20,7 @@ def list_enrollment_plans(
     province: str | None = None,
     batch: str | None = None,
     college_id: int | None = None,
+    student_type: str | None = None,
     keyword: str | None = None,
 ) -> list[EnrollmentPlanRead]:
     return [
@@ -30,6 +31,7 @@ def list_enrollment_plans(
             province=province,
             batch=batch,
             college_id=college_id,
+            student_type=student_type,
             keyword=keyword,
         )
     ]

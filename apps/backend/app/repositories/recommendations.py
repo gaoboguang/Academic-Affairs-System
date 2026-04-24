@@ -14,9 +14,12 @@ from app.models import (
     EnrollmentPlan,
     Major,
     MajorEmploymentMapping,
+    ProvinceScoreTransformRule,
     ProvinceVolunteerRule,
     RecommendationResult,
     RecommendationScheme,
+    SpecialTypeRule,
+    SubjectRequirementDict,
     VolunteerDraft,
     VolunteerDraftItem,
 )
@@ -229,6 +232,7 @@ def list_admission_records(
     year: int | None = None,
     province: str | None = None,
     college_id: int | None = None,
+    student_type: str | None = None,
 ) -> Sequence[AdmissionRecord]:
     stmt = (
         select(AdmissionRecord)
@@ -245,6 +249,8 @@ def list_admission_records(
         conditions.append(AdmissionRecord.province == province)
     if college_id:
         conditions.append(AdmissionRecord.college_id == college_id)
+    if student_type:
+        conditions.append(AdmissionRecord.student_type == student_type)
     if conditions:
         stmt = stmt.where(and_(*conditions))
     stmt = stmt.order_by(desc(AdmissionRecord.year), AdmissionRecord.college_id, AdmissionRecord.id)
@@ -281,6 +287,7 @@ def list_enrollment_plans(
     province: str | None = None,
     batch: str | None = None,
     college_id: int | None = None,
+    student_type: str | None = None,
     keyword: str | None = None,
 ) -> Sequence[EnrollmentPlan]:
     stmt = (
@@ -300,6 +307,8 @@ def list_enrollment_plans(
         conditions.append(EnrollmentPlan.batch == batch)
     if college_id:
         conditions.append(EnrollmentPlan.college_id == college_id)
+    if student_type:
+        conditions.append(EnrollmentPlan.student_type == student_type)
     if keyword:
         conditions.append(
             or_(
@@ -368,10 +377,7 @@ def list_admission_candidates(
     )
     if batch:
         stmt = stmt.where(AdmissionRecord.batch == batch)
-    if student_type == "general":
-        stmt = stmt.where(AdmissionRecord.student_type.in_(["general", "common", ""]))
-    else:
-        stmt = stmt.where(AdmissionRecord.student_type != "general")
+    stmt = stmt.where(AdmissionRecord.student_type.in_(_resolve_candidate_student_type_values(student_type)))
     if subject_requirement:
         stmt = stmt.where(
             (AdmissionRecord.subject_requirement.is_(None))
@@ -407,10 +413,7 @@ def list_enrollment_plan_candidates(
         stmt = stmt.where(EnrollmentPlan.batch == batch)
     if exam_mode:
         stmt = stmt.where(EnrollmentPlan.exam_mode.in_(build_compatible_exam_modes(exam_mode)))
-    if student_type == "general":
-        stmt = stmt.where(EnrollmentPlan.student_type.in_(["general", "common", ""]))
-    else:
-        stmt = stmt.where(EnrollmentPlan.student_type != "general")
+    stmt = stmt.where(EnrollmentPlan.student_type.in_(_resolve_candidate_student_type_values(student_type)))
     if subject_requirement:
         stmt = stmt.where(
             (EnrollmentPlan.subject_requirement.is_(None))
@@ -424,6 +427,13 @@ def list_enrollment_plan_candidates(
         EnrollmentPlan.id,
     )
     return session.scalars(stmt).unique().all()
+
+
+def _resolve_candidate_student_type_values(student_type: str) -> tuple[str, ...]:
+    normalized = (student_type or "").strip()
+    if normalized in {"", "general", "repeat"}:
+        return ("general", "common", "")
+    return (normalized,)
 
 
 def list_province_volunteer_rules(
@@ -478,6 +488,171 @@ def get_province_volunteer_rule_by_key(
         ProvinceVolunteerRule.exam_mode == exam_mode,
         ProvinceVolunteerRule.batch == batch,
         ProvinceVolunteerRule.candidate_type == candidate_type,
+    )
+    return session.scalar(stmt)
+
+
+def list_province_score_transform_rules(
+    session: Session,
+    *,
+    province: str | None = None,
+    year: int | None = None,
+    exam_mode: str | None = None,
+    subject_name: str | None = None,
+) -> Sequence[ProvinceScoreTransformRule]:
+    stmt = select(ProvinceScoreTransformRule).where(ProvinceScoreTransformRule.is_active.is_(True))
+    conditions = []
+    if province:
+        conditions.append(ProvinceScoreTransformRule.province == province)
+    if year:
+        conditions.append(ProvinceScoreTransformRule.year == year)
+    if exam_mode is not None:
+        conditions.append(ProvinceScoreTransformRule.exam_mode == exam_mode)
+    if subject_name:
+        conditions.append(ProvinceScoreTransformRule.subject_name == subject_name)
+    if conditions:
+        stmt = stmt.where(and_(*conditions))
+    stmt = stmt.order_by(
+        desc(ProvinceScoreTransformRule.year),
+        ProvinceScoreTransformRule.province,
+        ProvinceScoreTransformRule.exam_mode,
+        ProvinceScoreTransformRule.sort_order.is_(None),
+        ProvinceScoreTransformRule.sort_order,
+        ProvinceScoreTransformRule.subject_name,
+        ProvinceScoreTransformRule.id,
+    )
+    return session.scalars(stmt).all()
+
+
+def get_province_score_transform_rule(
+    session: Session,
+    rule_id: int,
+) -> ProvinceScoreTransformRule | None:
+    return session.get(ProvinceScoreTransformRule, rule_id)
+
+
+def get_province_score_transform_rule_by_key(
+    session: Session,
+    *,
+    province: str,
+    year: int,
+    exam_mode: str,
+    subject_name: str,
+) -> ProvinceScoreTransformRule | None:
+    stmt = select(ProvinceScoreTransformRule).where(
+        ProvinceScoreTransformRule.province == province,
+        ProvinceScoreTransformRule.year == year,
+        ProvinceScoreTransformRule.exam_mode == exam_mode,
+        ProvinceScoreTransformRule.subject_name == subject_name,
+    )
+    return session.scalar(stmt)
+
+
+def list_subject_requirement_dicts(
+    session: Session,
+    *,
+    province: str | None = None,
+    year: int | None = None,
+    exam_mode: str | None = None,
+    requirement_code: str | None = None,
+) -> Sequence[SubjectRequirementDict]:
+    stmt = select(SubjectRequirementDict).where(SubjectRequirementDict.is_active.is_(True))
+    conditions = []
+    if province:
+        conditions.append(SubjectRequirementDict.province == province)
+    if year:
+        conditions.append(SubjectRequirementDict.year == year)
+    if exam_mode is not None:
+        conditions.append(SubjectRequirementDict.exam_mode == exam_mode)
+    if requirement_code:
+        conditions.append(SubjectRequirementDict.requirement_code == requirement_code)
+    if conditions:
+        stmt = stmt.where(and_(*conditions))
+    stmt = stmt.order_by(
+        desc(SubjectRequirementDict.year),
+        SubjectRequirementDict.province,
+        SubjectRequirementDict.exam_mode,
+        SubjectRequirementDict.sort_order.is_(None),
+        SubjectRequirementDict.sort_order,
+        SubjectRequirementDict.requirement_text,
+        SubjectRequirementDict.id,
+    )
+    return session.scalars(stmt).all()
+
+
+def get_subject_requirement_dict(
+    session: Session,
+    dict_id: int,
+) -> SubjectRequirementDict | None:
+    return session.get(SubjectRequirementDict, dict_id)
+
+
+def get_subject_requirement_dict_by_key(
+    session: Session,
+    *,
+    province: str,
+    year: int,
+    exam_mode: str,
+    requirement_code: str,
+) -> SubjectRequirementDict | None:
+    stmt = select(SubjectRequirementDict).where(
+        SubjectRequirementDict.province == province,
+        SubjectRequirementDict.year == year,
+        SubjectRequirementDict.exam_mode == exam_mode,
+        SubjectRequirementDict.requirement_code == requirement_code,
+    )
+    return session.scalar(stmt)
+
+
+def list_special_type_rules(
+    session: Session,
+    *,
+    province: str | None = None,
+    year: int | None = None,
+    student_type: str | None = None,
+) -> Sequence[SpecialTypeRule]:
+    stmt = select(SpecialTypeRule).where(SpecialTypeRule.is_active.is_(True))
+    conditions = []
+    if province:
+        conditions.append(SpecialTypeRule.province == province)
+    if year:
+        conditions.append(SpecialTypeRule.year == year)
+    if student_type:
+        conditions.append(SpecialTypeRule.student_type == student_type)
+    if conditions:
+        stmt = stmt.where(and_(*conditions))
+    stmt = stmt.order_by(
+        desc(SpecialTypeRule.year),
+        SpecialTypeRule.province,
+        SpecialTypeRule.student_type,
+        SpecialTypeRule.sort_order.is_(None),
+        SpecialTypeRule.sort_order,
+        SpecialTypeRule.category_code,
+        SpecialTypeRule.id,
+    )
+    return session.scalars(stmt).all()
+
+
+def get_special_type_rule(
+    session: Session,
+    rule_id: int,
+) -> SpecialTypeRule | None:
+    return session.get(SpecialTypeRule, rule_id)
+
+
+def get_special_type_rule_by_key(
+    session: Session,
+    *,
+    province: str,
+    year: int,
+    student_type: str,
+    category_code: str,
+) -> SpecialTypeRule | None:
+    stmt = select(SpecialTypeRule).where(
+        SpecialTypeRule.province == province,
+        SpecialTypeRule.year == year,
+        SpecialTypeRule.student_type == student_type,
+        SpecialTypeRule.category_code == category_code,
     )
     return session.scalar(stmt)
 

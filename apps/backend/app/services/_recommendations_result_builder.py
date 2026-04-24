@@ -5,6 +5,7 @@ from typing import Any
 from app.analytics.recommendations import classify_ratio, classify_score_gap, weighted_reference_rank
 from app.models import AdmissionRecord, Major, MajorEmploymentMapping, RecommendationResult, Student
 
+from ._recommendations_candidates import is_art_like_student_type
 from ._recommendations_score_input import apply_input_context_to_evaluation
 
 
@@ -362,14 +363,14 @@ def evaluate_recommendation_candidate(
             risk_flags.append("sample_insufficient")
     elif first.min_score is not None and score_value is not None:
         result_type = classify_score_gap(round(score_value - first.min_score, 2))
-        score_basis = "comprehensive_score" if student_type != "general" else "score"
+        score_basis = "comprehensive_score" if is_art_like_student_type(student_type) else "score"
         risk_flags.append("rank_missing")
     else:
         return None
 
     if not result_type:
         return None
-    if student_type != "general":
+    if is_art_like_student_type(student_type):
         risk_flags.append("art_recommendation")
         if first.art_track is None:
             risk_flags.append("track_unconfirmed")
@@ -492,7 +493,8 @@ def build_recommendation_sort_key(
     reference_rank: int | None,
     college_name: str | None,
     major_name: str | None,
-) -> tuple[int, float, int, float, int, str, str]:
+    fallback_priority_score: float | None = None,
+) -> tuple[int, float, float, int, float, int, str, str]:
     result_order = {
         "challenge": 0,
         "steady": 1,
@@ -500,6 +502,7 @@ def build_recommendation_sort_key(
     }
     return (
         result_order.get(result_type, 9),
+        -(fallback_priority_score if fallback_priority_score is not None else -1.0),
         -(career_match_score if career_match_score is not None else -1.0),
         career_match_strength_order.get(career_match_strength or "pending", 99),
         ratio if ratio is not None else 999.0,

@@ -118,10 +118,17 @@ def list_admission_records(
     year: int | None = None,
     province: str | None = None,
     college_id: int | None = None,
+    student_type: str | None = None,
 ) -> list[AdmissionRecordRead]:
     return [
         _serialize_admission_record(item)
-        for item in repo_list_admission_records(session, year=year, province=province, college_id=college_id)
+        for item in repo_list_admission_records(
+            session,
+            year=year,
+            province=province,
+            college_id=college_id,
+            student_type=student_type,
+        )
     ]
 
 

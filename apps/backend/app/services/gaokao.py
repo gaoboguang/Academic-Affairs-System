@@ -9,7 +9,15 @@ from fastapi import HTTPException
 from sqlalchemy import func, inspect, or_, select, text
 from sqlalchemy.orm import Session
 
-from app.models import AdmissionRecord, College, EnrollmentPlan, ImportJob, ProvinceVolunteerRule
+from app.models import (
+    AdmissionRecord,
+    College,
+    EnrollmentPlan,
+    ImportJob,
+    ProvinceScoreTransformRule,
+    ProvinceVolunteerRule,
+    SubjectRequirementDict,
+)
 from app.repositories.system import list_recent_import_jobs
 from app.schemas.gaokao import (
     GaokaoCollegeEvidenceRead,
@@ -768,6 +776,9 @@ def get_shandong_monitor(
             raw_updated_candidates=("updated_at", "modified_at", "created_at"),
             raw_where_clause=shandong_where_clause,
             raw_where_params=shandong_where_params,
+            model=ProvinceScoreTransformRule,
+            model_filter=ProvinceScoreTransformRule.province == "山东",
+            model_batch_label="Stage B 赋分规则",
             notes=["当前仓库若未接入 gaokao_score_transform_rule，只显示空态。"],
         ),
         _build_shandong_section_from_raw_or_model(
@@ -794,10 +805,10 @@ def get_shandong_monitor(
             raw_fallback_table="gaokao_subject_requirement",
             raw_where_clause=shandong_where_clause,
             raw_where_params=shandong_where_params,
-            model=EnrollmentPlan,
-            model_filter=(EnrollmentPlan.province == "山东") & (EnrollmentPlan.subject_requirement.is_not(None)),
-            model_batch_label=_latest_enrollment_plan_batch(app_session),
-            notes=["应用侧 fallback 口径按山东招生计划中带选科要求的记录数估算。"],
+            model=SubjectRequirementDict,
+            model_filter=SubjectRequirementDict.province == "山东",
+            model_batch_label="Stage B 选科字典",
+            notes=["若原始 gaokao_subject_requirement_dict 未接入，当前优先回退到应用侧选科要求字典。"],
         ),
         _build_shandong_section_from_raw_or_model(
             app_session,

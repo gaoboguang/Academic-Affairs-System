@@ -315,6 +315,15 @@ export interface RecommendationResult {
   reference_rank?: number | null;
   student_rank?: number | null;
   score_basis: string;
+  reference_scope?: string | null;
+  reference_years_json: number[];
+  reference_record_count: number;
+  reference_source_notes_json: string[];
+  fallback_priority_score?: number | null;
+  fallback_priority_label?: string | null;
+  fallback_priority_notes_json?: string[] | null;
+  fallback_category_label?: string | null;
+  fallback_review_notes_json?: string[] | null;
   ratio?: number | null;
   career_match_score?: number | null;
   career_match_strength?: string | null;
@@ -358,6 +367,7 @@ export interface AdmissionFiltersState {
   year?: number;
   province: string;
   college_id?: number;
+  student_type: string;
 }
 
 export interface EnrollmentPlanFiltersState {
@@ -365,6 +375,7 @@ export interface EnrollmentPlanFiltersState {
   province: string;
   batch: string;
   college_id?: number;
+  student_type: string;
   keyword: string;
 }
 
@@ -433,6 +444,95 @@ export interface ProvinceVolunteerRulePayload {
 }
 
 export interface ProvinceVolunteerRuleBootstrapResponse {
+  year: number;
+  total_count: number;
+  created_count: number;
+  skipped_count: number;
+}
+
+export interface ProvinceScoreTransformRule {
+  id: number;
+  province: string;
+  year: number;
+  exam_mode: string;
+  subject_code?: string | null;
+  subject_name: string;
+  score_mode: string;
+  sort_order?: number | null;
+  grade_table_json: Array<Record<string, unknown>>;
+  formula_json: Record<string, unknown>;
+  source_note?: string | null;
+  note?: string | null;
+  is_active: boolean;
+}
+
+export interface ProvinceScoreTransformRuleFiltersState {
+  year?: number;
+  province: string;
+  exam_mode: string;
+  subject_name: string;
+}
+
+export interface ProvinceScoreTransformRuleBootstrapResponse {
+  year: number;
+  total_count: number;
+  created_count: number;
+  skipped_count: number;
+}
+
+export interface SubjectRequirementDict {
+  id: number;
+  province: string;
+  year: number;
+  exam_mode: string;
+  requirement_code: string;
+  requirement_text: string;
+  match_mode: string;
+  sort_order?: number | null;
+  normalized_subjects_json: string[];
+  source_note?: string | null;
+  note?: string | null;
+  is_active: boolean;
+}
+
+export interface SubjectRequirementDictFiltersState {
+  year?: number;
+  province: string;
+  exam_mode: string;
+  requirement_code: string;
+}
+
+export interface SubjectRequirementDictBootstrapResponse {
+  year: number;
+  total_count: number;
+  created_count: number;
+  skipped_count: number;
+}
+
+export interface SpecialTypeRule {
+  id: number;
+  province: string;
+  year: number;
+  student_type: string;
+  category_code: string;
+  category_label: string;
+  sort_order?: number | null;
+  match_keywords_json: string[];
+  review_notes_json: string[];
+  priority_bonus: number;
+  priority_notes_json: string[];
+  source_note?: string | null;
+  note?: string | null;
+  is_active: boolean;
+}
+
+export interface SpecialTypeRuleFiltersState {
+  year?: number;
+  province: string;
+  student_type: string;
+}
+
+export interface SpecialTypeRuleBootstrapResponse {
   year: number;
   total_count: number;
   created_count: number;
@@ -508,6 +608,11 @@ export interface VolunteerWorkbenchCandidate {
   reference_years_json: number[];
   reference_record_count: number;
   reference_source_notes_json: string[];
+  fallback_priority_score?: number | null;
+  fallback_priority_label?: string | null;
+  fallback_priority_notes_json?: string[] | null;
+  fallback_category_label?: string | null;
+  fallback_review_notes_json?: string[] | null;
   ratio?: number | null;
   career_match_score?: number | null;
   career_match_strength?: string | null;
@@ -521,6 +626,18 @@ export interface VolunteerWorkbenchCandidate {
   matched_rule_batch?: string | null;
   matched_rule_candidate_type?: string | null;
   matched_rule_is_baseline: boolean;
+  chapter_url?: string | null;
+  chapter_review_status?: string | null;
+  chapter_retrieval_status?: string | null;
+  chapter_campus_note?: string | null;
+  chapter_other_risk_note?: string | null;
+  chapter_language_requirement?: string | null;
+  chapter_single_subject_requirement?: string | null;
+  chapter_gender_requirement?: string | null;
+  chapter_height_requirement?: string | null;
+  chapter_vision_requirement?: string | null;
+  chapter_color_vision_requirement?: string | null;
+  chapter_physical_exam_requirement?: string | null;
   match_tags_json: string[];
   match_notes_json: string[];
   reason_text: string;

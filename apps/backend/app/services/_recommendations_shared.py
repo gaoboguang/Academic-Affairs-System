@@ -16,8 +16,11 @@ from app.models import (
     EnrollmentPlan,
     Major,
     MajorEmploymentMapping,
+    ProvinceScoreTransformRule,
     ProvinceVolunteerRule,
     RecommendationResult,
+    SpecialTypeRule,
+    SubjectRequirementDict,
 )
 from app.schemas.recommendation import (
     AdmissionRecordRead,
@@ -26,11 +29,14 @@ from app.schemas.recommendation import (
     EnrollmentPlanRead,
     MajorRead,
     MajorEmploymentMappingRead,
+    ProvinceScoreTransformRuleRead,
     ProvinceVolunteerRuleRead,
     RecommendationCollegeOption,
     RecommendationResultRead,
     RecommendationSettingsRead,
     RecommendationStrategyPresetRead,
+    SpecialTypeRuleRead,
+    SubjectRequirementDictRead,
 )
 
 
@@ -199,6 +205,60 @@ def _serialize_province_volunteer_rule(item: ProvinceVolunteerRule) -> ProvinceV
     )
 
 
+def _serialize_province_score_transform_rule(item: ProvinceScoreTransformRule) -> ProvinceScoreTransformRuleRead:
+    return ProvinceScoreTransformRuleRead(
+        id=item.id,
+        province=item.province,
+        year=item.year,
+        exam_mode=item.exam_mode,
+        subject_code=item.subject_code,
+        subject_name=item.subject_name,
+        score_mode=item.score_mode,
+        sort_order=item.sort_order,
+        grade_table_json=item.grade_table_json or [],
+        formula_json=item.formula_json or {},
+        source_note=item.source_note,
+        note=item.note,
+        is_active=item.is_active,
+    )
+
+
+def _serialize_subject_requirement_dict(item: SubjectRequirementDict) -> SubjectRequirementDictRead:
+    return SubjectRequirementDictRead(
+        id=item.id,
+        province=item.province,
+        year=item.year,
+        exam_mode=item.exam_mode,
+        requirement_code=item.requirement_code,
+        requirement_text=item.requirement_text,
+        match_mode=item.match_mode,
+        sort_order=item.sort_order,
+        normalized_subjects_json=item.normalized_subjects_json or [],
+        source_note=item.source_note,
+        note=item.note,
+        is_active=item.is_active,
+    )
+
+
+def _serialize_special_type_rule(item: SpecialTypeRule) -> SpecialTypeRuleRead:
+    return SpecialTypeRuleRead(
+        id=item.id,
+        province=item.province,
+        year=item.year,
+        student_type=item.student_type,
+        category_code=item.category_code,
+        category_label=item.category_label,
+        sort_order=item.sort_order,
+        match_keywords_json=item.match_keywords_json or [],
+        review_notes_json=item.review_notes_json or [],
+        priority_bonus=item.priority_bonus,
+        priority_notes_json=item.priority_notes_json or [],
+        source_note=item.source_note,
+        note=item.note,
+        is_active=item.is_active,
+    )
+
+
 def _serialize_result(item: RecommendationResult) -> RecommendationResultRead:
     snapshot = item.snapshot_json or {}
     return RecommendationResultRead(
@@ -216,6 +276,15 @@ def _serialize_result(item: RecommendationResult) -> RecommendationResultRead:
         reference_rank=item.reference_rank,
         student_rank=item.student_rank,
         score_basis=item.score_basis,
+        reference_scope=_read_optional_string(snapshot.get("reference_scope")),
+        reference_years_json=_read_int_list(snapshot.get("reference_years")),
+        reference_record_count=_read_optional_int(snapshot.get("reference_record_count")) or 0,
+        reference_source_notes_json=_read_string_list(snapshot.get("reference_source_notes_json")),
+        fallback_priority_score=_read_optional_float(snapshot.get("fallback_priority_score")),
+        fallback_priority_label=_read_optional_string(snapshot.get("fallback_priority_label")),
+        fallback_priority_notes_json=_read_string_list(snapshot.get("fallback_priority_notes_json")),
+        fallback_category_label=_read_optional_string(snapshot.get("fallback_category_label")),
+        fallback_review_notes_json=_read_string_list(snapshot.get("fallback_review_notes_json")),
         ratio=item.ratio,
         career_match_score=_read_optional_float(snapshot.get("career_match_score")),
         career_match_strength=_read_optional_string(snapshot.get("career_match_strength")),
@@ -246,6 +315,16 @@ def _read_optional_float(value: object) -> float | None:
     return None
 
 
+def _read_optional_int(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return None
+
+
 def _read_optional_bool(value: object) -> bool | None:
     if isinstance(value, bool):
         return value
@@ -261,6 +340,17 @@ def _read_string_list(value: object) -> list[str]:
             current = item.strip()
             if current:
                 result.append(current)
+    return result
+
+
+def _read_int_list(value: object) -> list[int]:
+    if not isinstance(value, list):
+        return []
+    result: list[int] = []
+    for item in value:
+        current = _read_optional_int(item)
+        if current is not None:
+            result.append(current)
     return result
 
 
