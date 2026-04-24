@@ -5,7 +5,7 @@
 ## 优先使用的统一入口
 
 - 双击 [`../start-local-edu.command`](../start-local-edu.command)
-  macOS 下的图形化启动入口；会在仓库根目录执行 `npm run dev`，适合日常直接点开用。
+  macOS 下的图形化启动入口；会在仓库根目录执行 `npm run dev`，适合日常直接点开用。普通用户步骤见 [`../docs/mac-user-startup-guide.md`](../docs/mac-user-startup-guide.md)。
 - `npm run dev`
   同时拉起前后端开发服务，内部调用 `scripts/dev-local.cjs`。
 - `npm run clean:local`
@@ -35,7 +35,7 @@
 - [`p0_delivery_check.py`](./p0_delivery_check.py)
   执行 P0 本地交付验收：数据健康、SQLite 完整性、备份包结构、临时恢复、恢复库健康检查和恢复后应用启动。
 - [`dev-local.cjs`](./dev-local.cjs)
-  根目录统一开发启动器，负责前后端一起启动和端口预检。
+  根目录统一开发启动器，负责前后端一起启动和端口预检；直接调用时也会从仓库根目录启动子命令。
 - [`dev.sh`](./dev.sh)
   macOS / Linux 的一键初始化与开发脚本。
 - [`dev.ps1`](./dev.ps1)
@@ -58,6 +58,7 @@
 - 需要排查 `npm run dev` 的行为时，再直接看 `dev-local.cjs`。
 - 需要只处理后端某个动作时，再看 `backend-cli.cjs`。
 - 需要跨平台初始化细节时，再看 `dev.sh` / `dev.ps1`。
+- 需要给下一位开发窗口交接启动和验证步骤时，看 `docs/mac-developer-checklist.md`。
 
 ## 不要把这些当源码主线
 

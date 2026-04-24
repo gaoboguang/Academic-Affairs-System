@@ -3,7 +3,9 @@
 const { spawn } = require("node:child_process");
 const http = require("node:http");
 const net = require("node:net");
+const path = require("node:path");
 
+const rootDir = path.resolve(__dirname, "..");
 const isWindows = process.platform === "win32";
 const npmCommand = isWindows ? "npm.cmd" : "npm";
 const childProcesses = [];
@@ -42,6 +44,7 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
 
 function spawnNamedProcess(name, args) {
   const child = spawn(npmCommand, args, {
+    cwd: rootDir,
     stdio: "inherit",
     env: process.env,
   });

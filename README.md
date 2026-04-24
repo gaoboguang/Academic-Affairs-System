@@ -6,10 +6,14 @@
 
 - 第一次接手仓库：
   先看 [`AGENTS.md`](./AGENTS.md)、[`docs/local_edu_tool_dev_spec.md`](./docs/local_edu_tool_dev_spec.md)、[`memory-bank/active-context.md`](./memory-bank/active-context.md)、[`memory-bank/handoff.md`](./memory-bank/handoff.md)
+- 按 Codex App 多窗口继续开发：
+  先看 [`docs/repo-audit.md`](./docs/repo-audit.md)、[`docs/mac-dev-setup.md`](./docs/mac-dev-setup.md)、[`docs/development-roadmap.md`](./docs/development-roadmap.md)
 - 想先搞清楚顶层目录和文档入口：
   看 [`docs/README.md`](./docs/README.md)、[`scripts/README.md`](./scripts/README.md)、[`handoffs/README.md`](./handoffs/README.md)
 - 只想知道怎么运行和验证：
   直接用 `npm run dev`、`npm run clean:local`、`npm run clean:slim`、`npm run check`、`npm run check:all`
+- 只想在 Mac 上双击启动：
+  看 [`docs/mac-user-startup-guide.md`](./docs/mac-user-startup-guide.md)，开发窗口看 [`docs/mac-developer-checklist.md`](./docs/mac-developer-checklist.md)
 - 只想做 P0 交付验收：
   直接用 `npm run backend:p0-check`，步骤说明见 [`docs/p0_delivery_runbook_2026-04-24.md`](./docs/p0_delivery_runbook_2026-04-24.md)
 - 只想看测试布局：
@@ -104,6 +108,8 @@ npm run dev
 如果你在 macOS 上更希望直接双击启动，也可以在仓库根目录双击：
 
 [`start-local-edu.command`](./start-local-edu.command)
+
+普通用户步骤见 [`docs/mac-user-startup-guide.md`](./docs/mac-user-startup-guide.md)，开发检查清单见 [`docs/mac-developer-checklist.md`](./docs/mac-developer-checklist.md)。
 
 它会在根目录同时启动前后端开发服务，默认地址仍是：
 

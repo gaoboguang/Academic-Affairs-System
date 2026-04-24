@@ -63,11 +63,11 @@ describe("recommendation helpers", () => {
 
   it("creates province volunteer rules with planning defaults", () => {
     expect(createProvinceVolunteerRuleForm()).toMatchObject({
-      province: "广东",
-      exam_mode: "3+1+2",
+      province: "山东",
+      exam_mode: "3+3",
       batch: "",
-      volunteer_limit: 45,
-      volunteer_unit_type: "院校专业组",
+      volunteer_limit: 96,
+      volunteer_unit_type: "专业",
       is_parallel: true,
       allow_adjustment: true,
       special_rules_json: [],

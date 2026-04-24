@@ -8,6 +8,31 @@
 
 ## 2026-04-23 新增
 
+- 2026-04-24 已完成 Codex App 窗口 0 仓库审计与总控规划：
+  - 新增 `docs/repo-audit.md`，覆盖真实技术栈、目录结构、功能状态、启动/数据健康状态、主要缺口、推荐开发顺序和多窗口并行边界
+  - 新增 `docs/mac-dev-setup.md`，覆盖 Mac 从零安装、后端虚拟环境、`.env`、迁移、启动、测试、构建、桌面包和常见问题
+  - 新增 `docs/development-roadmap.md`，按窗口 0-10 列出任务、真实文件、并行性、验收标准和公共文件保护清单
+  - `AGENTS.md` 与 `.rulesync/rules/overview.md` 已补当前技术栈、推荐命令、数据库安全、多窗口注意事项和中文汇报格式
+  - `README.md` 与 `docs/README.md` 已把窗口 0 三份文档加入优先阅读路径
+  - `.env.example` 已改为相对路径模板，避免继续保留个人绝对路径
+  - 本轮验证：`git diff --check` 通过；`npm run backend:test -- apps/backend/tests/test_data_health.py apps/backend/tests/test_gaokao_api.py -q` 为 `15 passed`；`npm run frontend:build` 通过；`npm run backend:p0-check -- --json` 为 `ok: true`，备份包 `data/backups/p0_delivery_backup_20260424_153049.zip`；`npm run dev` 确认复用前后端服务，`5173/8000` 均返回 HTTP `200`
+
+- 2026-04-24 已按 Codex App v3 窗口 0 要求补齐 dated 审计交付物：
+  - 新增 `docs/repo-audit-2026-04-24.md`，补齐 v3 指定的仓库审计与状态锁定文件
+  - 新增 `docs/current-development-map-2026-04-24.md`，补齐 v3 指定的当前开发地图文件
+  - `docs/README.md` 已把这两份 dated 文档加入优先阅读路径
+  - 本次确认 `AGENTS.md` 来源为 `rulesync.jsonc` + `.rulesync/rules/overview.md`，没有继续直接改生成物 `AGENTS.md`
+  - 本轮发现前端 helper 测试仍期待旧的广东默认规则，已把 `apps/frontend/tests/recommendations-helpers.test.ts` 调整为当前山东 `3+3`、96 个专业志愿默认值
+  - 本轮验证：`npm run backend:test` 为 `66 passed`；`npm run frontend:lint` 通过；`npm run frontend:test` 为 `20 passed / 114 passed`；`npm run frontend:build` 通过；`npm run backend:data-health` 通过且 P0 缺口仍为 `6`；`npm run backend:p0-check -- --json` 为 `ok: true`，备份包 `data/backups/p0_delivery_backup_20260424_155211.zip`；`git diff --check` 通过
+
+- 2026-04-24 已完成 Codex App 窗口 1 Mac 启动体验收口：
+  - `start-local-edu.command` 改为面向普通用户的中文提示，启动失败会给出 Node/npm、前端依赖、后端 `.venv`、端口占用和手工启动排查路径
+  - `scripts/dev-local.cjs` 直接调用时固定从仓库根目录启动子命令；`scripts/dev.sh` 已设为可执行，和 README 中 `./scripts/dev.sh` 用法一致
+  - 新增 `docs/mac-user-startup-guide.md`，面向非程序员说明首次准备、双击启动、命令启动、查看状态、关闭服务和常见失败
+  - 新增 `docs/mac-developer-checklist.md`，面向 Codex / 开发窗口说明开发前检查、改动后验证、改库前备份和桌面打包前检查
+  - README、`docs/README.md`、`scripts/README.md`、`docs/mac-dev-setup.md` 已加入两份新 Mac 文档入口
+  - 本轮验证：脚本帮助输出通过；`npm run backend:data-health -- --json` 通过且仍显示 P0 缺口 `6` 条；`npm run check` 通过，含后端 `66 passed`、前端 lint、前端 `20 passed / 114 passed` 和前端构建；`git diff --check` 通过
+
 - 2026-04-24 已完成交付计划 P0 第一段：
   - 新增 `apps/backend/app/utils/data_health.py` 与 `scripts/check_data_health.py`
   - 根目录新增统一入口 `npm run backend:data-health`

@@ -205,6 +205,23 @@
 
 ## 当前重点
 
+- 2026-04-24 已执行 Codex App 窗口 0 仓库审计与总控规划：
+  - 新增 `docs/repo-audit.md`，记录当前真实技术栈、目录结构、功能状态、启动/数据健康状态、主要缺口和后续开发顺序
+  - 新增 `docs/mac-dev-setup.md`，沉淀 Mac 主开发环境、依赖安装、`.env`、迁移、启动、测试、构建和常见问题
+  - 新增 `docs/development-roadmap.md`，按多窗口开发列出任务、真实文件、并行边界、验收标准和公共文件保护清单
+  - `AGENTS.md` 与 `.rulesync/rules/overview.md` 已补当前技术栈、推荐命令、数据库安全、多窗口注意事项和中文汇报格式
+  - `.env.example` 已从个人绝对路径改为仓库相对路径模板，后续窗口 1 可继续复核从零 Mac 启动
+- 2026-04-24 已按 Codex App v3 窗口 0 指定文件名补齐 dated 状态锁定：
+  - 新增 `docs/repo-audit-2026-04-24.md`，基于已有窗口 0 审计结果和当前仓库抽查，补齐 v3 要求的技术栈、目录、后端/前端/桌面/迁移结构、已完成/半完成模块、风险点、rulesync 来源和后续 5 个方向
+  - 新增 `docs/current-development-map-2026-04-24.md`，按学生/教师/基础数据、考试/成绩/分析/报表、课表/工作量、成长档案/评教/量化、推荐/高考/数据健康、Mac 启动/测试/打包整理当前业务模块地图
+  - 这次是对另一个窗口 0 已完成成果的补缺，不重复改 `AGENTS.md` 或重写既有 `repo-audit.md` / `mac-dev-setup.md` / `development-roadmap.md`
+  - 本轮验证：`npm run backend:test` 为 `66 passed`；`npm run frontend:lint` 通过；`npm run frontend:test` 修正一处山东默认规则测试期望后为 `20 passed / 114 passed`；`npm run frontend:build` 通过；`npm run backend:data-health` 显示 P0 缺口仍为 `6`；`npm run backend:p0-check -- --json` 为 `ok: true`，备份包 `data/backups/p0_delivery_backup_20260424_155211.zip`；`git diff --check` 通过
+- 2026-04-24 已完成 Codex App 窗口 1：Mac 环境、启动体验与桌面启动收口：
+  - `start-local-edu.command` 已补普通用户中文排障提示，启动失败时会指向 `npm install`、`.venv`、端口占用和 Mac 用户指南
+  - `scripts/dev-local.cjs` 直接调用时也会从仓库根目录启动子命令；`scripts/dev.sh` 已修正为可执行
+  - 新增 `docs/mac-user-startup-guide.md` 与 `docs/mac-developer-checklist.md`，并同步 README、docs 索引、scripts 索引和 `mac-dev-setup.md`
+  - 本轮验证：`node scripts/dev-local.cjs --help`、`node scripts/backend-cli.cjs --help`、`npm run backend:data-health -- --json`、`npm run check` 和 `git diff --check` 均通过；当前数据健康仍为 P0 缺口 `6` 条，属于后续数据线范围
+
 - 2026-04-24 已新增交付版后续开发计划：
   - `docs/development_plan_to_delivery_2026-04-24.md` 是当前从“继续补数据库/高考志愿主线”推进到“可交付投入使用”的计划入口
   - 当前文档明确山东考生为唯一近期生源地范围，重点是全国高校在山东招生数据、数据质量看板、普通类推荐可用、特殊类型安全初筛、备份恢复和 Windows 交付验证

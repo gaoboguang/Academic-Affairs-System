@@ -25,9 +25,43 @@ globs: ["**/*"]
 
 - 前端位于 `apps/frontend`。
 - 后端位于 `apps/backend`。
+- 桌面壳位于 `apps/desktop`。
 - 本地运行数据位于 `data/`。
 - 文档位于 `docs/`。
-- 测试当前主要位于 `apps/backend/tests`。
+- 后端测试位于 `apps/backend/tests`。
+- 前端单测位于 `apps/frontend/tests`。
+- 跨端 E2E 位于 `tests/e2e`。
+
+## 当前技术栈
+
+- 根目录：npm workspace。
+- 前端：Vue 3、TypeScript、Vite、Element Plus、Pinia、Vue Router、ECharts。
+- 后端：Python 3.11+、FastAPI、SQLAlchemy 2.x、Pydantic 2、Alembic、pandas、openpyxl。
+- 数据库：SQLite，主库默认 `data/app.db`。
+- 测试：pytest、ESLint、Vitest、Playwright。
+- 桌面：Electron + 后端独立二进制打包链。
+
+## 推荐命令
+
+- 一键开发启动：`npm run dev`
+- 后端迁移：`npm run backend:migrate`
+- 后端开发服务：`npm run backend:dev`
+- 后端测试：`npm run backend:test`
+- 高考数据健康检查：`npm run backend:data-health`
+- P0 交付验收：`npm run backend:p0-check`
+- 前端静态检查：`npm run frontend:lint`
+- 前端单测：`npm run frontend:test`
+- 前端构建：`npm run frontend:build`
+- 跨端 E2E：`npm run check:e2e`
+- 统一检查：`npm run check`、`npm run check:all`
+
+## 数据库与数据安全
+
+- 不要在没有 Alembic 迁移的情况下直接修改应用表结构。
+- `data/app.db` 是当前应用主库；高考 `gaokao_*` raw 表已并入主库。
+- `data/local_edu_tool/local_edu.sqlite3` 只作为 handoff 同步来源和 fallback。
+- 会改主库的命令包括 `backend:merge-handoff`、`backend:materialize-gaokao`、`backend:bootstrap-special-types`；执行前后必须保留备份和健康摘要。
+- 高考特殊类型在缺少专门录取结果时只能做初筛，不得把省控线或计划清单包装成录取把握。
 
 ## 强制约束
 
@@ -56,6 +90,24 @@ globs: ["**/*"]
 2. 再拆一个后端超大 service，优先评教量化 service。
 3. 然后统一测试目录说明与工程入口。
 4. 避免同时大改前端、后端、测试布局和脚本系统。
+
+## 多窗口开发注意事项
+
+- 窗口 0 负责审计、路线图和公共文档；后续窗口先读 `docs/repo-audit.md`、`docs/mac-dev-setup.md`、`docs/development-roadmap.md`。
+- 不要多个窗口同时修改 `package.json`、`README.md`、`AGENTS.md`、`.rulesync/rules/overview.md`。
+- 不要多个窗口同时修改 Alembic 迁移、`apps/backend/app/models/recommendation.py` 或 `data/app.db`。
+- 推荐页、高考数据页、推荐服务和 `tests/e2e/dashboard-smoke.spec.ts` 属于高冲突区域，改动前先确认其它窗口没有同时处理。
+- 如果必须修改公共文件，在最终中文汇报中明确说明影响范围。
+
+## 修改完成后的中文汇报格式
+
+每次阶段性完成后，用中文说明：
+
+1. 改了哪些文件。
+2. 新增或修复了什么。
+3. 为什么这样做。
+4. 运行了哪些验证，结果是什么。
+5. 还剩哪些风险或下一步。
 
 ## 记忆维护规则
 
