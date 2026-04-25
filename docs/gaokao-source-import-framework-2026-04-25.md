@@ -134,6 +134,7 @@ npm run backend:gaokao-import-official -- \
 2026 已公开政策：
 
 - 山东省教育厅单招 / 综评通知：`https://edu.shandong.gov.cn/art/2025/12/22/art_107093_10344338.html`
+- 2026 年高职（专科）单独招生和综合评价招生院校计划限额：同一教育厅通知附件口径，已登记为 `single_comprehensive_plan_limit`，只用于单招 / 综评计划边界，不得当作普通类正式招生计划。
 
 ## 5. 给 B1 的接手说明
 

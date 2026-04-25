@@ -119,6 +119,33 @@ class GaokaoDataSpecialTypeRiskRead(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
+class GaokaoDataPublicationSourceRead(BaseModel):
+    id: int
+    title: str
+    url: str | None = None
+    official_org: str | None = None
+    published_at: str | None = None
+    local_file_path: str | None = None
+    file_sha256: str | None = None
+    status: str | None = None
+    note: str | None = None
+
+
+class GaokaoDataPublicationStatusRead(BaseModel):
+    key: str
+    label: str
+    category: str
+    target_year: int
+    status: str
+    status_label: str
+    record_count: int = 0
+    source_documents: list[GaokaoDataPublicationSourceRead] = Field(default_factory=list)
+    action_label: str
+    explanation: str
+    notes: list[str] = Field(default_factory=list)
+    blocks_recommendation: bool = False
+
+
 class GaokaoDataHealthRead(BaseModel):
     db_path: str
     exists: bool
@@ -130,6 +157,7 @@ class GaokaoDataHealthRead(BaseModel):
     delivery_assessment: GaokaoDataDeliveryAssessmentRead | None = None
     tables: list[GaokaoDataHealthTableRead] = Field(default_factory=list)
     coverage: list[GaokaoDataHealthCoverageRead] = Field(default_factory=list)
+    publication_status: list[GaokaoDataPublicationStatusRead] = Field(default_factory=list)
     special_type_risks: list[GaokaoDataSpecialTypeRiskRead] = Field(default_factory=list)
     audit_summary: list[GaokaoDataAuditItemRead] = Field(default_factory=list)
     gaps: list[str] = Field(default_factory=list)

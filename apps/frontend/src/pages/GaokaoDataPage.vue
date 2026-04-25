@@ -108,6 +108,57 @@
         <section class="soft-card panel-block">
           <div class="section-head">
             <div>
+              <h3>2026 数据发布状态</h3>
+              <p>把已公开、已导入、待官方发布和需人工核验的数据分开看，避免把单招/综评材料误当成普通类正式计划。</p>
+            </div>
+          </div>
+          <div class="table-shell">
+            <el-table :data="dataHealth.publication_status" stripe>
+              <el-table-column label="数据项" min-width="220">
+                <template #default="{ row }">
+                  <div class="table-strong">{{ row.label }}</div>
+                  <div class="table-muted">{{ row.category }} · {{ row.target_year }}</div>
+                </template>
+              </el-table-column>
+              <el-table-column label="状态" width="150">
+                <template #default="{ row }">
+                  <el-tag :type="statusTagType(row.status)" effect="light">{{ row.status_label }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="当前记录" width="110" prop="record_count" />
+              <el-table-column label="已登记来源" min-width="300">
+                <template #default="{ row }">
+                  <div v-if="row.source_documents.length" class="source-doc-list">
+                    <a
+                      v-for="source in row.source_documents"
+                      :key="source.id"
+                      :href="source.url || undefined"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {{ source.title }}
+                    </a>
+                  </div>
+                  <span v-else class="table-muted">暂无单独来源</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="下一步" min-width="360">
+                <template #default="{ row }">
+                  <p class="risk-explanation">{{ row.action_label }}</p>
+                  <p class="table-muted">{{ row.explanation }}</p>
+                  <ul v-if="row.notes?.length" class="audit-note-list">
+                    <li v-for="note in row.notes" :key="note">{{ note }}</li>
+                  </ul>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+          <el-empty v-if="!dataHealth.publication_status.length" description="暂无 2026 数据发布状态" />
+        </section>
+
+        <section class="soft-card panel-block">
+          <div class="section-head">
+            <div>
               <h3>核心表统计</h3>
               <p>当前把高考只读库指标和应用侧可复用表放在一起看，方便区分“原始数据已到位”和“页面已能直接使用”。</p>
             </div>
@@ -1052,6 +1103,33 @@ interface GaokaoDataSpecialTypeRisk {
   notes: string[];
 }
 
+interface GaokaoDataPublicationSource {
+  id: number;
+  title: string;
+  url?: string | null;
+  official_org?: string | null;
+  published_at?: string | null;
+  local_file_path?: string | null;
+  file_sha256?: string | null;
+  status?: string | null;
+  note?: string | null;
+}
+
+interface GaokaoDataPublicationStatus {
+  key: string;
+  label: string;
+  category: string;
+  target_year: number;
+  status: string;
+  status_label: string;
+  record_count: number;
+  source_documents: GaokaoDataPublicationSource[];
+  action_label: string;
+  explanation: string;
+  notes: string[];
+  blocks_recommendation: boolean;
+}
+
 interface GaokaoDataHealth {
   db_path: string;
   exists: boolean;
@@ -1063,6 +1141,7 @@ interface GaokaoDataHealth {
   delivery_assessment?: GaokaoDataDeliveryAssessment | null;
   tables: GaokaoDataHealthTable[];
   coverage: GaokaoDataHealthCoverage[];
+  publication_status: GaokaoDataPublicationStatus[];
   special_type_risks: GaokaoDataSpecialTypeRisk[];
   audit_summary: GaokaoDataAuditItem[];
   gaps: string[];
@@ -1245,6 +1324,7 @@ const dataHealth = reactive<GaokaoDataHealth>({
   delivery_assessment: null,
   tables: [],
   coverage: [],
+  publication_status: [],
   special_type_risks: [],
   audit_summary: [],
   gaps: [],
@@ -1482,6 +1562,11 @@ function formatMonitorStatus(value?: string | null): string {
     gap: "需关注",
     missing: "缺失",
     ready: "已接入",
+    imported: "已导入",
+    published: "已公开",
+    pending_official_release: "待官方发布",
+    not_applicable: "当前不适用",
+    manual_review_required: "需人工核验",
     partial: "部分可用",
     waiting: "待同步",
     empty: "暂无数据",
@@ -1491,9 +1576,9 @@ function formatMonitorStatus(value?: string | null): string {
 }
 
 function statusTagType(value?: string | null): "success" | "info" | "warning" | "danger" | undefined {
-  if (["ok", "ready", "success"].includes(value ?? "")) return "success";
-  if (["gap", "partial", "processing", "no_year_column"].includes(value ?? "")) return "warning";
-  if (["waiting", "frozen", "empty"].includes(value ?? "")) return "info";
+  if (["ok", "ready", "success", "imported"].includes(value ?? "")) return "success";
+  if (["gap", "partial", "processing", "no_year_column", "published", "manual_review_required"].includes(value ?? "")) return "warning";
+  if (["waiting", "frozen", "empty", "pending_official_release", "not_applicable"].includes(value ?? "")) return "info";
   if (["failed", "missing"].includes(value ?? "")) return "danger";
   return undefined;
 }
@@ -1983,6 +2068,21 @@ onMounted(async () => {
   margin: 0 0 8px;
   color: #526a7f;
   line-height: 1.55;
+}
+
+.source-doc-list {
+  display: grid;
+  gap: 6px;
+}
+
+.source-doc-list a {
+  color: #2b6cb0;
+  line-height: 1.45;
+  text-decoration: none;
+}
+
+.source-doc-list a:hover {
+  text-decoration: underline;
 }
 
 .coverage-detail-table {

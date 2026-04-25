@@ -71,7 +71,7 @@ def test_register_gaokao_local_file_updates_document_and_creates_pending_run(app
         saved_run = session.get(GaokaoImportRun, run_id)
         assert saved_run is not None
         assert saved_run.importer_name == "shandong_score_rank_segment"
-        assert "等待 B1" in (saved_run.note or "")
+        assert "等待对应解析器" in (saved_run.note or "")
 
 
 def test_register_gaokao_local_file_rejects_files_outside_import_dirs(app, test_settings, tmp_path: Path) -> None:

@@ -8,6 +8,14 @@
 
 ## 2026-04-25 新增
 
+- 已完成 v4 下一轮窗口 B2：2026 已公开招生数据监控与导入入口：
+  - 从 B1 分支接续创建 `codex/r2-b2-2026-gaokao-data-watchlist`，未发现原 B2 半成品分支；B1 官方文件仍保持未跟踪，不纳入本次代码提交范围
+  - `backend:data-health` 和 `/api/gaokao/data-health` 新增 `publication_status`，固定 2026 数据状态枚举：`published / imported / pending_official_release / not_applicable / manual_review_required`
+  - `/gaokao-data` 的“山东覆盖”页签新增“2026 数据发布状态”表，显示普通类正式招生计划待官方发布、2026 投档/录取结果当前阶段不适用、一分一段和省控线待发布、选科要求已导入、单招/综评政策与计划限额已公开待结构化导入
+  - `gaokao_source_document` 默认来源新增 `single_comprehensive_plan_limit`，用于登记山东省教育厅 2026 单招/综评计划限额附件；已运行 `npm run backend:gaokao-sources -- --json`，真实主库新增 source document #13
+  - 新增 `docs/gaokao-2026-data-watchlist.md`，明确 2026 当前可做、不能做、人工导入入口和推荐页提示口径
+  - 验证：`npm run backend:test -- apps/backend/tests/test_data_health.py apps/backend/tests/test_gaokao_import_framework.py -q` 为 `9 passed`；`npm run frontend:build` 通过；`npm run backend:data-health -- --json` 输出 `publication_status`；`git diff --check` 通过
+
 - 已完成 v4 下一轮窗口 B1：2023-2025 山东普通类核心数据导入：
   - 新增 B1 官方解析服务 `apps/backend/app/services/gaokao_official_importers.py`
   - 新增根命令 `npm run backend:gaokao-import-shandong-core`，可在官方文件已放入 `data/imports/gaokao/official/{year}/` 后离线导入；`backend:gaokao-import-official` 也支持单文件 `--parse` 与批量 `--b1-shandong-core`

@@ -245,6 +245,18 @@ DEFAULT_SOURCE_DOCUMENT_SEEDS = (
         parser_name="shandong_policy_reference",
         note="仅用于 2026 单招/综评政策登记；不得当作普通类正式招生计划。",
     ),
+    GaokaoSourceDocumentSeed(
+        province="山东",
+        year=2026,
+        source_type="single_comprehensive_plan_limit",
+        title="2026年高职（专科）单独招生和综合评价招生院校计划限额",
+        url="https://edu.shandong.gov.cn/art/2025/12/22/art_107093_10344338.html",
+        official_org="山东省教育厅",
+        source_registry_code="sdedu",
+        published_at=date(2025, 12, 22),
+        parser_name="shandong_single_comprehensive_plan_limit",
+        note="教育厅通知附件口径；用于单招/综评计划限额登记或人工导入，不得当作 2026 夏季高考普通类正式计划。",
+    ),
 )
 
 
@@ -439,7 +451,7 @@ def register_gaokao_local_file(
         created_rows=0,
         updated_rows=0,
         raw_snapshot_path=document.local_file_path,
-        note="A1 已登记本地官方文件，等待 B1 具体解析器写入业务数据。",
+        note="已登记本地官方文件，等待对应解析器写入业务数据。",
     )
     session.add(run)
     session.flush()

@@ -96,6 +96,7 @@ def build_data_health_report(
             ),
             "tables": [],
             "coverage": [],
+            "publication_status": [],
             "special_type_risks": [],
             "audit_summary": [],
             "gaps": [f"数据库文件不存在：{db_path}"],
@@ -110,6 +111,7 @@ def build_data_health_report(
         gaps = _build_gap_summary(conn, schema, coverage, expected_years=expected_years)
         audit_summary = _build_audit_summary(conn, schema, coverage, expected_years=expected_years)
         special_type_risks = _build_special_type_risks(conn, schema, province=province)
+        publication_status = _build_2026_publication_status(conn, schema, province=province)
         schema_version = _read_schema_version(conn, schema)
 
     return {
@@ -128,6 +130,7 @@ def build_data_health_report(
         ),
         "tables": table_stats,
         "coverage": coverage,
+        "publication_status": publication_status,
         "special_type_risks": special_type_risks,
         "audit_summary": audit_summary,
         "gaps": gaps,
@@ -170,6 +173,18 @@ def format_data_health_report(report: dict[str, Any]) -> str:
                 f"计划 {item.get('plan_count', 0)}；录取 {item.get('admission_count', 0)}；"
                 f"省控线 {item.get('score_line_count', 0)}；规则 {item.get('volunteer_rule_count', 0)}"
                 f"/{item.get('special_rule_count', 0)}{fallback_text}"
+            )
+            for note in item.get("notes") or []:
+                lines.append(f"  - {note}")
+
+    publication_status = report.get("publication_status") or []
+    if publication_status:
+        lines.append("")
+        lines.append("2026 数据发布状态:")
+        for item in publication_status:
+            lines.append(
+                f"- {item['label']}: {item.get('status_label') or item.get('status')}；"
+                f"记录 {item.get('record_count', 0)}；{item.get('action_label') or ''}"
             )
             for note in item.get("notes") or []:
                 lines.append(f"  - {note}")
@@ -236,6 +251,11 @@ def _field_explanations() -> list[dict[str, str]]:
             "explanation": "把普通类、春考、艺术、体育、单招、综评分开判断，避免把初筛当成完整录取把握。",
         },
         {
+            "field": "publication_status",
+            "label": "2026 数据发布状态",
+            "explanation": "把已公开、已导入、待官方发布和需人工复核的数据分开，避免把未公开的 2026 普通类计划当成完整数据。",
+        },
+        {
             "field": "audit_summary",
             "label": "导入审计摘要",
             "explanation": "用于补数据前后对照当前记录数、疑似重复、冲突和待人工复核数量。",
@@ -277,6 +297,325 @@ def _build_table_stats(conn: sqlite3.Connection, schema: "_Schema") -> list[dict
             }
         )
     return stats
+
+
+def _build_2026_publication_status(
+    conn: sqlite3.Connection,
+    schema: "_Schema",
+    *,
+    province: str,
+) -> list[dict[str, Any]]:
+    target_year = 2026
+    general_plan_count = _count_year_type_records(
+        conn,
+        schema,
+        "enrollment_plan",
+        target_year,
+        province=province,
+        type_column="student_type",
+        normalized_type="general",
+    ) + _count_year_type_records(
+        conn,
+        schema,
+        "gaokao_admission_plan",
+        target_year,
+        province=province,
+        type_column="candidate_type",
+        normalized_type="general",
+    )
+    general_admission_count = _count_year_type_records(
+        conn,
+        schema,
+        "admission_record",
+        target_year,
+        province=province,
+        type_column="student_type",
+        normalized_type="general",
+    ) + _count_year_type_records(
+        conn,
+        schema,
+        "gaokao_admission_result",
+        target_year,
+        province=province,
+        type_column="candidate_type",
+        normalized_type="general",
+    )
+    rank_segment_count = _count_year_records(conn, schema, "score_rank_segment", target_year, province=province)
+    score_line_count = _count_year_records(conn, schema, "gaokao_score_line", target_year, province=province)
+    subject_requirement_count = _count_year_records(
+        conn,
+        schema,
+        "subject_requirement_dict",
+        target_year,
+        province=province,
+    )
+    policy_reference_count = _count_year_records(conn, schema, "gaokao_policy_reference", target_year, province=province)
+
+    subject_docs = _source_documents(conn, schema, year=target_year, source_type="subject_requirement", province=province)
+    policy_docs = _source_documents(conn, schema, year=target_year, source_type="policy", province=province)
+    plan_limit_docs = _source_documents(
+        conn,
+        schema,
+        year=target_year,
+        source_type="single_comprehensive_plan_limit",
+        province=province,
+    )
+
+    items = [
+        _publication_item(
+            key="general_admission_plan",
+            label="普通类正式招生计划",
+            category="普通类夏季高考",
+            status="imported" if general_plan_count else "pending_official_release",
+            record_count=general_plan_count,
+            source_documents=[],
+            action_label="待山东省教育招生考试院发布后再导入" if not general_plan_count else "已看到 2026 普通类计划记录，仍需核验完整性",
+            explanation="2026 夏季高考普通类正式招生计划是推荐前必须单独确认的数据，不能用单招/综评计划代替。",
+            notes=[
+                "当前推荐可先使用 2023-2025 历史投档数据和 2025/2026 适用选科要求。",
+                "正式填报前必须以山东省教育招生考试院最终发布的普通类招生计划为准。",
+            ],
+            blocks_recommendation=False,
+        ),
+        _publication_item(
+            key="general_admission_result",
+            label="普通类投档/录取结果",
+            category="普通类夏季高考",
+            status="imported" if general_admission_count else "not_applicable",
+            record_count=general_admission_count,
+            source_documents=[],
+            action_label="录取投档完成后才会产生，当前不能要求导入",
+            explanation="2026 投档结果发生在录取阶段之后，填报前不可用；推荐只能参考历史年份。",
+            notes=["不得伪造 2026 投档分、最低位次或录取结果。"],
+            blocks_recommendation=False,
+        ),
+        _publication_item(
+            key="score_rank_segment",
+            label="一分一段表",
+            category="成绩换算",
+            status="imported" if rank_segment_count else "pending_official_release",
+            record_count=rank_segment_count,
+            source_documents=[],
+            action_label="待 2026 成绩公布后导入；未发布前用最近一年时必须明示估算",
+            explanation="一分一段用于把预估分数换算为全省位次；未发布时只能按上一年临时估算。",
+            notes=["如果用 2025 一分一段换算 2026 预估位次，必须显示“按上一年一分一段估算”。"],
+            blocks_recommendation=False,
+        ),
+        _publication_item(
+            key="score_line",
+            label="各类别分数线 / 省控线",
+            category="资格线",
+            status="imported" if score_line_count else "pending_official_release",
+            record_count=score_line_count,
+            source_documents=[],
+            action_label="待 2026 分数线发布后导入；未发布前仅能参考历史资格线",
+            explanation="省控线用于判断一段线、二段线和特殊类型资格线，不能替代专业录取位次。",
+            notes=["艺术、体育等特殊类型在缺专门录取结果时也只能做资格线初筛。"],
+            blocks_recommendation=False,
+        ),
+        _publication_item(
+            key="subject_requirement",
+            label="2025/2026 适用选科要求",
+            category="选科要求",
+            status="imported" if subject_requirement_count else _status_from_source_documents(subject_docs, fallback="published"),
+            record_count=subject_requirement_count,
+            source_documents=subject_docs,
+            action_label="推荐时必须校验选科；未满足选科要求的专业不能进入冲稳保",
+            explanation="山东 2025/2026 推荐需要使用适用版选科要求，作为专业候选的硬约束。",
+            notes=["如果只登记了来源但未完成结构化导入，推荐结果必须提示选科仍需人工核对。"],
+            blocks_recommendation=subject_requirement_count == 0,
+        ),
+        _publication_item(
+            key="single_comprehensive_policy",
+            label="单招 / 综评政策通知",
+            category="2026 已公开政策",
+            status="imported" if policy_reference_count else _status_from_source_documents(policy_docs, fallback="published"),
+            record_count=policy_reference_count,
+            source_documents=policy_docs,
+            action_label="已作为政策来源登记；只能解释单招/综评边界",
+            explanation="该政策通知可用于登记 2026 单招/综评时间、组织方式和计划原则。",
+            notes=["该来源不能当作 2026 夏季高考普通类正式招生计划。"],
+            blocks_recommendation=False,
+        ),
+        _publication_item(
+            key="single_comprehensive_plan_limit",
+            label="单招 / 综评院校计划限额",
+            category="2026 已公开计划边界",
+            status=_status_from_source_documents(plan_limit_docs, fallback="manual_review_required"),
+            record_count=0,
+            source_documents=plan_limit_docs,
+            action_label="官方附件需人工下载、登记并核验后再解析",
+            explanation="计划限额可作为单招/综评数据入口，但不能扩展成普通类夏季高考计划。",
+            notes=["若自动抓取受阻，使用 backend:gaokao-import-official 登记放在 data/imports/gaokao/manual/ 或 official/ 下的官方附件。"],
+            blocks_recommendation=False,
+        ),
+        _publication_item(
+            key="college_chapters",
+            label="高校单招 / 综评章程和分专业计划",
+            category="高校官网材料",
+            status="manual_review_required",
+            record_count=0,
+            source_documents=[],
+            action_label="按高校官网逐校人工核验或下载后导入",
+            explanation="高校章程、分专业计划和特殊要求分散在各校官网，当前不做不稳定批量抓取。",
+            notes=["未核验前只能作为待审阅材料，不能给出完整录取把握。"],
+            blocks_recommendation=False,
+        ),
+    ]
+    return items
+
+
+def _publication_item(
+    *,
+    key: str,
+    label: str,
+    category: str,
+    status: str,
+    record_count: int,
+    source_documents: list[dict[str, Any]],
+    action_label: str,
+    explanation: str,
+    notes: list[str],
+    blocks_recommendation: bool,
+) -> dict[str, Any]:
+    return {
+        "key": key,
+        "label": label,
+        "category": category,
+        "target_year": 2026,
+        "status": status,
+        "status_label": _publication_status_label(status),
+        "record_count": record_count,
+        "source_documents": source_documents,
+        "action_label": action_label,
+        "explanation": explanation,
+        "notes": _dedupe_text(notes),
+        "blocks_recommendation": blocks_recommendation,
+    }
+
+
+def _publication_status_label(value: str) -> str:
+    mapping = {
+        "published": "已公开，待结构化导入",
+        "imported": "已导入",
+        "pending_official_release": "待官方发布",
+        "not_applicable": "当前阶段不适用",
+        "manual_review_required": "需人工核验",
+    }
+    return mapping.get(value, value)
+
+
+def _status_from_source_documents(docs: list[dict[str, Any]], *, fallback: str) -> str:
+    if not docs:
+        return fallback
+    statuses = {str(item.get("status") or "") for item in docs}
+    if "imported" in statuses or "success" in statuses:
+        return "imported"
+    if "file_ready" in statuses:
+        return "manual_review_required"
+    return "published"
+
+
+def _count_year_records(
+    conn: sqlite3.Connection,
+    schema: "_Schema",
+    table: str,
+    year: int,
+    *,
+    province: str,
+) -> int:
+    if not schema.has_table(table):
+        return 0
+    year_column = schema.pick_column(table, "year", "gaokao_year", "target_year")
+    if not year_column:
+        return 0
+    province_column = schema.pick_column(table, "province", "student_province")
+    where, params = _province_where(schema, table, province_column, province)
+    where, params = _append_where_condition(where, params, f'"{year_column}" = ?', year)
+    return _count_with_where(conn, table, where, params)
+
+
+def _count_year_type_records(
+    conn: sqlite3.Connection,
+    schema: "_Schema",
+    table: str,
+    year: int,
+    *,
+    province: str,
+    type_column: str,
+    normalized_type: str,
+) -> int:
+    if not schema.has_table(table):
+        return 0
+    year_column = schema.pick_column(table, "year", "gaokao_year", "target_year")
+    if not year_column:
+        return 0
+    province_column = schema.pick_column(table, "province", "student_province")
+    where, params = _province_where(schema, table, province_column, province)
+    where, params = _append_where_condition(where, params, f'"{year_column}" = ?', year)
+    if type_column in schema.columns(table):
+        aliases = _student_type_aliases(normalized_type)
+        placeholders = ", ".join(["?"] * len(aliases))
+        where, params = _append_where_condition(
+            where,
+            params,
+            f'lower(COALESCE("{type_column}", "")) IN ({placeholders})',
+            None,
+        )
+        params = (*params[:-1], *(alias.lower() for alias in aliases))
+    return _count_with_where(conn, table, where, params)
+
+
+def _source_documents(
+    conn: sqlite3.Connection,
+    schema: "_Schema",
+    *,
+    year: int,
+    source_type: str,
+    province: str,
+) -> list[dict[str, Any]]:
+    table = "gaokao_source_document"
+    if not schema.has_table(table):
+        return []
+    province_column = schema.pick_column(table, "province")
+    where, params = _province_where(schema, table, province_column, province)
+    where, params = _append_where_condition(where, params, '"year" = ?', year)
+    where, params = _append_where_condition(where, params, '"source_type" = ?', source_type)
+    rows = conn.execute(
+        f'''
+        SELECT id, title, url, official_org, published_at, local_file_path, file_sha256, status, note
+        FROM "{table}"
+        {where}
+        ORDER BY id
+        ''',
+        params,
+    ).fetchall()
+    return [
+        {
+            "id": int(row["id"]),
+            "title": str(row["title"] or ""),
+            "url": row["url"],
+            "official_org": row["official_org"],
+            "published_at": row["published_at"],
+            "local_file_path": row["local_file_path"],
+            "file_sha256": row["file_sha256"],
+            "status": row["status"],
+            "note": row["note"],
+        }
+        for row in rows
+    ]
+
+
+def _student_type_aliases(value: str) -> tuple[str, ...]:
+    mapping = {
+        "general": ("general", "普通类"),
+        "spring_exam": ("spring_exam", "春季高考"),
+        "art": ("art", "艺术类"),
+        "sports": ("sports", "体育类"),
+        "independent_recruitment": ("independent_recruitment", "单独招生"),
+        "comprehensive_evaluation": ("comprehensive_evaluation", "综合评价招生"),
+    }
+    return mapping.get(value, (value,))
 
 
 def _build_coverage(
