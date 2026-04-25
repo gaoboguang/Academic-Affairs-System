@@ -8,6 +8,15 @@
 
 ## 2026-04-25 新增
 
+- 已完成 v5 第三轮窗口 D3：学生升学画像与资格材料缺口：
+  - 从 D2 成果上切出 `codex/r3-d3-student-pathway-profile`
+  - 学生详情页新增“升学画像”标签，面向老师维护山东生源地、考生类型、考试类型、选科组合、春考专业类别、艺体/体育类别、报名状态、应届/中职/社会人员身份、同等学力、路径接受偏好、体检限制和材料备注
+  - 新增 `apps/frontend/src/components/students/StudentPathwayProfilePanel.vue` 与 `apps/frontend/src/components/students/studentPathwayProfile.ts`，保存画像后自动刷新路径评估预览，并展示状态统计、材料缺口、影响路径和下一步动作
+  - `apps/backend/app/services/gaokao_pathways.py` 已把画像字段缺失和材料缺失转为中文 `material_label / gap_type / next_action`，避免前端暴露内部字段或材料键
+  - 新增 `apps/frontend/tests/student-pathway-profile.test.ts`，补画像表单归一化、材料清单、缺口聚合和状态摘要 helper 回归；`apps/backend/tests/test_gaokao_pathways.py` 已补可读缺口断言
+  - 新增 `docs/round3-student-pathway-profile.md`，并在 `docs/README.md` 加入入口
+  - 验证：`npm run backend:test -- apps/backend/tests/test_gaokao_pathways.py -q` 为 `4 passed`；`npm run backend:test -- apps/backend/tests -q` 为 `88 passed`；`npm run frontend:test -- tests/student-pathway-profile.test.ts` 为 `5 passed`；`npm run frontend:test` 为 `24 files / 138 tests passed`；`npm run frontend:build` 通过；`git diff --check` 通过
+
 - 已完成 v5 第三轮窗口 D2：山东升学路径官方规则字典与 bootstrap：
   - `apps/backend/app/services/gaokao_pathways.py` 已把山东路径 bootstrap 扩展为官方来源文档登记、路径来源追溯和 D2 规则字典装载；路径与规则都会写入 `source_document_id`
   - D2 规则覆盖普通类常规批、普通类提前批 A/B、普通类特殊类型批、春季高考本/专、高职单招、高职综评、艺术本/专、体育常规、体育单招和高水平运动队

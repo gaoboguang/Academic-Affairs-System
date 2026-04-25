@@ -152,6 +152,33 @@ def test_student_pathway_rule_engine_reports_passed_failed_and_unknown(client):
     assert failed_eval["failed_rules_json"][0]["result"] == "failed"
 
 
+def test_student_pathway_profile_missing_fields_are_readable(client):
+    client.post("/api/gaokao/pathways/bootstrap-shandong", params={"target_year": 2026})
+    student_id = _first_student_id(client)
+    profile_response = client.put(
+        f"/api/gaokao/students/{student_id}/pathway-profile",
+        json={
+            "province": "山东",
+            "candidate_type": "general",
+            "materials_json": {},
+        },
+    )
+    assert profile_response.status_code == 200
+
+    preview_response = client.post(
+        f"/api/gaokao/students/{student_id}/pathway-evaluations/preview",
+        params={"target_year": 2026, "province": "山东"},
+    )
+    assert preview_response.status_code == 200
+    general_eval = _evaluation_by_code(preview_response.json()["evaluations"], "summer_general_regular")
+    missing_items = general_eval["missing_materials_json"]
+    missing_by_key = {item["material_key"]: item for item in missing_items}
+    assert missing_by_key["has_gaokao_registration"]["material_label"] == "高考报名状态"
+    assert missing_by_key["subject_combination"]["material_label"] == "选科组合"
+    assert missing_by_key["subject_combination"]["gap_type"] == "profile_field"
+    assert "补充选科组合" in missing_by_key["subject_combination"]["next_action"]
+
+
 def test_student_pathway_evaluations_can_be_persisted(client):
     client.post("/api/gaokao/pathways/bootstrap-shandong", params={"target_year": 2026})
     student_id = _first_student_id(client)

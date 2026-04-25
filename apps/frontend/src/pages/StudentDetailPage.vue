@@ -236,6 +236,12 @@
           </section>
         </el-tab-pane>
 
+        <el-tab-pane label="升学画像">
+          <section class="soft-card detail-card">
+            <StudentPathwayProfilePanel :student-id="studentId" />
+          </section>
+        </el-tab-pane>
+
         <el-tab-pane label="附件">
           <section class="soft-card detail-card">
             <div class="section-head">
@@ -288,6 +294,7 @@ import type { UploadFile } from "element-plus";
 import { useRoute, useRouter } from "vue-router";
 
 import { apiRequest, openFile, uploadFile } from "../api/client";
+import StudentPathwayProfilePanel from "../components/students/StudentPathwayProfilePanel.vue";
 
 interface GuardianItem {
   id: number;
@@ -381,6 +388,7 @@ interface StudentProfile {
 const route = useRoute();
 const router = useRouter();
 const profile = ref<StudentProfile | null>(null);
+const studentId = computed(() => Number(route.params.studentId));
 const uploadingAttachment = ref(false);
 const attachmentDraft = reactive({
   title: "",

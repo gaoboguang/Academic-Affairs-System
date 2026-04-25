@@ -205,6 +205,13 @@
 
 ## 当前重点
 
+- 2026-04-25 已按 v5 第三轮开发文档完成窗口 D3：学生升学画像与资格材料缺口：
+  - 当前分支 `codex/r3-d3-student-pathway-profile`，从 D2 分支切出；本轮不执行 `git push`
+  - 学生详情页新增“升学画像”标签，接入 D1 的 `/api/gaokao/students/{student_id}/pathway-profile` 和路径评估预览接口，可维护山东生源地、考生类型、选科组合、春考/艺体/体育类别、报名状态、身份字段、接受偏好、体检限制和材料备注
+  - 新增 `apps/frontend/src/components/students/StudentPathwayProfilePanel.vue` 与 `studentPathwayProfile.ts`，页面会在保存画像后刷新路径初筛，集中展示状态统计、材料缺口、影响路径和下一步动作；文案继续强调资格初筛 / 人工复核，不把特殊路径包装成录取概率
+  - `apps/backend/app/services/gaokao_pathways.py` 已把画像字段缺口和材料缺口转成中文 `material_label / gap_type / next_action`，前端不需要展示内部材料键
+  - 新增 `docs/round3-student-pathway-profile.md` 并接入 `docs/README.md`，说明 D3 页面入口、字段、读法和边界
+  - 本轮验证：D3 定向后端 `4 passed`；后端全量 `88 passed`；前端新增 helper `5 passed`；前端全量 `138 passed`；`frontend:build` 通过；`git diff --check` 通过
 - 2026-04-25 已按 v5 第三轮开发文档完成窗口 D2：山东升学路径官方规则字典与 bootstrap：
   - 当前分支 `codex/r3-d2-shandong-pathway-rule-bootstrap`，从 D1 分支接续；本轮不改前端大页面、不执行 `git push`
   - `apps/backend/app/services/gaokao_pathways.py` 已把 bootstrap 扩展为“官方来源文档 + 路径字典 + D2 规则字典”：会先登记/更新 `gaokao_source_document`，再把 `source_document_id` 写入 `gaokao_pathway` 和 `gaokao_pathway_rule`

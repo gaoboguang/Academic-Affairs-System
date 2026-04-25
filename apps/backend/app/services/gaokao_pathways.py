@@ -50,6 +50,40 @@ RULE_RESULT_UNKNOWN = "unknown"
 
 _MISSING = object()
 
+PROFILE_FIELD_LABELS = {
+    "province": "生源地",
+    "candidate_type": "考生类型",
+    "exam_type": "考试类型",
+    "subject_combination": "选科组合",
+    "spring_exam_category": "春季高考专业类别",
+    "art_track": "艺术类别",
+    "sports_track": "体育类别",
+    "has_gaokao_registration": "高考报名状态",
+    "is_fresh_graduate": "普通高中应届状态",
+    "is_vocational_student": "中职学生身份",
+    "is_social_candidate": "社会人员身份",
+    "has_high_school_equivalent": "高中阶段学历或同等学力",
+    "accept_junior_college": "是否接受专科",
+    "accept_private_college": "是否接受民办院校",
+    "accept_sino_foreign": "是否接受中外合作",
+    "accept_outside_province": "是否接受省外院校",
+    "accept_early_batch": "是否接受提前批",
+    "accept_service_commitment": "是否接受定向服务约束",
+    "accept_interview_or_physical_test": "是否接受面试体检政审",
+}
+
+MATERIAL_LABELS = {
+    "gaokao_registration": "高考报名确认材料",
+    "special_type_score_line_ready": "特殊类型控制线或分数线确认",
+    "special_type_qualification": "特殊类型资格名单或测试材料",
+    "high_school_equivalent": "高中阶段毕业证书或同等学力材料",
+    "comprehensive_quality_evaluation": "综合素质评价材料",
+    "art_exam_score": "艺术统考、校考或联考成绩",
+    "sports_test_score": "体育专业测试成绩",
+    "athlete_level_certificate": "体育单招运动员技术等级证书",
+    "high_level_athlete_level": "高水平运动队运动员等级材料",
+}
+
 
 @dataclass(frozen=True)
 class PathwaySeed:
@@ -1190,15 +1224,7 @@ def _evaluate_single_pathway(
         if item.result != RULE_RESULT_PASSED
         and item.rule_type in {"soft_warning", "manual_check", "chapter_check", "time_window", "material_required"}
     ]
-    missing_materials = [
-        {
-            "rule_code": item.rule_code,
-            "material_key": item.missing_material_key or item.rule_code,
-            "message": item.message or item.rule_name,
-        }
-        for item in rule_results
-        if item.result != RULE_RESULT_PASSED and item.rule_type == "material_required"
-    ]
+    missing_materials = _build_missing_materials(rule_results)
     manual_required = [
         item
         for item in rule_results
@@ -1222,7 +1248,7 @@ def _evaluate_single_pathway(
     )
     score = _calculate_score(
         hard_failure_count=len(hard_failures),
-        unknown_count=len(hard_unknowns) + len(manual_required) + len(missing_materials),
+        unknown_count=len(hard_unknowns) + len(manual_required) + _count_required_material_gaps(rule_results),
         warning_count=len(warning_rules),
     )
     return StudentPathwayEvaluationRead(
@@ -1250,7 +1276,7 @@ def _evaluate_single_pathway(
 
 def _evaluate_rule(profile: StudentPathwayProfile, rule: GaokaoPathwayRule) -> StudentPathwayRuleEvaluationRead:
     result = _evaluate_condition(profile, rule.condition_json or {})
-    missing_key = _extract_missing_material_key(rule.condition_json or {})
+    missing_key = _extract_missing_material_key(profile, rule.condition_json or {})
     return StudentPathwayRuleEvaluationRead(
         rule_id=rule.id,
         rule_code=rule.rule_code,
@@ -1262,6 +1288,40 @@ def _evaluate_rule(profile: StudentPathwayProfile, rule: GaokaoPathwayRule) -> S
         manual_review_required=rule.manual_review_required,
         missing_material_key=missing_key if result != RULE_RESULT_PASSED else None,
     )
+
+
+def _build_missing_materials(rule_results: list[StudentPathwayRuleEvaluationRead]) -> list[dict[str, object]]:
+    items: list[dict[str, object]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in rule_results:
+        if item.result == RULE_RESULT_PASSED:
+            continue
+        if item.rule_type == "material_required":
+            gap_type = "material"
+        elif item.result == RULE_RESULT_UNKNOWN and item.rule_type in {"hard_gate", "subject_required", "category_match", "score_line"}:
+            gap_type = "profile_field"
+        else:
+            continue
+        material_key = item.missing_material_key or item.rule_code
+        dedupe_key = (item.rule_code, material_key)
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        items.append(
+            {
+                "rule_code": item.rule_code,
+                "material_key": material_key,
+                "material_label": _missing_material_label(material_key),
+                "gap_type": gap_type,
+                "message": item.message or item.rule_name,
+                "next_action": f"补充{_missing_material_label(material_key)}后重新评估该路径。",
+            }
+        )
+    return items
+
+
+def _count_required_material_gaps(rule_results: list[StudentPathwayRuleEvaluationRead]) -> int:
+    return sum(1 for item in rule_results if item.result != RULE_RESULT_PASSED and item.rule_type == "material_required")
 
 
 def _evaluate_condition(profile: StudentPathwayProfile, condition: dict[str, Any]) -> str:
@@ -1339,14 +1399,39 @@ def _has_value(value: object) -> bool:
     return True
 
 
-def _extract_missing_material_key(condition: dict[str, Any]) -> str | None:
+def _extract_missing_material_key(profile: StudentPathwayProfile, condition: dict[str, Any]) -> str | None:
     if condition.get("type") == "material_present":
         key = condition.get("key")
-        return str(key) if key else None
+        return str(key) if key and _evaluate_condition(profile, condition) != RULE_RESULT_PASSED else None
     if condition.get("type") == "field_present":
         field = condition.get("field")
-        return str(field) if field else None
+        value = _resolve_profile_value(profile, str(field or ""))
+        return str(field) if field and not _has_value(value) else None
+    if condition.get("type") in {"boolean_is", "field_equals", "field_in"}:
+        field = condition.get("field")
+        value = _resolve_profile_value(profile, str(field or ""))
+        return str(field) if field and (value is _MISSING or value is None) else None
+    if condition.get("type") == "all":
+        for item in _condition_items(condition):
+            key = _extract_missing_material_key(profile, item)
+            if key:
+                return key
+    if condition.get("type") == "any":
+        items = _condition_items(condition)
+        if any(_evaluate_condition(profile, item) == RULE_RESULT_PASSED for item in items):
+            return None
+        for item in items:
+            if _evaluate_condition(profile, item) == RULE_RESULT_UNKNOWN:
+                key = _extract_missing_material_key(profile, item)
+                if key:
+                    return key
     return None
+
+
+def _missing_material_label(key: str) -> str:
+    if key.startswith("materials."):
+        key = key.removeprefix("materials.")
+    return MATERIAL_LABELS.get(key) or PROFILE_FIELD_LABELS.get(key) or key
 
 
 def _decide_status(
