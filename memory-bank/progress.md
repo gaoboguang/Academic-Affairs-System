@@ -8,6 +8,22 @@
 
 ## 2026-04-25 新增
 
+- 已完成 v5 第三轮窗口 D8：第三轮最终集成、报告、交接：
+  - 从 D7 成果上切出 `codex/r3-d8-final-pathway-integration`
+  - `/gaokao-pathways` 已新增“打印报告 / 导出 Excel”，当前可把学生画像、路径卡、材料缺口、下一步行动、2026 数据发布状态和 P0 风险输出为“山东升学路径规划报告”
+  - 新增 `/print/gaokao-pathway-report/:storageKey` 打印页、`POST /api/reports/gaokao-pathway/export` 和 `export_gaokao_pathway_report()`；Excel 工作簿包含“汇总页 / 学生画像 / 路径建议 / 材料缺口 / 下一步行动 / 数据风险”
+  - 新增 `docs/round3-shandong-pathway-final-report.md` 与 `docs/round3-shandong-pathway-user-guide.md`，并在 `docs/README.md` 加入入口
+  - D8 数据健康结果：`schema_version=20260425_0018`、状态 `warning`、P0 缺口 6 条；`backend:p0-check` 为 `ok: true`，备份包 `data/backups/p0_delivery_backup_20260425_214113.zip`
+  - D8 验证：路径报告后端导出 `7 passed`；路径中心前端 helper `8 passed`；`frontend:build` 通过；`npm run check` 通过（后端 `94 passed`、前端 lint、前端 `25 files / 147 tests passed`、前端构建）；`npm run check:all` 通过（E2E `32 passed`）；`git diff --check` 通过
+
+- 已完成 v5 第三轮窗口 D7：艺体、体育、提前批、专项路径初筛：
+  - 从 D6 成果上切出 `codex/r3-d7-special-early-art-sports-pathways`
+  - `apps/backend/app/services/gaokao_pathways.py` 已为艺术本科/专科、体育常规批、普通类提前批 A/B、普通类特殊类型批、体育单招和高水平运动队补充材料规则、章程限制、体检政审面试、专项资格和兼报边界
+  - `apps/frontend/src/components/students/studentPathwayProfile.ts` 已新增 D7 材料清单；`apps/frontend/src/components/gaokao-pathways/pathwayCenter.ts` 已给 D7 路径卡补关键要求、边界说明和人工复核提示
+  - 真实 `data/app.db` 已运行 `npm run backend:bootstrap-pathways -- --target-year 2026 --json`，写入前备份 `data/backups/app_before_pathway_bootstrap_2026_20260425_03.db`，本次新增规则 `23` 条、跳过/更新已有规则 `62` 条
+  - 新增 `docs/round3-special-early-art-sports-pathways.md`，并在 `docs/README.md` 加入入口
+  - 验证：D7 定向后端 `6 passed`；D7 定向前端 `12 passed`；后端全量 `93 passed`；前端全量 `25 files / 146 tests passed`；`frontend:build` 通过；`git diff --check` 通过
+
 - 已完成 v5 第三轮窗口 D6：单招、综评、春考路径初筛：
   - 从 D5 成果上切出 `codex/r3-d6-vocational-spring-pathways`
   - `apps/backend/app/services/gaokao_pathways.py` 已为规则引擎新增 `material_present_when` 条件，社会人员同等学力材料现在只在确认社会人员身份时提示，不再误要求中职学生补社会人员材料

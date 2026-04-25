@@ -7,6 +7,7 @@ from openpyxl import load_workbook
 
 from app.core.bootstrap import ensure_runtime_directories
 from app.exporters.recommendations import (
+    export_gaokao_pathway_report,
     export_recommendation_summary,
     export_shandong_recommendation_report,
     export_volunteer_draft_summary,
@@ -145,6 +146,100 @@ def test_shandong_recommendation_export_splits_buckets_and_localizes_risks(test_
     source_sheet = workbook["数据来源页"]
     source_values = [source_sheet.cell(row=index, column=3).value for index in range(2, source_sheet.max_row + 1)]
     assert any("2025 山东普通类投档表" in str(item) for item in source_values)
+
+
+def test_gaokao_pathway_export_includes_cards_gaps_and_data_risks(test_settings) -> None:
+    ensure_runtime_directories(test_settings)
+    export_path = export_gaokao_pathway_report(
+        test_settings,
+        {
+            "student_id": 3,
+            "student_name": "张三",
+            "target_year": 2026,
+            "generated_at": "2026-04-25T22:00:00",
+            "data_health_summary": "可验收但有数据警告",
+            "profile_summary": [
+                {"key": "province", "label": "生源地", "value": "山东", "filled": True},
+                {"key": "subject_combination", "label": "选科组合", "value": "物理,化学,生物", "filled": True},
+            ],
+            "cards": [
+                {
+                    "code": "summer_general_regular",
+                    "name": "普通类常规批",
+                    "group": "夏季高考",
+                    "status_label": "适合关注",
+                    "depth_label": "可接完整位次推荐",
+                    "confidence_label": "中等",
+                    "score": 94,
+                    "applicable_object": "普通类学生 · 夏季高考",
+                    "volunteer_mode": "专业（专业类）+学校",
+                    "summary": "可进入山东普通类推荐工作台。",
+                    "key_requirements": ["报名：已完成山东高考报名"],
+                    "missing_materials": [],
+                    "risk_messages": ["正式填报前仍需导入 2026 官方计划"],
+                    "next_actions": ["进入山东普通类推荐工作台查看冲稳保候选。"],
+                    "source_document_id": 11,
+                },
+                {
+                    "code": "vocational_comprehensive",
+                    "name": "高职综合评价招生",
+                    "group": "高职分类招生",
+                    "status_label": "信息不足",
+                    "depth_label": "资格初筛",
+                    "confidence_label": "待补充",
+                    "score": 45,
+                    "applicable_object": "普通类学生",
+                    "volunteer_mode": "院校报名与素质测试",
+                    "summary": "只做资格初筛。",
+                    "key_requirements": ["材料：综合素质评价、素质测试或面试安排"],
+                    "missing_materials": ["综合素质评价材料"],
+                    "risk_messages": ["当前只做资格初筛和人工复核清单，不输出录取概率。"],
+                    "next_actions": ["补齐综合素质评价材料后重新评估该路径。"],
+                    "source_document_id": 12,
+                },
+            ],
+            "material_gaps": [
+                {
+                    "key": "comprehensive_quality_evaluation",
+                    "label": "综合素质评价材料",
+                    "count": 1,
+                    "pathways": ["高职综合评价招生"],
+                    "nextAction": "补齐综合素质评价材料后重新评估该路径。",
+                }
+            ],
+            "next_actions": [
+                {
+                    "key": "recommendation-entry",
+                    "title": "普通类常规批可以继续看冲稳保候选",
+                    "detail": "进入山东普通类推荐工作台后，仍要以 2026 官方计划和高校章程复核结果。",
+                    "tone": "primary",
+                }
+            ],
+            "publication_status": [
+                {
+                    "key": "summer_general_plan",
+                    "label": "2026 普通类正式招生计划",
+                    "status_label": "待官方发布",
+                    "action_label": "等待官方发布后导入",
+                    "explanation": "不能把单招综评材料当作普通类正式计划。",
+                    "blocks_recommendation": True,
+                }
+            ],
+            "p0_gaps": ["2026 普通类正式计划未导入"],
+        },
+    )
+
+    workbook = load_exported_workbook(export_path, test_settings.project_root)
+    assert workbook.sheetnames == ["汇总页", "学生画像", "路径建议", "材料缺口", "下一步行动", "数据风险"]
+    assert workbook["汇总页"].cell(row=2, column=2).value == "张三"
+    assert workbook["汇总页"].cell(row=9, column=2).value == "普通类常规批可进入位次型推荐；其他路径只做资格初筛、政策提醒和人工复核，不输出录取概率。"
+    pathway_sheet = workbook["路径建议"]
+    assert pathway_sheet.cell(row=2, column=1).value == "普通类常规批"
+    assert pathway_sheet.cell(row=3, column=4).value == "资格初筛"
+    assert "综合素质评价材料" in str(pathway_sheet.cell(row=3, column=11).value)
+    data_sheet = workbook["数据风险"]
+    assert data_sheet.cell(row=2, column=1).value == "2026 普通类正式招生计划"
+    assert data_sheet.cell(row=3, column=1).value == "P0 数据缺口"
 
 
 def test_volunteer_draft_export_includes_missing_rule_and_general_rule_summaries(test_settings) -> None:

@@ -27,6 +27,11 @@ class ShandongRecommendationReportExportPayload(BaseModel):
     result: ShandongRushStableSafeRecommendationResponse
 
 
+class GaokaoPathwayReportExportPayload(BaseModel):
+    report_name: str | None = None
+    report: dict
+
+
 class ReportExportRecordRead(ORMModel):
     id: int
     report_type: str

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildGaokaoPathwayReportName,
+  buildGaokaoPathwayReportPayload,
   buildPathwayCenterActions,
   buildPathwayCenterCards,
   buildPathwayProfileSummary,
@@ -403,5 +405,46 @@ describe("pathway center helpers", () => {
 
     expect(highlights[0].key).toBe("summer_general_plan");
     expect(highlights[1].key).toBe("single_comprehensive_policy");
+  });
+
+  it("builds pathway report payload for print and Excel export", () => {
+    const cards = buildPathwayCenterCards([buildEvaluation()], [buildPathway()]);
+    const materialGaps: AggregatedPathwayGap[] = [
+      {
+        key: "subject_combination",
+        label: "选科组合",
+        count: 1,
+        pathways: ["普通类常规批"],
+        nextAction: "补充选科组合后重新评估。",
+      },
+    ];
+    const dataHealth = buildDataHealth();
+    const payload = buildGaokaoPathwayReportPayload({
+      student: {
+        id: 3,
+        student_no: "S003",
+        name: "张三",
+        current_grade_name: "高三",
+        current_class_name: "1班",
+      },
+      targetYear: 2026,
+      profileSummary: buildPathwayProfileSummary(buildProfile()),
+      cards,
+      materialGaps,
+      nextActions: buildPathwayCenterActions(cards, materialGaps, dataHealth),
+      publicationStatus: buildPublicationStatusHighlights(dataHealth),
+      dataHealth,
+    });
+
+    expect(buildGaokaoPathwayReportName(payload)).toBe("张三2026山东升学路径规划报告");
+    expect(payload.cards[0]).toMatchObject({
+      code: "summer_general_regular",
+      depth_label: "可接完整位次推荐",
+      source_document_id: 11,
+    });
+    expect(payload.material_gaps[0].label).toBe("选科组合");
+    expect(payload.next_actions[0].key).toBe("recommendation-entry");
+    expect(payload.publication_status[0].key).toBe("summer_general_plan");
+    expect(payload.p0_gaps).toEqual(["2026 普通类正式计划未导入"]);
   });
 });

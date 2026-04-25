@@ -18,6 +18,8 @@
       <div class="action-row">
         <el-button :loading="loading" @click="reloadAll">刷新方案中心</el-button>
         <el-button @click="router.push('/gaokao-data')">查看高考数据</el-button>
+        <el-button :disabled="!cards.length" @click="openPathwayReportPrintPreview">打印报告</el-button>
+        <el-button :disabled="!cards.length" :loading="exportingReport" @click="exportPathwayReport">导出 Excel</el-button>
         <el-button type="primary" :disabled="!selectedStudentId" @click="openRecommendationWorkbench">
           山东普通类推荐
         </el-button>
@@ -270,8 +272,11 @@ import { computed, onMounted, ref } from "vue";
 import ElMessage from "element-plus/es/components/message/index";
 import { useRoute, useRouter } from "vue-router";
 
-import { apiRequest } from "../api/client";
+import { apiRequest, openFile } from "../api/client";
 import {
+  GAOKAO_PATHWAY_PRINT_STORAGE_PREFIX,
+  buildGaokaoPathwayReportName,
+  buildGaokaoPathwayReportPayload,
   buildPathwayCenterActions,
   buildPathwayCenterCards,
   buildPathwayProfileSummary,
@@ -293,6 +298,8 @@ import {
   type StudentPathwayRuleEvaluation,
 } from "../components/students/studentPathwayProfile";
 import type { ShandongRecommendationDataHealth } from "../components/recommendations/types";
+import type { ExportRecord } from "../components/recommendations/types";
+import { gaokaoPathwayPrintPreviewPath } from "../utils/print";
 import { formatUserActionError } from "../utils/userFeedback";
 
 interface StudentListResponse {
@@ -317,6 +324,7 @@ const evaluating = ref(false);
 const errorMessage = ref<string | null>(null);
 const detailDrawerVisible = ref(false);
 const selectedCard = ref<PathwayCenterCard | null>(null);
+const exportingReport = ref(false);
 
 const selectedStudent = computed(() => studentOptions.value.find((item) => item.id === selectedStudentId.value) ?? null);
 const cards = computed(() => buildPathwayCenterCards(evaluations.value, pathways.value));
@@ -398,6 +406,53 @@ function openRecommendationWorkbench(): void {
 function openPathwayDetail(card: PathwayCenterCard): void {
   selectedCard.value = card;
   detailDrawerVisible.value = true;
+}
+
+function buildCurrentReportPayload() {
+  return buildGaokaoPathwayReportPayload({
+    student: selectedStudent.value,
+    targetYear: targetYear.value,
+    profileSummary: profileSummary.value,
+    cards: cards.value,
+    materialGaps: aggregatedGaps.value,
+    nextActions: nextActions.value,
+    publicationStatus: publicationHighlights.value,
+    dataHealth: dataHealth.value,
+  });
+}
+
+function openPathwayReportPrintPreview(): void {
+  if (!selectedStudentId.value || !cards.value.length) {
+    ElMessage.warning("请先选择学生并刷新升学路径评估后再打印报告。");
+    return;
+  }
+  const storageKey = `${GAOKAO_PATHWAY_PRINT_STORAGE_PREFIX}${Date.now()}`;
+  window.localStorage.setItem(storageKey, JSON.stringify(buildCurrentReportPayload()));
+  openFile(gaokaoPathwayPrintPreviewPath(storageKey));
+}
+
+async function exportPathwayReport(): Promise<void> {
+  if (!selectedStudentId.value || !cards.value.length) {
+    ElMessage.warning("请先选择学生并刷新升学路径评估后再导出报告。");
+    return;
+  }
+  try {
+    exportingReport.value = true;
+    const report = buildCurrentReportPayload();
+    const result = await apiRequest<ExportRecord>("/api/reports/gaokao-pathway/export", {
+      method: "POST",
+      body: JSON.stringify({
+        report_name: buildGaokaoPathwayReportName(report),
+        report,
+      }),
+    });
+    openFile(result.download_url);
+    ElMessage.success("山东升学路径规划报告已生成");
+  } catch (error) {
+    ElMessage.error(formatUserActionError("导出山东升学路径规划报告", error, "先确认路径评估结果仍在页面中，再重新点击导出。"));
+  } finally {
+    exportingReport.value = false;
+  }
 }
 
 function formatRuleLine(rule: StudentPathwayRuleEvaluation): string {

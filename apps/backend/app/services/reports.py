@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.exporters.archive import export_growth_summary
 from app.exporters.recommendations import (
+    export_gaokao_pathway_report,
     export_recommendation_summary,
     export_shandong_recommendation_report,
     export_volunteer_draft_summary,
@@ -26,7 +27,12 @@ from app.repositories.recommendations import get_employment_direction
 from app.repositories.students import get_student_career_preference as repo_get_student_career_preference
 from app.repositories.system import get_report_export, list_report_exports as repo_list_report_exports, write_audit_log
 from app.schemas.recommendation import RecommendationHistoryItem
-from app.schemas.report import ReportExportPayload, ReportExportRecordRead, ShandongRecommendationReportExportPayload
+from app.schemas.report import (
+    GaokaoPathwayReportExportPayload,
+    ReportExportPayload,
+    ReportExportRecordRead,
+    ShandongRecommendationReportExportPayload,
+)
 from app.services import analytics as analytics_service
 from app.services import archive as archive_service
 from app.services import evaluation as evaluation_service
@@ -46,6 +52,7 @@ REPORT_TYPE_NAME_MAP = {
     "evaluation_summary": "评教汇总报表",
     "adviser_quant_summary": "班主任量化报表",
     "shandong_recommendation_summary": "山东普通类冲稳保推荐报告",
+    "gaokao_pathway_report": "山东升学路径规划报告",
 }
 
 
@@ -103,6 +110,39 @@ def export_shandong_recommendation_report_record(
         target_type="report",
         target_id=str(record.id),
         detail_json={"report_type": "shandong_recommendation_summary", "file_path": file_path},
+    )
+    return _serialize_export_record(record)
+
+
+def export_gaokao_pathway_report_record(
+    session: Session,
+    settings,
+    payload: GaokaoPathwayReportExportPayload,
+) -> ReportExportRecordRead:
+    report = payload.report
+    file_path = export_gaokao_pathway_report(settings, report)
+    record = ReportExportRecord(
+        report_type="gaokao_pathway_report",
+        report_name=payload.report_name or REPORT_TYPE_NAME_MAP["gaokao_pathway_report"],
+        params_json={
+            "report_type": "gaokao_pathway_report",
+            "student_id": report.get("student_id"),
+            "student_name": report.get("student_name"),
+            "target_year": report.get("target_year"),
+            "pathway_count": len(report.get("cards") or []),
+        },
+        file_path=file_path,
+        status="success",
+    )
+    session.add(record)
+    session.flush()
+    write_audit_log(
+        session,
+        module="reports",
+        action="export",
+        target_type="report",
+        target_id=str(record.id),
+        detail_json={"report_type": "gaokao_pathway_report", "file_path": file_path},
     )
     return _serialize_export_record(record)
 

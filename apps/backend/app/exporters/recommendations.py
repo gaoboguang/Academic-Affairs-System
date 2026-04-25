@@ -303,6 +303,106 @@ def export_shandong_recommendation_report(settings: Settings, payload: dict[str,
     return relative_to_project(path, settings.project_root)
 
 
+def export_gaokao_pathway_report(settings: Settings, payload: dict[str, object]) -> str:
+    workbook = Workbook()
+    summary_sheet = workbook.active
+    summary_sheet.title = "汇总页"
+
+    cards = _as_dict_list(payload.get("cards"))
+    profile_summary = _as_dict_list(payload.get("profile_summary"))
+    material_gaps = _as_dict_list(payload.get("material_gaps"))
+    next_actions = _as_dict_list(payload.get("next_actions"))
+    publication_status = _as_dict_list(payload.get("publication_status"))
+    p0_gaps = [str(item) for item in payload.get("p0_gaps") or [] if item]
+
+    summary_sheet.append(["报告", "山东升学路径规划报告"])
+    summary_sheet.append(["学生", payload.get("student_name") or "未命名学生"])
+    summary_sheet.append(["目标年份", payload.get("target_year")])
+    summary_sheet.append(["生成时间", payload.get("generated_at")])
+    summary_sheet.append(["路径卡数量", len(cards)])
+    summary_sheet.append(["材料缺口数量", len(material_gaps)])
+    summary_sheet.append(["P0 数据缺口数量", len(p0_gaps)])
+    summary_sheet.append(["数据健康状态", payload.get("data_health_summary") or "未读取数据健康状态"])
+    summary_sheet.append(["边界说明", "普通类常规批可进入位次型推荐；其他路径只做资格初筛、政策提醒和人工复核，不输出录取概率。"])
+
+    profile_sheet = workbook.create_sheet("学生画像")
+    profile_sheet.append(["字段", "当前值", "是否已维护"])
+    for item in profile_summary:
+        profile_sheet.append([
+            item.get("label"),
+            item.get("value"),
+            "是" if item.get("filled") else "否",
+        ])
+
+    pathway_sheet = workbook.create_sheet("路径建议")
+    pathway_sheet.append([
+        "路径",
+        "分组",
+        "状态",
+        "推荐深度",
+        "置信程度",
+        "评估分",
+        "适用对象",
+        "志愿方式",
+        "摘要",
+        "关键要求",
+        "缺失材料",
+        "风险提示",
+        "下一步",
+        "来源编号",
+    ])
+    for row in cards:
+        pathway_sheet.append([
+            row.get("name"),
+            row.get("group"),
+            row.get("status_label"),
+            row.get("depth_label"),
+            row.get("confidence_label"),
+            _format_export_value(row.get("score")),
+            row.get("applicable_object"),
+            row.get("volunteer_mode"),
+            row.get("summary"),
+            _join_export_list(row.get("key_requirements")),
+            _join_export_list(row.get("missing_materials")),
+            _join_export_list(row.get("risk_messages")),
+            _join_export_list(row.get("next_actions")),
+            _format_export_value(row.get("source_document_id")),
+        ])
+
+    gap_sheet = workbook.create_sheet("材料缺口")
+    gap_sheet.append(["材料或画像字段", "影响路径数", "影响路径", "下一步"])
+    for row in material_gaps:
+        gap_sheet.append([
+            row.get("label"),
+            row.get("count"),
+            _join_export_list(row.get("pathways")),
+            row.get("nextAction") or row.get("next_action"),
+        ])
+
+    action_sheet = workbook.create_sheet("下一步行动")
+    action_sheet.append(["标题", "说明", "优先级"])
+    for row in next_actions:
+        action_sheet.append([row.get("title"), row.get("detail"), row.get("tone")])
+
+    data_sheet = workbook.create_sheet("数据风险")
+    data_sheet.append(["数据项", "状态", "下一步", "说明", "是否阻断推荐"])
+    for row in publication_status:
+        data_sheet.append([
+            row.get("label"),
+            row.get("status_label"),
+            row.get("action_label"),
+            row.get("explanation"),
+            "是" if row.get("blocks_recommendation") else "否",
+        ])
+    for gap in p0_gaps:
+        data_sheet.append(["P0 数据缺口", "需关注", "正式填报前补齐或人工复核", gap, "否"])
+
+    filename = make_timestamped_filename("gaokao_pathway_report", ".xlsx")
+    path = settings.exports_dir / filename
+    workbook.save(path)
+    return relative_to_project(path, settings.project_root)
+
+
 def _build_path_hint(row: dict[str, object]) -> str:
     hints: list[str] = []
     if row.get("requires_postgraduate_path") is True:
@@ -312,6 +412,19 @@ def _build_path_hint(row: dict[str, object]) -> str:
     if row.get("requires_long_training_path") is True:
         hints.append("长培养周期")
     return " / ".join(hints)
+
+
+def _as_dict_list(value: object) -> list[dict[str, object]]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _join_export_list(value: object) -> str:
+    if not isinstance(value, list):
+        return "-"
+    items = [str(item) for item in value if str(item or "").strip()]
+    return "；".join(items) if items else "-"
 
 
 def _format_risk_flags(flags: object) -> str:

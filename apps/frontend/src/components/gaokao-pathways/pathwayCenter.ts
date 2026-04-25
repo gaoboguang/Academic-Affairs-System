@@ -79,6 +79,38 @@ export interface PathwayCenterAction {
   tone: "primary" | "warning" | "danger" | "info" | "success";
 }
 
+export const GAOKAO_PATHWAY_PRINT_STORAGE_PREFIX = "local-edu-tool:gaokao-pathway-report:";
+
+export interface GaokaoPathwayReportPayload {
+  student_id: number | null;
+  student_name: string;
+  target_year: number;
+  generated_at: string;
+  data_health_summary: string;
+  profile_summary: PathwayCenterProfileItem[];
+  cards: Array<{
+    code: string;
+    name: string;
+    group: string;
+    status_label: string;
+    depth_label: string;
+    confidence_label: string;
+    score: number | null | undefined;
+    applicable_object: string;
+    volunteer_mode: string;
+    summary: string;
+    key_requirements: string[];
+    missing_materials: string[];
+    risk_messages: string[];
+    next_actions: string[];
+    source_document_id: number | null | undefined;
+  }>;
+  material_gaps: AggregatedPathwayGap[];
+  next_actions: PathwayCenterAction[];
+  publication_status: ShandongPublicationStatus[];
+  p0_gaps: string[];
+}
+
 export function formatPathwayStudentOption(student: PathwayCenterStudentOption): string {
   const meta = [student.student_no, student.current_grade_name, student.current_class_name]
     .filter(Boolean)
@@ -291,6 +323,51 @@ export function buildPublicationStatusHighlights(
 export function buildStatusSummaryCopy(summary: PathwayStatusSummaryItem[]): string {
   if (!summary.length) return "暂无路径评估结果";
   return summary.map((item) => `${item.label} ${item.count}`).join("，");
+}
+
+export function buildGaokaoPathwayReportName(payload: Pick<GaokaoPathwayReportPayload, "student_name" | "target_year">): string {
+  return `${payload.student_name || "未命名学生"}${payload.target_year}山东升学路径规划报告`;
+}
+
+export function buildGaokaoPathwayReportPayload(options: {
+  student: PathwayCenterStudentOption | null;
+  targetYear: number;
+  profileSummary: PathwayCenterProfileItem[];
+  cards: PathwayCenterCard[];
+  materialGaps: AggregatedPathwayGap[];
+  nextActions: PathwayCenterAction[];
+  publicationStatus: ShandongPublicationStatus[];
+  dataHealth: ShandongRecommendationDataHealth | null;
+}): GaokaoPathwayReportPayload {
+  return {
+    student_id: options.student?.id ?? null,
+    student_name: options.student?.name || "未选择学生",
+    target_year: options.targetYear,
+    generated_at: new Date().toISOString(),
+    data_health_summary: options.dataHealth?.summary || "未读取数据健康状态",
+    profile_summary: options.profileSummary,
+    cards: options.cards.map((card) => ({
+      code: card.code,
+      name: card.name,
+      group: card.group,
+      status_label: card.statusLabel,
+      depth_label: card.depthLabel,
+      confidence_label: card.confidenceLabel,
+      score: card.score,
+      applicable_object: card.applicableObject,
+      volunteer_mode: card.volunteerMode,
+      summary: card.summary,
+      key_requirements: card.keyRequirements,
+      missing_materials: card.missingMaterials,
+      risk_messages: card.riskMessages,
+      next_actions: card.nextActions,
+      source_document_id: card.pathway?.source_document_id,
+    })),
+    material_gaps: options.materialGaps,
+    next_actions: options.nextActions,
+    publication_status: options.publicationStatus,
+    p0_gaps: options.dataHealth?.gaps ?? [],
+  };
 }
 
 export function formatPathwayStatusTone(tone: PathwayCenterAction["tone"]): "success" | "warning" | "danger" | "info" | "primary" {

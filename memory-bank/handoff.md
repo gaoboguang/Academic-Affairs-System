@@ -2,6 +2,11 @@
 
 ## 当前主线状态（2026-04-25）
 
+- 已按 `Codex-App-第三轮开发计划-山东升学方案库与多路径规则引擎-v5.md` 完成窗口 D8，当前分支 `codex/r3-d8-final-pathway-integration`：在 D1-D7 多路径规则、学生画像、方案中心、普通类推荐加固、单招/综评/春考、艺体/体育/提前批/特殊类型初筛基础上，完成第三轮最终集成、报告输出和交接。本轮不执行 `git push`。
+- D8 新增路径规划报告输出闭环：`/gaokao-pathways` 页面新增“打印报告 / 导出 Excel”；新增 `/print/gaokao-pathway-report/:storageKey` 打印页、`POST /api/reports/gaokao-pathway/export`、`export_gaokao_pathway_report()` 和对应导出记录。Excel 包含“汇总页 / 学生画像 / 路径建议 / 材料缺口 / 下一步行动 / 数据风险”。
+- D8 新增 `docs/round3-shandong-pathway-final-report.md` 与 `docs/round3-shandong-pathway-user-guide.md`，并接入 `docs/README.md`。最终报告已说明：本地提交链存在 D1-D7，未发现独立 D0 分支或 D0 专门文档，D8 以第二轮最终报告、D1-D7 文档、当前 git 提交链和真实代码状态作为第三轮基线。
+- D8 数据健康：`npm run backend:data-health -- --json` 通过，`schema_version=20260425_0018`、状态 `warning`、P0 缺口 6 条；`npm run backend:p0-check -- --json` 为 `ok: true`，备份包 `data/backups/p0_delivery_backup_20260425_214113.zip`。
+- D8 验证：路径报告后端导出定向 `7 passed`；路径中心前端定向 `8 passed`；`frontend:build` 通过；`npm run check` 通过（后端 `94 passed`、前端 lint、前端 `25 files / 147 tests passed`、前端构建）；`npm run check:all` 通过（E2E `32 passed`）；`git diff --check` 通过。
 - 已按 `Codex-App-第三轮开发计划-山东升学方案库与多路径规则引擎-v5.md` 完成窗口 D7，当前分支 `codex/r3-d7-special-early-art-sports-pathways`：在 D1-D6 的路径规则引擎、官方来源、学生画像、方案中心、普通类加固和单招/综评/春考初筛基础上，细化艺体、体育、提前批、特殊类型、体育单招和高水平运动队初筛。本轮不执行 `git push`。
 - D7 后端在 `apps/backend/app/services/gaokao_pathways.py` 新增 23 条规则种子和对应材料标签：艺术本科/专科补艺术成绩、文化线/综合分、章程限制和同批次兼报；体育常规批补体育测试、文化线/专业线/综合分、章程和兼报限制；提前批 A/B 补提前批意向、体检/面试/政审/背景调查、章程限制和定向协议；特殊类型补报名审核、公示、校测/面试和章程限制；体育单招 / 高水平运动队补专项身份、等级证书、报名系统、资格审查、文化/专项考试和高校简章。
 - D7 前端在 `apps/frontend/src/components/students/studentPathwayProfile.ts` 增加材料清单，在 `apps/frontend/src/components/gaokao-pathways/pathwayCenter.ts` 给 D7 路径卡补关键要求、边界说明和学生画像摘要字段；页面继续明确这些路径只做资格初筛 / 人工复核，不输出录取概率，且体育常规批、体育单招、高水平运动队不得混用。

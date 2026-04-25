@@ -41,3 +41,7 @@ export function volunteerDraftPrintPreviewPath(draftId: number): string {
 export function shandongRecommendationPrintPreviewPath(storageKey: string): string {
   return `/print/shandong-recommendation/${encodeURIComponent(storageKey)}`;
 }
+
+export function gaokaoPathwayPrintPreviewPath(storageKey: string): string {
+  return `/print/gaokao-pathway-report/${encodeURIComponent(storageKey)}`;
+}
