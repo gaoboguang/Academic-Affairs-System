@@ -2,6 +2,12 @@
 
 ## 当前状态
 
+- 2026-04-26 已按第四轮 v6 开发文档完成窗口 E0：第四轮基线审计：
+  - 当前分支 `codex/r4-e0-baseline-audit`，从 `main` 的第三轮 D8 成果切出；本轮不执行 `git push`
+  - 新增 `docs/round4-baseline-audit.md`，只做审计文档，不开发新功能、不修改业务代码
+  - E0 已确认学生列表页缺批量选择、批量删除和批量调班；后端学生接口缺批量删除/调班预检与执行接口；现有 `Student.is_active` 可做软删除底座，但学生列表查询尚未默认过滤停用学生
+  - 已确认现有 `student_class_history` 能展示班级历史段，但不具备调班批次、明细、来源班级、目标班级、生效日期、原因和备注；成长档案当前只读人工成长记录，不能聚合调班系统事件
+  - 数据健康仍为 `schema_version=20260425_0018`、状态 `warning`、P0 缺口 6 条；下一步优先 E1 批量删除后端、E3 批量调班后端、E5 数据库补齐审计计划
 - 2026-04-25 已按 v5 第三轮开发文档完成窗口 D8：第三轮最终集成、报告、交接：
   - 当前分支 `codex/r3-d8-final-pathway-integration`，从 D7 分支切出；本轮不执行 `git push`
   - D8 新增山东升学路径规划报告输出闭环：`/gaokao-pathways` 页面新增“打印报告 / 导出 Excel”，新增 `/print/gaokao-pathway-report/:storageKey` 打印页和 `POST /api/reports/gaokao-pathway/export`

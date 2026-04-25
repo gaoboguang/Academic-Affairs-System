@@ -1,5 +1,11 @@
 # 交接说明
 
+## 当前主线状态（2026-04-26）
+
+- 已按 `Codex-App-第四轮开发计划-学生批量操作调班与数据库补齐-v6.md` 完成窗口 E0，当前分支 `codex/r4-e0-baseline-audit`：新增 `docs/round4-baseline-audit.md`，只做基线审计，不开发新功能、不修改业务代码，不执行 `git push`。
+- E0 审计已确认：学生列表页没有批量选择、批量删除或批量调班；后端学生接口没有批量删除/调班预检和执行接口；`Student.is_active` 可作为软删除底座但列表查询尚未默认排除停用学生；现有 `student_class_history` 不足以承载调班批次、明细、来源班级、目标班级、生效日期、原因和备注；成长档案当前只聚合人工成长记录，不展示调班系统事件。
+- E0 数据健康：`npm run backend:data-health -- --json` 通过，`schema_version=20260425_0018`、状态 `warning`、P0 缺口仍为 6 条。下一步可并行开 E1 批量删除后端、E3 批量调班后端、E5 数据库补齐审计计划；E2 依赖 E1，E4 依赖 E3，E6/E7 依赖 E5。
+
 ## 当前主线状态（2026-04-25）
 
 - 已按 `Codex-App-第三轮开发计划-山东升学方案库与多路径规则引擎-v5.md` 完成窗口 D8，当前分支 `codex/r3-d8-final-pathway-integration`：在 D1-D7 多路径规则、学生画像、方案中心、普通类推荐加固、单招/综评/春考、艺体/体育/提前批/特殊类型初筛基础上，完成第三轮最终集成、报告输出和交接。本轮不执行 `git push`。
@@ -67,6 +73,7 @@
 ## 下一次接手先做什么
 
 1. 先阅读 `AGENTS.md`、`memory-bank/project-context.md`、`memory-bank/active-context.md`。
+2. 如继续第四轮 v6，先读 `/Users/gao/Downloads/Codex-App-第四轮开发计划-学生批量操作调班与数据库补齐-v6.md` 和 `docs/round4-baseline-audit.md`。E0 已完成，后续按窗口边界推进：E1 做学生批量删除后端，E2 做学生批量删除前端，E3 做批量调班后端和历史记录，E4 做批量调班前端与成长档案系统事件，E5 做数据库补齐审计计划，E6 执行可补数据导入，E7 做数据健康展示和用户说明，E8 最终集成验收。不要在 E1-E4 重写第三轮高考路径或推荐报表主线。
 2. 如继续第三轮 v5，先读 `/Users/gao/Downloads/Codex-App-第三轮开发计划-山东升学方案库与多路径规则引擎-v5.md`、`docs/round3-shandong-pathway-rules.md`、`docs/round3-student-pathway-profile.md`、`docs/round3-gaokao-pathway-center.md`、`docs/round3-shandong-general-recommendation-hardening.md`、`docs/round3-vocational-spring-pathway-screening.md` 和 `docs/round3-special-early-art-sports-pathways.md`。D1 已完成路径表、画像表、评估表和三态规则引擎；D2 已完成官方规则字典、来源追溯和真实主库 bootstrap；D3 已完成学生详情页“升学画像”入口、材料缺口汇总和老师可读提示；D4 已完成 `/gaokao-pathways` 方案中心、路径卡、详情抽屉、数据风险和普通类推荐入口；D5 已完成普通类推荐算法加固、共享分数换位次、选科解析测试和 2026 官方计划缺失提示；D6 已完成单招、综评、春考本/专路径初筛细化；D7 已完成艺体、体育、提前批、特殊类型、体育单招和高水平运动队路径初筛细化。下一步优先进入 D8：第三轮最终集成、报告和验收，继续保留资格初筛 / 人工复核边界，不要把特殊路径说成录取概率。
 2. 如继续 v4 Round 2 收口，先读 `docs/round2-gaokao-recommendation-final-report.md`、`docs/gaokao-data-coverage-after-round2.md`、`docs/gaokao-shandong-2023-2025-coverage.md`、`docs/gaokao-2026-data-watchlist.md`、`docs/gaokao-data-baseline-2026-04-25.md`、`docs/gaokao-source-import-framework-2026-04-25.md` 与 `docs/gaokao-shandong-rush-stable-safe-engine-2026-04-25.md`。下一步优先完成 C3 剩余验收、提交 `codex/r2-final-gaokao-recommendation-integration`，并在 GitHub 认证恢复后推送/合并；不要伪造 2026 普通类计划或投档结果，不要把校内考试名次直接当山东全省位次。
 3. 2026-04-24 窗口 0 已生成当前多窗口接手入口：`docs/repo-audit.md`、`docs/mac-dev-setup.md`、`docs/development-roadmap.md`。后续 Codex 窗口应先读这三份，再进入自己的窗口任务。按 Codex App v3 补齐的 dated 状态锁定文件为 `docs/repo-audit-2026-04-24.md` 与 `docs/current-development-map-2026-04-24.md`，它们是对已有窗口 0 成果的补缺，不是新路线图；本轮验证已通过后端 `66 passed`、前端 lint、前端 `114 passed`、前端构建、数据健康、P0 验收和 `git diff --check`。
