@@ -152,9 +152,22 @@ export const pathwayMaterialDefinitions: Array<{ key: string; label: string; hel
   { key: "spring_exam_score_line", label: "春季高考类别分数线", help: "按专业类别核对本科或专科批分数线。" },
   { key: "spring_exam_college_plan_chapter", label: "春季高考分专业计划和院校章程", help: "核对目标院校是否按对应专业类别招生及章程限制。" },
   { key: "art_exam_score", label: "艺术统考、校考或联考成绩", help: "艺术类路径仅能在成绩和文化线明确后初筛。" },
+  { key: "art_culture_composite_rule", label: "艺术类文化控制线和综合分规则", help: "核对文化控制线、专业成绩折算和院校录取原则。" },
+  { key: "art_chapter_restrictions", label: "艺术类院校章程限制", help: "逐校核对身高、色觉、单科成绩、语种和校考要求。" },
   { key: "sports_test_score", label: "体育专业测试成绩", help: "体育常规批需要结合体育专业测试成绩。" },
+  { key: "sports_culture_composite_rule", label: "体育类文化线、专业线和综合分规则", help: "核对体育一段/二段、专业测试成绩和综合分规则。" },
+  { key: "sports_chapter_restrictions", label: "体育类院校章程和兼报限制", help: "核对普通类、艺术类同批次兼报限制和院校章程要求。" },
+  { key: "early_batch_physical_political_review", label: "提前批体检、面试、政审或背景调查材料", help: "军警、招飞、航海、消防等方向需要逐项人工复核。" },
+  { key: "early_batch_chapter_limits", label: "提前批院校章程限制", help: "核对单科、语种、身高、视力、体检和面试要求。" },
+  { key: "early_b_service_contract", label: "提前批 B 类定向协议和服务约束材料", help: "公费师范、省属公费生、定向就业等路径要核对签约与服务年限。" },
+  { key: "special_type_application_review", label: "特殊类型报名、资格审核和公示材料", help: "核对强基、高校专项等报名平台、资格审核、公示或校测材料。" },
+  { key: "special_type_chapter_limits", label: "特殊类型高校章程和测试限制", help: "核对高校测试、面试、单科、语种、体检等章程要求。" },
   { key: "athlete_level_certificate", label: "体育单招运动员技术等级证书", help: "体育单招路径需要核对等级、项目和报名系统。" },
+  { key: "sports_single_exam_arrangement", label: "体育单招文化考试和体育专项考试安排", help: "核对体育单招报名系统、文化考试、专项考试和缴费安排。" },
+  { key: "sports_single_college_chapter", label: "体育单招院校简章和招生项目", help: "逐校核对招生项目、报名条件、计划和录取规则。" },
   { key: "high_level_athlete_level", label: "高水平运动队运动员等级材料", help: "高水平运动队通常要求一级及以上等级并逐校核验。" },
+  { key: "high_level_qualification_review", label: "高水平运动队资格审查和高校测试安排", help: "核对资格审核、项目一致性、高校测试和公示要求。" },
+  { key: "high_level_college_chapter", label: "高水平运动队高校简章和文化成绩要求", help: "逐校核对简章、文化成绩要求、单科语种和专业测试规则。" },
 ];
 
 const profileFieldLabels: Record<string, string> = {

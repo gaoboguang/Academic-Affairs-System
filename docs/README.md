@@ -46,11 +46,13 @@
    第三轮 D5 的山东普通类推荐算法加固、共享分数换位次和 2026 数据提示说明。
 21. [`round3-vocational-spring-pathway-screening.md`](./round3-vocational-spring-pathway-screening.md)
    第三轮 D6 的高职单招、高职综评、春季高考本科/专科路径初筛、材料缺口和人工复核说明。
-22. [`report-export-print-audit-2026-04-24.md`](./report-export-print-audit-2026-04-24.md)
+22. [`round3-special-early-art-sports-pathways.md`](./round3-special-early-art-sports-pathways.md)
+   第三轮 D7 的艺体、体育、提前批、特殊类型、体育单招和高水平运动队路径初筛、材料缺口和人工复核说明。
+23. [`report-export-print-audit-2026-04-24.md`](./report-export-print-audit-2026-04-24.md)
    窗口 6 的报表、打印、Excel 导出一致性审计与修复记录。
-23. [`frontend-navigation-audit-2026-04-24.md`](./frontend-navigation-audit-2026-04-24.md)
+24. [`frontend-navigation-audit-2026-04-24.md`](./frontend-navigation-audit-2026-04-24.md)
    窗口 7 的前端导航、空态、错误提示和非程序员可读性审计记录。
-24. [`dev/README.md`](./dev/README.md)
+25. [`dev/README.md`](./dev/README.md)
    当前开发主线、分工文档和 prompt 的索引。
 
 ## 当前仍在用的文档
@@ -97,6 +99,8 @@
   第三轮 D5 对山东普通类冲稳保推荐加固、共享一分一段换位次和 2026 官方计划缺失提示的说明。
 - [`round3-vocational-spring-pathway-screening.md`](./round3-vocational-spring-pathway-screening.md)
   第三轮 D6 对高职单招、高职综评、春季高考本科/专科路径初筛、材料缺口和人工复核清单的说明。
+- [`round3-special-early-art-sports-pathways.md`](./round3-special-early-art-sports-pathways.md)
+  第三轮 D7 对艺体、体育、提前批、特殊类型、体育单招和高水平运动队路径初筛、材料缺口和人工复核清单的说明。
 - [`report-export-print-audit-2026-04-24.md`](./report-export-print-audit-2026-04-24.md)
   窗口 6 对报表中心、打印页和 Excel 导出的一致性审计与修复记录。
 - [`frontend-navigation-audit-2026-04-24.md`](./frontend-navigation-audit-2026-04-24.md)

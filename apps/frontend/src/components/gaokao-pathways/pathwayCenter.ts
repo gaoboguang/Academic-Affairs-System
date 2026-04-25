@@ -120,6 +120,18 @@ export function buildPathwayProfileSummary(profile: StudentPathwayProfile | null
       filled: Boolean(profile.spring_exam_category),
     },
     {
+      key: "art_track",
+      label: "艺术类别",
+      value: profile.art_track || "未维护",
+      filled: Boolean(profile.art_track),
+    },
+    {
+      key: "sports_track",
+      label: "体育专项",
+      value: profile.sports_track || "未维护",
+      filled: Boolean(profile.sports_track),
+    },
+    {
       key: "gaokao_registration",
       label: "高考报名",
       value: formatBooleanValue(profile.has_gaokao_registration),
@@ -154,6 +166,18 @@ export function buildPathwayProfileSummary(profile: StudentPathwayProfile | null
       label: "提前批意向",
       value: formatBooleanValue(profile.accept_early_batch),
       filled: profile.accept_early_batch !== null && profile.accept_early_batch !== undefined,
+    },
+    {
+      key: "service_commitment",
+      label: "定向服务",
+      value: formatBooleanValue(profile.accept_service_commitment),
+      filled: profile.accept_service_commitment !== null && profile.accept_service_commitment !== undefined,
+    },
+    {
+      key: "interview_physical",
+      label: "面试体检政审",
+      value: formatBooleanValue(profile.accept_interview_or_physical_test),
+      filled: profile.accept_interview_or_physical_test !== null && profile.accept_interview_or_physical_test !== undefined,
     },
   ];
 }
@@ -285,7 +309,7 @@ function buildRequirementLines(
     .map((item) => item.rule_name)
     .filter((item): item is string => Boolean(item));
   const lines = uniqueNonEmpty([
-    ...d6PathwayRequirementHints(evaluation.pathway_code || pathway?.pathway_code),
+    ...pathwayRequirementHints(evaluation.pathway_code || pathway?.pathway_code),
     pathway?.batch_name ? `批次：${pathway.batch_name}` : "",
     pathway?.volunteer_mode ? `志愿方式：${pathway.volunteer_mode}` : "",
     ...ruleNames,
@@ -307,9 +331,9 @@ function buildRiskMessages(
   const boundary = typeof pathway?.notes_json?.boundary === "string" ? pathway.notes_json.boundary : "";
   const officialBoundary = typeof pathway?.notes_json?.official_boundary === "string" ? pathway.notes_json.official_boundary : "";
   const riskLevel = formatRiskLevel(pathway?.risk_level);
-  const d6Boundary = d6PathwayBoundaryMessage(evaluation.pathway_code || pathway?.pathway_code);
+  const screeningBoundary = pathwayBoundaryMessage(evaluation.pathway_code || pathway?.pathway_code);
   return uniqueNonEmpty([
-    d6Boundary,
+    screeningBoundary,
     ...warningMessages,
     boundary,
     officialBoundary,
@@ -317,7 +341,7 @@ function buildRiskMessages(
   ]).slice(0, 4);
 }
 
-function d6PathwayRequirementHints(code?: string | null): string[] {
+function pathwayRequirementHints(code?: string | null): string[] {
   const mapping: Record<string, string[]> = {
     vocational_single_exam: [
       "报名：已完成山东高考报名，并核对目标院校单招报名时间",
@@ -343,13 +367,74 @@ function d6PathwayRequirementHints(code?: string | null): string[] {
       "材料：知识与技能考试成绩、类别分数线",
       "复核：缺春考分专业计划或院校章程时只能人工核验",
     ],
+    art_undergrad: [
+      "类别：确认艺术类别、统考/校考或联考口径",
+      "成绩：核对文化控制线、专业成绩和综合分规则",
+      "章程：身高、色觉、视力、单科、语种和校考限制需逐校复核",
+      "兼报：与普通类、体育类同批次兼报边界需人工核验",
+    ],
+    art_junior: [
+      "类别：确认艺术类别和专科批录取原则",
+      "成绩：核对统考、校考或联考成绩与文化控制线",
+      "章程：综合分、身高、色觉、单科和语种要求需逐校复核",
+      "兼报：与普通类、体育类同批次兼报边界需人工核验",
+    ],
+    sports_regular: [
+      "身份：确认体育类考生身份和山东高考报名",
+      "成绩：核对体育专业测试、文化线和综合分规则",
+      "兼报：与普通类、艺术类同批次兼报限制需人工复核",
+      "边界：体育常规批不得与体育单招、高水平运动队混用",
+    ],
+    summer_general_early_a: [
+      "意向：确认学生接受提前批报名、录取和流程约束",
+      "复核：体检、面试、政审、体能测试或背景调查需人工核验",
+      "章程：单科、语种、身高、视力、色觉和选科限制需逐校核对",
+      "方向：军警、招飞、航海、消防等方向以官方公告和高校章程为准",
+    ],
+    summer_general_early_b: [
+      "意向：确认学生接受提前批和定向服务约束",
+      "签约：公费师范、省属公费生、定向就业需核对协议和服务年限",
+      "章程：体检、面试、单科、语种、身高、视力等限制需逐校核对",
+      "边界：只做资格提醒，不替代目标院校和主管部门审核",
+    ],
+    summer_special_type: [
+      "资格：核对强基、高校专项等报名、资格审核、公示和校测材料",
+      "分数：特殊类型控制线或相关分数边界需以官方发布为准",
+      "章程：高校测试、面试、单科、语种和体检限制需逐校复核",
+      "边界：不得把特殊类型初筛混同普通类常规批冲稳保推荐",
+    ],
+    sports_single_exam: [
+      "身份：确认体育专项方向、运动员等级和报名系统要求",
+      "考试：核对文化考试、体育专项考试、缴费和考试时间安排",
+      "简章：逐校核对招生项目、计划、报名条件和录取规则",
+      "边界：体育单招不是体育类常规批，也不是高水平运动队",
+    ],
+    high_level_sports: [
+      "身份：确认体育专项方向、等级证书和高考报名",
+      "资格：核对高校资格审查、测试、公示和项目一致性",
+      "章程：文化成绩、单科、语种、专业测试和录取办法需逐校复核",
+      "边界：高水平运动队不得与体育单招、体育常规批混用",
+    ],
   };
   return code ? mapping[code] ?? [] : [];
 }
 
-function d6PathwayBoundaryMessage(code?: string | null): string {
+function pathwayBoundaryMessage(code?: string | null): string {
   if (!code) return "";
-  if (["vocational_single_exam", "vocational_comprehensive", "spring_exam_undergrad", "spring_exam_junior"].includes(code)) {
+  if ([
+    "vocational_single_exam",
+    "vocational_comprehensive",
+    "spring_exam_undergrad",
+    "spring_exam_junior",
+    "art_undergrad",
+    "art_junior",
+    "sports_regular",
+    "summer_general_early_a",
+    "summer_general_early_b",
+    "summer_special_type",
+    "sports_single_exam",
+    "high_level_sports",
+  ].includes(code)) {
     return "当前只做资格初筛和人工复核清单，不输出录取概率。";
   }
   return "";

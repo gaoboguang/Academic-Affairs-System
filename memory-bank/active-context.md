@@ -205,6 +205,12 @@
 
 ## 当前重点
 
+- 2026-04-25 已按 v5 第三轮开发文档完成窗口 D7：艺体、体育、提前批、专项路径初筛：
+  - 当前分支 `codex/r3-d7-special-early-art-sports-pathways`，从 D6 分支切出；本轮不执行 `git push`
+  - 后端路径规则已补艺术类本科/专科、体育类常规批、普通类提前批 A/B、普通类特殊类型批、体育单招、高水平运动队的 D7 材料缺口和人工复核项，覆盖章程、体检、政审、面试、专项资格、单科/语种/身高/视力、兼报限制和专项报名系统
+  - 前端升学画像材料清单和 `/gaokao-pathways` 路径卡已补 D7 的材料项、关键要求、风险边界和学生画像摘要字段；继续明确这些路径只做资格初筛和人工复核清单，不输出录取概率
+  - 真实主库已执行 D7 bootstrap，备份为 `data/backups/app_before_pathway_bootstrap_2026_20260425_03.db`，新增规则 `23` 条，已有规则 `62` 条跳过/更新；新增 `docs/round3-special-early-art-sports-pathways.md`
+  - 本轮验证：D7 定向后端 `6 passed`；D7 定向前端 `12 passed`；后端全量 `93 passed`；前端全量 `146 passed`；`frontend:build` 通过；`git diff --check` 通过
 - 2026-04-25 已按 v5 第三轮开发文档完成窗口 D6：单招、综评、春考路径初筛：
   - 当前分支 `codex/r3-d6-vocational-spring-pathways`，从 D5 分支切出；本轮不执行 `git push`
   - 后端规则引擎新增 `material_present_when` 条件，支持“只在社会人员身份成立时要求同等学力材料”这类条件式材料缺口，避免 D6 路径误报

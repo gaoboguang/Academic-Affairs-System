@@ -283,6 +283,104 @@ describe("pathway center helpers", () => {
     expect(springCard?.missingMaterials).toContain("春季高考类别分数线");
   });
 
+  it("adds D7 manual-review hints for art sports early and special cards", () => {
+    const cards = buildPathwayCenterCards([
+      buildEvaluation({
+        pathway_id: 20,
+        pathway_code: "art_undergrad",
+        pathway_name: "艺术类本科批",
+        pathway_group: "艺术体育",
+        status: "insufficient_data",
+        status_label: "信息不足",
+        recommendation_depth: "eligibility_screening",
+        missing_materials_json: [
+          {
+            rule_code: "d7_art_undergrad_chapter_restrictions",
+            material_key: "art_chapter_restrictions",
+            material_label: "艺术类院校章程限制",
+            next_action: "逐校核对章程限制。",
+          },
+        ],
+      }),
+      buildEvaluation({
+        pathway_id: 21,
+        pathway_code: "summer_general_early_a",
+        pathway_name: "普通类提前批A类",
+        pathway_group: "提前批",
+        status: "insufficient_data",
+        status_label: "信息不足",
+        recommendation_depth: "eligibility_screening",
+        missing_materials_json: [
+          {
+            rule_code: "d7_early_a_physical_political_material",
+            material_key: "early_batch_physical_political_review",
+            material_label: "提前批体检、面试、政审或背景调查材料",
+            next_action: "补齐体检政审材料后重新评估。",
+          },
+        ],
+      }),
+      buildEvaluation({
+        pathway_id: 22,
+        pathway_code: "sports_single_exam",
+        pathway_name: "体育单招",
+        pathway_group: "艺术体育",
+        status: "insufficient_data",
+        status_label: "信息不足",
+        recommendation_depth: "policy_notice",
+        missing_materials_json: [
+          {
+            rule_code: "d7_sports_single_college_chapter",
+            material_key: "sports_single_college_chapter",
+            material_label: "体育单招院校简章和招生项目",
+            next_action: "逐校核对体育单招简章。",
+          },
+        ],
+      }),
+    ], [
+      buildPathway({
+        id: 20,
+        pathway_code: "art_undergrad",
+        pathway_name: "艺术类本科批",
+        pathway_group: "艺术体育",
+        student_type: "art",
+        exam_type: "art_gaokao",
+        recommendation_depth: "eligibility_screening",
+        notes_json: { boundary: "不同院校录取原则不同" },
+      }),
+      buildPathway({
+        id: 21,
+        pathway_code: "summer_general_early_a",
+        pathway_name: "普通类提前批A类",
+        pathway_group: "提前批",
+        student_type: "general",
+        exam_type: "summer_gaokao",
+        recommendation_depth: "eligibility_screening",
+      }),
+      buildPathway({
+        id: 22,
+        pathway_code: "sports_single_exam",
+        pathway_name: "体育单招",
+        pathway_group: "艺术体育",
+        student_type: "sports",
+        exam_type: "sports_single_exam",
+        recommendation_depth: "policy_notice",
+        notes_json: { boundary: "仅做路径提醒和材料清单" },
+      }),
+    ]);
+
+    const artCard = cards.find((item) => item.code === "art_undergrad");
+    const earlyCard = cards.find((item) => item.code === "summer_general_early_a");
+    const sportsSingleCard = cards.find((item) => item.code === "sports_single_exam");
+
+    expect(artCard?.keyRequirements).toContain("成绩：核对文化控制线、专业成绩和综合分规则");
+    expect(artCard?.missingMaterials).toContain("艺术类院校章程限制");
+    expect(artCard?.riskMessages).toContain("当前只做资格初筛和人工复核清单，不输出录取概率。");
+    expect(earlyCard?.keyRequirements).toContain("复核：体检、面试、政审、体能测试或背景调查需人工核验");
+    expect(earlyCard?.missingMaterials).toContain("提前批体检、面试、政审或背景调查材料");
+    expect(sportsSingleCard?.keyRequirements).toContain("边界：体育单招不是体育类常规批，也不是高水平运动队");
+    expect(sportsSingleCard?.missingMaterials).toContain("体育单招院校简章和招生项目");
+  });
+
   it("builds next actions from recommendation entry, gaps, and data warnings", () => {
     const cards = buildPathwayCenterCards([buildEvaluation()], [buildPathway()]);
     const gaps: AggregatedPathwayGap[] = [

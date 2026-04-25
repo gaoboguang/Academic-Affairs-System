@@ -299,6 +299,99 @@ def test_d6_vocational_and_spring_pathways_surface_screening_requirements(client
     assert "spring_exam_college_plan_chapter" in spring_missing
 
 
+def test_d7_special_early_art_and_sports_pathways_surface_manual_review_requirements(client):
+    client.post("/api/gaokao/pathways/bootstrap-shandong", params={"target_year": 2026})
+    student_id = _first_student_id(client)
+
+    client.put(
+        f"/api/gaokao/students/{student_id}/pathway-profile",
+        json={
+            "province": "山东",
+            "candidate_type": "art",
+            "art_track": "美术与设计类",
+            "materials_json": {},
+        },
+    )
+    art_preview = client.post(
+        f"/api/gaokao/students/{student_id}/pathway-evaluations/preview",
+        params={"target_year": 2026, "province": "山东"},
+    ).json()
+    art_eval = _evaluation_by_code(art_preview["evaluations"], "art_undergrad")
+    art_missing = {item["material_key"]: item for item in art_eval["missing_materials_json"]}
+    assert art_eval["status"] == "insufficient_data"
+    assert "art_exam_score" in art_missing
+    assert "art_culture_composite_rule" in art_missing
+    assert art_missing["art_chapter_restrictions"]["material_label"] == "艺术类院校章程限制"
+    assert any("同批次兼报" in item["message"] for item in art_eval["warning_rules_json"])
+    assert "不能理解为录取概率" in art_eval["summary"]
+
+    client.put(
+        f"/api/gaokao/students/{student_id}/pathway-profile",
+        json={
+            "province": "山东",
+            "candidate_type": "sports",
+            "has_gaokao_registration": True,
+            "sports_track": "田径",
+            "materials_json": {},
+        },
+    )
+    sports_preview = client.post(
+        f"/api/gaokao/students/{student_id}/pathway-evaluations/preview",
+        params={"target_year": 2026, "province": "山东"},
+    ).json()
+    sports_eval = _evaluation_by_code(sports_preview["evaluations"], "sports_regular")
+    sports_missing = {item["material_key"]: item for item in sports_eval["missing_materials_json"]}
+    assert "sports_test_score" in sports_missing
+    assert "sports_culture_composite_rule" in sports_missing
+    assert "sports_chapter_restrictions" in sports_missing
+    assert any("体育类常规批、体育单招和高水平运动队" in item["message"] for item in sports_eval["warning_rules_json"])
+
+    sports_single_eval = _evaluation_by_code(sports_preview["evaluations"], "sports_single_exam")
+    sports_single_missing = {item["material_key"]: item for item in sports_single_eval["missing_materials_json"]}
+    assert "athlete_level_certificate" in sports_single_missing
+    assert "sports_single_exam_arrangement" in sports_single_missing
+    assert "sports_single_college_chapter" in sports_single_missing
+
+    high_level_eval = _evaluation_by_code(sports_preview["evaluations"], "high_level_sports")
+    high_level_missing = {item["material_key"]: item for item in high_level_eval["missing_materials_json"]}
+    assert "high_level_athlete_level" in high_level_missing
+    assert "high_level_qualification_review" in high_level_missing
+    assert "high_level_college_chapter" in high_level_missing
+
+    client.put(
+        f"/api/gaokao/students/{student_id}/pathway-profile",
+        json={
+            "province": "山东",
+            "candidate_type": "general",
+            "has_gaokao_registration": True,
+            "accept_early_batch": True,
+            "accept_interview_or_physical_test": True,
+            "accept_service_commitment": True,
+            "materials_json": {},
+        },
+    )
+    general_preview = client.post(
+        f"/api/gaokao/students/{student_id}/pathway-evaluations/preview",
+        params={"target_year": 2026, "province": "山东"},
+    ).json()
+    early_a_eval = _evaluation_by_code(general_preview["evaluations"], "summer_general_early_a")
+    early_a_missing = {item["material_key"]: item for item in early_a_eval["missing_materials_json"]}
+    assert "early_batch_physical_political_review" in early_a_missing
+    assert "early_batch_chapter_limits" in early_a_missing
+
+    early_b_eval = _evaluation_by_code(general_preview["evaluations"], "summer_general_early_b")
+    early_b_missing = {item["material_key"]: item for item in early_b_eval["missing_materials_json"]}
+    assert "early_b_service_contract" in early_b_missing
+    assert "early_batch_chapter_limits" in early_b_missing
+
+    special_eval = _evaluation_by_code(general_preview["evaluations"], "summer_special_type")
+    special_missing = {item["material_key"]: item for item in special_eval["missing_materials_json"]}
+    assert "special_type_score_line_ready" in special_missing
+    assert "special_type_qualification" in special_missing
+    assert "special_type_application_review" in special_missing
+    assert "special_type_chapter_limits" in special_missing
+
+
 def test_student_pathway_evaluations_can_be_persisted(client):
     client.post("/api/gaokao/pathways/bootstrap-shandong", params={"target_year": 2026})
     student_id = _first_student_id(client)

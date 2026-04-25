@@ -119,6 +119,9 @@ describe("student pathway profile helpers", () => {
     expect(materials.find((item) => item.key === "comprehensive_quality_evaluation")?.checked).toBe(true);
     expect(materials.find((item) => item.key === "single_exam_college_chapter_plan")?.label).toBe("单招院校章程和分专业计划");
     expect(materials.find((item) => item.key === "spring_exam_score_line")?.help).toContain("本科或专科批分数线");
+    expect(materials.find((item) => item.key === "art_chapter_restrictions")?.help).toContain("身高");
+    expect(materials.find((item) => item.key === "sports_single_exam_arrangement")?.label).toBe("体育单招文化考试和体育专项考试安排");
+    expect(materials.find((item) => item.key === "high_level_college_chapter")?.help).toContain("文化成绩");
   });
 
   it("aggregates missing materials across pathway evaluations", () => {
@@ -143,6 +146,8 @@ describe("student pathway profile helpers", () => {
     expect(gaps.find((item) => item.key === "comprehensive_quality_evaluation")?.label).toBe("综合素质评价材料");
     expect(formatPathwayMaterialKey("accept_service_commitment")).toBe("定向服务约束接受度");
     expect(formatPathwayMaterialKey("comprehensive_college_chapter_plan")).toBe("综评院校章程和分专业计划");
+    expect(formatPathwayMaterialKey("early_batch_physical_political_review")).toBe("提前批体检、面试、政审或背景调查材料");
+    expect(formatPathwayMaterialKey("special_type_chapter_limits")).toBe("特殊类型高校章程和测试限制");
   });
 
   it("summarizes evaluation statuses for the teacher-facing result strip", () => {

@@ -1254,3 +1254,10 @@
   - 最新数据健康仍为 `warning`，P0 缺口仍为 6 条；`npm run backend:p0-check -- --json` 为 `ok: true`，备份包 `data/backups/p0_delivery_backup_20260425_170902.zip`
   - C3 验证已通过：`git diff --check`、定向后端导出 `6 passed`、山东工作台前端单测 `5 passed`、`npm run check`（后端 `84 passed`、前端 `133 passed`、lint/build 通过）和 `npm run check:all`（E2E `32 passed`）
   - `git fetch --all --prune` 因本机 GitHub HTTPS 认证不可交互失败；后续推送或合并远端前需先恢复凭据
+- 2026-04-25 已完成 v5 第三轮窗口 D7 艺体、体育、提前批、专项路径初筛：
+  - 当前分支为 `codex/r3-d7-special-early-art-sports-pathways`
+  - `apps/backend/app/services/gaokao_pathways.py` 已新增 D7 材料标签和 23 条规则种子，覆盖艺术类本科/专科、体育类常规批、普通类提前批 A/B、普通类特殊类型批、体育单招、高水平运动队的章程、体检、政审、面试、专项资格、单科/语种/身高/视力、兼报限制和专项报名系统复核
+  - `apps/frontend/src/components/students/studentPathwayProfile.ts` 与 `apps/frontend/src/components/gaokao-pathways/pathwayCenter.ts` 已补 D7 材料清单、路径卡关键要求、风险边界和画像摘要字段；仍只做资格初筛和人工复核清单，不输出录取概率
+  - 新增 `docs/round3-special-early-art-sports-pathways.md` 并接入 `docs/README.md`
+  - 真实 `data/app.db` 已执行 `npm run backend:bootstrap-pathways -- --target-year 2026 --json`，备份为 `data/backups/app_before_pathway_bootstrap_2026_20260425_03.db`，新增规则 `23` 条，已有规则 `62` 条跳过/更新
+  - 验证：D7 定向后端 `6 passed`，D7 定向前端 `12 passed`，后端全量 `93 passed`，前端全量 `146 passed`，`frontend:build` 和 `git diff --check` 通过
