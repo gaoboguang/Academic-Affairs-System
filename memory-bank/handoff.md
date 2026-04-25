@@ -1,5 +1,11 @@
 # 交接说明
 
+## 当前主线状态（2026-04-25）
+
+- `main` 已 fast-forward 合并 `codex/09-final-integration-acceptance`；窗口 2-9 第一轮本地工作区成果已正式进入主线，功能整合提交为 `3b796b3 feat: integrate windows 2-9 final acceptance`。
+- 合并后验证已通过：`npm run backend:data-health`、`npm run backend:p0-check -- --json`（`ok: true`，备份包 `data/backups/p0_delivery_backup_20260425_092923.zip`）、`npm run check:all`（后端 `69 passed`、前端 lint、前端 `128 passed`、前端构建、E2E `31 passed`）和 `git diff --check`。
+- 下一轮可以从 `main` 进入开发规划；仍需保留 P0 数据风险边界：特殊类型只能初筛，山东公开数据和章程复核缺口继续作为后续重点。
+
 ## 下一次接手先做什么
 
 1. 先阅读 `AGENTS.md`、`memory-bank/project-context.md`、`memory-bank/active-context.md`。

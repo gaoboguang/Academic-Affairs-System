@@ -6,6 +6,16 @@
 - 后端与前端基础功能已覆盖多个业务域，README 中已记录到 M0-M6 的实现范围。
 - 后端测试与前端构建在此前环境中已验证通过。
 
+## 2026-04-25 新增
+
+- 已将 `codex/09-final-integration-acceptance` fast-forward 合并回 `main`，窗口 2-9 第一轮成果正式进入主线：
+  - 功能整合提交为 `3b796b3 feat: integrate windows 2-9 final acceptance`
+  - 合并后已执行 `npm run backend:data-health`，通过且仍保留 P0 缺口 `6` 条
+  - 合并后已执行 `npm run backend:p0-check -- --json`，结果 `ok: true`，备份包 `data/backups/p0_delivery_backup_20260425_092923.zip`
+  - 合并后已执行 `npm run check:all`，结果为后端 `69 passed`、前端 lint、前端 `22 files / 128 tests passed`、前端构建通过、E2E `31 passed`
+  - 合并后已执行 `git diff --check`，通过
+  - 当前 `main` 可作为下一轮开发规划基线；特殊类型推荐仍只能初筛和人工核对，不能包装成完整录取判断
+
 ## 2026-04-23 新增
 
 - 2026-04-24 已完成 Codex App 窗口 0 仓库审计与总控规划：

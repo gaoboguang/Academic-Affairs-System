@@ -3,7 +3,8 @@
 - 执行窗口：窗口 9，最终整合、冲突处理、发布前验收
 - 报告文件名日期：2026-04-24，沿用 Codex App v3 执行文档要求
 - 实际验收时间：2026-04-25
-- 当前分支：`codex/09-final-integration-acceptance`
+- 验收分支：`codex/09-final-integration-acceptance`
+- 主线合并状态：2026-04-25 已 fast-forward 合并进 `main`
 
 ## 1. 结论
 
@@ -162,3 +163,18 @@ npm run dev
 - 完整质量门禁通过。
 - P0 备份恢复验收通过。
 - 新增最终验收报告，用户可以直接知道当前能不能试用、怎么启动、还缺什么。
+
+## 12. main 合并确认
+
+2026-04-25 已将 `codex/09-final-integration-acceptance` fast-forward 合并回 `main`。第一轮窗口 2-9 的本地工作区成果已正式进入主线；功能整合提交为 `3b796b3 feat: integrate windows 2-9 final acceptance`。
+
+合并后重新执行的验证结果：
+
+| 命令 | 结果 |
+| --- | --- |
+| `npm run backend:data-health` | 通过；核心表缺失 `0`、空表 `0`、需关注表 `2`、P0 缺口 `6` |
+| `npm run backend:p0-check -- --json` | 通过，`ok: true`；备份包 `data/backups/p0_delivery_backup_20260425_092923.zip` |
+| `npm run check:all` | 通过；后端 `69 passed`、前端 lint、前端 `22 files / 128 tests passed`、前端构建、E2E `31 passed` |
+| `git diff --check` | 通过 |
+
+主线结论：`main` 已可作为下一轮开发规划基线。继续规划时仍需保留本报告第 7 节的数据风险，尤其是特殊类型推荐只能作为初筛和人工核对参考。
