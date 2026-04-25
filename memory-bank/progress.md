@@ -8,6 +8,14 @@
 
 ## 2026-04-25 新增
 
+- 已完成 v5 第三轮窗口 D2：山东升学路径官方规则字典与 bootstrap：
+  - `apps/backend/app/services/gaokao_pathways.py` 已把山东路径 bootstrap 扩展为官方来源文档登记、路径来源追溯和 D2 规则字典装载；路径与规则都会写入 `source_document_id`
+  - D2 规则覆盖普通类常规批、普通类提前批 A/B、普通类特殊类型批、春季高考本/专、高职单招、高职综评、艺术本/专、体育常规、体育单招和高水平运动队
+  - 新增 `scripts/bootstrap_gaokao_pathways.py`、根命令 `npm run backend:bootstrap-pathways -- --target-year 2026`，并同步 `scripts/backend-cli.cjs`、`package.json`、`scripts/README.md`、`README.md`
+  - 新增 `docs/round3-shandong-pathway-rules.md`，记录 D2 官方来源、规则类型、路径边界和 D3/D4 后续注意事项；`docs/README.md` 已加入入口
+  - 真实 `data/app.db` 已运行 `npm run backend:bootstrap-pathways -- --target-year 2026 --json`，装载前备份为 `data/backups/app_before_pathway_bootstrap_2026_20260425_01.db`，结果为路径 `13` 条、规则 `48` 条、D2 政策来源文档 `11` 条；再次执行 `--no-backup` 幂等结果为新增 `0`
+  - 验证：`npm run backend:test -- apps/backend/tests/test_gaokao_pathways.py -q` 为 `3 passed`；`npm run backend:test -- apps/backend/tests -q` 为 `87 passed`；`npm run backend:data-health -- --json` 通过且仍保留 P0 缺口 `6` 条；`git diff --check` 通过
+
 - 已完成 v5 第三轮窗口 D1：山东升学路径数据模型与规则引擎底座：
   - 新增 `GaokaoPathway`、`GaokaoPathwayRule`、`StudentPathwayProfile`、`StudentPathwayEvaluation` 模型，并通过迁移 `20260425_0018_gaokao_pathway_schema.py` 创建 `gaokao_pathway`、`gaokao_pathway_rule`、`student_pathway_profile`、`student_pathway_evaluation`
   - 新增 `apps/backend/app/schemas/gaokao_pathway.py`、`apps/backend/app/repositories/gaokao_pathways.py`、`apps/backend/app/services/gaokao_pathways.py`，规则引擎支持 `passed / failed / unknown` 三态评估，并输出状态、材料缺口、人工复核项和下一步动作

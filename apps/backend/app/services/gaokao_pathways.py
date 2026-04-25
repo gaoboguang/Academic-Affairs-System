@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 
 from fastapi import HTTPException
@@ -28,6 +29,7 @@ from app.schemas.gaokao_pathway import (
     StudentPathwayProfileRead,
     StudentPathwayRuleEvaluationRead,
 )
+from app.services.gaokao_imports import GaokaoSourceDocumentSeed, upsert_gaokao_source_document
 
 
 DEFAULT_PROVINCE = "山东"
@@ -63,6 +65,27 @@ class PathwaySeed:
     summary: str
     risk_level: str
     notes_json: dict[str, object]
+    source_key: str = "shandong_2026_registration"
+
+
+@dataclass(frozen=True)
+class PolicySourceSeed:
+    source_key: str
+    seed: GaokaoSourceDocumentSeed
+    status: str = "registered"
+
+
+@dataclass(frozen=True)
+class PathwayRuleSeed:
+    pathway_code: str
+    rule_code: str
+    rule_name: str
+    rule_type: str
+    severity: str
+    condition_json: dict[str, object]
+    message_template: str
+    source_key: str
+    manual_review_required: bool = False
 
 
 PATHWAY_SEEDS: tuple[PathwaySeed, ...] = (
@@ -78,7 +101,12 @@ PATHWAY_SEEDS: tuple[PathwaySeed, ...] = (
         recommendation_depth="full_rank_recommendation",
         summary="可接入现有山东普通类冲稳保推荐；正式填报前仍需核对 2026 官方计划和章程。",
         risk_level="medium",
-        notes_json={"entry": "shandong_rush_stable_safe", "official_boundary": "最终以官方发布和高校章程为准"},
+        notes_json={
+            "entry": "shandong_rush_stable_safe",
+            "official_boundary": "最终以官方发布和高校章程为准",
+            "source_status": "2026 普通类正式招生计划和录取意见发布后需继续更新",
+        },
+        source_key="shandong_2025_admission_policy_reference",
     ),
     PathwaySeed(
         "summer_general_early_a",
@@ -93,6 +121,7 @@ PATHWAY_SEEDS: tuple[PathwaySeed, ...] = (
         "用于军事、公安政法、飞行技术、航海、消防救援等方向的资格提醒。",
         "high",
         {"boundary": "只做资格初筛，不给录取概率"},
+        "shandong_2025_admission_policy_reference",
     ),
     PathwaySeed(
         "summer_general_early_b",
@@ -107,6 +136,7 @@ PATHWAY_SEEDS: tuple[PathwaySeed, ...] = (
         "用于公费师范生、省属公费生、定向就业等路径的规则提醒。",
         "high",
         {"boundary": "需人工核对定向就业、签约和服务年限"},
+        "shandong_2025_admission_policy_reference",
     ),
     PathwaySeed(
         "summer_special_type",
@@ -121,6 +151,7 @@ PATHWAY_SEEDS: tuple[PathwaySeed, ...] = (
         "用于高校专项等需资格审核路径的资格提醒。",
         "high",
         {"boundary": "资格名单、前置报名和高校测试必须人工核验"},
+        "moe_2026_special_type",
     ),
     PathwaySeed(
         "spring_exam_undergrad",
@@ -135,6 +166,7 @@ PATHWAY_SEEDS: tuple[PathwaySeed, ...] = (
         "春季高考路径必须核对专业类别和对应分数线。",
         "high",
         {"boundary": "缺专门录取结果时只能初筛"},
+        "shandong_2026_spring_exam_standard",
     ),
     PathwaySeed(
         "spring_exam_junior",
@@ -149,6 +181,7 @@ PATHWAY_SEEDS: tuple[PathwaySeed, ...] = (
         "春季高考专科路径必须核对专业类别和院校章程。",
         "high",
         {"boundary": "缺专门录取结果时只能初筛"},
+        "shandong_2026_spring_exam_standard",
     ),
     PathwaySeed(
         "vocational_single_exam",
@@ -163,6 +196,7 @@ PATHWAY_SEEDS: tuple[PathwaySeed, ...] = (
         "面向中职应届、社会人员等，重点核对报名、文化素质和专业技能测试。",
         "high",
         {"boundary": "不等同于夏季普通类常规批"},
+        "shandong_2026_single_comprehensive",
     ),
     PathwaySeed(
         "vocational_comprehensive",
@@ -177,6 +211,7 @@ PATHWAY_SEEDS: tuple[PathwaySeed, ...] = (
         "面向普通高中应届毕业生，重点核对综合素质评价和院校测试要求。",
         "high",
         {"boundary": "只做资格初筛和材料缺口提醒"},
+        "shandong_2026_single_comprehensive",
     ),
     PathwaySeed(
         "art_undergrad",
@@ -191,6 +226,7 @@ PATHWAY_SEEDS: tuple[PathwaySeed, ...] = (
         "艺术路径需核对统考、校考、文化线、综合分和章程限制。",
         "high",
         {"boundary": "不同院校录取原则不同，不能给统一概率"},
+        "shandong_2026_art_policy",
     ),
     PathwaySeed(
         "art_junior",
@@ -205,6 +241,7 @@ PATHWAY_SEEDS: tuple[PathwaySeed, ...] = (
         "艺术专科路径需核对艺术类别、文化线和章程限制。",
         "high",
         {"boundary": "不同院校录取原则不同，不能给统一概率"},
+        "shandong_2026_art_policy",
     ),
     PathwaySeed(
         "sports_regular",
@@ -219,6 +256,7 @@ PATHWAY_SEEDS: tuple[PathwaySeed, ...] = (
         "体育类常规批需核对体育专业成绩、综合分和兼报限制。",
         "high",
         {"boundary": "不要和体育单招或高水平运动队混淆"},
+        "shandong_2026_sports_regular",
     ),
     PathwaySeed(
         "sports_single_exam",
@@ -233,6 +271,7 @@ PATHWAY_SEEDS: tuple[PathwaySeed, ...] = (
         "体育单招是独立路径，需要专项报名、文化考试和体育专项考试。",
         "high",
         {"boundary": "仅做路径提醒和材料清单"},
+        "shandong_2026_sports_single_exam",
     ),
     PathwaySeed(
         "high_level_sports",
@@ -247,6 +286,597 @@ PATHWAY_SEEDS: tuple[PathwaySeed, ...] = (
         "高水平运动队需核对运动员等级、资格审核和高校招生简章。",
         "high",
         {"boundary": "仅做路径提醒和材料清单"},
+        "shandong_2026_high_level_sports",
+    ),
+)
+
+
+D2_POLICY_SOURCE_SEEDS: tuple[PolicySourceSeed, ...] = (
+    PolicySourceSeed(
+        "shandong_2026_registration",
+        GaokaoSourceDocumentSeed(
+            province="山东",
+            year=2026,
+            source_type="pathway_policy",
+            title="关于做好山东省2026年普通高等学校招生考试报名工作的通知",
+            url="https://www.sdzk.cn/NewsInfo.aspx?BCID=20&CID=1117&NewsID=7061",
+            official_org="山东省教育招生考试院",
+            source_registry_code="sdzk",
+            published_at=date(2025, 10, 27),
+            parser_name="shandong_pathway_policy_reference",
+            note="D2 路径规则用于确认春季/夏季高考报名、报名条件和缴费边界。",
+        ),
+    ),
+    PolicySourceSeed(
+        "shandong_2025_admission_policy_reference",
+        GaokaoSourceDocumentSeed(
+            province="山东",
+            year=2025,
+            source_type="pathway_policy_reference",
+            title="山东省2025年普通高等学校招生录取工作的意见",
+            url="https://www.sdzk.cn/NewsInfo.aspx?BCID=20&CID=1117&NewsID=6928",
+            official_org="山东省教育招生考试院",
+            source_registry_code="sdzk",
+            published_at=date(2025, 6, 18),
+            parser_name="shandong_pathway_policy_reference",
+            note="D2 仅作为普通类批次结构、提前批 A/B 和特殊类型批规则参考；2026 正式录取意见发布后必须替换或复核。",
+        ),
+        status="manual_review_required",
+    ),
+    PolicySourceSeed(
+        "shandong_2026_subject_requirement",
+        GaokaoSourceDocumentSeed(
+            province="山东",
+            year=2026,
+            source_type="subject_requirement",
+            title="2024通用版普通高校拟在山东招生专业（类）选考科目要求",
+            url="https://www.sdzk.cn/NewsInfo.aspx?NewsID=6819",
+            official_org="山东省教育招生考试院",
+            source_registry_code="sdzk",
+            published_at=date(2025, 3, 17),
+            parser_name="shandong_subject_requirement",
+            note="D2 路径规则用于普通类、提前批和高校专业选科要求复核。",
+        ),
+    ),
+    PolicySourceSeed(
+        "shandong_2026_spring_exam_standard",
+        GaokaoSourceDocumentSeed(
+            province="山东",
+            year=2026,
+            source_type="spring_exam_category_standard",
+            title="山东省春季高考统一考试招生专业类别考试标准（2026年版）",
+            url="https://www.sdzk.cn/NewsInfo.aspx?NewsID=7088",
+            official_org="山东省教育招生考试院",
+            source_registry_code="sdzk",
+            published_at=date(2025, 12, 5),
+            parser_name="shandong_pathway_policy_reference",
+            note="D2 路径规则用于春季高考专业类别一致性和知识/技能考试模块复核。",
+        ),
+    ),
+    PolicySourceSeed(
+        "shandong_2026_single_comprehensive",
+        GaokaoSourceDocumentSeed(
+            province="山东",
+            year=2026,
+            source_type="policy",
+            title="关于做好2026年高职（专科）单独考试招生和综合评价招生工作的通知",
+            url="https://edu.shandong.gov.cn/art/2025/12/22/art_107093_10344338.html",
+            official_org="山东省教育厅",
+            source_registry_code="sdedu",
+            published_at=date(2025, 12, 22),
+            parser_name="shandong_pathway_policy_reference",
+            note="D2 路径规则用于单招/综评招生对象、报名、测试、专业类别和院校章程边界。",
+        ),
+    ),
+    PolicySourceSeed(
+        "shandong_2026_art_policy",
+        GaokaoSourceDocumentSeed(
+            province="山东",
+            year=2026,
+            source_type="art_pathway_policy",
+            title="关于印发山东省2026年普通高等学校艺术类专业招生工作实施方案的通知",
+            url="https://www.sdzk.cn/NewsInfo.aspx?BCID=21&CID=1142&NewsID=7078",
+            official_org="山东省教育招生考试院",
+            source_registry_code="sdzk",
+            published_at=date(2025, 11, 24),
+            parser_name="shandong_pathway_policy_reference",
+            note="D2 路径规则用于艺术类别、省统考/省际联考/校考、综合分、兼报和章程复核。",
+        ),
+    ),
+    PolicySourceSeed(
+        "shandong_2026_sports_regular",
+        GaokaoSourceDocumentSeed(
+            province="山东",
+            year=2026,
+            source_type="sports_pathway_policy",
+            title="山东省教育厅关于做好山东省2026年普通高校体育类专业招生有关工作的通知",
+            url="https://www.sdzk.cn/NewsInfo.aspx?NewsID=7165",
+            official_org="山东省教育招生考试院",
+            source_registry_code="sdzk",
+            published_at=date(2026, 4, 1),
+            parser_name="shandong_pathway_policy_reference",
+            note="D2 路径规则用于体育类报名、体育专业统一测试、综合分和兼报复核。",
+        ),
+    ),
+    PolicySourceSeed(
+        "shandong_2026_sports_single_exam",
+        GaokaoSourceDocumentSeed(
+            province="山东",
+            year=2026,
+            source_type="sports_single_exam_policy",
+            title="关于做好2026年普通高等学校运动训练、武术与民族传统体育专业招生工作的通知",
+            url="https://www.sdzk.cn/NewsInfo.aspx?NewsID=7120",
+            official_org="山东省教育招生考试院",
+            source_registry_code="sdzk",
+            published_at=date(2025, 12, 22),
+            parser_name="shandong_pathway_policy_reference",
+            note="D2 路径规则用于体育单招报名、专项报名系统、文化考试和专项考试复核。",
+        ),
+    ),
+    PolicySourceSeed(
+        "sport_2026_sports_single_exam_management",
+        GaokaoSourceDocumentSeed(
+            province="全国",
+            year=2026,
+            source_type="sports_single_exam_policy",
+            title="2026年普通高等学校运动训练、武术与民族传统体育专业招生管理办法",
+            url="https://www.sport.gov.cn/kjs/n23837299/c29231171/content.html",
+            official_org="国家体育总局科教司",
+            source_registry_code=None,
+            published_at=date(2025, 11, 20),
+            parser_name="shandong_pathway_policy_reference",
+            note="D2 路径规则用于体育单招运动员等级、报名系统、考试和招生项目总规则复核。",
+        ),
+    ),
+    PolicySourceSeed(
+        "shandong_2026_high_level_sports",
+        GaokaoSourceDocumentSeed(
+            province="山东",
+            year=2026,
+            source_type="high_level_sports_policy",
+            title="关于做好2026年普通高等学校在山东省招收高水平运动队相关工作的通知",
+            url="https://www.sdzk.cn/NewsInfo.aspx?NewsID=7121",
+            official_org="山东省教育招生考试院",
+            source_registry_code="sdzk",
+            published_at=date(2025, 12, 22),
+            parser_name="shandong_pathway_policy_reference",
+            note="D2 路径规则用于高水平运动队高考报名、等级证书、项目一致性和资格审查复核。",
+        ),
+    ),
+    PolicySourceSeed(
+        "moe_2026_special_type",
+        GaokaoSourceDocumentSeed(
+            province="全国",
+            year=2026,
+            source_type="special_type_policy",
+            title="教育部办公厅关于做好2026年普通高等学校部分特殊类型招生工作的通知",
+            url="https://www.moe.gov.cn/srcsite/A15/moe_776/tslxzs/202510/t20251031_1418664.html",
+            official_org="教育部办公厅",
+            source_registry_code=None,
+            published_at=date(2025, 10, 17),
+            parser_name="shandong_pathway_policy_reference",
+            note="D2 路径规则用于特殊类型、高校专项、综合评价、高水平运动队等资格审核和信息公示边界。",
+        ),
+    ),
+    PolicySourceSeed(
+        "shandong_2026_flight_tech",
+        GaokaoSourceDocumentSeed(
+            province="山东",
+            year=2026,
+            source_type="early_batch_policy",
+            title="关于做好山东省2026年普通高等学校招收民航飞行技术专业工作的通知",
+            url="https://www.sdzk.cn/NewsInfo.aspx?NewsID=7069",
+            official_org="山东省教育招生考试院",
+            source_registry_code="sdzk",
+            published_at=date(2025, 11, 11),
+            parser_name="shandong_pathway_policy_reference",
+            note="D2 路径规则用于提前批 A 类中飞行技术方向的年龄、体检、背景调查、语种和选科复核。",
+        ),
+    ),
+)
+
+
+D2_PATHWAY_RULE_SEEDS: tuple[PathwayRuleSeed, ...] = (
+    PathwayRuleSeed(
+        "summer_general_regular",
+        "d2_general_gaokao_registration",
+        "山东普通类高考报名确认",
+        "hard_gate",
+        "required",
+        {"type": "boolean_is", "field": "has_gaokao_registration", "value": True},
+        "学生画像需确认已完成山东 2026 普通高校招生考试报名。",
+        "shandong_2026_registration",
+    ),
+    PathwayRuleSeed(
+        "summer_general_regular",
+        "d2_general_subject_combination",
+        "普通类选科组合确认",
+        "subject_required",
+        "required",
+        {"type": "field_present", "field": "subject_combination"},
+        "补充学生选科组合后，才能按专业选科要求过滤候选。",
+        "shandong_2026_subject_requirement",
+    ),
+    PathwayRuleSeed(
+        "summer_general_regular",
+        "d2_general_2026_plan_pending",
+        "2026 正式计划待发布复核",
+        "soft_warning",
+        "warning",
+        {"type": "manual_review", "source_status": "pending_official_release"},
+        "2026 普通类正式招生计划、分数线和录取意见发布后必须重新导入并复核。",
+        "shandong_2025_admission_policy_reference",
+    ),
+    PathwayRuleSeed(
+        "summer_general_regular",
+        "d2_general_chapter_review",
+        "普通类高校章程限制核验",
+        "chapter_check",
+        "review",
+        {"type": "manual_review"},
+        "正式填报前逐校核对体检、语种、单科成绩、校区和专业备注等高校章程限制。",
+        "shandong_2025_admission_policy_reference",
+    ),
+    PathwayRuleSeed(
+        "summer_general_early_a",
+        "d2_early_a_candidate_type",
+        "提前批 A 类普通类身份确认",
+        "hard_gate",
+        "required",
+        {"type": "field_in", "field": "candidate_type", "values": ["general", "普通类"]},
+        "提前批 A 类需先确认学生为夏季高考普通类相关考生。",
+        "shandong_2025_admission_policy_reference",
+    ),
+    PathwayRuleSeed(
+        "summer_general_early_a",
+        "d2_early_a_physical_interview_acceptance",
+        "提前批 A 类体检面试接受度",
+        "hard_gate",
+        "required",
+        {"type": "boolean_is", "field": "accept_interview_or_physical_test", "value": True},
+        "该路径通常涉及体检、面试、体能测试、政审或背景调查；学生需确认可以接受。",
+        "shandong_2025_admission_policy_reference",
+    ),
+    PathwayRuleSeed(
+        "summer_general_early_a",
+        "d2_early_a_flight_manual_review",
+        "飞行技术等方向专项核验",
+        "manual_check",
+        "review",
+        {"type": "manual_review"},
+        "如关注飞行技术等提前批 A 类方向，需逐项核验年龄、性别、外语、选科、背景调查和招飞体检标准。",
+        "shandong_2026_flight_tech",
+        manual_review_required=True,
+    ),
+    PathwayRuleSeed(
+        "summer_general_early_b",
+        "d2_early_b_candidate_type",
+        "提前批 B 类普通类身份确认",
+        "hard_gate",
+        "required",
+        {"type": "field_in", "field": "candidate_type", "values": ["general", "普通类"]},
+        "提前批 B 类需先确认学生为夏季高考普通类相关考生。",
+        "shandong_2025_admission_policy_reference",
+    ),
+    PathwayRuleSeed(
+        "summer_general_early_b",
+        "d2_early_b_service_commitment",
+        "定向就业或服务约束确认",
+        "hard_gate",
+        "required",
+        {"type": "boolean_is", "field": "accept_service_commitment", "value": True},
+        "公费师范生、省属公费生、定向就业等路径需学生和家庭确认可接受签约、服务年限和就业地区约束。",
+        "shandong_2025_admission_policy_reference",
+    ),
+    PathwayRuleSeed(
+        "summer_general_early_b",
+        "d2_early_b_contract_manual_review",
+        "提前批 B 类签约章程复核",
+        "chapter_check",
+        "review",
+        {"type": "manual_review"},
+        "需人工核对当年招生计划、签约流程、服务地限制、违约责任和高校章程。",
+        "shandong_2025_admission_policy_reference",
+        manual_review_required=True,
+    ),
+    PathwayRuleSeed(
+        "summer_special_type",
+        "d2_special_type_score_line_review",
+        "特殊类型招生控制线复核",
+        "score_line",
+        "required",
+        {"type": "material_present", "key": "special_type_score_line_ready"},
+        "补充当年特殊类型招生控制线或确认分数线后，再判断资格边界。",
+        "shandong_2025_admission_policy_reference",
+        manual_review_required=True,
+    ),
+    PathwayRuleSeed(
+        "summer_special_type",
+        "d2_special_type_qualification",
+        "特殊类型资格材料",
+        "material_required",
+        "required",
+        {"type": "material_present", "key": "special_type_qualification"},
+        "补充高校专项、资格名单、前置报名或高校测试等特殊类型资格材料。",
+        "moe_2026_special_type",
+        manual_review_required=True,
+    ),
+    PathwayRuleSeed(
+        "spring_exam_undergrad",
+        "d2_spring_undergrad_candidate_type",
+        "春季高考考生类型确认",
+        "hard_gate",
+        "required",
+        {"type": "field_in", "field": "candidate_type", "values": ["spring_exam", "春季高考"]},
+        "春季高考本科批仅适用于春季高考相关考生，不能与夏季普通类规则混用。",
+        "shandong_2026_registration",
+    ),
+    PathwayRuleSeed(
+        "spring_exam_undergrad",
+        "d2_spring_undergrad_category",
+        "春季高考专业类别一致",
+        "category_match",
+        "required",
+        {"type": "field_present", "field": "spring_exam_category"},
+        "补充春季高考专业类别，后续只能在对应类别内做初筛。",
+        "shandong_2026_spring_exam_standard",
+    ),
+    PathwayRuleSeed(
+        "spring_exam_junior",
+        "d2_spring_junior_candidate_type",
+        "春季高考专科考生类型确认",
+        "hard_gate",
+        "required",
+        {"type": "field_in", "field": "candidate_type", "values": ["spring_exam", "春季高考"]},
+        "春季高考专科批仅适用于春季高考相关考生，不能与夏季普通类规则混用。",
+        "shandong_2026_registration",
+    ),
+    PathwayRuleSeed(
+        "spring_exam_junior",
+        "d2_spring_junior_category",
+        "春季高考专科专业类别一致",
+        "category_match",
+        "required",
+        {"type": "field_present", "field": "spring_exam_category"},
+        "补充春季高考专业类别，后续只能在对应类别内做初筛。",
+        "shandong_2026_spring_exam_standard",
+    ),
+    PathwayRuleSeed(
+        "vocational_single_exam",
+        "d2_single_registration",
+        "单招高考报名确认",
+        "hard_gate",
+        "required",
+        {"type": "boolean_is", "field": "has_gaokao_registration", "value": True},
+        "高职单招考生也需确认已完成山东 2026 普通高校招生考试报名。",
+        "shandong_2026_single_comprehensive",
+    ),
+    PathwayRuleSeed(
+        "vocational_single_exam",
+        "d2_single_candidate_scope",
+        "单招招生对象范围",
+        "hard_gate",
+        "required",
+        {
+            "type": "any",
+            "items": [
+                {"type": "boolean_is", "field": "is_vocational_student", "value": True},
+                {"type": "boolean_is", "field": "is_social_candidate", "value": True},
+            ],
+        },
+        "高职单招主要面向中职应届毕业生和社会人员；需在学生画像中确认身份。",
+        "shandong_2026_single_comprehensive",
+    ),
+    PathwayRuleSeed(
+        "vocational_single_exam",
+        "d2_single_social_equivalent",
+        "社会人员高中阶段学历或同等学力",
+        "material_required",
+        "required",
+        {"type": "material_present", "key": "high_school_equivalent"},
+        "如学生按社会人员报考单招，需补充高中阶段毕业证书或同等学力材料。",
+        "shandong_2026_single_comprehensive",
+    ),
+    PathwayRuleSeed(
+        "vocational_single_exam",
+        "d2_single_school_chapter",
+        "单招院校章程和测试方式",
+        "chapter_check",
+        "review",
+        {"type": "manual_review"},
+        "逐校核对招生章程、文化素质考试、专业技能测试、退役士兵测试方式和专业类别要求。",
+        "shandong_2026_single_comprehensive",
+        manual_review_required=True,
+    ),
+    PathwayRuleSeed(
+        "vocational_comprehensive",
+        "d2_comprehensive_candidate_scope",
+        "综评普通高中应届身份",
+        "hard_gate",
+        "required",
+        {
+            "type": "all",
+            "items": [
+                {"type": "field_in", "field": "candidate_type", "values": ["general", "普通类"]},
+                {"type": "boolean_is", "field": "is_fresh_graduate", "value": True},
+            ],
+        },
+        "高职综合评价招生面向普通高中应届毕业生；需确认普通类身份和应届状态。",
+        "shandong_2026_single_comprehensive",
+    ),
+    PathwayRuleSeed(
+        "vocational_comprehensive",
+        "d2_comprehensive_quality_record",
+        "综合素质评价材料",
+        "material_required",
+        "required",
+        {"type": "material_present", "key": "comprehensive_quality_evaluation"},
+        "补充综合素质评价信息，供高职综评路径初筛和院校测试复核使用。",
+        "shandong_2026_single_comprehensive",
+        manual_review_required=True,
+    ),
+    PathwayRuleSeed(
+        "vocational_comprehensive",
+        "d2_comprehensive_test_review",
+        "综评素质测试或面试复核",
+        "manual_check",
+        "review",
+        {"type": "manual_review"},
+        "逐校核对综合评价招生章程、素质测试或面试安排、成绩组成和录取规则。",
+        "shandong_2026_single_comprehensive",
+        manual_review_required=True,
+    ),
+    PathwayRuleSeed(
+        "art_undergrad",
+        "d2_art_undergrad_track",
+        "艺术类别确认",
+        "hard_gate",
+        "required",
+        {
+            "type": "any",
+            "items": [
+                {"type": "field_in", "field": "candidate_type", "values": ["art", "艺术类"]},
+                {"type": "field_present", "field": "art_track"},
+            ],
+        },
+        "艺术类本科路径需先确认艺术类别或艺术方向。",
+        "shandong_2026_art_policy",
+    ),
+    PathwayRuleSeed(
+        "art_undergrad",
+        "d2_art_undergrad_score",
+        "艺术统考/校考成绩与文化线",
+        "material_required",
+        "required",
+        {"type": "material_present", "key": "art_exam_score"},
+        "补充艺术统考、校考或省际联考成绩，并核对对应文化控制线。",
+        "shandong_2026_art_policy",
+        manual_review_required=True,
+    ),
+    PathwayRuleSeed(
+        "art_junior",
+        "d2_art_junior_track",
+        "艺术专科类别确认",
+        "hard_gate",
+        "required",
+        {
+            "type": "any",
+            "items": [
+                {"type": "field_in", "field": "candidate_type", "values": ["art", "艺术类"]},
+                {"type": "field_present", "field": "art_track"},
+            ],
+        },
+        "艺术类专科路径需先确认艺术类别或艺术方向。",
+        "shandong_2026_art_policy",
+    ),
+    PathwayRuleSeed(
+        "art_junior",
+        "d2_art_junior_chapter_review",
+        "艺术专科录取原则和章程核验",
+        "chapter_check",
+        "review",
+        {"type": "manual_review"},
+        "艺术类不同院校录取原则、综合分、身高、色觉、单科、语种等要求差异大，必须逐校复核。",
+        "shandong_2026_art_policy",
+        manual_review_required=True,
+    ),
+    PathwayRuleSeed(
+        "sports_regular",
+        "d2_sports_regular_track",
+        "体育类身份和报名确认",
+        "hard_gate",
+        "required",
+        {
+            "type": "all",
+            "items": [
+                {"type": "boolean_is", "field": "has_gaokao_registration", "value": True},
+                {
+                    "type": "any",
+                    "items": [
+                        {"type": "field_in", "field": "candidate_type", "values": ["sports", "体育类"]},
+                        {"type": "field_present", "field": "sports_track"},
+                    ],
+                },
+            ],
+        },
+        "体育类常规批需确认已参加夏季高考报名，并选择体育类或补充体育方向。",
+        "shandong_2026_sports_regular",
+    ),
+    PathwayRuleSeed(
+        "sports_regular",
+        "d2_sports_regular_score",
+        "体育专业测试成绩",
+        "material_required",
+        "required",
+        {"type": "material_present", "key": "sports_test_score"},
+        "补充山东体育专业统一测试成绩，再结合综合分和批次线做初筛。",
+        "shandong_2026_sports_regular",
+        manual_review_required=True,
+    ),
+    PathwayRuleSeed(
+        "sports_regular",
+        "d2_sports_regular_not_single_exam",
+        "体育常规批与体育单招区分",
+        "soft_warning",
+        "warning",
+        {"type": "manual_review"},
+        "体育类常规批、体育单招和高水平运动队是不同路径，报名系统、测试和录取规则不能混用。",
+        "shandong_2026_sports_regular",
+        manual_review_required=True,
+    ),
+    PathwayRuleSeed(
+        "sports_single_exam",
+        "d2_sports_single_athlete_level",
+        "体育单招运动员等级",
+        "material_required",
+        "required",
+        {"type": "material_present", "key": "athlete_level_certificate"},
+        "补充运动员技术等级证书，并核对项目是否与目标院校招生项目一致。",
+        "sport_2026_sports_single_exam_management",
+        manual_review_required=True,
+    ),
+    PathwayRuleSeed(
+        "sports_single_exam",
+        "d2_sports_single_registration_system",
+        "体育单招专项报名系统",
+        "time_window",
+        "review",
+        {"type": "manual_review"},
+        "按中国运动文化教育网或体教联盟 APP 的体育单招系统完成注册、报名、缴费和考试安排核对。",
+        "shandong_2026_sports_single_exam",
+        manual_review_required=True,
+    ),
+    PathwayRuleSeed(
+        "high_level_sports",
+        "d2_high_level_gaokao_registration",
+        "高水平运动队高考报名",
+        "hard_gate",
+        "required",
+        {"type": "boolean_is", "field": "has_gaokao_registration", "value": True},
+        "高水平运动队考生必须参加山东 2026 普通高校招生考试报名。",
+        "shandong_2026_high_level_sports",
+    ),
+    PathwayRuleSeed(
+        "high_level_sports",
+        "d2_high_level_athlete_level",
+        "高水平运动队等级证书",
+        "material_required",
+        "required",
+        {"type": "material_present", "key": "high_level_athlete_level"},
+        "补充国家一级运动员（含）以上技术等级等材料，并核对项目一致性。",
+        "shandong_2026_high_level_sports",
+        manual_review_required=True,
+    ),
+    PathwayRuleSeed(
+        "high_level_sports",
+        "d2_high_level_college_qualification",
+        "高水平运动队高校简章和资格审核",
+        "chapter_check",
+        "review",
+        {"type": "manual_review"},
+        "逐校核对阳光高考或高校招生网站公布的招生项目、报名条件、资格审查和专业测试要求。",
+        "moe_2026_special_type",
+        manual_review_required=True,
     ),
 )
 
@@ -268,13 +898,16 @@ def bootstrap_shandong_pathways(
     *,
     target_year: int = DEFAULT_TARGET_YEAR,
 ) -> GaokaoPathwayBootstrapResponse:
+    source_ids = _ensure_d2_policy_source_documents(session)
     created_count = 0
     skipped_count = 0
     rule_created_count = 0
     rule_skipped_count = 0
     for seed in PATHWAY_SEEDS:
+        source_id = source_ids.get(seed.source_key)
         pathway = get_pathway_by_code(session, province=DEFAULT_PROVINCE, pathway_code=seed.pathway_code)
         if pathway:
+            _apply_pathway_seed(pathway, seed, source_id)
             skipped_count += 1
         else:
             pathway = GaokaoPathway(
@@ -289,6 +922,7 @@ def bootstrap_shandong_pathways(
                 max_volunteer_count=seed.max_volunteer_count,
                 recommendation_depth=seed.recommendation_depth,
                 status="active",
+                source_document_id=source_id,
                 summary=seed.summary,
                 risk_level=seed.risk_level,
                 notes_json=seed.notes_json,
@@ -297,7 +931,10 @@ def bootstrap_shandong_pathways(
             session.flush()
             created_count += 1
 
-        result = _ensure_baseline_rule(session, pathway, target_year)
+        result = _ensure_baseline_rule(session, pathway, target_year, source_ids)
+        rule_created_count += result[0]
+        rule_skipped_count += result[1]
+        result = _ensure_d2_pathway_rules(session, pathway, target_year, source_ids)
         rule_created_count += result[0]
         rule_skipped_count += result[1]
 
@@ -308,7 +945,11 @@ def bootstrap_shandong_pathways(
             action="bootstrap_shandong_pathways",
             target_type="gaokao_pathway",
             target_id=str(target_year),
-            detail_json={"created_count": created_count, "rule_created_count": rule_created_count},
+            detail_json={
+                "created_count": created_count,
+                "rule_created_count": rule_created_count,
+                "source_document_count": len(source_ids),
+            },
         )
 
     return GaokaoPathwayBootstrapResponse(
@@ -320,6 +961,68 @@ def bootstrap_shandong_pathways(
         rule_created_count=rule_created_count,
         rule_skipped_count=rule_skipped_count,
     )
+
+
+def _ensure_d2_policy_source_documents(session: Session) -> dict[str, int]:
+    source_ids: dict[str, int] = {}
+    for policy_seed in D2_POLICY_SOURCE_SEEDS:
+        document, _ = upsert_gaokao_source_document(session, policy_seed.seed)
+        document.status = policy_seed.status
+        session.flush()
+        source_ids[policy_seed.source_key] = document.id
+    return source_ids
+
+
+def _apply_pathway_seed(
+    pathway: GaokaoPathway,
+    seed: PathwaySeed,
+    source_document_id: int | None,
+) -> None:
+    pathway.pathway_name = seed.pathway_name
+    pathway.pathway_group = seed.pathway_group
+    pathway.student_type = seed.student_type
+    pathway.exam_type = seed.exam_type
+    pathway.batch_name = seed.batch_name
+    pathway.volunteer_mode = seed.volunteer_mode
+    pathway.max_volunteer_count = seed.max_volunteer_count
+    pathway.recommendation_depth = seed.recommendation_depth
+    pathway.status = "active"
+    pathway.source_document_id = source_document_id
+    pathway.summary = seed.summary
+    pathway.risk_level = seed.risk_level
+    pathway.notes_json = seed.notes_json
+    pathway.is_active = True
+
+
+def _ensure_d2_pathway_rules(
+    session: Session,
+    pathway: GaokaoPathway,
+    target_year: int,
+    source_ids: dict[str, int],
+) -> tuple[int, int]:
+    created_count = 0
+    skipped_count = 0
+    for seed in D2_PATHWAY_RULE_SEEDS:
+        if seed.pathway_code != pathway.pathway_code:
+            continue
+        result = _ensure_rule_from_payload(
+            session,
+            pathway,
+            GaokaoPathwayRulePayload(
+                rule_code=seed.rule_code,
+                rule_name=seed.rule_name,
+                rule_type=seed.rule_type,
+                severity=seed.severity,
+                condition_json=seed.condition_json,
+                message_template=seed.message_template,
+                source_document_id=source_ids.get(seed.source_key),
+                manual_review_required=seed.manual_review_required,
+                valid_from_year=target_year,
+            ),
+        )
+        created_count += result[0]
+        skipped_count += result[1]
+    return created_count, skipped_count
 
 
 def list_pathway_rules(
@@ -769,6 +1472,7 @@ def _ensure_baseline_rule(
     session: Session,
     pathway: GaokaoPathway,
     target_year: int,
+    source_ids: dict[str, int],
 ) -> tuple[int, int]:
     if pathway.recommendation_depth == "full_rank_recommendation":
         return _ensure_rule_from_payload(
@@ -781,6 +1485,7 @@ def _ensure_baseline_rule(
                 severity="required",
                 condition_json={"type": "field_in", "field": "candidate_type", "values": ["general", "普通类"]},
                 message_template="学生画像需确认为山东普通类考生，才能进入普通类常规批推荐。",
+                source_document_id=source_ids.get("shandong_2026_registration"),
                 valid_from_year=target_year,
             ),
         )
@@ -794,6 +1499,7 @@ def _ensure_baseline_rule(
             severity="review",
             condition_json={"type": "manual_review"},
             message_template="该路径需要核对官方公告、报名时间、资格材料和高校章程；当前只能做初筛或提醒。",
+            source_document_id=pathway.source_document_id,
             manual_review_required=True,
             valid_from_year=target_year,
         ),
@@ -807,6 +1513,10 @@ def _ensure_rule_from_payload(
 ) -> tuple[int, int]:
     existing = get_pathway_rule_by_code(session, pathway_id=pathway.id, rule_code=payload.rule_code)
     if existing:
+        if payload.source_document_id and not existing.source_document_id:
+            existing.source_document_id = payload.source_document_id
+        if existing.valid_from_year is None and payload.valid_from_year is not None:
+            existing.valid_from_year = payload.valid_from_year
         return (0, 1)
     rule = GaokaoPathwayRule(pathway_id=pathway.id, rule_code=payload.rule_code)
     session.add(rule)

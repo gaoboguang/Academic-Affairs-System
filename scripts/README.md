@@ -21,6 +21,7 @@
 - `npm run backend:merge-handoff`
 - `npm run backend:materialize-gaokao`
 - `npm run backend:bootstrap-special-types -- --year 2025 --year 2026`
+- `npm run backend:bootstrap-pathways -- --target-year 2026`
 - `npm run backend:gaokao-sources -- --json`
 - `npm run backend:gaokao-import-official -- --source-document-id <id> --file data/imports/gaokao/official/<year>/<file>`
 - `npm run backend:gaokao-import-shandong-core -- --json`

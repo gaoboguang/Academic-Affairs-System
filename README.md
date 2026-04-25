@@ -90,7 +90,7 @@ local-edu-tool/
 - 如需改高考库位置，可设置 `LOCAL_EDU_GAOKAO_DB_PATH=/绝对路径/local_edu.sqlite3`
 - 当前接管包已整理到 `handoffs/2026-04-21_mac_db_handoff`
 - `data/local_edu_tool/local_edu.sqlite3` 当前可以指向 handoff 包内快照；如需把其原始高考表并入主库，执行 `npm run backend:merge-handoff`
-- `data/backups/` 是主库备份目录。`backend:merge-handoff`、`backend:materialize-gaokao` 默认会先备份主库；`backend:bootstrap-special-types` 也会在写入规则前备份，除非显式传入 `-- --no-backup`
+- `data/backups/` 是主库备份目录。`backend:merge-handoff`、`backend:materialize-gaokao` 默认会先备份主库；`backend:bootstrap-special-types`、`backend:bootstrap-pathways` 也会在写入规则前备份，除非显式传入 `-- --no-backup`
 - 交付前或补数据前先执行 `npm run backend:data-health`；需要机器可读结果时执行 `npm run backend:data-health -- --json`。该 JSON 同时包含阶段一覆盖矩阵和导入审计摘要，可用于补数据前后对照
 
 ## 开发环境
@@ -190,6 +190,7 @@ npm run backend:migrate
 npm run backend:merge-handoff
 npm run backend:materialize-gaokao
 npm run backend:bootstrap-special-types -- --year 2025 --year 2026
+npm run backend:bootstrap-pathways -- --target-year 2026
 npm run backend:data-health
 npm run backend:p0-check
 npm run backend:init-demo

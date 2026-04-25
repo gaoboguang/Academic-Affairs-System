@@ -23,11 +23,12 @@ def test_bootstrap_shandong_pathways_creates_core_paths(client):
     payload = response.json()
     assert payload["total_count"] >= 10
     assert payload["created_count"] >= 10
-    assert payload["rule_created_count"] >= 10
+    assert payload["rule_created_count"] >= 35
 
     list_response = client.get("/api/gaokao/pathways", params={"province": "山东"})
     assert list_response.status_code == 200
-    codes = {item["pathway_code"] for item in list_response.json()}
+    pathways = list_response.json()
+    codes = {item["pathway_code"] for item in pathways}
     assert {
         "summer_general_regular",
         "summer_general_early_a",
@@ -41,9 +42,31 @@ def test_bootstrap_shandong_pathways_creates_core_paths(client):
         "high_level_sports",
     }.issubset(codes)
 
+    general_pathway = _pathway_by_code(pathways, "summer_general_regular")
+    assert general_pathway["source_document_id"]
+    rule_response = client.get(f"/api/gaokao/pathways/{general_pathway['id']}/rules")
+    assert rule_response.status_code == 200
+    rules = rule_response.json()
+    rule_codes = {item["rule_code"] for item in rules}
+    assert {
+        "d2_general_gaokao_registration",
+        "d2_general_subject_combination",
+        "d2_general_2026_plan_pending",
+        "d2_general_chapter_review",
+    }.issubset(rule_codes)
+    assert all(item["source_document_id"] for item in rules if item["rule_code"].startswith("d2_"))
+
+    single_pathway = _pathway_by_code(pathways, "vocational_single_exam")
+    single_rules = client.get(f"/api/gaokao/pathways/{single_pathway['id']}/rules").json()
+    assert {item["rule_code"] for item in single_rules}.issuperset(
+        {"d2_single_registration", "d2_single_candidate_scope", "d2_single_school_chapter"}
+    )
+    assert any(item["manual_review_required"] for item in single_rules if item["rule_code"].startswith("d2_"))
+
     second_response = client.post("/api/gaokao/pathways/bootstrap-shandong", params={"target_year": 2026})
     assert second_response.status_code == 200
     assert second_response.json()["created_count"] == 0
+    assert second_response.json()["rule_created_count"] == 0
 
 
 def test_student_pathway_rule_engine_reports_passed_failed_and_unknown(client):
@@ -71,6 +94,8 @@ def test_student_pathway_rule_engine_reports_passed_failed_and_unknown(client):
         json={
             "province": "山东",
             "candidate_type": "general",
+            "subject_combination": "物理,化学,生物",
+            "has_gaokao_registration": True,
             "materials_json": {},
         },
     )
@@ -92,6 +117,8 @@ def test_student_pathway_rule_engine_reports_passed_failed_and_unknown(client):
         json={
             "province": "山东",
             "candidate_type": "general",
+            "subject_combination": "物理,化学,生物",
+            "has_gaokao_registration": True,
             "materials_json": {"gaokao_registration": True},
         },
     )
@@ -100,14 +127,19 @@ def test_student_pathway_rule_engine_reports_passed_failed_and_unknown(client):
         params={"target_year": 2026, "province": "山东"},
     )
     passed_eval = _evaluation_by_code(passed_preview.json()["evaluations"], "summer_general_regular")
-    assert passed_eval["status"] == "suitable"
+    assert passed_eval["status"] == "possible"
     assert {item["result"] for item in passed_eval["matched_rules_json"]} == {"passed"}
+    assert {item["rule_code"] for item in passed_eval["warning_rules_json"]}.issuperset(
+        {"d2_general_2026_plan_pending", "d2_general_chapter_review"}
+    )
 
     client.put(
         f"/api/gaokao/students/{student_id}/pathway-profile",
         json={
             "province": "山东",
             "candidate_type": "spring_exam",
+            "subject_combination": "物理,化学,生物",
+            "has_gaokao_registration": True,
             "materials_json": {"gaokao_registration": True},
         },
     )

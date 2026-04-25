@@ -1,5 +1,11 @@
 # 决策日志
 
+## 2026-04-25：第三轮路径规则 bootstrap 必须同时写入官方来源追溯
+
+- 决定：D2 的 `bootstrap_shandong_pathways()` 不只创建路径和规则，还会先登记/更新 `gaokao_source_document`，再把 `source_document_id` 写入 `gaokao_pathway` 与 `gaokao_pathway_rule`；同时新增 `npm run backend:bootstrap-pathways -- --target-year 2026`，默认写库前备份主库。
+- 原因：第三轮要求“路径规则以数据形式落库，并保留官方来源”。如果只在后端常量里写规则或只在文档里列来源，D4 页面和后续报告无法追溯政策来源，也容易把 2026 未发布普通类正式计划误认为已导入。
+- 约束：2026 普通类正式招生计划、分数线和录取意见未发布或未导入时，只能用 `pending_official_release / manual_review_required` 口径提醒；单招、综评、春考、艺体、体育、提前批、特殊类型继续只做资格初筛、材料缺口和人工复核，不能输出录取概率。
+
 ## 2026-04-25：第三轮多路径规划单独建路径与画像表，规则评估采用三态结果
 
 - 决定：新增 `gaokao_pathway`、`gaokao_pathway_rule`、`student_pathway_profile`、`student_pathway_evaluation`，把山东多升学路径、路径规则、学生画像和评估结果从既有普通类冲稳保推荐、`special_type_rule`、`province_volunteer_rule` 中拆出独立底座。

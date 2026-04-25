@@ -62,6 +62,7 @@ function printUsage() {
   merge-handoff  把 handoff 高考原始表并入主库
   materialize-gaokao  把 raw 高考表整理到业务表
   bootstrap-special-types  装载山东特殊类型规则字典
+  bootstrap-pathways  装载山东升学路径和 D2 官方规则字典
   gaokao-sources  登记山东高考官方来源并准备导入目录
   gaokao-import-official  登记人工下载的高考官方文件和导入批次
   gaokao-import-shandong-core  导入 2023-2025 山东官方投档表、一分一段和省控线
@@ -127,6 +128,14 @@ switch (command) {
       "请先创建 `.venv` 并安装后端依赖，例如运行 `./scripts/dev.sh` 或手工执行 `pip install -e \"./apps/backend[dev]\"`。",
     );
     run(python, ["scripts/bootstrap_special_type_rules.py", ...extraArgs]);
+    break;
+  }
+  case "bootstrap-pathways": {
+    const python = requireExecutable(
+      "python",
+      "请先创建 `.venv` 并安装后端依赖，例如运行 `./scripts/dev.sh` 或手工执行 `pip install -e \"./apps/backend[dev]\"`。",
+    );
+    run(python, ["scripts/bootstrap_gaokao_pathways.py", ...extraArgs]);
     break;
   }
   case "gaokao-sources": {

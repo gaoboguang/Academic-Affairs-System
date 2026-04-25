@@ -36,11 +36,13 @@
    窗口 2 的导入体系审计与统一治理记录，覆盖导入入口、错误报告、批次摘要、导入中心和回滚边界。
 16. [`gaokao-source-import-framework-2026-04-25.md`](./gaokao-source-import-framework-2026-04-25.md)
    窗口 A1 的山东高考官方来源登记、导入批次和本地文件入场框架。
-17. [`report-export-print-audit-2026-04-24.md`](./report-export-print-audit-2026-04-24.md)
+17. [`round3-shandong-pathway-rules.md`](./round3-shandong-pathway-rules.md)
+   第三轮 D2 的山东升学路径规则字典、官方来源追溯和后续窗口注意事项。
+18. [`report-export-print-audit-2026-04-24.md`](./report-export-print-audit-2026-04-24.md)
    窗口 6 的报表、打印、Excel 导出一致性审计与修复记录。
-18. [`frontend-navigation-audit-2026-04-24.md`](./frontend-navigation-audit-2026-04-24.md)
+19. [`frontend-navigation-audit-2026-04-24.md`](./frontend-navigation-audit-2026-04-24.md)
    窗口 7 的前端导航、空态、错误提示和非程序员可读性审计记录。
-19. [`dev/README.md`](./dev/README.md)
+20. [`dev/README.md`](./dev/README.md)
    当前开发主线、分工文档和 prompt 的索引。
 
 ## 当前仍在用的文档
@@ -77,6 +79,8 @@
   窗口 2 对学生、教师、成绩、课表、录取数据、招生计划等导入入口与 `/import-center` 的统一治理记录。
 - [`gaokao-source-import-framework-2026-04-25.md`](./gaokao-source-import-framework-2026-04-25.md)
   窗口 A1 对山东高考官方来源文档、导入运行批次和本地文件目录的框架说明。
+- [`round3-shandong-pathway-rules.md`](./round3-shandong-pathway-rules.md)
+  第三轮 D2 对山东多升学路径官方规则字典、来源追溯和 bootstrap 边界的说明。
 - [`report-export-print-audit-2026-04-24.md`](./report-export-print-audit-2026-04-24.md)
   窗口 6 对报表中心、打印页和 Excel 导出的一致性审计与修复记录。
 - [`frontend-navigation-audit-2026-04-24.md`](./frontend-navigation-audit-2026-04-24.md)
