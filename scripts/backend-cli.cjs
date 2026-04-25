@@ -64,6 +64,7 @@ function printUsage() {
   bootstrap-special-types  装载山东特殊类型规则字典
   gaokao-sources  登记山东高考官方来源并准备导入目录
   gaokao-import-official  登记人工下载的高考官方文件和导入批次
+  gaokao-import-shandong-core  导入 2023-2025 山东官方投档表、一分一段和省控线
   data-health  检查 data/app.db 的 P0 数据健康状态
   p0-check  执行 P0 本地交付验收
   init-demo  初始化模板、基础数据和演示数据
@@ -142,6 +143,14 @@ switch (command) {
       "请先创建 `.venv` 并安装后端依赖，例如运行 `./scripts/dev.sh` 或手工执行 `pip install -e \"./apps/backend[dev]\"`。",
     );
     run(python, ["scripts/import_gaokao_official.py", ...extraArgs]);
+    break;
+  }
+  case "gaokao-import-shandong-core": {
+    const python = requireExecutable(
+      "python",
+      "请先创建 `.venv` 并安装后端依赖，例如运行 `./scripts/dev.sh` 或手工执行 `pip install -e \"./apps/backend[dev]\"`。",
+    );
+    run(python, ["scripts/import_shandong_gaokao_core_data.py", ...extraArgs]);
     break;
   }
   case "data-health": {

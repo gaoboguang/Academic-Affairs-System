@@ -205,6 +205,14 @@
 
 ## 当前重点
 
+- 2026-04-25 已按 v4 下一轮开发文档完成窗口 B1：2023-2025 山东普通类核心数据导入：
+  - 新增 `apps/backend/app/services/gaokao_official_importers.py`，实现普通类常规批第 1 次志愿投档表、一分一段表、分数线 / 省控线导入器，复用 A1 的 `gaokao_source_document` / `gaokao_import_run`
+  - 新增 `npm run backend:gaokao-import-shandong-core`，并增强 `backend:gaokao-import-official` 支持 `--parse`、`--b1-shandong-core` 和 `--no-download`；导入器会优先读取 `data/imports/gaokao/official/{year}/` 本地官方文件，网络不可用时不阻塞人工文件导入
+  - 已在写入真实 `data/app.db` 前备份到 `data/backups/app_before_b1_shandong_core_import_20260425_1338.db`，随后执行 `npm run backend:gaokao-import-shandong-core -- --no-download --json`
+  - 当前真实主库新增/刷新：2023 一分一段 `3774` 条、2023 省控线 `15` 条；2023/2024/2025 投档表导入批次分别成功 `19230`、`20300`、`21381` 行；应用侧录取来源回填分别为 `19152`、`20211`、`21269` 条
+  - 新增 `docs/gaokao-shandong-2023-2025-coverage.md`，记录三年投档表、一分一段、省控线官方文件、SHA256、批次和覆盖矩阵；最近三年普通类推荐最低数据条件已满足
+  - 本轮验证：`npm run backend:test -- apps/backend/tests/test_gaokao_import_framework.py -q` 为 `7 passed`；脚本帮助输出通过；`npm run backend:data-health -- --json` 显示一分一段 / 省控线缺口已从 2020-2023 收窄到 2020-2022；`npm run backend:p0-check -- --json` 为 `ok: true`，备份包 `data/backups/p0_delivery_backup_20260425_133451.zip`；`git diff --check` 通过
+  - 仍需保留边界：2023 招生计划缺失、2024 招生计划偏少、特殊类型专门录取结果缺失、政策参考偏少、章程限制链待复核不属于 B1 已解决范围
 - 2026-04-25 已按 v4 下一轮开发文档完成窗口 A1：山东高考官方数据源登记与导入框架：
   - 新增 `gaokao_source_document` 与 `gaokao_import_run`，迁移版本 `20260425_0016`；`admission_record`、`enrollment_plan` 及存在时的 raw 高考表会补可空 `source_document_id / import_run_id`
   - 新增 `npm run backend:gaokao-sources`，用于准备 `data/imports/gaokao/official/`、`manual/`、错误报告和 raw 快照目录，并登记 v4 指定的山东省教育招生考试院、山东省教育厅和高校官网章程来源

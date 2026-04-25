@@ -23,6 +23,7 @@
 - `npm run backend:bootstrap-special-types -- --year 2025 --year 2026`
 - `npm run backend:gaokao-sources -- --json`
 - `npm run backend:gaokao-import-official -- --source-document-id <id> --file data/imports/gaokao/official/<year>/<file>`
+- `npm run backend:gaokao-import-shandong-core -- --json`
 - `npm run backend:data-health`
 - `npm run backend:p0-check`
 - `npm run backend:init-demo`
@@ -69,7 +70,9 @@
 - [`manage_gaokao_sources.py`](./manage_gaokao_sources.py)
   登记山东高考官方来源文档，准备 `data/imports/gaokao/official/`、`manual/`、错误报告和 raw 快照目录；后续 B1/B2 导入器应先复用这里的 `source_document_id`。
 - [`import_gaokao_official.py`](./import_gaokao_official.py)
-  登记人工下载的官方文件，写入文件路径、SHA256 和一条待解析的 `gaokao_import_run`；当前不直接解析投档表、一分一段或省控线。
+  登记人工下载的官方文件，写入文件路径、SHA256 和导入批次；B1 后可加 `--parse` 解析单个文件，或加 `--b1-shandong-core --no-download` 批量导入 2023-2025 山东普通类投档表、一分一段和省控线。
+- [`import_shandong_gaokao_core_data.py`](./import_shandong_gaokao_core_data.py)
+  B1 官方核心数据导入器；复用 A1 的来源文档，自动下载或读取 `data/imports/gaokao/official/{year}/` 下的文件，解析 2023-2025 山东普通类投档表、一分一段和省控线，并生成 `docs/gaokao-shandong-2023-2025-coverage.md`。
 - [`run_e2e_backend.py`](./run_e2e_backend.py)
   给 Playwright / E2E 提供临时后端服务。
 - [`backup.ps1`](./backup.ps1)

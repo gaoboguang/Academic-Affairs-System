@@ -8,6 +8,14 @@
 
 ## 2026-04-25 新增
 
+- 已完成 v4 下一轮窗口 B1：2023-2025 山东普通类核心数据导入：
+  - 新增 B1 官方解析服务 `apps/backend/app/services/gaokao_official_importers.py`
+  - 新增根命令 `npm run backend:gaokao-import-shandong-core`，可在官方文件已放入 `data/imports/gaokao/official/{year}/` 后离线导入；`backend:gaokao-import-official` 也支持单文件 `--parse` 与批量 `--b1-shandong-core`
+  - 已用本地官方文件写入真实 `data/app.db`：2023 一分一段 `3774` 条、2023 省控线 `15` 条，并刷新 2024/2025 一分一段和省控线来源追溯
+  - 2023/2024/2025 普通类投档表批次分别成功 `19230`、`20300`、`21381` 行；raw 投档结果和应用侧录取记录均关联 `source_document_id / import_run_id`
+  - 新增 `docs/gaokao-shandong-2023-2025-coverage.md`，结论为最近三年普通类推荐最低数据条件已满足；2026 普通类正式计划和投档结果未伪造
+  - 验证：B1 导入前备份 `data/backups/app_before_b1_shandong_core_import_20260425_1338.db`；`npm run backend:test -- apps/backend/tests/test_gaokao_import_framework.py -q` 为 `7 passed`；`npm run backend:data-health -- --json` 显示一分一段 / 省控线缺少年份收窄为 `2020, 2021, 2022`；`npm run backend:p0-check -- --json` 为 `ok: true`，备份包 `data/backups/p0_delivery_backup_20260425_133451.zip`；`git diff --check` 通过
+
 - 已完成 v4 下一轮窗口 A1：山东高考官方数据源登记与导入框架：
   - 新增模型与迁移 `20260425_0016_gaokao_source_import_framework.py`，创建 `gaokao_source_document`、`gaokao_import_run`
   - `admission_record`、`enrollment_plan` 及已存在的 `score_rank_segment`、`gaokao_score_line`、`gaokao_admission_result`、`gaokao_admission_plan`、`gaokao_subject_requirement`、`gaokao_college_chapter_rule` 会按存在情况补 `source_document_id / import_run_id`
