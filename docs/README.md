@@ -40,11 +40,13 @@
    第三轮 D2 的山东升学路径规则字典、官方来源追溯和后续窗口注意事项。
 18. [`round3-student-pathway-profile.md`](./round3-student-pathway-profile.md)
    第三轮 D3 的学生升学画像、材料缺口和路径评估可读化说明。
-19. [`report-export-print-audit-2026-04-24.md`](./report-export-print-audit-2026-04-24.md)
+19. [`round3-gaokao-pathway-center.md`](./round3-gaokao-pathway-center.md)
+   第三轮 D4 的山东升学方案中心页面、路径卡片和数据风险入口说明。
+20. [`report-export-print-audit-2026-04-24.md`](./report-export-print-audit-2026-04-24.md)
    窗口 6 的报表、打印、Excel 导出一致性审计与修复记录。
-20. [`frontend-navigation-audit-2026-04-24.md`](./frontend-navigation-audit-2026-04-24.md)
+21. [`frontend-navigation-audit-2026-04-24.md`](./frontend-navigation-audit-2026-04-24.md)
    窗口 7 的前端导航、空态、错误提示和非程序员可读性审计记录。
-21. [`dev/README.md`](./dev/README.md)
+22. [`dev/README.md`](./dev/README.md)
    当前开发主线、分工文档和 prompt 的索引。
 
 ## 当前仍在用的文档
@@ -85,6 +87,8 @@
   第三轮 D2 对山东多升学路径官方规则字典、来源追溯和 bootstrap 边界的说明。
 - [`round3-student-pathway-profile.md`](./round3-student-pathway-profile.md)
   第三轮 D3 对学生升学画像、资格材料缺口和路径评估可读提示的说明。
+- [`round3-gaokao-pathway-center.md`](./round3-gaokao-pathway-center.md)
+  第三轮 D4 对山东升学方案中心、路径卡片、详情抽屉和数据风险入口的说明。
 - [`report-export-print-audit-2026-04-24.md`](./report-export-print-audit-2026-04-24.md)
   窗口 6 对报表中心、打印页和 Excel 导出的一致性审计与修复记录。
 - [`frontend-navigation-audit-2026-04-24.md`](./frontend-navigation-audit-2026-04-24.md)

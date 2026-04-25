@@ -156,6 +156,14 @@ export const navSections: AppNavSection[] = [
         tags: ["数据来源", "只读看板", "山东覆盖"],
       },
       {
+        path: "/gaokao-pathways",
+        label: "升学方案",
+        description: "按学生画像查看山东多路径初筛、材料缺口和人工复核事项。",
+        helper: "先补齐学生画像和资格材料，再进入普通类推荐或逐校核对。",
+        icon: School,
+        tags: ["山东路径", "材料缺口", "人工复核"],
+      },
+      {
         path: "/recommendations",
         label: "高考志愿",
         description: "维护招生计划、录取库和省份规则，生成志愿推荐方案。",

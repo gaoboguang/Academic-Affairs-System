@@ -14,6 +14,7 @@
         </div>
       </div>
       <div class="action-row">
+        <el-button @click="$router.push('/gaokao-pathways')">升学方案中心</el-button>
         <el-button @click="downloadEnrollmentPlanTemplate">计划模板下载</el-button>
         <el-button @click="activeTab = 'enrollment-plans'">查看计划库</el-button>
         <el-button @click="activeTab = 'volunteer-rules'">维护省份规则</el-button>

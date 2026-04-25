@@ -8,6 +8,16 @@
 
 ## 2026-04-25 新增
 
+- 已完成 v5 第三轮窗口 D4：山东升学方案中心页面：
+  - 从 D3 成果上切出 `codex/r3-d4-gaokao-pathway-center-ui`
+  - 新增 `/gaokao-pathways` 独立页面，导航显示“升学方案”，支持选择学生和目标年份，并调用路径列表、学生路径评估预览和高考数据健康接口
+  - 新增 `apps/frontend/src/components/gaokao-pathways/pathwayCenter.ts` 与 `apps/frontend/src/pages/GaokaoPathwaysPage.vue`，页面展示学生画像摘要、路径卡片、路径详情抽屉、材料缺口、下一步行动清单、2026 发布状态和 P0 数据风险
+  - 普通类常规批路径卡可进入山东普通类推荐；单招、综评、春考、艺体、体育、提前批和特殊类型路径继续只显示资格初筛、材料缺口和人工复核事项
+  - 学生详情页新增“升学方案”入口，高考志愿页新增“升学方案中心”入口
+  - 新增 `apps/frontend/tests/pathway-center.test.ts`，补路径卡、画像摘要、下一步行动和发布状态 helper 回归；`apps/frontend/tests/navigation.test.ts` 已补导航入口断言
+  - 新增 `docs/round3-gaokao-pathway-center.md`，并在 `docs/README.md` 加入入口
+  - 验证：`npm run frontend:test -- tests/pathway-center.test.ts tests/navigation.test.ts` 为 `10 passed`；`npm run frontend:lint` 通过；`npm run frontend:test` 为 `25 files / 144 tests passed`；`npm run frontend:build` 通过；`git diff --check` 通过
+
 - 已完成 v5 第三轮窗口 D3：学生升学画像与资格材料缺口：
   - 从 D2 成果上切出 `codex/r3-d3-student-pathway-profile`
   - 学生详情页新增“升学画像”标签，面向老师维护山东生源地、考生类型、考试类型、选科组合、春考专业类别、艺体/体育类别、报名状态、应届/中职/社会人员身份、同等学力、路径接受偏好、体检限制和材料备注

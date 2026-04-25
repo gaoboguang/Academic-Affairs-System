@@ -25,6 +25,14 @@ describe("navigation", () => {
     expect(gaokaoItem.label).toBe("高考数据");
   });
 
+  it("exposes the gaokao pathway center in the decision section", () => {
+    const pathwayItem = resolveNavItem("/gaokao-pathways");
+
+    expect(pathwayItem.path).toBe("/gaokao-pathways");
+    expect(pathwayItem.sectionId).toBe("decision");
+    expect(pathwayItem.label).toBe("升学方案");
+  });
+
   it("falls back to dashboard for unknown paths", () => {
     expect(resolveNavItem("/unknown").path).toBe("/");
   });

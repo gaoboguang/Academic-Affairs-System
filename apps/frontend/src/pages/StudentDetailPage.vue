@@ -21,6 +21,7 @@
       <div class="action-row">
         <el-button @click="router.push('/students')">返回列表</el-button>
         <el-button @click="router.push('/growth-archive')">成长档案</el-button>
+        <el-button @click="router.push(`/gaokao-pathways?student_id=${studentId}`)">升学方案</el-button>
         <el-button type="primary" @click="router.push('/recommendations')">升学推荐</el-button>
       </div>
     </header>

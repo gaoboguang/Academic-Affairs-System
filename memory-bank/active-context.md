@@ -205,6 +205,13 @@
 
 ## 当前重点
 
+- 2026-04-25 已按 v5 第三轮开发文档完成窗口 D4：山东升学方案中心页面：
+  - 当前分支 `codex/r3-d4-gaokao-pathway-center-ui`，从 D3 分支切出；本轮不执行 `git push`
+  - 新增 `/gaokao-pathways` 独立页面，导航显示“升学方案”，页面会加载学生列表、D1/D2 路径字典、D3 学生画像评估预览和 `/api/gaokao/data-health`
+  - 新增 `apps/frontend/src/components/gaokao-pathways/pathwayCenter.ts`，把路径评估结果整理成老师可读路径卡：适用对象、推荐深度、关键要求、缺失材料、风险提示、下一步动作和普通类推荐入口
+  - 新增 `apps/frontend/src/pages/GaokaoPathwaysPage.vue`，包含学生选择、画像摘要、路径卡片、路径详情抽屉、材料缺口、下一步行动清单、2026 发布状态和 P0 风险；继续强调资格初筛 / 人工复核，不输出录取概率
+  - 学生详情页新增“升学方案”入口，高考志愿页新增“升学方案中心”入口；新增 `docs/round3-gaokao-pathway-center.md` 并接入 `docs/README.md`
+  - 本轮验证：D4 定向前端 `10 passed`；前端全量 `144 passed`；`frontend:lint` 通过；`frontend:build` 通过；`git diff --check` 通过
 - 2026-04-25 已按 v5 第三轮开发文档完成窗口 D3：学生升学画像与资格材料缺口：
   - 当前分支 `codex/r3-d3-student-pathway-profile`，从 D2 分支切出；本轮不执行 `git push`
   - 学生详情页新增“升学画像”标签，接入 D1 的 `/api/gaokao/students/{student_id}/pathway-profile` 和路径评估预览接口，可维护山东生源地、考生类型、选科组合、春考/艺体/体育类别、报名状态、身份字段、接受偏好、体检限制和材料备注

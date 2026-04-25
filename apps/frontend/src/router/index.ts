@@ -13,6 +13,7 @@ const ExamsPage = () => import("../pages/ExamsPage.vue");
 const AnalyticsPage = () => import("../pages/AnalyticsPage.vue");
 const ImportCenterPage = () => import("../pages/ImportCenterPage.vue");
 const GaokaoDataPage = () => import("../pages/GaokaoDataPage.vue");
+const GaokaoPathwaysPage = () => import("../pages/GaokaoPathwaysPage.vue");
 const TimetableWorkloadPage = () => import("../pages/TimetableWorkloadPage.vue");
 const EvaluationQuantPage = () => import("../pages/EvaluationQuantPage.vue");
 const ReportsPage = () => import("../pages/ReportsPage.vue");
@@ -146,6 +147,11 @@ const router = createRouter({
           path: "gaokao-data",
           name: "gaokao-data",
           component: GaokaoDataPage,
+        },
+        {
+          path: "gaokao-pathways",
+          name: "gaokao-pathways",
+          component: GaokaoPathwaysPage,
         },
         {
           path: "workload",
