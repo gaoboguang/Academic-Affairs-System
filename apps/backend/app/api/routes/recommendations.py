@@ -41,6 +41,8 @@ from app.schemas.recommendation import (
     SpecialTypeRuleBootstrapResponse,
     SpecialTypeRulePayload,
     SpecialTypeRuleRead,
+    StudentGaokaoScoreProjectionPayload,
+    StudentGaokaoScoreProjectionRead,
     VolunteerDraftPayload,
     VolunteerDraftRead,
     VolunteerDraftSummaryRead,
@@ -401,6 +403,39 @@ def update_special_type_rule(
     session: Session = Depends(get_db_session),
 ) -> SpecialTypeRuleRead:
     return service.update_special_type_rule(session, rule_id, payload)
+
+
+@router.post("/recommendations/gaokao-score-projections/calculate", response_model=StudentGaokaoScoreProjectionRead)
+def calculate_gaokao_score_projection(
+    payload: StudentGaokaoScoreProjectionPayload,
+    session: Session = Depends(get_db_session),
+) -> StudentGaokaoScoreProjectionRead:
+    return service.calculate_gaokao_score_projection(session, payload)
+
+
+@router.post("/recommendations/gaokao-score-projections", response_model=StudentGaokaoScoreProjectionRead)
+def create_gaokao_score_projection(
+    payload: StudentGaokaoScoreProjectionPayload,
+    session: Session = Depends(get_db_session),
+) -> StudentGaokaoScoreProjectionRead:
+    return service.create_gaokao_score_projection(session, payload)
+
+
+@router.get("/recommendations/gaokao-score-projections", response_model=list[StudentGaokaoScoreProjectionRead])
+def list_gaokao_score_projections(
+    student_id: int | None = Query(default=None),
+    target_year: int | None = Query(default=None),
+    session: Session = Depends(get_db_session),
+) -> list[StudentGaokaoScoreProjectionRead]:
+    return service.list_gaokao_score_projections(session, student_id=student_id, target_year=target_year)
+
+
+@router.get("/recommendations/gaokao-score-projections/{projection_id}", response_model=StudentGaokaoScoreProjectionRead)
+def get_gaokao_score_projection(
+    projection_id: int,
+    session: Session = Depends(get_db_session),
+) -> StudentGaokaoScoreProjectionRead:
+    return service.get_gaokao_score_projection(session, projection_id)
 
 
 @router.post("/recommendations/volunteer-workbench/preview", response_model=VolunteerWorkbenchPreviewResponse)

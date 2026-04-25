@@ -205,6 +205,13 @@
 
 ## 当前重点
 
+- 2026-04-25 已按 v4 下一轮开发文档完成窗口 B3：学生考试成绩到高考预估分 / 位次推算：
+  - 当前分支 `codex/r2-b3-student-gaokao-score-projection` 是从 B2 成果上接续；B1 官方文件仍以未跟踪 `data/imports/` 形式保留
+  - 新增 `student_gaokao_score_projection` 表与迁移 `20260425_0017`，保存学生、目标年份、来源模式、预估分、预估位次、位次区间、置信度、所选考试和计算明细
+  - 新增预估接口：`POST /api/recommendations/gaokao-score-projections/calculate` 只计算不保存；`POST /api/recommendations/gaokao-score-projections` 保存快照；列表和详情接口可供 B4 / C1 读取
+  - 支持三类输入：`manual_score` 按一分一段换位次，目标年缺失时回退最近上一年并标记 `previous_year_score_rank_segment`；`manual_rank` 直接作为全省位次；`exam_projection` 按历次考试总分、年级名次、趋势和波动加权估算
+  - 缺少本校历届高考校准数据时，历次考试估算固定标记 `low/medium` 并写入“校内估算，不能把校内名次直接当作山东全省位次”的说明；后续如新增校准表，可在该服务内替换映射方式
+  - 本轮验证：B3 定向 `4 passed`；推荐域+B3 `17 passed`；临时干净库 `backend:migrate` 升级到 `20260425_0017` 通过；`git diff --check` 通过
 - 2026-04-25 已按 v4 下一轮开发文档完成窗口 B2：2026 已公开招生数据监控与导入入口：
   - 当前分支 `codex/r2-b2-2026-gaokao-data-watchlist` 是从 B1 成果上接续；本地没有发现原 B2 半成品分支，B1 官方文件仍以未跟踪 `data/imports/` 形式保留
   - `apps/backend/app/utils/data_health.py` 已新增 `publication_status`，把 2026 数据分为 `published / imported / pending_official_release / not_applicable / manual_review_required`

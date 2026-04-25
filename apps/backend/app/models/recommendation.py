@@ -288,6 +288,26 @@ class SpecialTypeRule(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class StudentGaokaoScoreProjection(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "student_gaokao_score_projection"
+
+    student_id: Mapped[int] = mapped_column(ForeignKey("student.id"), nullable=False)
+    target_year: Mapped[int] = mapped_column(Integer, nullable=False)
+    province: Mapped[str] = mapped_column(String(50), default="山东", nullable=False)
+    source_mode: Mapped[str] = mapped_column(String(50), nullable=False)
+    predicted_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    predicted_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rank_range_low: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rank_range_high: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    confidence_level: Mapped[str] = mapped_column(String(30), nullable=False)
+    rank_projection_basis: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    selected_exam_ids_json: Mapped[list[int] | None] = mapped_column(JSON, nullable=True)
+    calculation_detail_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    student = relationship("Student")
+
+
 class RecommendationScheme(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     __tablename__ = "recommendation_scheme"
 

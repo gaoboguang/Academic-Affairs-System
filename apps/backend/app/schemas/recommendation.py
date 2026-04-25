@@ -364,6 +364,38 @@ class SpecialTypeRuleBootstrapResponse(BaseModel):
     skipped_count: int
 
 
+class StudentGaokaoScoreProjectionPayload(BaseModel):
+    student_id: int
+    target_year: int
+    province: str = "山东"
+    source_mode: str
+    manual_score: float | None = None
+    manual_rank: int | None = None
+    selected_exam_ids: list[int] = Field(default_factory=list)
+    note: str | None = None
+
+
+class StudentGaokaoScoreProjectionRead(ORMModel):
+    id: int | None = None
+    student_id: int
+    student_name: str | None = None
+    target_year: int
+    province: str
+    source_mode: str
+    predicted_score: float | None = None
+    predicted_rank: int | None = None
+    rank_range_low: int | None = None
+    rank_range_high: int | None = None
+    confidence_level: str
+    rank_projection_basis: str | None = None
+    selected_exam_ids_json: list[int] = Field(default_factory=list)
+    calculation_detail_json: dict[str, object] = Field(default_factory=dict)
+    note: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    is_active: bool = True
+
+
 class VolunteerWorkbenchPreviewPayload(BaseModel):
     student_id: int
     exam_id: int

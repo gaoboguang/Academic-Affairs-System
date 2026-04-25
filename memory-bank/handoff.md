@@ -2,6 +2,9 @@
 
 ## 当前主线状态（2026-04-25）
 
+- 已按 `Codex-App-下一轮开发计划-山东高考志愿数据库与推荐-v4.md` 完成窗口 B3，当前分支 `codex/r2-b3-student-gaokao-score-projection`：新增 `student_gaokao_score_projection` 快照表、迁移 `20260425_0017`、后端计算/保存/列表/详情接口和定向测试。当前支持 `manual_score` 按一分一段换位次、`manual_rank` 直接作为全省位次、`exam_projection` 按历次考试总分/年级名次/趋势/波动加权估算；目标年一分一段缺失时会回退最近上一年并标记 `previous_year_score_rank_segment`。
+- B3 边界：历次考试估算仍缺少本校历届高考校准表，因此只能标记 `low/medium` 并展示“校内估算，不能把校内名次直接当作山东全省位次”；B4 可先读取 `student_gaokao_score_projection.predicted_rank` / `rank_range_low` / `rank_range_high` / `calculation_detail_json` 作为推荐输入，但需要继续保留该风险提示。
+- B3 验证：`npm run backend:test -- apps/backend/tests/test_gaokao_score_projection.py -q` 为 `4 passed`；`npm run backend:test -- apps/backend/tests/test_recommendation_workflow.py apps/backend/tests/test_gaokao_score_projection.py -q` 为 `17 passed`；临时干净库 `backend:migrate` 升级到 `20260425_0017` 通过；`git diff --check` 通过。
 - 已按 `Codex-App-下一轮开发计划-山东高考志愿数据库与推荐-v4.md` 完成窗口 B2，当前分支 `codex/r2-b2-2026-gaokao-data-watchlist`：扩展 `backend:data-health` / `/api/gaokao/data-health` 的 `publication_status`，在 `/gaokao-data` 的“山东覆盖”页签新增“2026 数据发布状态”，并新增 `docs/gaokao-2026-data-watchlist.md`。真实 `data/app.db` 已通过 `npm run backend:gaokao-sources -- --json` 登记 2026 单招/综评计划限额 source document #13；该来源只用于单招/综评计划边界，不得当作 2026 夏季高考普通类正式计划。
 - B2 后真实状态：2026 普通类正式招生计划、一分一段、省控线为 `pending_official_release`；2026 普通类投档/录取结果为 `not_applicable`；2025/2026 适用选科要求为 `imported`；单招/综评政策通知和计划限额为 `published`，高校章程和分专业计划仍为 `manual_review_required`。
 - B2 验证：`npm run backend:test -- apps/backend/tests/test_data_health.py apps/backend/tests/test_gaokao_import_framework.py -q` 为 `9 passed`；`npm run frontend:build` 通过；`npm run backend:data-health -- --json` 通过并输出 `publication_status`；`git diff --check` 通过。
@@ -19,7 +22,7 @@
 ## 下一次接手先做什么
 
 1. 先阅读 `AGENTS.md`、`memory-bank/project-context.md`、`memory-bank/active-context.md`。
-2. 如继续 v4 下一轮第二批，B1、B2 已完成；先读 `docs/gaokao-shandong-2023-2025-coverage.md`、`docs/gaokao-2026-data-watchlist.md`、`docs/gaokao-data-baseline-2026-04-25.md` 与 `docs/gaokao-source-import-framework-2026-04-25.md`，再进入 B3 / B4。B3 处理学生考试成绩到高考预估分 / 位次；B4 基于 B1 数据结构做冲稳保推荐算法与解释，并读取 B2 的 `publication_status` 作为 2026 风险提示来源。不要伪造 2026 普通类计划或投档结果。
+2. 如继续 v4 下一轮第二批，B1、B2、B3 已完成；先读 `docs/gaokao-shandong-2023-2025-coverage.md`、`docs/gaokao-2026-data-watchlist.md`、`docs/gaokao-data-baseline-2026-04-25.md` 与 `docs/gaokao-source-import-framework-2026-04-25.md`，再进入 B4。B4 基于 B1 数据结构做冲稳保推荐算法与解释，可读取 B3 的 `student_gaokao_score_projection` 作为学生预估分/位次来源，并读取 B2 的 `publication_status` 作为 2026 风险提示来源。不要伪造 2026 普通类计划或投档结果，不要把校内考试名次直接当山东全省位次。
 3. 2026-04-24 窗口 0 已生成当前多窗口接手入口：`docs/repo-audit.md`、`docs/mac-dev-setup.md`、`docs/development-roadmap.md`。后续 Codex 窗口应先读这三份，再进入自己的窗口任务。按 Codex App v3 补齐的 dated 状态锁定文件为 `docs/repo-audit-2026-04-24.md` 与 `docs/current-development-map-2026-04-24.md`，它们是对已有窗口 0 成果的补缺，不是新路线图；本轮验证已通过后端 `66 passed`、前端 lint、前端 `114 passed`、前端构建、数据健康、P0 验收和 `git diff --check`。
 3. 2026-04-24 窗口 1 已完成 Mac 启动体验收口；同日又修正了“终端关闭后前端掉线”的使用问题。普通用户优先双击 `start-local-edu.command` 或执行 `npm run start:local`，服务会后台运行，日志在 `data/logs/local-services/`；需要停止时执行 `npm run stop:local`。`npm run dev` 保留为前台开发调试模式，终端关闭后前端会停止。
 4. 如果任务涉及结构优化，先补看 `docs/README.md`、`docs/dev/README.md`、`scripts/README.md` 与 `handoffs/README.md`，再阅读 `docs/development_recommendations_2026-04-05.md`。
