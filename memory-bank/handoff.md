@@ -2,6 +2,9 @@
 
 ## 当前主线状态（2026-04-25）
 
+- 已按 `Codex-App-第三轮开发计划-山东升学方案库与多路径规则引擎-v5.md` 完成窗口 D1，当前分支 `codex/r3-d1-gaokao-pathway-schema-rule-engine`：新增山东升学路径数据模型、规则引擎底座、学生升学画像和学生路径评估结构。本轮新增迁移 `20260425_0018_gaokao_pathway_schema.py`，创建 `gaokao_pathway`、`gaokao_pathway_rule`、`student_pathway_profile`、`student_pathway_evaluation`；真实 `data/app.db` 迁移前备份为 `data/backups/app_before_d1_pathway_schema_migrate_20260425_2030.db`，迁移后 `backend:data-health -- --json` 显示 schema_version=`20260425_0018`、状态仍为 `warning`、P0 缺口仍为 6 条。
+- D1 新增 `apps/backend/app/services/gaokao_pathways.py`、`apps/backend/app/schemas/gaokao_pathway.py` 与 `apps/backend/app/repositories/gaokao_pathways.py`，并在 `/api/gaokao` 下新增路径列表、山东基础路径 bootstrap、路径规则、学生升学画像、路径评估预览和持久化评估 API。规则评估必须保留 `passed / failed / unknown` 三态；`unknown` 用于信息不足、材料缺口和人工复核，不能包装成录取概率。D1 的 bootstrap 只提供基础路径和最小边界规则，D2 应继续补官方规则字典、来源追溯和更细政策口径。
+- D1 验证：`npm run backend:test -- apps/backend/tests/test_gaokao_pathways.py -q` 为 `3 passed`；`npm run backend:test -- apps/backend/tests -q` 为 `87 passed`；`npm run backend:data-health -- --json` 通过但仍保留 P0 数据警告；`git diff --check` 通过。D1 没有改前端大页面，没有执行 `git push`。
 - 已按 `Codex-App-下一轮开发计划-山东高考志愿数据库与推荐-v4.md` 完成窗口 C3，当前分支 `codex/r2-final-gaokao-recommendation-integration`：A0/A1/B1/B2/B3/B4 已以提交链集成，C1/C2 成果在 C3 开工时位于当前工作区，C3 未回退并已纳入最终整合分支。C3 新增 `docs/round2-gaokao-recommendation-final-report.md` 与 `docs/gaokao-data-coverage-after-round2.md`，并把本地官方附件目录 `data/imports/` 加入 `.gitignore`，避免把本机下载材料提交进代码。
 - C3 已对真实 `data/app.db` 执行迁移补齐 B3 预估表：迁移前备份为 `data/backups/app_before_c3_round2_integration_migrate_20260425_1700.db`，当前 Alembic 版本为 `20260425_0017`。最新 `npm run backend:data-health -- --json` 显示 schema_version=`20260425_0017`、状态 `warning`、P0 缺口仍为 6 条；`npm run backend:p0-check -- --json` 为 `ok: true`，备份包 `data/backups/p0_delivery_backup_20260425_170902.zip`。C3 验证已通过：`git diff --check`、定向后端导出 `6 passed`、山东工作台前端单测 `5 passed`、`npm run check`（后端 `84 passed`、前端 `133 passed`、lint/build 通过）和 `npm run check:all`（E2E `32 passed`）。
 - C3 远端核查受本机认证限制影响：`git fetch --all --prune` 失败，报 `could not read Username for 'https://github.com': Device not configured`。本地 `main` 仍停在 `a7c7148`，最终推送或合并 GitHub 前需要先恢复 GitHub HTTPS/凭据认证。
@@ -36,6 +39,7 @@
 ## 下一次接手先做什么
 
 1. 先阅读 `AGENTS.md`、`memory-bank/project-context.md`、`memory-bank/active-context.md`。
+2. 如继续第三轮 v5，先读 `/Users/gao/Downloads/Codex-App-第三轮开发计划-山东升学方案库与多路径规则引擎-v5.md`。D1 已完成路径表、画像表、评估表、三态规则引擎和基础 API；下一步 D2 应在 D1 模型基础上建立山东 2026 升学路径官方规则字典和 bootstrap，要求所有规则保留来源追溯，不要在前端硬编码政策，不要把初筛说成录取概率。
 2. 如继续 v4 Round 2 收口，先读 `docs/round2-gaokao-recommendation-final-report.md`、`docs/gaokao-data-coverage-after-round2.md`、`docs/gaokao-shandong-2023-2025-coverage.md`、`docs/gaokao-2026-data-watchlist.md`、`docs/gaokao-data-baseline-2026-04-25.md`、`docs/gaokao-source-import-framework-2026-04-25.md` 与 `docs/gaokao-shandong-rush-stable-safe-engine-2026-04-25.md`。下一步优先完成 C3 剩余验收、提交 `codex/r2-final-gaokao-recommendation-integration`，并在 GitHub 认证恢复后推送/合并；不要伪造 2026 普通类计划或投档结果，不要把校内考试名次直接当山东全省位次。
 3. 2026-04-24 窗口 0 已生成当前多窗口接手入口：`docs/repo-audit.md`、`docs/mac-dev-setup.md`、`docs/development-roadmap.md`。后续 Codex 窗口应先读这三份，再进入自己的窗口任务。按 Codex App v3 补齐的 dated 状态锁定文件为 `docs/repo-audit-2026-04-24.md` 与 `docs/current-development-map-2026-04-24.md`，它们是对已有窗口 0 成果的补缺，不是新路线图；本轮验证已通过后端 `66 passed`、前端 lint、前端 `114 passed`、前端构建、数据健康、P0 验收和 `git diff --check`。
 3. 2026-04-24 窗口 1 已完成 Mac 启动体验收口；同日又修正了“终端关闭后前端掉线”的使用问题。普通用户优先双击 `start-local-edu.command` 或执行 `npm run start:local`，服务会后台运行，日志在 `data/logs/local-services/`；需要停止时执行 `npm run stop:local`。`npm run dev` 保留为前台开发调试模式，终端关闭后前端会停止。

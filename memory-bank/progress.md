@@ -8,6 +8,13 @@
 
 ## 2026-04-25 新增
 
+- 已完成 v5 第三轮窗口 D1：山东升学路径数据模型与规则引擎底座：
+  - 新增 `GaokaoPathway`、`GaokaoPathwayRule`、`StudentPathwayProfile`、`StudentPathwayEvaluation` 模型，并通过迁移 `20260425_0018_gaokao_pathway_schema.py` 创建 `gaokao_pathway`、`gaokao_pathway_rule`、`student_pathway_profile`、`student_pathway_evaluation`
+  - 新增 `apps/backend/app/schemas/gaokao_pathway.py`、`apps/backend/app/repositories/gaokao_pathways.py`、`apps/backend/app/services/gaokao_pathways.py`，规则引擎支持 `passed / failed / unknown` 三态评估，并输出状态、材料缺口、人工复核项和下一步动作
+  - `/api/gaokao` 新增升学路径、路径规则、学生升学画像、路径评估预览和持久化评估 API；D1 bootstrap 已覆盖普通类常规批、提前批、特殊类型批、春考、高职单招/综评、艺体、体育单招和高水平运动队等基础路径
+  - 真实 `data/app.db` 已在迁移前备份到 `data/backups/app_before_d1_pathway_schema_migrate_20260425_2030.db`，随后执行 `npm run backend:migrate` 升级到 `20260425_0018`
+  - 验证：`npm run backend:test -- apps/backend/tests/test_gaokao_pathways.py -q` 为 `3 passed`；`npm run backend:test -- apps/backend/tests -q` 为 `87 passed`；`npm run backend:data-health -- --json` 通过且仍保留 P0 缺口 `6` 条；`git diff --check` 通过
+
 - 已完成 v4 下一轮窗口 C2：推荐报告、Excel 导出、打印页一致性：
   - 新增 `apps/backend/app/exporters/recommendations.py` 中的山东普通类报告导出器，支持把 B4/C1 预览结果导出为 Excel
   - 新增 `POST /api/reports/shandong-recommendation/export`，导出后写入现有 `report_export_record`，报表中心导出记录可显示“山东普通类冲稳保推荐报告”

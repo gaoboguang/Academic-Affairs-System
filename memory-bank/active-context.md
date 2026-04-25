@@ -205,6 +205,13 @@
 
 ## 当前重点
 
+- 2026-04-25 已按 v5 第三轮开发文档完成窗口 D1：山东升学路径数据模型与规则引擎底座：
+  - 当前分支 `codex/r3-d1-gaokao-pathway-schema-rule-engine`，从本地 `main` 的第二轮 C3 成果上切出；本轮不改前端大页面、不推送远端
+  - 新增迁移 `20260425_0018_gaokao_pathway_schema.py`，创建 `gaokao_pathway`、`gaokao_pathway_rule`、`student_pathway_profile`、`student_pathway_evaluation` 四张表；真实 `data/app.db` 迁移前备份到 `data/backups/app_before_d1_pathway_schema_migrate_20260425_2030.db`，迁移后 schema_version=`20260425_0018`
+  - 新增 `apps/backend/app/services/gaokao_pathways.py`、`schemas/gaokao_pathway.py` 与 `repositories/gaokao_pathways.py`；规则评估明确输出 `passed / failed / unknown`，unknown 会落到材料缺口、信息不足或人工复核，不会被包装成录取概率
+  - 新增 `/api/gaokao/pathways`、`/api/gaokao/pathways/bootstrap-shandong`、`/api/gaokao/pathways/{pathway_id}/rules`、`/api/gaokao/students/{student_id}/pathway-profile`、`/api/gaokao/students/{student_id}/pathway-evaluations/preview` 和持久化评估入口
+  - `bootstrap-shandong` 只装载 D1 基础路径和最小边界规则，覆盖普通类常规批、提前批 A/B、特殊类型批、春考本/专、高职单招、高职综评、艺术本/专、体育常规、体育单招、高水平运动队；官方政策细则和来源追溯留给 D2
+  - 本轮验证：D1 定向后端 `3 passed`；后端全量 `87 passed`；`backend:data-health -- --json` 通过且仍为 `warning`、P0 缺口 6 条；`git diff --check` 通过
 - 2026-04-25 已按 v4 下一轮开发文档完成窗口 C3：最终集成、测试、合并、交接文档：
   - 当前分支 `codex/r2-final-gaokao-recommendation-integration`，从 A0/A1/B1/B2/B3/B4 提交和当前 C1/C2 未提交工作区接续；未回退 C1/C2 成果，B1 官方文件目录 `data/imports/` 已加入 `.gitignore`，不纳入代码提交
   - C3 已补 `docs/round2-gaokao-recommendation-final-report.md` 与 `docs/gaokao-data-coverage-after-round2.md`，整合 A0/A1/B1/B2/B3/B4/C1/C2 的数据、推荐、输出和风险边界

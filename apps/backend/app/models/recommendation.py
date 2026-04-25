@@ -308,6 +308,108 @@ class StudentGaokaoScoreProjection(PrimaryKeyMixin, TimestampMixin, ActiveMixin,
     student = relationship("Student")
 
 
+class GaokaoPathway(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "gaokao_pathway"
+    __table_args__ = (UniqueConstraint("province", "pathway_code", name="uq_gaokao_pathway_code"),)
+
+    province: Mapped[str] = mapped_column(String(50), default="山东", nullable=False)
+    pathway_code: Mapped[str] = mapped_column(String(100), nullable=False)
+    pathway_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    pathway_group: Mapped[str] = mapped_column(String(80), nullable=False)
+    student_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    exam_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    batch_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    volunteer_mode: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    max_volunteer_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    recommendation_depth: Mapped[str] = mapped_column(String(80), nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default="active", nullable=False)
+    source_document_id: Mapped[int | None] = mapped_column(ForeignKey("gaokao_source_document.id"), nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    risk_level: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    notes_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    rules = relationship("GaokaoPathwayRule", back_populates="pathway", cascade="all, delete-orphan")
+    evaluations = relationship("StudentPathwayEvaluation", back_populates="pathway", cascade="all, delete-orphan")
+
+
+class GaokaoPathwayRule(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "gaokao_pathway_rule"
+    __table_args__ = (UniqueConstraint("pathway_id", "rule_code", name="uq_gaokao_pathway_rule_code"),)
+
+    pathway_id: Mapped[int] = mapped_column(ForeignKey("gaokao_pathway.id"), nullable=False)
+    rule_code: Mapped[str] = mapped_column(String(120), nullable=False)
+    rule_name: Mapped[str] = mapped_column(String(150), nullable=False)
+    rule_type: Mapped[str] = mapped_column(String(60), nullable=False)
+    severity: Mapped[str] = mapped_column(String(40), nullable=False)
+    condition_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    message_template: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_document_id: Mapped[int | None] = mapped_column(ForeignKey("gaokao_source_document.id"), nullable=True)
+    manual_review_required: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    valid_from_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    valid_to_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    pathway = relationship("GaokaoPathway", back_populates="rules")
+
+
+class StudentPathwayProfile(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "student_pathway_profile"
+    __table_args__ = (UniqueConstraint("student_id", "province", name="uq_student_pathway_profile_student_province"),)
+
+    student_id: Mapped[int] = mapped_column(ForeignKey("student.id"), nullable=False)
+    province: Mapped[str] = mapped_column(String(50), default="山东", nullable=False)
+    candidate_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    exam_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    subject_combination: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    spring_exam_category: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    art_track: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    sports_track: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    has_gaokao_registration: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    is_fresh_graduate: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    is_vocational_student: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    is_social_candidate: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    has_high_school_equivalent: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    accept_private_college: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    accept_sino_foreign: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    accept_junior_college: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    accept_outside_province: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    accept_early_batch: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    accept_service_commitment: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    accept_interview_or_physical_test: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    career_preferences_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    region_preferences_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    family_constraints_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    known_body_limitations_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    materials_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    student = relationship("Student")
+
+
+class StudentPathwayEvaluation(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "student_pathway_evaluation"
+    __table_args__ = (
+        UniqueConstraint("student_id", "pathway_id", "target_year", name="uq_student_pathway_evaluation_core"),
+    )
+
+    student_id: Mapped[int] = mapped_column(ForeignKey("student.id"), nullable=False)
+    pathway_id: Mapped[int] = mapped_column(ForeignKey("gaokao_pathway.id"), nullable=False)
+    target_year: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(60), nullable=False)
+    status_label: Mapped[str] = mapped_column(String(80), nullable=False)
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    confidence_level: Mapped[str] = mapped_column(String(40), nullable=False)
+    matched_rules_json: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
+    failed_rules_json: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
+    warning_rules_json: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
+    missing_materials_json: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
+    recommendation_depth: Mapped[str] = mapped_column(String(80), nullable=False)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    next_actions_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+
+    student = relationship("Student")
+    pathway = relationship("GaokaoPathway", back_populates="evaluations")
+
+
 class RecommendationScheme(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     __tablename__ = "recommendation_scheme"
 

@@ -1,5 +1,11 @@
 # 决策日志
 
+## 2026-04-25：第三轮多路径规划单独建路径与画像表，规则评估采用三态结果
+
+- 决定：新增 `gaokao_pathway`、`gaokao_pathway_rule`、`student_pathway_profile`、`student_pathway_evaluation`，把山东多升学路径、路径规则、学生画像和评估结果从既有普通类冲稳保推荐、`special_type_rule`、`province_volunteer_rule` 中拆出独立底座。
+- 原因：第三轮目标是多路径规划，不只是继续加普通类推荐。单招、综评、春考、艺体、体育、提前批等路径很多只能做资格初筛和材料缺口提醒，不能复用普通类位次推荐表述，也不能把特殊类型初筛规则混成录取把握。
+- 约束：路径规则引擎必须输出 `passed / failed / unknown`，其中 `unknown` 应被展示为信息不足、材料缺口或人工复核项；D1 的 `bootstrap-shandong` 只提供基础路径和最小边界规则，D2 再补官方规则字典和来源追溯，不要在前端硬编码政策细则。
+
 ## 2026-04-25：高考来源追溯单独建 source document / import run，不复用通用 import_job 承载逐行溯源
 
 - 决定：新增 `gaokao_source_document` 与 `gaokao_import_run`，把官方来源页面、本地下载文件、文件 SHA256、解析器名、导入行数、错误报告和 raw 快照路径作为高考数据专用追溯层；通用 `import_job` 仍保留给业务页导入中心聚合。
