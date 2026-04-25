@@ -2,6 +2,9 @@
 
 ## 当前主线状态（2026-04-25）
 
+- 已按 `Codex-App-下一轮开发计划-山东高考志愿数据库与推荐-v4.md` 完成窗口 A0：新增 `docs/gaokao-data-baseline-2026-04-25.md`，当前分支 `codex/r2-a0-gaokao-data-baseline`。本轮只做审计文档和记忆更新，未新增功能、未写入 `data/app.db`。
+- A0 真实结论：2023-2025 山东普通类投档/录取结果已有；2023 一分一段、省控线、招生计划缺失；2024 招生计划偏少；2026 当前只有规则/选科要求/特殊类型初筛规则，普通类正式计划、投档结果、一分一段、省控线均不得视为已导入。
+- A0 验证：`npm run backend:data-health -- --json` 为 `warning`，P0 缺口仍为 6；`npm run backend:p0-check -- --json` 为 `ok: true`，备份包 `data/backups/p0_delivery_backup_20260425_104947.zip`。`git pull --ff-only` 因本机 GitHub HTTPS 认证不可交互失败，但本地 `main` 已包含 `a7c7148` 与 `3b796b3`。
 - `main` 已 fast-forward 合并 `codex/09-final-integration-acceptance`；窗口 2-9 第一轮本地工作区成果已正式进入主线，功能整合提交为 `3b796b3 feat: integrate windows 2-9 final acceptance`。
 - 合并后验证已通过：`npm run backend:data-health`、`npm run backend:p0-check -- --json`（`ok: true`，备份包 `data/backups/p0_delivery_backup_20260425_092923.zip`）、`npm run check:all`（后端 `69 passed`、前端 lint、前端 `128 passed`、前端构建、E2E `31 passed`）和 `git diff --check`。
 - 下一轮可以从 `main` 进入开发规划；仍需保留 P0 数据风险边界：特殊类型只能初筛，山东公开数据和章程复核缺口继续作为后续重点。
@@ -9,7 +12,8 @@
 ## 下一次接手先做什么
 
 1. 先阅读 `AGENTS.md`、`memory-bank/project-context.md`、`memory-bank/active-context.md`。
-2. 2026-04-24 窗口 0 已生成当前多窗口接手入口：`docs/repo-audit.md`、`docs/mac-dev-setup.md`、`docs/development-roadmap.md`。后续 Codex 窗口应先读这三份，再进入自己的窗口任务。按 Codex App v3 补齐的 dated 状态锁定文件为 `docs/repo-audit-2026-04-24.md` 与 `docs/current-development-map-2026-04-24.md`，它们是对已有窗口 0 成果的补缺，不是新路线图；本轮验证已通过后端 `66 passed`、前端 lint、前端 `114 passed`、前端构建、数据健康、P0 验收和 `git diff --check`。
+2. 如继续 v4 下一轮第一批，先读 `docs/gaokao-data-baseline-2026-04-25.md`，然后进入窗口 A1：复用 `gaokao_source_registry`、`import_job`、`data_import_error_log`，判断是否新增 `gaokao_source_document` / `gaokao_import_run`，并为 `data/imports/gaokao/official/` 与 `data/imports/gaokao/manual/` 建好导入框架。不要在 A1 抢做 B1 的完整数据导入。
+3. 2026-04-24 窗口 0 已生成当前多窗口接手入口：`docs/repo-audit.md`、`docs/mac-dev-setup.md`、`docs/development-roadmap.md`。后续 Codex 窗口应先读这三份，再进入自己的窗口任务。按 Codex App v3 补齐的 dated 状态锁定文件为 `docs/repo-audit-2026-04-24.md` 与 `docs/current-development-map-2026-04-24.md`，它们是对已有窗口 0 成果的补缺，不是新路线图；本轮验证已通过后端 `66 passed`、前端 lint、前端 `114 passed`、前端构建、数据健康、P0 验收和 `git diff --check`。
 3. 2026-04-24 窗口 1 已完成 Mac 启动体验收口；同日又修正了“终端关闭后前端掉线”的使用问题。普通用户优先双击 `start-local-edu.command` 或执行 `npm run start:local`，服务会后台运行，日志在 `data/logs/local-services/`；需要停止时执行 `npm run stop:local`。`npm run dev` 保留为前台开发调试模式，终端关闭后前端会停止。
 4. 如果任务涉及结构优化，先补看 `docs/README.md`、`docs/dev/README.md`、`scripts/README.md` 与 `handoffs/README.md`，再阅读 `docs/development_recommendations_2026-04-05.md`。
 5. 如继续把项目推进到交付可用，先阅读 `docs/development_plan_to_delivery_2026-04-24.md`；它按当前真实数据库统计整理了后续阶段、数据缺口、质量红线和交付验收清单。2026-04-24 阶段 0 安全底座已可验收，阶段 1 已落地山东覆盖矩阵、导入审计摘要、交付判断和特殊类型风险矩阵；阶段二也已先落地规则核对入口：`/recommendations` 的“特殊类型规则 / 赋分规则 / 选科字典”页签支持列表、筛选和 bootstrap，但完整编辑维护仍未做。

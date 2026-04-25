@@ -1130,3 +1130,8 @@
   - `tests/e2e/dashboard-smoke.spec.ts` 已新增统一确认弹窗 helper，并把推荐生成、推荐导出、志愿导出、策略模板应用、Stage B 单学生/批量场景断言同步到当前交互
   - `openRecommendationCenter()` 测试 helper 已支持按场景选择是否自动兜底学生默认生源地，避免批量跨省用例被默认“广东”覆盖
   - 当前已重新执行 `npm run frontend:lint` 与全量 `npm run e2e`，31 条 Playwright 流程全部通过
+- 2026-04-25 已完成 v4 下一轮窗口 A0 数据库基线审计：
+  - 新增 `docs/gaokao-data-baseline-2026-04-25.md`，固定 `data/app.db` 当前高考相关表、记录数、2023-2025 最近三年覆盖、2026 待发布/待导入状态和特殊类型初筛边界
+  - 当前普通类投档/录取结果覆盖 2023=29301、2024=30838、2025=32963；一分一段只有 2024/2025；省控线只有 2024/2025；招生计划 2023 缺失、2024 偏少、2025 较多但仍需来源追溯
+  - 当前 2026 只有规则和选科要求可作为公开依据：山东 `province_volunteer_rule` 2026 年 26 条、`province_score_transform_rule` 9 条、`subject_requirement_dict` 9 条、`special_type_rule` 31 条；普通类正式计划/投档/一分一段/省控线均无 2026 记录
+  - 验证：`npm run backend:data-health -- --json` 可运行且状态为 `warning`；`npm run backend:p0-check -- --json` 通过并生成 `data/backups/p0_delivery_backup_20260425_104947.zip`
