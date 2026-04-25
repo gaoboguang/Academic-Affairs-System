@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.common import ORMModel
 
@@ -108,6 +109,124 @@ class StudentListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class StudentBulkDeleteBaseRequest(BaseModel):
+    student_ids: list[int] = Field(min_length=1, max_length=1000)
+    mode: Literal["soft_delete"] = "soft_delete"
+    reason: str = Field(min_length=1, max_length=255)
+    operator_name: str | None = Field(default=None, max_length=80)
+
+    @field_validator("student_ids")
+    @classmethod
+    def validate_student_ids(cls, value: list[int]) -> list[int]:
+        normalized: list[int] = []
+        seen: set[int] = set()
+        for student_id in value:
+            if student_id <= 0:
+                raise ValueError("学生 ID 必须为正整数")
+            if student_id in seen:
+                continue
+            seen.add(student_id)
+            normalized.append(student_id)
+        if not normalized:
+            raise ValueError("请至少选择 1 名学生")
+        return normalized
+
+    @field_validator("reason", "operator_name")
+    @classmethod
+    def trim_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("文本不能为空")
+        return normalized
+
+
+class StudentBulkDeletePreviewRequest(StudentBulkDeleteBaseRequest):
+    pass
+
+
+class StudentBulkDeleteExecuteRequest(StudentBulkDeleteBaseRequest):
+    confirm_token: str = Field(min_length=16, max_length=128)
+    confirm_text: str = Field(min_length=1, max_length=80)
+
+    @field_validator("confirm_token", "confirm_text")
+    @classmethod
+    def trim_confirm_fields(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("确认信息不能为空")
+        return normalized
+
+
+class StudentBulkDeleteAssociationSummary(BaseModel):
+    score_count: int = 0
+    score_snapshot_count: int = 0
+    growth_record_count: int = 0
+    attachment_count: int = 0
+    class_history_count: int = 0
+    recommendation_count: int = 0
+    volunteer_draft_count: int = 0
+    gaokao_score_projection_count: int = 0
+    pathway_profile_count: int = 0
+    pathway_evaluation_count: int = 0
+
+
+class StudentBulkDeletePreviewItem(BaseModel):
+    student_id: int
+    student_no: str | None = None
+    student_name: str | None = None
+    current_class_id: int | None = None
+    current_class_name: str | None = None
+    status: Literal["deletable", "blocked"]
+    reason: str | None = None
+    message: str
+    association_counts: StudentBulkDeleteAssociationSummary = Field(
+        default_factory=StudentBulkDeleteAssociationSummary
+    )
+
+
+class StudentBulkDeletePreviewResponse(BaseModel):
+    total: int
+    deletable_count: int
+    blocked_count: int
+    mode: Literal["soft_delete"]
+    required_confirm_text: str
+    confirm_token: str
+    items: list[StudentBulkDeletePreviewItem] = Field(default_factory=list)
+    warnings: list[StudentBulkDeletePreviewItem] = Field(default_factory=list)
+    blocked: list[StudentBulkDeletePreviewItem] = Field(default_factory=list)
+
+
+class StudentBulkDeleteExecuteItem(BaseModel):
+    student_id: int
+    student_no: str | None = None
+    student_name: str | None = None
+    status: Literal["success", "blocked", "failed"]
+    message: str
+    error_message: str | None = None
+    before_snapshot_json: dict | None = None
+    after_snapshot_json: dict | None = None
+    association_counts: StudentBulkDeleteAssociationSummary = Field(
+        default_factory=StudentBulkDeleteAssociationSummary
+    )
+
+
+class StudentBulkDeleteExecuteResponse(BaseModel):
+    total: int
+    success_count: int
+    failed_count: int
+    blocked_count: int
+    status: Literal["success", "partially_failed", "failed"]
+    mode: Literal["soft_delete"]
+    message: str
+    audit_log_id: int | None = None
+    items: list[StudentBulkDeleteExecuteItem] = Field(default_factory=list)
+    success_items: list[StudentBulkDeleteExecuteItem] = Field(default_factory=list)
+    failed_items: list[StudentBulkDeleteExecuteItem] = Field(default_factory=list)
+    blocked: list[StudentBulkDeleteExecuteItem] = Field(default_factory=list)
 
 
 class StudentClassHistoryRead(BaseModel):

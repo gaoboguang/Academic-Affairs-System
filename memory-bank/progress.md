@@ -8,6 +8,14 @@
 
 ## 2026-04-26 新增
 
+- 已完成 v6 第四轮窗口 E1：学生批量删除后端：
+  - 从 E0 基线切出 `codex/r4-e1-student-bulk-delete-backend`
+  - 新增后端接口 `POST /api/students/bulk-delete/preview` 与 `POST /api/students/bulk-delete`
+  - 批量删除采用软删除 / 停用主档，只设置 `Student.is_active=False`，不物理删除成绩、成长档案、附件、推荐记录、志愿草稿、升学画像或路径评估
+  - 预检统计每个学生的成绩、成绩快照、成长档案、附件、班级历史、推荐记录、志愿草稿、高考分数预估、升学画像和路径评估数量；执行时校验确认 token 与确认文字，并写入 `audit_log`
+  - 学生列表默认隐藏停用学生，新增 `include_inactive=true` 用于审计或后续恢复入口
+  - 验证：`npm run backend:migrate` 通过；E1 定向后端 `2 passed`；后端全量 `96 passed`；`git diff --check` 通过
+
 - 已完成 v6 第四轮窗口 E0：第四轮基线审计：
   - 从 `main` 切出 `codex/r4-e0-baseline-audit`
   - 新增 `docs/round4-baseline-audit.md`，记录学生批量删除、批量调班、成长档案系统事件和数据库补齐的真实代码入口、已有能力、缺失能力、建议修改范围、不建议修改模块、E1-E8 依赖关系和推荐测试命令

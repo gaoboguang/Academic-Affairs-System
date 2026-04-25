@@ -11,6 +11,10 @@ from app.core.config import Settings
 from app.schemas.student import (
     StudentAttachmentPayload,
     StudentAttachmentSummary,
+    StudentBulkDeleteExecuteRequest,
+    StudentBulkDeleteExecuteResponse,
+    StudentBulkDeletePreviewRequest,
+    StudentBulkDeletePreviewResponse,
     StudentCareerPreferencePayload,
     StudentCareerPreferenceRead,
     StudentListResponse,
@@ -35,6 +39,7 @@ def list_students(
     status: str | None = None,
     student_type: str | None = None,
     art_track: str | None = None,
+    include_inactive: bool = Query(default=False),
     session: Session = Depends(get_db_session),
 ) -> StudentListResponse:
     return service.list_students(
@@ -48,6 +53,7 @@ def list_students(
         status=status,
         student_type=student_type,
         art_track=art_track,
+        include_inactive=include_inactive,
     )
 
 
@@ -93,6 +99,22 @@ def export_students(
         project_root=settings.project_root,
     )
     return FileResponse(path, filename=Path(path).name)
+
+
+@router.post("/bulk-delete/preview", response_model=StudentBulkDeletePreviewResponse)
+def preview_student_bulk_delete(
+    payload: StudentBulkDeletePreviewRequest,
+    session: Session = Depends(get_db_session),
+) -> StudentBulkDeletePreviewResponse:
+    return service.preview_student_bulk_delete(session, payload)
+
+
+@router.post("/bulk-delete", response_model=StudentBulkDeleteExecuteResponse)
+def execute_student_bulk_delete(
+    payload: StudentBulkDeleteExecuteRequest,
+    session: Session = Depends(get_db_session),
+) -> StudentBulkDeleteExecuteResponse:
+    return service.execute_student_bulk_delete(session, payload)
 
 
 @router.get("/{student_id}/profile", response_model=StudentProfileRead)

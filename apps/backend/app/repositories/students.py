@@ -17,12 +17,15 @@ def build_student_query(
     status: str | None = None,
     student_type: str | None = None,
     art_track: str | None = None,
+    include_inactive: bool = False,
 ) -> Select[tuple[Student]]:
     stmt = select(Student).options(
         joinedload(Student.current_grade),
         joinedload(Student.current_class),
         selectinload(Student.guardians),
     )
+    if not include_inactive:
+        stmt = stmt.where(Student.is_active.is_(True))
     if student_no:
         stmt = stmt.where(Student.student_no.contains(student_no))
     if name:

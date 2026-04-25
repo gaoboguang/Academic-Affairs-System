@@ -2,6 +2,13 @@
 
 ## 当前状态
 
+- 2026-04-26 已按第四轮 v6 开发文档完成窗口 E1：学生批量删除后端：
+  - 当前分支 `codex/r4-e1-student-bulk-delete-backend`，从 E0 审计基线切出；本轮不执行 `git push`
+  - 新增 `POST /api/students/bulk-delete/preview` 和 `POST /api/students/bulk-delete`，批量删除只做 `Student.is_active=False` 软删除，不物理删除成绩、成长档案、附件、推荐记录、志愿草稿、升学画像和路径评估
+  - 预检会返回可删除 / 被阻断学生清单、中文提示、确认文字、确认 token，并统计成绩、成绩快照、成长档案、附件、班级历史、推荐记录、志愿草稿、高考分数预估、升学画像和路径评估数量
+  - 执行接口校验 confirm token 和确认文字，写 `audit_log` 结构化审计记录；学生列表默认隐藏停用学生，新增 `include_inactive=true` 可查看停用主档
+  - 本轮未新增批量操作表或 Alembic 迁移；后续 E2 前端应使用 `required_confirm_text` 作为二次确认输入文案
+  - 验证：`npm run backend:migrate` 通过；`npm run backend:test -- apps/backend/tests/test_student_bulk_delete.py -q` 为 `2 passed`；`npm run backend:test -- apps/backend/tests -q` 为 `96 passed`；`git diff --check` 通过
 - 2026-04-26 已按第四轮 v6 开发文档完成窗口 E0：第四轮基线审计：
   - 当前分支 `codex/r4-e0-baseline-audit`，从 `main` 的第三轮 D8 成果切出；本轮不执行 `git push`
   - 新增 `docs/round4-baseline-audit.md`，只做审计文档，不开发新功能、不修改业务代码
