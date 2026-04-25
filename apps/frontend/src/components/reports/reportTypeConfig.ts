@@ -59,6 +59,19 @@ const REPORT_FIELD_LABELS: Record<ReportFormField, string> = {
   rule_version_id: "规则版本",
 };
 
+const REPORT_TYPE_LABEL_FALLBACKS: Record<string, string> = {
+  shandong_recommendation_summary: "山东普通类冲稳保推荐报告",
+};
+
+const REPORT_PARAM_LABELS: Record<string, string> = {
+  ...REPORT_FIELD_LABELS,
+  report_type: "报表类型",
+  student_name: "学生",
+  target_year: "目标年份",
+  source_mode: "输入来源",
+  predicted_rank: "预估位次",
+};
+
 export const REPORT_TYPE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "student_analysis", label: "学生成绩分析单" },
   { value: "class_analysis", label: "班级成绩分析报表" },
@@ -150,7 +163,7 @@ const REPORT_TYPE_CONFIGS: Record<string, ReportTypeConfig> = {
 };
 
 export function getReportTypeLabel(reportType: string): string {
-  return REPORT_TYPE_CONFIGS[reportType]?.label ?? reportType;
+  return REPORT_TYPE_CONFIGS[reportType]?.label ?? REPORT_TYPE_LABEL_FALLBACKS[reportType] ?? reportType;
 }
 
 export function reportTypeUsesField(reportType: string, field: ReportFormField): boolean {
@@ -178,7 +191,7 @@ export function formatReportExportParams(value?: Record<string, unknown> | null)
       if (key === "report_type") {
         return `报表类型=${getReportTypeLabel(String(item))}`;
       }
-      const label = REPORT_FIELD_LABELS[key as ReportFormField] ?? key;
+      const label = REPORT_PARAM_LABELS[key] ?? key;
       return `${label}=${item}`;
     })
     .join(" / ") || "-";

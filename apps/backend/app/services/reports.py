@@ -6,7 +6,11 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.exporters.archive import export_growth_summary
-from app.exporters.recommendations import export_recommendation_summary, export_volunteer_draft_summary
+from app.exporters.recommendations import (
+    export_recommendation_summary,
+    export_shandong_recommendation_report,
+    export_volunteer_draft_summary,
+)
 from app.exporters.reports import (
     export_adviser_quant_summary_report,
     export_class_analysis_report,
@@ -22,7 +26,7 @@ from app.repositories.recommendations import get_employment_direction
 from app.repositories.students import get_student_career_preference as repo_get_student_career_preference
 from app.repositories.system import get_report_export, list_report_exports as repo_list_report_exports, write_audit_log
 from app.schemas.recommendation import RecommendationHistoryItem
-from app.schemas.report import ReportExportPayload, ReportExportRecordRead
+from app.schemas.report import ReportExportPayload, ReportExportRecordRead, ShandongRecommendationReportExportPayload
 from app.services import analytics as analytics_service
 from app.services import archive as archive_service
 from app.services import evaluation as evaluation_service
@@ -41,6 +45,7 @@ REPORT_TYPE_NAME_MAP = {
     "volunteer_draft_summary": "学生志愿草稿",
     "evaluation_summary": "评教汇总报表",
     "adviser_quant_summary": "班主任量化报表",
+    "shandong_recommendation_summary": "山东普通类冲稳保推荐报告",
 }
 
 
@@ -66,6 +71,40 @@ def get_report_export_record(session: Session, export_id: int) -> ReportExportRe
     if not item:
         raise HTTPException(status_code=404, detail="报表导出记录不存在")
     return item
+
+
+def export_shandong_recommendation_report_record(
+    session: Session,
+    settings,
+    payload: ShandongRecommendationReportExportPayload,
+) -> ReportExportRecordRead:
+    result = payload.result.model_dump(mode="json")
+    file_path = export_shandong_recommendation_report(settings, result)
+    record = ReportExportRecord(
+        report_type="shandong_recommendation_summary",
+        report_name=payload.report_name or REPORT_TYPE_NAME_MAP["shandong_recommendation_summary"],
+        params_json={
+            "report_type": "shandong_recommendation_summary",
+            "student_id": result.get("student_id"),
+            "student_name": result.get("student_name"),
+            "target_year": result.get("target_year"),
+            "source_mode": result.get("source_mode"),
+            "predicted_rank": result.get("predicted_rank"),
+        },
+        file_path=file_path,
+        status="success",
+    )
+    session.add(record)
+    session.flush()
+    write_audit_log(
+        session,
+        module="reports",
+        action="export",
+        target_type="report",
+        target_id=str(record.id),
+        detail_json={"report_type": "shandong_recommendation_summary", "file_path": file_path},
+    )
+    return _serialize_export_record(record)
 
 
 def export_report(session: Session, settings, payload: ReportExportPayload) -> ReportExportRecordRead:

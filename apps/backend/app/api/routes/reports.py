@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_session, get_settings
 from app.core.config import Settings
-from app.schemas.report import ReportExportPayload, ReportExportRecordRead
+from app.schemas.report import ReportExportPayload, ReportExportRecordRead, ShandongRecommendationReportExportPayload
 from app.services import reports as service
 from app.utils.files import resolve_allowed_file_path
 
@@ -22,6 +22,15 @@ def export_report(
     settings: Settings = Depends(get_settings),
 ) -> ReportExportRecordRead:
     return service.export_report(session, settings, payload)
+
+
+@router.post("/shandong-recommendation/export", response_model=ReportExportRecordRead)
+def export_shandong_recommendation_report(
+    payload: ShandongRecommendationReportExportPayload,
+    session: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+) -> ReportExportRecordRead:
+    return service.export_shandong_recommendation_report_record(session, settings, payload)
 
 
 @router.get("/exports", response_model=list[ReportExportRecordRead])

@@ -6,7 +6,11 @@ from pathlib import Path
 from openpyxl import load_workbook
 
 from app.core.bootstrap import ensure_runtime_directories
-from app.exporters.recommendations import export_recommendation_summary, export_volunteer_draft_summary
+from app.exporters.recommendations import (
+    export_recommendation_summary,
+    export_shandong_recommendation_report,
+    export_volunteer_draft_summary,
+)
 
 
 def build_candidate_row(**overrides):
@@ -48,6 +52,97 @@ def build_candidate_row(**overrides):
 def load_exported_workbook(path: str, project_root: Path):
     export_path = project_root / path
     return load_workbook(BytesIO(export_path.read_bytes()))
+
+
+def build_shandong_candidate(**overrides):
+    row = {
+        "college_id": 1,
+        "college_name": "山东示例大学",
+        "college_code_snapshot": "A001",
+        "major_id": 2,
+        "major_name": "计算机类",
+        "major_code_snapshot": "0809",
+        "bucket": "stable",
+        "bucket_label": "稳",
+        "rank_margin": 1200,
+        "rank_margin_ratio": 0.08,
+        "score_summary": {
+            "reference_rank": 15000,
+            "latest_min_score": 612,
+            "latest_min_rank": 15200,
+        },
+        "years_used": [2025, 2024, 2023],
+        "historical_summary": {
+            "weighted_reference_rank": 15000,
+            "rank_rows": [
+                {"year": 2025, "min_rank": 15200, "min_score": 612, "plan_count": 12, "source_note": "2025 山东普通类投档表"},
+                {"year": 2024, "min_rank": 15100, "min_score": 609, "plan_count": 10, "source_note": "2024 山东普通类投档表"},
+            ],
+            "plan_change": {
+                "target_year_plan_count": None,
+                "latest_historical_plan_count": 12,
+                "plan_change_factor": None,
+            },
+        },
+        "plan_count": None,
+        "subject_requirement": "物理 化学",
+        "data_confidence": "medium",
+        "risk_flags": ["plan_missing", "three_year_data_incomplete"],
+        "explanation_text": "按近三年山东普通类投档数据计算，归为稳。",
+        "source_document_ids": [101, 102],
+    }
+    row.update(overrides)
+    return row
+
+
+def test_shandong_recommendation_export_splits_buckets_and_localizes_risks(test_settings) -> None:
+    ensure_runtime_directories(test_settings)
+    export_path = export_shandong_recommendation_report(
+        test_settings,
+        {
+            "student_id": 1,
+            "student_name": "张三",
+            "province": "山东",
+            "target_year": 2026,
+            "student_type": "general",
+            "source_mode": "manual_rank",
+            "predicted_score": 620,
+            "predicted_rank": 13800,
+            "rank_range_low": 13800,
+            "rank_range_high": 13800,
+            "rank_projection_basis": "manual_rank",
+            "risk_preference": "balanced",
+            "data_years": [2025, 2024, 2023],
+            "input_notes": ["当前按手动填写的全省位次作为主排序依据。"],
+            "summary": {
+                "rush_count": 1,
+                "stable_count": 1,
+                "safe_count": 1,
+                "watch_count": 1,
+                "excluded_subject_mismatch_count": 2,
+            },
+            "rush": [build_shandong_candidate(bucket="rush", bucket_label="冲", major_name="人工智能")],
+            "stable": [build_shandong_candidate()],
+            "safe": [build_shandong_candidate(bucket="safe", bucket_label="保", major_name="软件工程", risk_flags=[])],
+            "watch": [build_shandong_candidate(bucket="watch", bucket_label="仅关注", major_name="数据科学", risk_flags=["historical_data_missing"])],
+        },
+    )
+
+    workbook = load_exported_workbook(export_path, test_settings.project_root)
+    assert workbook.sheetnames == ["汇总页", "风险说明", "冲列表", "稳列表", "保列表", "数据不足与风险列表", "数据来源页"]
+    summary_sheet = workbook["汇总页"]
+    assert summary_sheet.cell(row=2, column=2).value == "张三"
+    assert summary_sheet.cell(row=6, column=2).value == "手动全省位次"
+    assert "2026 普通类正式招生计划" in str(summary_sheet.cell(row=16, column=2).value)
+
+    stable_sheet = workbook["稳列表"]
+    assert stable_sheet.cell(row=2, column=1).value == "稳"
+    assert "目标年份招生计划暂缺" in str(stable_sheet.cell(row=2, column=17).value)
+    assert "plan_missing" not in str(stable_sheet.cell(row=2, column=17).value)
+
+    source_sheet = workbook["数据来源页"]
+    source_values = [source_sheet.cell(row=index, column=3).value for index in range(2, source_sheet.max_row + 1)]
+    assert any("2025 山东普通类投档表" in str(item) for item in source_values)
 
 
 def test_volunteer_draft_export_includes_missing_rule_and_general_rule_summaries(test_settings) -> None:

@@ -37,3 +37,7 @@ export function adviserQuantPrintPreviewPath(semesterId: number, ruleVersionId?:
 export function volunteerDraftPrintPreviewPath(draftId: number): string {
   return `/print/volunteer-drafts/${draftId}`;
 }
+
+export function shandongRecommendationPrintPreviewPath(storageKey: string): string {
+  return `/print/shandong-recommendation/${encodeURIComponent(storageKey)}`;
+}

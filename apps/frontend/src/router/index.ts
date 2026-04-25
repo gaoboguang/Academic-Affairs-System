@@ -19,6 +19,7 @@ const ReportsPage = () => import("../pages/ReportsPage.vue");
 const RecommendationsPage = () => import("../pages/RecommendationsPage.vue");
 const SystemToolsPage = () => import("../pages/SystemToolsPage.vue");
 const RecommendationPrintPage = () => import("../pages/RecommendationPrintPage.vue");
+const ShandongRecommendationPrintPage = () => import("../pages/ShandongRecommendationPrintPage.vue");
 const GrowthSummaryPrintPage = () => import("../pages/GrowthSummaryPrintPage.vue");
 const StudentAnalysisPrintPage = () => import("../pages/StudentAnalysisPrintPage.vue");
 const ClassAnalysisPrintPage = () => import("../pages/ClassAnalysisPrintPage.vue");
@@ -36,6 +37,11 @@ const router = createRouter({
       path: "/print/recommendations/:studentId/:schemeId",
       name: "recommendation-print",
       component: RecommendationPrintPage,
+    },
+    {
+      path: "/print/shandong-recommendation/:storageKey",
+      name: "shandong-recommendation-print",
+      component: ShandongRecommendationPrintPage,
     },
     {
       path: "/print/student-analysis/:studentId/:examId",

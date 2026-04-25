@@ -5,6 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from app.schemas.common import ORMModel
+from app.schemas.recommendation import ShandongRushStableSafeRecommendationResponse
 
 
 class ReportExportPayload(BaseModel):
@@ -19,6 +20,11 @@ class ReportExportPayload(BaseModel):
     rule_version_id: int | None = None
     scheme_id: int | None = None
     draft_id: int | None = None
+
+
+class ShandongRecommendationReportExportPayload(BaseModel):
+    report_name: str | None = None
+    result: ShandongRushStableSafeRecommendationResponse
 
 
 class ReportExportRecordRead(ORMModel):

@@ -205,6 +205,27 @@
 
 ## 当前重点
 
+- 2026-04-25 已按 v4 下一轮开发文档完成窗口 C3：最终集成、测试、合并、交接文档：
+  - 当前分支 `codex/r2-final-gaokao-recommendation-integration`，从 A0/A1/B1/B2/B3/B4 提交和当前 C1/C2 未提交工作区接续；未回退 C1/C2 成果，B1 官方文件目录 `data/imports/` 已加入 `.gitignore`，不纳入代码提交
+  - C3 已补 `docs/round2-gaokao-recommendation-final-report.md` 与 `docs/gaokao-data-coverage-after-round2.md`，整合 A0/A1/B1/B2/B3/B4/C1/C2 的数据、推荐、输出和风险边界
+  - 真实 `data/app.db` 已在迁移前备份到 `data/backups/app_before_c3_round2_integration_migrate_20260425_1700.db`，并执行 `npm run backend:migrate` 从 `20260425_0016` 升到 `20260425_0017`
+  - 最新 `backend:data-health -- --json` 显示 schema_version=`20260425_0017`、状态仍为 `warning`、P0 缺口仍为 6 条；`backend:p0-check -- --json` 为 `ok: true`，备份包 `data/backups/p0_delivery_backup_20260425_170902.zip`
+  - C3 验证已通过：`git diff --check`、定向后端导出 `6 passed`、山东工作台前端单测 `5 passed`、`npm run check`（后端 `84 passed`、前端 `133 passed`、lint/build 通过）和 `npm run check:all`（E2E `32 passed`）
+  - 远端同步受本机 GitHub HTTPS 认证限制影响，`git fetch --all --prune` 报 `could not read Username for 'https://github.com': Device not configured`；后续推送/合并 GitHub 需先修认证或改用已登录凭据
+- 2026-04-25 已按 v4 下一轮开发文档完成窗口 C2：推荐报告、Excel 导出、打印页一致性：
+  - 当前分支 `codex/r2-c2-shandong-recommendation-report-export`，从 `codex/r2-c1-shandong-recommendation-workbench-ui` 的未提交 C1 工作区上接续；未回退既有 C1 改动，B1 官方文件仍以未跟踪 `data/imports/` 形式保留
+  - 新增 `POST /api/reports/shandong-recommendation/export`，把 B4/C1 的山东普通类冲稳保预览结果导出为 Excel，并写入现有 `report_export_record`
+  - 新增 `export_shandong_recommendation_report()`，Excel 包含“汇总页 / 风险说明 / 冲列表 / 稳列表 / 保列表 / 数据不足与风险列表 / 数据来源页”；风险码映射为中文，不展示原始英文码
+  - `/recommendations` 的“山东普通类推荐”结果区新增“打印报告 / 导出 Excel”，新增 `/print/shandong-recommendation/:storageKey` 打印页，保留 2026 普通类正式计划未公开提示、输入来源、预估分/位次、冲稳保分组、风险和来源编号
+  - 本轮未新增数据库表、不持久化 B4 预览候选、不伪造 2026 普通类计划或投档结果；打印页使用本地浏览器缓存承接当前预览结果
+  - 本轮验证：`backend:test -- apps/backend/tests/test_recommendation_exporters.py -q` 为 `6 passed`；`frontend:test -- tests/shandong-recommendation-workbench.test.ts` 为 `5 passed`；`frontend:build` 通过；`git diff --check` 通过
+- 2026-04-25 已按 v4 下一轮开发文档完成窗口 C1：推荐工作台 UI 和数据质量看板：
+  - 当前分支 `codex/r2-c1-shandong-recommendation-workbench-ui` 从 B4 成果上接续；B1 官方文件仍以未跟踪 `data/imports/` 形式保留，本轮未纳入提交
+  - `/recommendations` 新增“山东普通类推荐”页签和顶部快捷入口，面向老师提供“选择学生与考试估算 / 手动预估分 / 手动全省位次”三种入口，默认目标年份为 2026、批次为山东常规批
+  - 新增 `RecommendationShandongWorkbenchPanel.vue`、`useShandongRecommendationWorkbench.ts` 与 `shandongRecommendationWorkbench.ts`，前端会先按 B3 接口生成考试预估快照，再调用 B4 `shandong-rush-stable-safe/preview`，不新增后端表、不改 B4 算法
+  - 推荐结果按“冲 / 稳 / 保 / 仅关注”分组展示；每条结果可展开查看历年最低分/位次、位次差距、计划数变化、选科要求、章程复核提示、风险标签、来源编号和推荐理由
+  - 同页接入 `/api/gaokao/data-health`，展示 2023-2025 覆盖矩阵、2026 发布状态和 P0 缺口；当前真实库仍为 `warning`，P0 缺口 6 条，且 schema_version 仍显示 `20260425_0016`
+  - 本轮验证：`frontend:lint` 通过；`frontend:test` 为 `23 passed / 132 passed`；`frontend:build` 通过；新增山东工作台 E2E `1 passed`；`backend:data-health -- --json` 可运行但仍为 warning；`git diff --check` 通过
 - 2026-04-25 已按 v4 下一轮开发文档完成窗口 B4：山东普通类冲稳保推荐算法与解释引擎：
   - 当前分支 `codex/r2-b4-shandong-rush-stable-safe-recommendation` 从 B3 成果上接续；B1 官方文件仍以未跟踪 `data/imports/` 形式保留，本轮未纳入提交
   - 新增 `POST /api/recommendations/shandong-rush-stable-safe/preview` 预览接口，不新增推荐结果持久化表，不写入真实主库

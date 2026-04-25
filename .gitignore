@@ -34,6 +34,7 @@ data/exports/*
 !data/exports/.gitkeep
 data/logs/*
 !data/logs/.gitkeep
+data/imports/
 data/templates/*.xlsx
 data/uploads/*
 !data/uploads/.gitkeep

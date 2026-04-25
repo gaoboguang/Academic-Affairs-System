@@ -545,6 +545,194 @@ export type ScoreInputMode =
 
 export type RiskPreference = "conservative" | "balanced" | "aggressive";
 
+export type ShandongRecommendationSourceMode = "exam_projection" | "manual_score" | "manual_rank";
+
+export interface StudentGaokaoScoreProjectionPayload {
+  student_id: number;
+  target_year: number;
+  province: string;
+  source_mode: "manual_score" | "manual_rank" | "exam_projection";
+  manual_score?: number;
+  manual_rank?: number;
+  selected_exam_ids: number[];
+  note?: string;
+}
+
+export interface StudentGaokaoScoreProjectionRead {
+  id?: number | null;
+  student_id: number;
+  student_name?: string | null;
+  target_year: number;
+  province: string;
+  source_mode: string;
+  predicted_score?: number | null;
+  predicted_rank?: number | null;
+  rank_range_low?: number | null;
+  rank_range_high?: number | null;
+  confidence_level: string;
+  rank_projection_basis?: string | null;
+  selected_exam_ids_json: number[];
+  calculation_detail_json: Record<string, unknown>;
+  note?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  is_active: boolean;
+}
+
+export interface ShandongRecommendationFormState {
+  student_id?: number;
+  exam_id?: number;
+  target_year: number;
+  batch: string;
+  source_mode: ShandongRecommendationSourceMode;
+  manual_score?: number;
+  manual_rank?: number;
+  risk_preference: RiskPreference;
+  selected_subjects_json: string[];
+  target_regions_json: string[];
+  school_level_tags_json: string[];
+  major_keyword: string;
+  limit: number;
+}
+
+export interface ShandongRushStableSafeRecommendationPayload {
+  student_id?: number;
+  projection_id?: number;
+  target_year: number;
+  province: "山东";
+  student_type: "general";
+  batch?: string;
+  subject_combination?: string;
+  source_mode: "manual_score" | "manual_rank" | "projection";
+  manual_score?: number;
+  manual_rank?: number;
+  risk_preference: RiskPreference;
+  target_regions_json: string[];
+  school_level_tags_json: string[];
+  major_keyword?: string;
+  limit: number;
+}
+
+export interface ShandongRushStableSafeCandidate {
+  college_id: number;
+  college_name: string;
+  college_code_snapshot?: string | null;
+  major_id?: number | null;
+  major_name?: string | null;
+  major_code_snapshot?: string | null;
+  bucket: string;
+  bucket_label: string;
+  rank_margin?: number | null;
+  rank_margin_ratio?: number | null;
+  score_summary: Record<string, unknown>;
+  years_used: number[];
+  historical_summary: Record<string, unknown>;
+  plan_count?: number | null;
+  subject_requirement?: string | null;
+  data_confidence: string;
+  risk_flags: string[];
+  explanation_text: string;
+  source_document_ids: number[];
+}
+
+export interface ShandongRushStableSafeSummary {
+  rush_count: number;
+  stable_count: number;
+  safe_count: number;
+  watch_count: number;
+  excluded_subject_mismatch_count: number;
+}
+
+export interface ShandongRushStableSafeRecommendationResponse {
+  student_id?: number | null;
+  student_name?: string | null;
+  province: string;
+  target_year: number;
+  student_type: string;
+  source_mode: string;
+  predicted_score?: number | null;
+  predicted_rank: number;
+  rank_range_low?: number | null;
+  rank_range_high?: number | null;
+  rank_projection_basis?: string | null;
+  risk_preference: string;
+  data_years: number[];
+  input_notes: string[];
+  summary: ShandongRushStableSafeSummary;
+  rush: ShandongRushStableSafeCandidate[];
+  stable: ShandongRushStableSafeCandidate[];
+  safe: ShandongRushStableSafeCandidate[];
+  watch: ShandongRushStableSafeCandidate[];
+}
+
+export interface ShandongDataHealthType {
+  key: string;
+  label?: string | null;
+  count: number;
+}
+
+export interface ShandongDataHealthYearBreakdown {
+  year: number;
+  total: number;
+  student_types: ShandongDataHealthType[];
+  batches: ShandongDataHealthType[];
+  status: string;
+}
+
+export interface ShandongDataHealthCoverage {
+  key: string;
+  label: string;
+  status: string;
+  total: number;
+  years: number[];
+  missing_years: number[];
+  readiness: string;
+  readiness_label?: string | null;
+  risk_level: string;
+  explanation?: string | null;
+  notes: string[];
+  student_types: ShandongDataHealthType[];
+  batch_distribution: ShandongDataHealthType[];
+  year_breakdown: ShandongDataHealthYearBreakdown[];
+}
+
+export interface ShandongPublicationSource {
+  id: number;
+  title: string;
+  url?: string | null;
+  official_org?: string | null;
+  published_at?: string | null;
+  local_file_path?: string | null;
+  file_sha256?: string | null;
+  status?: string | null;
+  note?: string | null;
+}
+
+export interface ShandongPublicationStatus {
+  key: string;
+  label: string;
+  category: string;
+  target_year: number;
+  status: string;
+  status_label: string;
+  record_count: number;
+  source_documents: ShandongPublicationSource[];
+  action_label: string;
+  explanation: string;
+  notes: string[];
+  blocks_recommendation: boolean;
+}
+
+export interface ShandongRecommendationDataHealth {
+  generated_at: string;
+  province: string;
+  expected_years: number[];
+  coverage: ShandongDataHealthCoverage[];
+  publication_status: ShandongPublicationStatus[];
+  gaps: string[];
+  summary: string;
+}
+
 export interface VolunteerWorkbenchPreviewPayload extends CareerPreferenceFields {
   student_id: number;
   exam_id: number;

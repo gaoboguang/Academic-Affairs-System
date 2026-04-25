@@ -20,6 +20,7 @@
         <el-button @click="activeTab = 'special-type-rules'">特殊类型规则</el-button>
         <el-button @click="activeTab = 'score-transform-rules'">赋分规则</el-button>
         <el-button @click="activeTab = 'subject-requirements'">选科字典</el-button>
+        <el-button @click="activeTab = 'shandong-workbench'">山东普通类推荐</el-button>
         <el-button @click="activeTab = 'volunteer-workbench'">学生工作台</el-button>
         <el-button type="primary" @click="activeTab = 'recommendations'">生成推荐</el-button>
       </div>
@@ -233,6 +234,32 @@
         />
       </el-tab-pane>
 
+      <el-tab-pane label="山东普通类推荐" name="shandong-workbench">
+        <RecommendationShandongWorkbenchPanel
+          :form="shandongRecommendationForm"
+          :student-options="studentOptions"
+          :exam-options="examOptions"
+          :year-options="workbenchYearOptions"
+          :target-region-options="targetRegionOptions"
+          :school-level-options="schoolLevelOptions"
+          :result="shandongRecommendationResult"
+          :result-groups="shandongResultGroups"
+          :projection="shandongRecommendationProjection"
+          :data-health="shandongDataHealth"
+          :coverage-rows="shandongCoverageRows"
+          :loading="generatingShandongRecommendation"
+          :loading-data-health="loadingShandongDataHealth"
+          :saving-projection="savingShandongProjection"
+          :exporting-report="exportingShandongReport"
+          @generate="generateShandongRecommendation"
+          @reset="resetShandongRecommendation"
+          @load-data-health="loadShandongDataHealth"
+          @sync-from-recommendation="syncShandongRecommendationFromRecommendation"
+          @print-report="openShandongRecommendationPrintPreview"
+          @export-report="exportShandongRecommendationReport"
+        />
+      </el-tab-pane>
+
       <el-tab-pane label="学生志愿工作台" name="volunteer-workbench">
         <RecommendationVolunteerWorkbenchPanel
           :form="volunteerWorkbenchForm"
@@ -440,6 +467,7 @@ import RecommendationMajorEmploymentMappingsPanel from "../components/recommenda
 import RecommendationMajorsPanel from "../components/recommendations/RecommendationMajorsPanel.vue";
 import RecommendationScoreTransformRulesPanel from "../components/recommendations/RecommendationScoreTransformRulesPanel.vue";
 import RecommendationSchemeResultsPanel from "../components/recommendations/RecommendationSchemeResultsPanel.vue";
+import RecommendationShandongWorkbenchPanel from "../components/recommendations/RecommendationShandongWorkbenchPanel.vue";
 import RecommendationSpecialTypeRulesPanel from "../components/recommendations/RecommendationSpecialTypeRulesPanel.vue";
 import RecommendationStrategyPanel from "../components/recommendations/RecommendationStrategyPanel.vue";
 import RecommendationSubjectRequirementDictsPanel from "../components/recommendations/RecommendationSubjectRequirementDictsPanel.vue";
@@ -491,11 +519,16 @@ const {
   enrollmentPlanFilters,
   enrollmentPlanImportResult,
   enrollmentPlans,
+  exportShandongRecommendationReport,
   exportVolunteerDraft,
   exportScheme,
   examModeOptions,
   exportingVolunteerDraftId,
+  exportingShandongReport,
   gaokaoCandidateTypeOptions,
+  generateShandongRecommendation,
+  generatingShandongRecommendation,
+  openShandongRecommendationPrintPreview,
   openRecommendationPrintPreview,
   openVolunteerDraftPrintPreview,
   reloadRecommendationSettings,
@@ -516,6 +549,7 @@ const {
   historyItems,
   latestGeneration,
   latestGenerationMessage,
+  loadShandongDataHealth,
   loadAdmissions,
   loadColleges,
   loadEmploymentDirections,
@@ -533,6 +567,7 @@ const {
   loadingVolunteerDrafts,
   loadingStudentCareerPreference,
   loadingHistory,
+  loadingShandongDataHealth,
   loadingSelectedScheme,
   loadVolunteerWorkbenchPreview,
   majorDialogTitle,
@@ -586,6 +621,7 @@ const {
   resetMajorFilters,
   resetMajorEmploymentMappingFilters,
   resetRecommendationForm,
+  resetShandongRecommendation,
   resetScoreTransformRuleFilters,
   resetSpecialTypeRuleFilters,
   resetSubjectRequirementDictFilters,
@@ -602,6 +638,7 @@ const {
   saveVolunteerDraftAsNew,
   savingCollege,
   savingEmploymentDirection,
+  savingShandongProjection,
   savingVolunteerDraft,
   savingMajor,
   savingMajorEmploymentMapping,
@@ -613,6 +650,12 @@ const {
   selectedSchemeError,
   selectedSchemeResults,
   selectedStrategyPresetId,
+  shandongCoverageRows,
+  shandongDataHealth,
+  shandongRecommendationForm,
+  shandongRecommendationProjection,
+  shandongRecommendationResult,
+  shandongResultGroups,
   scoreTransformRuleFilters,
   scoreTransformRuleYearOptions,
   specialRuleOptions,
@@ -634,6 +677,7 @@ const {
   submitRecommendation,
   submitVolunteerRule,
   summaryCards,
+  syncShandongRecommendationFromRecommendation,
   targetRegionOptions,
   syncVolunteerWorkbenchFromRecommendation,
   applyStudentCareerPreference,

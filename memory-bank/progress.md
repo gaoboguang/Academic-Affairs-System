@@ -8,6 +8,23 @@
 
 ## 2026-04-25 新增
 
+- 已完成 v4 下一轮窗口 C2：推荐报告、Excel 导出、打印页一致性：
+  - 新增 `apps/backend/app/exporters/recommendations.py` 中的山东普通类报告导出器，支持把 B4/C1 预览结果导出为 Excel
+  - 新增 `POST /api/reports/shandong-recommendation/export`，导出后写入现有 `report_export_record`，报表中心导出记录可显示“山东普通类冲稳保推荐报告”
+  - Excel 工作簿包含“汇总页 / 风险说明 / 冲列表 / 稳列表 / 保列表 / 数据不足与风险列表 / 数据来源页”，其中“数据不足与风险列表”用于承接开发文档里的数据不足/风险分组，避免 Excel sheet 名不允许 `/` 的限制
+  - 新增 `/print/shandong-recommendation/:storageKey` 打印页，并在 `/recommendations` 的山东普通类推荐结果区接入“打印报告 / 导出 Excel”
+  - 风险提示复用中文映射，覆盖上一年一分一段估算、校内考试估算、近三年样本不完整、目标年计划暂缺、计划减少、选科核对等 C2 输出场景
+  - 验证：`npm run backend:test -- apps/backend/tests/test_recommendation_exporters.py -q` 为 `6 passed`；`npm run frontend:test -- tests/shandong-recommendation-workbench.test.ts` 为 `5 passed`；`npm run frontend:build` 通过；`git diff --check` 通过
+
+- 已完成 v4 下一轮窗口 C1：推荐工作台 UI 和数据质量看板：
+  - 从 B4 成果上接续创建 `codex/r2-c1-shandong-recommendation-workbench-ui`
+  - `/recommendations` 新增“山东普通类推荐”页签，支持选择学生与考试估算、手动填写预估高考分数、手动填写山东全省位次三种入口，默认面向 2026 山东普通类常规批
+  - 新增 `apps/frontend/src/components/recommendations/RecommendationShandongWorkbenchPanel.vue`、`useShandongRecommendationWorkbench.ts` 与 `shandongRecommendationWorkbench.ts`；考试估算入口会调用 B3 快照保存接口，再用快照 ID 调 B4 冲稳保预览接口
+  - 推荐结果按“冲 / 稳 / 保 / 仅关注”分组展示，展开行展示历年最低分/位次、位次差距、计划数变化、选科要求、章程复核提示、风险标签、来源编号和推荐理由
+  - 同页接入数据质量看板，展示 2023-2025 覆盖矩阵、2026 发布状态和 P0 缺口，避免把 2026 未公开数据或单招/综评材料误当普通类正式计划
+  - 新增 `apps/frontend/tests/shandong-recommendation-workbench.test.ts` 和最小 E2E“山东普通类推荐工作台可查看输入和数据质量”
+  - 验证：`npm run frontend:lint` 通过；`npm run frontend:test` 为 `23 passed / 132 passed`；`npm run frontend:build` 通过；`npm run e2e -- -g "山东普通类推荐工作台" tests/e2e/dashboard-smoke.spec.ts` 为 `1 passed`；`npm run backend:data-health -- --json` 可运行但仍为 `warning`、P0 缺口 6 条；`git diff --check` 通过
+
 - 已完成 v4 下一轮窗口 B4：山东普通类冲稳保推荐算法与解释引擎：
   - 从 B3 成果上接续创建 `codex/r2-b4-shandong-rush-stable-safe-recommendation`
   - 新增 `POST /api/recommendations/shandong-rush-stable-safe/preview`，支持 `projection`、`manual_rank`、`manual_score` 三类学生位次来源；`projection` 读取 B3 的 `student_gaokao_score_projection`，`manual_score` 使用一分一段并在目标年缺失时回退最近上一年
@@ -1176,3 +1193,12 @@
   - 当前普通类投档/录取结果覆盖 2023=29301、2024=30838、2025=32963；一分一段只有 2024/2025；省控线只有 2024/2025；招生计划 2023 缺失、2024 偏少、2025 较多但仍需来源追溯
   - 当前 2026 只有规则和选科要求可作为公开依据：山东 `province_volunteer_rule` 2026 年 26 条、`province_score_transform_rule` 9 条、`subject_requirement_dict` 9 条、`special_type_rule` 31 条；普通类正式计划/投档/一分一段/省控线均无 2026 记录
   - 验证：`npm run backend:data-health -- --json` 可运行且状态为 `warning`；`npm run backend:p0-check -- --json` 通过并生成 `data/backups/p0_delivery_backup_20260425_104947.zip`
+- 2026-04-25 已完成 v4 Round 2 C3 最终集成文档与真实库迁移：
+  - 当前最终整合分支为 `codex/r2-final-gaokao-recommendation-integration`
+  - 新增 `docs/round2-gaokao-recommendation-final-report.md` 与 `docs/gaokao-data-coverage-after-round2.md`
+  - 当前已整合 A0/A1/B1/B2/B3/B4/C1/C2，形成官方来源登记、最近三年核心数据导入、数据健康看板、预估分/位次、山东普通类冲稳保推荐、打印和 Excel 输出闭环
+  - `data/imports/` 已加入 `.gitignore`，本地官方附件不进入代码提交
+  - 真实 `data/app.db` 已从 `20260425_0016` 迁移到 `20260425_0017`，迁移前备份为 `data/backups/app_before_c3_round2_integration_migrate_20260425_1700.db`
+  - 最新数据健康仍为 `warning`，P0 缺口仍为 6 条；`npm run backend:p0-check -- --json` 为 `ok: true`，备份包 `data/backups/p0_delivery_backup_20260425_170902.zip`
+  - C3 验证已通过：`git diff --check`、定向后端导出 `6 passed`、山东工作台前端单测 `5 passed`、`npm run check`（后端 `84 passed`、前端 `133 passed`、lint/build 通过）和 `npm run check:all`（E2E `32 passed`）
+  - `git fetch --all --prune` 因本机 GitHub HTTPS 认证不可交互失败；后续推送或合并远端前需先恢复凭据

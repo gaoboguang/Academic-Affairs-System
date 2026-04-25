@@ -2,6 +2,16 @@
 
 ## 当前主线状态（2026-04-25）
 
+- 已按 `Codex-App-下一轮开发计划-山东高考志愿数据库与推荐-v4.md` 完成窗口 C3，当前分支 `codex/r2-final-gaokao-recommendation-integration`：A0/A1/B1/B2/B3/B4 已以提交链集成，C1/C2 成果在 C3 开工时位于当前工作区，C3 未回退并已纳入最终整合分支。C3 新增 `docs/round2-gaokao-recommendation-final-report.md` 与 `docs/gaokao-data-coverage-after-round2.md`，并把本地官方附件目录 `data/imports/` 加入 `.gitignore`，避免把本机下载材料提交进代码。
+- C3 已对真实 `data/app.db` 执行迁移补齐 B3 预估表：迁移前备份为 `data/backups/app_before_c3_round2_integration_migrate_20260425_1700.db`，当前 Alembic 版本为 `20260425_0017`。最新 `npm run backend:data-health -- --json` 显示 schema_version=`20260425_0017`、状态 `warning`、P0 缺口仍为 6 条；`npm run backend:p0-check -- --json` 为 `ok: true`，备份包 `data/backups/p0_delivery_backup_20260425_170902.zip`。C3 验证已通过：`git diff --check`、定向后端导出 `6 passed`、山东工作台前端单测 `5 passed`、`npm run check`（后端 `84 passed`、前端 `133 passed`、lint/build 通过）和 `npm run check:all`（E2E `32 passed`）。
+- C3 远端核查受本机认证限制影响：`git fetch --all --prune` 失败，报 `could not read Username for 'https://github.com': Device not configured`。本地 `main` 仍停在 `a7c7148`，最终推送或合并 GitHub 前需要先恢复 GitHub HTTPS/凭据认证。
+- 已按 `Codex-App-下一轮开发计划-山东高考志愿数据库与推荐-v4.md` 完成窗口 C2，当前分支 `codex/r2-c2-shandong-recommendation-report-export`：山东普通类冲稳保推荐结果现在可从 `/recommendations` 的“山东普通类推荐”页签直接“打印报告 / 导出 Excel”。本轮新增 `POST /api/reports/shandong-recommendation/export`，导出的 Excel 会写入现有报表导出记录。
+- C2 Excel 包含“汇总页 / 风险说明 / 冲列表 / 稳列表 / 保列表 / 数据不足与风险列表 / 数据来源页”。风险标签已映射为中文，不直接展示英文码；“数据不足与风险列表”对应文档里的“数据不足/风险列表”，名称调整是因为 Excel sheet 名不允许 `/`。
+- C2 打印页路径为 `/print/shandong-recommendation/:storageKey`，由当前浏览器本地缓存承接 C1 预览结果，适合立即打印或保存 PDF；本轮未新增持久化推荐候选表、不改 B4 算法、不伪造 2026 普通类正式计划或投档结果。
+- C2 验证：`npm run backend:test -- apps/backend/tests/test_recommendation_exporters.py -q` 为 `6 passed`；`npm run frontend:test -- tests/shandong-recommendation-workbench.test.ts` 为 `5 passed`；`npm run frontend:build` 通过；`git diff --check` 通过。
+- 已按 `Codex-App-下一轮开发计划-山东高考志愿数据库与推荐-v4.md` 完成窗口 C1，当前分支 `codex/r2-c1-shandong-recommendation-workbench-ui`：`/recommendations` 新增“山东普通类推荐”页签，支持选择学生与考试估算、手动预估分、手动全省位次三种入口，调用 B3 预估快照和 B4 冲稳保预览接口，按“冲 / 稳 / 保 / 仅关注”展示结果，并在展开行展示历年最低分/位次、位次差距、计划数变化、选科要求、章程复核提示、风险标签、来源编号和推荐理由。
+- C1 同页新增数据质量看板：直接读取 `/api/gaokao/data-health`，展示 2023-2025 覆盖矩阵、2026 发布状态和 P0 缺口。当前真实 `data/app.db` 的 `backend:data-health -- --json` 仍为 `warning`、P0 缺口 6 条，且输出 schema_version 仍显示 `20260425_0016`；C1 未改数据库、未伪造 2026 普通类计划或投档结果。
+- C1 验证：`npm run frontend:lint` 通过；`npm run frontend:test` 为 `23 passed / 132 passed`；`npm run frontend:build` 通过；`npm run e2e -- -g "山东普通类推荐工作台" tests/e2e/dashboard-smoke.spec.ts` 为 `1 passed`；`npm run backend:data-health -- --json` 可运行但仍为 warning；`git diff --check` 通过。
 - 已按 `Codex-App-下一轮开发计划-山东高考志愿数据库与推荐-v4.md` 完成窗口 B4，当前分支 `codex/r2-b4-shandong-rush-stable-safe-recommendation`：新增山东普通类冲稳保推荐预览接口 `POST /api/recommendations/shandong-rush-stable-safe/preview`，用 2025/2024/2023 山东普通类历史投档位次加权生成“冲 / 稳 / 保 / 仅关注”，并返回 `rank_margin`、`rank_margin_ratio`、`score_summary`、`years_used`、`historical_summary`、`risk_flags`、`explanation_text`、`source_document_ids`。
 - B4 输入来源：`projection` 读取 B3 的 `student_gaokao_score_projection`，`manual_rank` 直接使用山东全省位次，`manual_score` 按一分一段换算位次；目标年份一分一段缺失时回退最近上一年并标记 `rank_projection_from_previous_year`。真实 `data/app.db` 当前数据健康仍显示 schema_version `20260425_0016`，因此使用真实库的 `projection` 模式前仍需要先执行 B3 迁移到 `20260425_0017`。
 - B4 安全边界：选科不符候选会直接排除；近三年样本不足降低置信度，只有单年样本归为“仅关注”；缺目标年份计划或计划缩招进入风险提示，计划缩招不允许进入“保”；本轮不伪造 2026 普通类计划或投档结果，也不处理特殊类型录取把握。
@@ -26,7 +36,7 @@
 ## 下一次接手先做什么
 
 1. 先阅读 `AGENTS.md`、`memory-bank/project-context.md`、`memory-bank/active-context.md`。
-2. 如继续 v4 下一轮第二批，B1、B2、B3、B4 已完成；先读 `docs/gaokao-shandong-2023-2025-coverage.md`、`docs/gaokao-2026-data-watchlist.md`、`docs/gaokao-data-baseline-2026-04-25.md`、`docs/gaokao-source-import-framework-2026-04-25.md` 与 `docs/gaokao-shandong-rush-stable-safe-engine-2026-04-25.md`。下一步更适合进入 C1，把 B4 预览接口接到推荐页，做老师可读的“冲 / 稳 / 保 / 仅关注”视图；随后 C2 再把同一结果接入打印 / Excel / 报表。不要伪造 2026 普通类计划或投档结果，不要把校内考试名次直接当山东全省位次。
+2. 如继续 v4 Round 2 收口，先读 `docs/round2-gaokao-recommendation-final-report.md`、`docs/gaokao-data-coverage-after-round2.md`、`docs/gaokao-shandong-2023-2025-coverage.md`、`docs/gaokao-2026-data-watchlist.md`、`docs/gaokao-data-baseline-2026-04-25.md`、`docs/gaokao-source-import-framework-2026-04-25.md` 与 `docs/gaokao-shandong-rush-stable-safe-engine-2026-04-25.md`。下一步优先完成 C3 剩余验收、提交 `codex/r2-final-gaokao-recommendation-integration`，并在 GitHub 认证恢复后推送/合并；不要伪造 2026 普通类计划或投档结果，不要把校内考试名次直接当山东全省位次。
 3. 2026-04-24 窗口 0 已生成当前多窗口接手入口：`docs/repo-audit.md`、`docs/mac-dev-setup.md`、`docs/development-roadmap.md`。后续 Codex 窗口应先读这三份，再进入自己的窗口任务。按 Codex App v3 补齐的 dated 状态锁定文件为 `docs/repo-audit-2026-04-24.md` 与 `docs/current-development-map-2026-04-24.md`，它们是对已有窗口 0 成果的补缺，不是新路线图；本轮验证已通过后端 `66 passed`、前端 lint、前端 `114 passed`、前端构建、数据健康、P0 验收和 `git diff --check`。
 3. 2026-04-24 窗口 1 已完成 Mac 启动体验收口；同日又修正了“终端关闭后前端掉线”的使用问题。普通用户优先双击 `start-local-edu.command` 或执行 `npm run start:local`，服务会后台运行，日志在 `data/logs/local-services/`；需要停止时执行 `npm run stop:local`。`npm run dev` 保留为前台开发调试模式，终端关闭后前端会停止。
 4. 如果任务涉及结构优化，先补看 `docs/README.md`、`docs/dev/README.md`、`scripts/README.md` 与 `handoffs/README.md`，再阅读 `docs/development_recommendations_2026-04-05.md`。

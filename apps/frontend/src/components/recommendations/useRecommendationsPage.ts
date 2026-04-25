@@ -7,6 +7,7 @@ import { useRecommendationCareerManager } from "./useRecommendationCareerManager
 import { useGaokaoPlanningManager } from "./useGaokaoPlanningManager";
 import { useGaokaoVolunteerWorkspace } from "./useGaokaoVolunteerWorkspace";
 import { useRecommendationWorkflow } from "./useRecommendationWorkflow";
+import { useShandongRecommendationWorkbench } from "./useShandongRecommendationWorkbench";
 import { useReferenceStore } from "../../stores/reference";
 import { formatUserActionError } from "../../utils/userFeedback";
 
@@ -33,6 +34,9 @@ export function useRecommendationsPage() {
     batchOptions: planning.batchOptions,
     examModeOptions: planning.examModeOptions,
     employmentDirections: career.employmentDirections,
+  });
+  const shandongWorkbench = useShandongRecommendationWorkbench({
+    recommendationForm: workflow.recommendationForm,
   });
 
   const summaryCards = computed(() => {
@@ -70,6 +74,7 @@ export function useRecommendationsPage() {
       if (workflow.historyItems.value.length) {
         await workflow.viewScheme(workflow.historyItems.value[0]);
       }
+      void shandongWorkbench.loadShandongDataHealth();
     } catch (error) {
       ElMessage.error(formatUserActionError("加载高考志愿页面", error, "确认本地服务已启动后刷新页面；若某个页签数据为空，可进入对应页签单独刷新。"));
     }
@@ -87,6 +92,9 @@ export function useRecommendationsPage() {
       if (tab === "subject-requirements" && !planning.subjectRequirementDicts.value.length) {
         void planning.loadSubjectRequirementDicts();
       }
+      if (tab === "shandong-workbench" && !shandongWorkbench.shandongDataHealth.value) {
+        void shandongWorkbench.loadShandongDataHealth();
+      }
     },
   );
 
@@ -94,6 +102,7 @@ export function useRecommendationsPage() {
     ...catalog,
     ...career,
     ...planning,
+    ...shandongWorkbench,
     ...volunteerWorkspace,
     ...workflow,
     provinceOptions,
