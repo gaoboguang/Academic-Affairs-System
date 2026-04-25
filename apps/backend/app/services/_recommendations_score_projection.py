@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from statistics import pstdev
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Exam, ExamSubject, ScoreTotalSnapshot, Student, StudentGaokaoScoreProjection
@@ -15,17 +14,15 @@ from app.schemas.recommendation import (
     StudentGaokaoScoreProjectionRead,
 )
 
+from ._recommendations_score_rank import (
+    ScoreRankLookup,
+    latest_rank_population,
+    lookup_rank_for_score,
+    try_lookup_rank_for_score,
+)
+
 SUPPORTED_SOURCE_MODES = {"manual_score", "manual_rank", "exam_projection"}
 DEFAULT_GAOKAO_TOTAL_SCORE = 750
-
-
-@dataclass(frozen=True)
-class ScoreRankLookup:
-    year: int
-    score: float
-    rank: int
-    basis: str
-    source_note: str
 
 
 def calculate_gaokao_score_projection(
@@ -116,7 +113,7 @@ def _calculate_manual_score_projection(
         raise HTTPException(status_code=400, detail="手动分数模式需要填写预估高考分数")
     if payload.manual_score < 0:
         raise HTTPException(status_code=400, detail="预估高考分数不能为负数")
-    lookup = _lookup_rank_for_score(
+    lookup = lookup_rank_for_score(
         session,
         province=payload.province,
         target_year=payload.target_year,
@@ -203,7 +200,7 @@ def _calculate_exam_projection(
     weighted_score = _weighted_average([row["normalized_score"] for row in rows])
     grade_rank_values = [float(row["grade_rank"]) for row in rows if row["grade_rank"] is not None]
     weighted_grade_rank = _weighted_average(grade_rank_values) if grade_rank_values else None
-    rank_lookup = _try_lookup_rank_for_score(
+    rank_lookup = try_lookup_rank_for_score(
         session,
         province=payload.province,
         target_year=payload.target_year,
@@ -318,125 +315,6 @@ def _load_grade_sizes(session: Session, exam_ids: list[int]) -> dict[int, int]:
     return {int(exam_id): int(count or 0) for exam_id, count in rows}
 
 
-def _lookup_rank_for_score(
-    session: Session,
-    *,
-    province: str,
-    target_year: int,
-    score: float,
-) -> ScoreRankLookup:
-    lookup = _try_lookup_rank_for_score(session, province=province, target_year=target_year, score=score)
-    if lookup is None:
-        raise HTTPException(status_code=400, detail="缺少可用一分一段表，无法把预估分数换算为位次")
-    return lookup
-
-
-def _try_lookup_rank_for_score(
-    session: Session,
-    *,
-    province: str,
-    target_year: int,
-    score: float,
-) -> ScoreRankLookup | None:
-    columns = _score_rank_columns(session)
-    if not columns or "score" not in columns or "year" not in columns:
-        return None
-    rank_column = "rank_value" if "rank_value" in columns else "cumulative_count" if "cumulative_count" in columns else None
-    if rank_column is None:
-        return None
-    used_year = _select_score_rank_year(session, target_year, province, columns)
-    if used_year is None:
-        return None
-    subject_filter = _subject_group_filter(columns)
-    score_type_filter = _score_type_filter(columns)
-    province_filter = _province_filter(province, columns)
-    base_sql = f"""
-        SELECT year, score, {rank_column} AS rank_value
-        FROM score_rank_segment
-        WHERE year = :year
-          AND score IS NOT NULL
-          AND {rank_column} IS NOT NULL
-          {province_filter}
-          {subject_filter}
-          {score_type_filter}
-    """
-    params = {"year": used_year, "score": score, "province": province, "province_alias": _province_alias(province)}
-    row = session.execute(
-        text(
-            f"""
-            {base_sql}
-              AND score <= :score
-            ORDER BY score DESC
-            LIMIT 1
-            """
-        ),
-        params,
-    ).mappings().first()
-    if row is None:
-        row = session.execute(
-            text(
-                f"""
-                {base_sql}
-                ORDER BY score ASC
-                LIMIT 1
-                """
-            ),
-            params,
-        ).mappings().first()
-    if row is None:
-        return None
-    basis = "target_year_score_rank_segment" if used_year == target_year else "previous_year_score_rank_segment"
-    source_note = "按目标年份一分一段换算" if used_year == target_year else f"目标年份一分一段缺失，按 {used_year} 年一分一段估算"
-    return ScoreRankLookup(
-        year=int(row["year"]),
-        score=float(row["score"]),
-        rank=int(row["rank_value"]),
-        basis=basis,
-        source_note=source_note,
-    )
-
-
-def _select_score_rank_year(
-    session: Session,
-    target_year: int,
-    province: str,
-    columns: set[str],
-) -> int | None:
-    province_filter = _province_filter(province, columns)
-    subject_filter = _subject_group_filter(columns)
-    score_type_filter = _score_type_filter(columns)
-    params = {"target_year": target_year, "province": province, "province_alias": _province_alias(province)}
-    row = session.execute(
-        text(
-            f"""
-            SELECT MAX(year) AS year
-            FROM score_rank_segment
-            WHERE year <= :target_year
-              {province_filter}
-              {subject_filter}
-              {score_type_filter}
-            """
-        ),
-        params,
-    ).mappings().first()
-    if row and row["year"] is not None:
-        return int(row["year"])
-    row = session.execute(
-        text(
-            f"""
-            SELECT MAX(year) AS year
-            FROM score_rank_segment
-            WHERE 1 = 1
-              {province_filter}
-              {subject_filter}
-              {score_type_filter}
-            """
-        ),
-        params,
-    ).mappings().first()
-    return int(row["year"]) if row and row["year"] is not None else None
-
-
 def _estimate_rank_from_school_position(
     session: Session,
     rows: list[dict[str, Any]],
@@ -457,64 +335,7 @@ def _estimate_rank_from_school_position(
 
 
 def _latest_rank_population(session: Session, province: str, target_year: int) -> int | None:
-    columns = _score_rank_columns(session)
-    if not columns:
-        return None
-    rank_column = "rank_value" if "rank_value" in columns else "cumulative_count" if "cumulative_count" in columns else None
-    if rank_column is None:
-        return None
-    used_year = _select_score_rank_year(session, target_year, province, columns)
-    if used_year is None:
-        return None
-    province_filter = _province_filter(province, columns)
-    subject_filter = _subject_group_filter(columns)
-    score_type_filter = _score_type_filter(columns)
-    row = session.execute(
-        text(
-            f"""
-            SELECT MAX({rank_column}) AS population
-            FROM score_rank_segment
-            WHERE year = :year
-              {province_filter}
-              {subject_filter}
-              {score_type_filter}
-            """
-        ),
-        {"year": used_year, "province": province, "province_alias": _province_alias(province)},
-    ).mappings().first()
-    return int(row["population"]) if row and row["population"] is not None else None
-
-
-def _score_rank_columns(session: Session) -> set[str]:
-    try:
-        rows = session.execute(text("PRAGMA table_info(score_rank_segment)")).mappings().all()
-    except Exception:
-        return set()
-    return {str(row["name"]) for row in rows}
-
-
-def _province_filter(province: str, columns: set[str]) -> str:
-    if "province" not in columns:
-        return ""
-    return "AND province IN (:province, :province_alias)"
-
-
-def _province_alias(province: str) -> str:
-    if province in {"山东", "sd", "SD"}:
-        return "sd" if province == "山东" else "山东"
-    return province
-
-
-def _subject_group_filter(columns: set[str]) -> str:
-    if "subject_group" not in columns:
-        return ""
-    return "AND (subject_group IS NULL OR subject_group IN ('all', '全体'))"
-
-
-def _score_type_filter(columns: set[str]) -> str:
-    if "score_type" not in columns:
-        return ""
-    return "AND (score_type IS NULL OR score_type IN ('summer_total', '总分', '普通类'))"
+    return latest_rank_population(session, province, target_year)
 
 
 def _get_student(session: Session, student_id: int) -> Student:

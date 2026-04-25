@@ -1,5 +1,11 @@
 # 决策日志
 
+## 2026-04-25：山东普通类分数换位次收成共享 helper
+
+- 决定：新增 `apps/backend/app/services/_recommendations_score_rank.py`，让学生高考预估和山东普通类冲稳保推荐共用一分一段换位次逻辑；共享逻辑统一处理山东别名、普通类总分 `score_type`、全体 `subject_group` 和目标年缺失时回退最近一年。
+- 原因：D5 复核发现 `_recommendations_score_projection.py` 与 `_recommendations_shandong_rush_stable_safe.py` 各自维护换位次查询，后者容易与省份、分数类型和选科组过滤产生不一致。收成共享 helper 可以避免同一分数在预估快照和普通类推荐里得到不同位次。
+- 约束：该 helper 只解决普通类分数到位次换算，不代表 2026 普通类正式计划已导入；2026 正式填报前仍需导入官方计划、一分一段、省控线并复核高校章程。
+
 ## 2026-04-25：第三轮路径规则 bootstrap 必须同时写入官方来源追溯
 
 - 决定：D2 的 `bootstrap_shandong_pathways()` 不只创建路径和规则，还会先登记/更新 `gaokao_source_document`，再把 `source_document_id` 写入 `gaokao_pathway` 与 `gaokao_pathway_rule`；同时新增 `npm run backend:bootstrap-pathways -- --target-year 2026`，默认写库前备份主库。

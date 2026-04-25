@@ -8,6 +8,15 @@
 
 ## 2026-04-25 新增
 
+- 已完成 v5 第三轮窗口 D5：山东普通类推荐算法加固：
+  - 从 D4 成果上切出 `codex/r3-d5-shandong-general-recommendation-hardening`
+  - 新增 `apps/backend/app/services/_recommendations_score_rank.py`，统一学生高考预估和山东普通类冲稳保推荐的分数换位次逻辑
+  - 共享换算逻辑统一处理山东省份别名、普通类总分 `score_type`、全体 `subject_group` 和目标年缺失时回退最近一年一分一段
+  - `apps/frontend/src/components/recommendations/RecommendationShandongWorkbenchPanel.vue` 已在 2026 目标年下直接显示正式计划缺失提示；打印页和 Excel 导出的 2026 数据提示已同步为同一口径
+  - `apps/backend/tests/test_shandong_rush_stable_safe_recommendation.py` 已补常见选科要求解析和普通类推荐换位次过滤回归；`apps/backend/tests/test_gaokao_score_projection.py` 已补学生预估换位次过滤回归；`apps/frontend/tests/shandong-recommendation-workbench.test.ts` 已锁定 2026 提示文案
+  - 新增 `docs/round3-shandong-general-recommendation-hardening.md`，并在 `docs/README.md` 加入入口
+  - 验证：`npm run backend:test -- apps/backend/tests/test_shandong_rush_stable_safe_recommendation.py apps/backend/tests/test_gaokao_score_projection.py -q` 为 `10 passed`；`npm run backend:test -- apps/backend/tests/test_recommendation_exporters.py -q` 为 `6 passed`；`npm run frontend:test -- tests/shandong-recommendation-workbench.test.ts` 为 `5 passed`；`npm run frontend:build` 通过；`git diff --check` 通过
+
 - 已完成 v5 第三轮窗口 D4：山东升学方案中心页面：
   - 从 D3 成果上切出 `codex/r3-d4-gaokao-pathway-center-ui`
   - 新增 `/gaokao-pathways` 独立页面，导航显示“升学方案”，支持选择学生和目标年份，并调用路径列表、学生路径评估预览和高考数据健康接口

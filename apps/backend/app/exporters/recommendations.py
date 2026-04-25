@@ -43,8 +43,8 @@ RECOMMENDATION_RISK_FLAG_LABELS = {
 }
 
 SHANDONG_2026_DATA_NOTICE = (
-    "2026 普通类正式招生计划如未完全公开，当前推荐主要基于 2023-2025 历史投档数据和已公开规则；"
-    "正式填报前必须以山东省教育招生考试院最终发布的招生计划和高校章程为准。"
+    "2026 普通类正式招生计划如未完全公开，当前主要参考 2023-2025 历史投档数据；"
+    "正式填报前需导入 2026 官方计划，并以山东省教育招生考试院最终发布的招生计划和高校章程为准。"
 )
 
 
@@ -421,7 +421,7 @@ def _build_shandong_risk_overview_rows(
     rows: list[dict[str, str]] = []
     source_mode = str(payload.get("source_mode") or "")
     rank_basis = str(payload.get("rank_projection_basis") or "")
-    if source_mode == "projection" or rank_basis == "exam_projection":
+    if source_mode in {"projection", "exam_projection"} or "exam" in rank_basis:
         rows.append(
             {
                 "title": "校内考试估算",

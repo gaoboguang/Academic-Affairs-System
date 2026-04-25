@@ -33,6 +33,14 @@
           <p class="mode-help">{{ currentSourceModeHelp }}</p>
         </div>
 
+        <el-alert
+          v-if="form.target_year === 2026"
+          :title="SHANDONG_2026_DATA_NOTICE"
+          type="warning"
+          show-icon
+          :closable="false"
+        />
+
         <div class="filter-grid shandong-filter-grid">
           <el-select v-model="form.student_id" filterable placeholder="选择学生">
             <el-option
@@ -347,6 +355,7 @@
 import { computed } from "vue";
 
 import {
+  SHANDONG_2026_DATA_NOTICE,
   formatNullableNumber,
   formatPercent,
   formatShandongConfidence,

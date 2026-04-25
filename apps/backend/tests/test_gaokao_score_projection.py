@@ -42,6 +42,41 @@ def _create_score_rank_segment_table(client) -> None:
         )
 
 
+def _create_mixed_score_rank_segment_table(client) -> None:
+    with client.app.state.db.session_scope() as session:
+        session.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS score_rank_segment (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    province TEXT NOT NULL,
+                    year INTEGER NOT NULL,
+                    score_type TEXT,
+                    subject_group TEXT,
+                    score NUMERIC,
+                    segment_count INTEGER,
+                    cumulative_count INTEGER,
+                    rank_value INTEGER
+                )
+                """
+            )
+        )
+        session.execute(
+            text(
+                """
+                INSERT INTO score_rank_segment (
+                    province, year, score_type, subject_group, score, segment_count, cumulative_count, rank_value
+                )
+                VALUES
+                    ('sd', 2025, 'spring_total', 'all', 620, 1, 1, 1),
+                    ('sd', 2025, 'summer_total', 'spring', 620, 2, 2, 2),
+                    ('广东', 2025, 'summer_total', 'all', 620, 3, 3, 3),
+                    ('sd', 2025, 'summer_total', 'all', 600, 100, 20000, 20000)
+                """
+            )
+        )
+
+
 def _build_score_workbook(exam_name: str, rows: list[list[object]]) -> bytes:
     workbook = Workbook()
     sheet = workbook.active
@@ -132,6 +167,26 @@ def test_manual_score_uses_previous_year_score_rank_segment(client) -> None:
     assert payload["rank_projection_basis"] == "previous_year_score_rank_segment"
     assert payload["calculation_detail_json"]["score_rank_segment"]["used_year"] == 2025
     assert "2026 年一分一段暂缺" in payload["calculation_detail_json"]["notes"][0]
+
+
+def test_manual_score_uses_general_summer_score_rank_filters(client) -> None:
+    _create_mixed_score_rank_segment_table(client)
+
+    response = client.post(
+        "/api/recommendations/gaokao-score-projections/calculate",
+        json={
+            "student_id": 1,
+            "target_year": 2026,
+            "province": "山东",
+            "source_mode": "manual_score",
+            "manual_score": 620,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["predicted_rank"] == 20000
+    assert payload["calculation_detail_json"]["score_rank_segment"]["used_score"] == 600
 
 
 def test_manual_rank_projection_can_be_saved_and_listed(client) -> None:

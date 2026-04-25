@@ -133,7 +133,9 @@ def test_shandong_recommendation_export_splits_buckets_and_localizes_risks(test_
     summary_sheet = workbook["汇总页"]
     assert summary_sheet.cell(row=2, column=2).value == "张三"
     assert summary_sheet.cell(row=6, column=2).value == "手动全省位次"
-    assert "2026 普通类正式招生计划" in str(summary_sheet.cell(row=16, column=2).value)
+    notice = str(summary_sheet.cell(row=16, column=2).value)
+    assert "当前主要参考 2023-2025 历史投档数据" in notice
+    assert "正式填报前需导入 2026 官方计划" in notice
 
     stable_sheet = workbook["稳列表"]
     assert stable_sheet.cell(row=2, column=1).value == "稳"

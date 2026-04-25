@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  SHANDONG_2026_DATA_NOTICE,
   buildShandongCoverageRows,
   buildShandongRecommendationExportPayload,
   buildShandongRecommendationPrintPayload,
@@ -219,6 +220,8 @@ describe("shandong recommendation workbench helpers", () => {
     expect(printPayload.result.predicted_rank).toBe(13800);
     expect(printPayload.data_health_gaps).toEqual(["2026 普通类正式招生计划待官方发布"]);
     expect(formatShandongRiskFlag(result.stable[0].risk_flags[0])).toBe("近三年样本不完整");
+    expect(SHANDONG_2026_DATA_NOTICE).toContain("当前主要参考 2023-2025 历史投档数据");
+    expect(SHANDONG_2026_DATA_NOTICE).toContain("正式填报前需导入 2026 官方计划");
   });
 
   it("summarizes 2023-2025 data coverage for the quality board", () => {

@@ -25,7 +25,7 @@ export const shandongSourceModeOptions: Array<{ label: string; value: ShandongRe
 ];
 
 export const SHANDONG_2026_DATA_NOTICE =
-  "2026 普通类正式招生计划如未完全公开，当前推荐主要基于 2023-2025 历史投档数据和已公开规则；正式填报前必须以山东省教育招生考试院最终发布的招生计划和高校章程为准。";
+  "2026 普通类正式招生计划如未完全公开，当前主要参考 2023-2025 历史投档数据；正式填报前需导入 2026 官方计划，并以山东省教育招生考试院最终发布的招生计划和高校章程为准。";
 
 export const SHANDONG_RECOMMENDATION_PRINT_STORAGE_PREFIX = "local-edu-tool:shandong-recommendation-report:";
 

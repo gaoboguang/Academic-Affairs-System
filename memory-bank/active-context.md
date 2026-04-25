@@ -205,6 +205,12 @@
 
 ## 当前重点
 
+- 2026-04-25 已按 v5 第三轮开发文档完成窗口 D5：山东普通类推荐算法加固：
+  - 当前分支 `codex/r3-d5-shandong-general-recommendation-hardening`，从 D4 分支切出；本轮不执行 `git push`
+  - 新增 `apps/backend/app/services/_recommendations_score_rank.py`，把一分一段换位次逻辑收成共享 helper；`_recommendations_score_projection.py` 与 `_recommendations_shandong_rush_stable_safe.py` 现共用省份、`score_type`、`subject_group` 过滤和目标年缺失回退口径
+  - 山东普通类推荐页、打印页和 Excel 导出已统一 2026 提示：当前主要参考 2023-2025 历史投档数据，正式填报前需导入 2026 官方计划并复核高校章程
+  - 后端测试已补分数换位次过滤口径和“不限 / 不提科目要求 / 物理 / 物理 化学 / 物理或化学 / 物理和化学均须选考”等选科表达；前端测试锁定 2026 提示文案；新增 `docs/round3-shandong-general-recommendation-hardening.md`
+  - 本轮验证：D5 定向后端 `10 passed`；导出定向 `6 passed`；前端山东推荐 helper `5 passed`；`frontend:build` 通过；`git diff --check` 通过
 - 2026-04-25 已按 v5 第三轮开发文档完成窗口 D4：山东升学方案中心页面：
   - 当前分支 `codex/r3-d4-gaokao-pathway-center-ui`，从 D3 分支切出；本轮不执行 `git push`
   - 新增 `/gaokao-pathways` 独立页面，导航显示“升学方案”，页面会加载学生列表、D1/D2 路径字典、D3 学生画像评估预览和 `/api/gaokao/data-health`

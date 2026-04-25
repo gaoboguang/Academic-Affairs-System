@@ -14,6 +14,7 @@ from app.schemas.recommendation import (
 )
 
 from ._recommendations_candidates import detect_student_type
+from ._recommendations_score_rank import lookup_rank_for_score
 
 B4_REFERENCE_YEARS = (2025, 2024, 2023)
 B4_YEAR_WEIGHTS = {2025: 0.5, 2024: 0.3, 2023: 0.2}
@@ -181,20 +182,22 @@ def _resolve_projection(
             input_notes=["当前按手动填写的全省位次作为主排序依据。"],
         )
 
-    lookup = _lookup_rank_from_score(session, province="山东", target_year=payload.target_year, score=payload.manual_score or 0)
-    basis = "target_year_score_rank_segment" if lookup["used_year"] == payload.target_year else "previous_year_score_rank_segment"
-    notes = [f"当前按 {lookup['used_year']} 年一分一段把 {payload.manual_score:g} 分换算为约 {lookup['rank']} 位。"]
-    if basis == "previous_year_score_rank_segment":
+    score = payload.manual_score or 0
+    if score <= 0:
+        raise HTTPException(status_code=400, detail="手动预估分数必须大于 0")
+    lookup = lookup_rank_for_score(session, province="山东", target_year=payload.target_year, score=score)
+    notes = [f"当前按 {lookup.year} 年一分一段把 {score:g} 分换算为约 {lookup.rank} 位。"]
+    if lookup.basis == "previous_year_score_rank_segment":
         notes.append(f"{payload.target_year} 年一分一段暂缺，当前按上一年一分一段估算。")
     return ResolvedProjection(
         student_id=payload.student_id,
         student_name=student.name if student else None,
         source_mode="manual_score",
         predicted_score=payload.manual_score,
-        predicted_rank=int(lookup["rank"]),
-        rank_range_low=int(lookup["rank"]),
-        rank_range_high=int(lookup["rank"]),
-        rank_projection_basis=basis,
+        predicted_rank=lookup.rank,
+        rank_range_low=lookup.rank,
+        rank_range_high=lookup.rank,
+        rank_projection_basis=lookup.basis,
         input_notes=notes,
     )
 
@@ -563,41 +566,6 @@ def _matches_candidate_filters(
     if major_keyword and (not major_name or major_keyword not in major_name):
         return False
     return True
-
-
-def _lookup_rank_from_score(session: Session, *, province: str, target_year: int, score: float) -> dict[str, int | float]:
-    if score <= 0:
-        raise HTTPException(status_code=400, detail="手动预估分数必须大于 0")
-    if not _table_exists(session, "score_rank_segment"):
-        raise HTTPException(status_code=400, detail="缺少可用一分一段表，无法按分数换算位次")
-    columns = {row[1] for row in session.execute(text("PRAGMA table_info(score_rank_segment)")).all()}
-    score_column = "score" if "score" in columns else None
-    rank_column = "rank_value" if "rank_value" in columns else "cumulative_count" if "cumulative_count" in columns else None
-    if not score_column or not rank_column or "year" not in columns:
-        raise HTTPException(status_code=400, detail="一分一段表字段不完整，无法按分数换算位次")
-    province_filter = "province IN ('山东', 'sd', '山东省', 'shandong')" if "province" in columns else "1 = 1"
-    row = session.execute(
-        text(
-            f"""
-            SELECT year, {score_column} AS score, {rank_column} AS rank
-            FROM score_rank_segment
-            WHERE {province_filter}
-              AND year = (
-                  SELECT MAX(year)
-                  FROM score_rank_segment
-                  WHERE {province_filter} AND year <= :target_year
-              )
-              AND {score_column} <= :score
-              AND {rank_column} IS NOT NULL
-            ORDER BY {score_column} DESC
-            LIMIT 1
-            """
-        ),
-        {"target_year": target_year, "score": score},
-    ).mappings().first()
-    if not row:
-        raise HTTPException(status_code=400, detail="缺少可用一分一段表，无法按分数换算位次")
-    return {"used_year": int(row["year"]), "score": float(row["score"]), "rank": int(row["rank"])}
 
 
 def _table_exists(session: Session, table_name: str) -> bool:
