@@ -77,7 +77,15 @@ MATERIAL_LABELS = {
     "special_type_score_line_ready": "特殊类型控制线或分数线确认",
     "special_type_qualification": "特殊类型资格名单或测试材料",
     "high_school_equivalent": "高中阶段毕业证书或同等学力材料",
+    "retired_soldier_identity": "退役士兵身份或免试资格材料",
+    "single_exam_major_category_match": "单招目标专业类别或技能测试匹配材料",
+    "single_exam_college_chapter_plan": "单招院校章程和分专业计划",
     "comprehensive_quality_evaluation": "综合素质评价材料",
+    "comprehensive_test_or_interview": "综评素质测试或面试安排",
+    "comprehensive_college_chapter_plan": "综评院校章程和分专业计划",
+    "spring_exam_skill_score": "春季高考知识与技能考试成绩",
+    "spring_exam_score_line": "春季高考类别分数线",
+    "spring_exam_college_plan_chapter": "春季高考分专业计划和院校章程",
     "art_exam_score": "艺术统考、校考或联考成绩",
     "sports_test_score": "体育专业测试成绩",
     "athlete_level_certificate": "体育单招运动员技术等级证书",
@@ -197,9 +205,12 @@ PATHWAY_SEEDS: tuple[PathwaySeed, ...] = (
         "专业类别内填报",
         None,
         "eligibility_screening",
-        "春季高考路径必须核对专业类别和对应分数线。",
+        "春季高考路径必须核对考生身份、专业类别、知识技能成绩、类别分数线和院校计划。",
         "high",
-        {"boundary": "缺专门录取结果时只能初筛"},
+        {
+            "boundary": "缺专门录取结果时只能初筛，不能理解为录取概率",
+            "manual_review": "正式报名前逐校核对春考分专业计划、类别限制和院校章程",
+        },
         "shandong_2026_spring_exam_standard",
     ),
     PathwaySeed(
@@ -212,9 +223,12 @@ PATHWAY_SEEDS: tuple[PathwaySeed, ...] = (
         "专业类别内填报",
         None,
         "eligibility_screening",
-        "春季高考专科路径必须核对专业类别和院校章程。",
+        "春季高考专科路径必须核对专业类别、技能成绩、类别分数线、分专业计划和院校章程。",
         "high",
-        {"boundary": "缺专门录取结果时只能初筛"},
+        {
+            "boundary": "缺专门录取结果时只能初筛，不能理解为录取概率",
+            "manual_review": "正式报名前逐校核对春考分专业计划、类别限制和院校章程",
+        },
         "shandong_2026_spring_exam_standard",
     ),
     PathwaySeed(
@@ -227,9 +241,12 @@ PATHWAY_SEEDS: tuple[PathwaySeed, ...] = (
         "院校报名与测试",
         None,
         "eligibility_screening",
-        "面向中职应届、社会人员等，重点核对报名、文化素质和专业技能测试。",
+        "面向中职应届、社会人员、退役士兵等，重点核对报名、文化素质、专业技能测试和院校章程。",
         "high",
-        {"boundary": "不等同于夏季普通类常规批"},
+        {
+            "boundary": "只做资格初筛，不等同于夏季普通类常规批，也不能理解为录取概率",
+            "manual_review": "缺少目标院校章程或分专业计划时必须人工核验",
+        },
         "shandong_2026_single_comprehensive",
     ),
     PathwaySeed(
@@ -242,9 +259,12 @@ PATHWAY_SEEDS: tuple[PathwaySeed, ...] = (
         "院校报名与素质测试",
         None,
         "eligibility_screening",
-        "面向普通高中应届毕业生，重点核对综合素质评价和院校测试要求。",
+        "面向普通高中应届毕业生，重点核对高考报名、综合素质评价、素质测试或面试和院校章程。",
         "high",
-        {"boundary": "只做资格初筛和材料缺口提醒"},
+        {
+            "boundary": "只做资格初筛和材料缺口提醒，不能理解为录取概率",
+            "manual_review": "缺少目标院校章程或分专业计划时必须人工核验",
+        },
         "shandong_2026_single_comprehensive",
     ),
     PathwaySeed(
@@ -637,6 +657,16 @@ D2_PATHWAY_RULE_SEEDS: tuple[PathwayRuleSeed, ...] = (
     ),
     PathwayRuleSeed(
         "spring_exam_undergrad",
+        "d6_spring_undergrad_registration",
+        "春季高考报名确认",
+        "hard_gate",
+        "required",
+        {"type": "boolean_is", "field": "has_gaokao_registration", "value": True},
+        "春季高考本科批需确认已完成山东 2026 普通高校招生考试报名。",
+        "shandong_2026_registration",
+    ),
+    PathwayRuleSeed(
+        "spring_exam_undergrad",
         "d2_spring_undergrad_candidate_type",
         "春季高考考生类型确认",
         "hard_gate",
@@ -654,6 +684,49 @@ D2_PATHWAY_RULE_SEEDS: tuple[PathwayRuleSeed, ...] = (
         {"type": "field_present", "field": "spring_exam_category"},
         "补充春季高考专业类别，后续只能在对应类别内做初筛。",
         "shandong_2026_spring_exam_standard",
+    ),
+    PathwayRuleSeed(
+        "spring_exam_undergrad",
+        "d6_spring_undergrad_score_and_skill",
+        "春季高考成绩与类别线复核",
+        "material_required",
+        "required",
+        {"type": "material_present", "key": "spring_exam_skill_score"},
+        "补充春季高考知识与技能考试成绩，并核对该专业类别本科批分数线。",
+        "shandong_2026_spring_exam_standard",
+        manual_review_required=True,
+    ),
+    PathwayRuleSeed(
+        "spring_exam_undergrad",
+        "d6_spring_undergrad_score_line",
+        "春季高考本科类别分数线",
+        "score_line",
+        "required",
+        {"type": "material_present", "key": "spring_exam_score_line"},
+        "补充春季高考对应专业类别本科批分数线；缺专门录取结果时只能做初筛。",
+        "shandong_2026_spring_exam_standard",
+        manual_review_required=True,
+    ),
+    PathwayRuleSeed(
+        "spring_exam_undergrad",
+        "d6_spring_undergrad_plan_chapter",
+        "春考本科计划和章程核验",
+        "material_required",
+        "review",
+        {"type": "material_present", "key": "spring_exam_college_plan_chapter"},
+        "缺少春季高考本科分专业计划或院校章程时，必须人工核验专业类别、体检和录取规则。",
+        "shandong_2026_spring_exam_standard",
+        manual_review_required=True,
+    ),
+    PathwayRuleSeed(
+        "spring_exam_junior",
+        "d6_spring_junior_registration",
+        "春季高考专科报名确认",
+        "hard_gate",
+        "required",
+        {"type": "boolean_is", "field": "has_gaokao_registration", "value": True},
+        "春季高考专科批需确认已完成山东 2026 普通高校招生考试报名。",
+        "shandong_2026_registration",
     ),
     PathwayRuleSeed(
         "spring_exam_junior",
@@ -674,6 +747,39 @@ D2_PATHWAY_RULE_SEEDS: tuple[PathwayRuleSeed, ...] = (
         {"type": "field_present", "field": "spring_exam_category"},
         "补充春季高考专业类别，后续只能在对应类别内做初筛。",
         "shandong_2026_spring_exam_standard",
+    ),
+    PathwayRuleSeed(
+        "spring_exam_junior",
+        "d6_spring_junior_score_and_skill",
+        "春季高考专科成绩与类别线复核",
+        "material_required",
+        "required",
+        {"type": "material_present", "key": "spring_exam_skill_score"},
+        "补充春季高考知识与技能考试成绩，并核对该专业类别专科批分数线。",
+        "shandong_2026_spring_exam_standard",
+        manual_review_required=True,
+    ),
+    PathwayRuleSeed(
+        "spring_exam_junior",
+        "d6_spring_junior_score_line",
+        "春季高考专科类别分数线",
+        "score_line",
+        "required",
+        {"type": "material_present", "key": "spring_exam_score_line"},
+        "补充春季高考对应专业类别专科批分数线；缺专门录取结果时只能做初筛。",
+        "shandong_2026_spring_exam_standard",
+        manual_review_required=True,
+    ),
+    PathwayRuleSeed(
+        "spring_exam_junior",
+        "d6_spring_junior_plan_chapter",
+        "春考专科计划和章程核验",
+        "material_required",
+        "review",
+        {"type": "material_present", "key": "spring_exam_college_plan_chapter"},
+        "缺少春季高考专科分专业计划或院校章程时，必须人工核验专业类别、体检和录取规则。",
+        "shandong_2026_spring_exam_standard",
+        manual_review_required=True,
     ),
     PathwayRuleSeed(
         "vocational_single_exam",
@@ -698,7 +804,7 @@ D2_PATHWAY_RULE_SEEDS: tuple[PathwayRuleSeed, ...] = (
                 {"type": "boolean_is", "field": "is_social_candidate", "value": True},
             ],
         },
-        "高职单招主要面向中职应届毕业生和社会人员；需在学生画像中确认身份。",
+        "高职单招主要面向中职应届毕业生、社会人员和符合条件的退役士兵；需在学生画像中确认身份。",
         "shandong_2026_single_comprehensive",
     ),
     PathwayRuleSeed(
@@ -707,9 +813,46 @@ D2_PATHWAY_RULE_SEEDS: tuple[PathwayRuleSeed, ...] = (
         "社会人员高中阶段学历或同等学力",
         "material_required",
         "required",
-        {"type": "material_present", "key": "high_school_equivalent"},
+        {
+            "type": "material_present_when",
+            "key": "high_school_equivalent",
+            "when": {"type": "boolean_is", "field": "is_social_candidate", "value": True},
+        },
         "如学生按社会人员报考单招，需补充高中阶段毕业证书或同等学力材料。",
         "shandong_2026_single_comprehensive",
+    ),
+    PathwayRuleSeed(
+        "vocational_single_exam",
+        "d6_single_major_category_match",
+        "单招专业类别和技能测试匹配",
+        "category_match",
+        "required",
+        {"type": "material_present", "key": "single_exam_major_category_match"},
+        "确认目标专业类别、职业技能测试或适应性测试要求，与学生中职专业或报考身份匹配。",
+        "shandong_2026_single_comprehensive",
+        manual_review_required=True,
+    ),
+    PathwayRuleSeed(
+        "vocational_single_exam",
+        "d6_single_retired_soldier_review",
+        "退役士兵测试方式复核",
+        "manual_check",
+        "review",
+        {"type": "manual_review"},
+        "如学生为退役士兵，需单独核对是否走素质测试、面试或免文化素质考试等院校规则。",
+        "shandong_2026_single_comprehensive",
+        manual_review_required=True,
+    ),
+    PathwayRuleSeed(
+        "vocational_single_exam",
+        "d6_single_chapter_plan_material",
+        "单招章程和分专业计划",
+        "material_required",
+        "review",
+        {"type": "material_present", "key": "single_exam_college_chapter_plan"},
+        "缺少目标院校单招章程或分专业计划时，必须人工核验报名时间、测试方式、专业类别和录取规则。",
+        "shandong_2026_single_comprehensive",
+        manual_review_required=True,
     ),
     PathwayRuleSeed(
         "vocational_single_exam",
@@ -721,6 +864,16 @@ D2_PATHWAY_RULE_SEEDS: tuple[PathwayRuleSeed, ...] = (
         "逐校核对招生章程、文化素质考试、专业技能测试、退役士兵测试方式和专业类别要求。",
         "shandong_2026_single_comprehensive",
         manual_review_required=True,
+    ),
+    PathwayRuleSeed(
+        "vocational_comprehensive",
+        "d6_comprehensive_registration",
+        "综评高考报名确认",
+        "hard_gate",
+        "required",
+        {"type": "boolean_is", "field": "has_gaokao_registration", "value": True},
+        "高职综合评价招生需确认学生已完成山东 2026 普通高校招生考试报名。",
+        "shandong_2026_single_comprehensive",
     ),
     PathwayRuleSeed(
         "vocational_comprehensive",
@@ -746,6 +899,28 @@ D2_PATHWAY_RULE_SEEDS: tuple[PathwayRuleSeed, ...] = (
         "required",
         {"type": "material_present", "key": "comprehensive_quality_evaluation"},
         "补充综合素质评价信息，供高职综评路径初筛和院校测试复核使用。",
+        "shandong_2026_single_comprehensive",
+        manual_review_required=True,
+    ),
+    PathwayRuleSeed(
+        "vocational_comprehensive",
+        "d6_comprehensive_test_material",
+        "综评素质测试或面试安排",
+        "material_required",
+        "required",
+        {"type": "material_present", "key": "comprehensive_test_or_interview"},
+        "补充目标院校素质测试或面试安排；不同院校测试方式和成绩组成必须逐校核验。",
+        "shandong_2026_single_comprehensive",
+        manual_review_required=True,
+    ),
+    PathwayRuleSeed(
+        "vocational_comprehensive",
+        "d6_comprehensive_chapter_plan",
+        "综评章程和分专业计划",
+        "material_required",
+        "review",
+        {"type": "material_present", "key": "comprehensive_college_chapter_plan"},
+        "缺少目标院校综评章程或分专业计划时，必须人工核验报名、测试、成绩组成和录取规则。",
         "shandong_2026_single_comprehensive",
         manual_review_required=True,
     ),
@@ -1355,6 +1530,14 @@ def _evaluate_condition(profile: StudentPathwayProfile, condition: dict[str, Any
         key = str(condition.get("key") or "")
         value = (profile.materials_json or {}).get(key, _MISSING)
         return RULE_RESULT_PASSED if _has_value(value) and bool(value) else RULE_RESULT_UNKNOWN
+    if condition_type == "material_present_when":
+        when = condition.get("when")
+        when_result = _evaluate_condition(profile, when if isinstance(when, dict) else {})
+        if when_result != RULE_RESULT_PASSED:
+            return RULE_RESULT_PASSED
+        key = str(condition.get("key") or "")
+        value = (profile.materials_json or {}).get(key, _MISSING)
+        return RULE_RESULT_PASSED if _has_value(value) and bool(value) else RULE_RESULT_UNKNOWN
     if condition_type == "all":
         results = [_evaluate_condition(profile, item) for item in _condition_items(condition)]
         if any(item == RULE_RESULT_FAILED for item in results):
@@ -1401,6 +1584,14 @@ def _has_value(value: object) -> bool:
 
 def _extract_missing_material_key(profile: StudentPathwayProfile, condition: dict[str, Any]) -> str | None:
     if condition.get("type") == "material_present":
+        key = condition.get("key")
+        return str(key) if key and _evaluate_condition(profile, condition) != RULE_RESULT_PASSED else None
+    if condition.get("type") == "material_present_when":
+        when = condition.get("when")
+        when_condition = when if isinstance(when, dict) else {}
+        when_result = _evaluate_condition(profile, when_condition)
+        if when_result != RULE_RESULT_PASSED:
+            return None
         key = condition.get("key")
         return str(key) if key and _evaluate_condition(profile, condition) != RULE_RESULT_PASSED else None
     if condition.get("type") == "field_present":
@@ -1511,7 +1702,10 @@ def _build_evaluation_summary(
     if status == "not_recommended":
         return prefix + "存在硬性门槛不满足，当前不建议作为主路径。"
     if missing_count:
-        return prefix + f"还有 {missing_count} 项材料或画像信息缺失，补齐后再评估。"
+        suffix = f"还有 {missing_count} 项材料或画像信息缺失，补齐后再评估。"
+        if pathway.recommendation_depth != "full_rank_recommendation":
+            suffix += "该路径当前只做资格初筛，不能理解为录取概率。"
+        return prefix + suffix
     if manual_count or pathway.recommendation_depth != "full_rank_recommendation":
         return prefix + "该路径当前只做资格初筛或政策提醒，不能理解为录取概率。"
     return prefix + "可结合现有山东普通类冲稳保推荐继续查看候选。"
@@ -1598,10 +1792,7 @@ def _ensure_rule_from_payload(
 ) -> tuple[int, int]:
     existing = get_pathway_rule_by_code(session, pathway_id=pathway.id, rule_code=payload.rule_code)
     if existing:
-        if payload.source_document_id and not existing.source_document_id:
-            existing.source_document_id = payload.source_document_id
-        if existing.valid_from_year is None and payload.valid_from_year is not None:
-            existing.valid_from_year = payload.valid_from_year
+        _apply_rule_payload(existing, payload)
         return (0, 1)
     rule = GaokaoPathwayRule(pathway_id=pathway.id, rule_code=payload.rule_code)
     session.add(rule)

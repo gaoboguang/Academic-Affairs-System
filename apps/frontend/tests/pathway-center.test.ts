@@ -210,7 +210,77 @@ describe("pathway center helpers", () => {
     expect(cards[1].canOpenRecommendation).toBe(false);
     expect(cards[1].depthLabel).toBe("资格初筛");
     expect(cards[1].missingMaterials).toContain("综合素质评价材料");
+    expect(cards[1].keyRequirements).toContain("材料：综合素质评价、素质测试或面试安排");
+    expect(cards[1].riskMessages).toContain("当前只做资格初筛和人工复核清单，不输出录取概率。");
     expect(cards[1].riskMessages).toContain("只做资格初筛和材料缺口提醒");
+  });
+
+  it("adds D6 screening hints for single recruitment and spring exam cards", () => {
+    const cards = buildPathwayCenterCards([
+      buildEvaluation({
+        pathway_id: 7,
+        pathway_code: "vocational_single_exam",
+        pathway_name: "高职单独招生",
+        pathway_group: "高职分类招生",
+        status: "insufficient_data",
+        status_label: "信息不足",
+        recommendation_depth: "eligibility_screening",
+        missing_materials_json: [
+          {
+            rule_code: "d6_single_chapter_plan_material",
+            material_key: "single_exam_college_chapter_plan",
+            material_label: "单招院校章程和分专业计划",
+            next_action: "缺少目标院校单招章程或分专业计划时必须人工核验。",
+          },
+        ],
+      }),
+      buildEvaluation({
+        pathway_id: 8,
+        pathway_code: "spring_exam_undergrad",
+        pathway_name: "春季高考本科批",
+        pathway_group: "春季高考",
+        status: "insufficient_data",
+        status_label: "信息不足",
+        recommendation_depth: "eligibility_screening",
+        missing_materials_json: [
+          {
+            rule_code: "d6_spring_undergrad_score_line",
+            material_key: "spring_exam_score_line",
+            material_label: "春季高考类别分数线",
+            next_action: "补充春季高考类别分数线后重新评估该路径。",
+          },
+        ],
+      }),
+    ], [
+      buildPathway({
+        id: 7,
+        pathway_code: "vocational_single_exam",
+        pathway_name: "高职单独招生",
+        pathway_group: "高职分类招生",
+        student_type: "vocational_or_social",
+        exam_type: "vocational_single_exam",
+        recommendation_depth: "eligibility_screening",
+        notes_json: { boundary: "只做资格初筛，不等同于夏季普通类常规批" },
+      }),
+      buildPathway({
+        id: 8,
+        pathway_code: "spring_exam_undergrad",
+        pathway_name: "春季高考本科批",
+        pathway_group: "春季高考",
+        student_type: "spring_exam",
+        exam_type: "spring_gaokao",
+        recommendation_depth: "eligibility_screening",
+      }),
+    ]);
+
+    const singleCard = cards.find((item) => item.code === "vocational_single_exam");
+    const springCard = cards.find((item) => item.code === "spring_exam_undergrad");
+
+    expect(singleCard?.keyRequirements).toContain("身份：中职应届、社会人员等身份需在画像中确认");
+    expect(singleCard?.missingMaterials).toContain("单招院校章程和分专业计划");
+    expect(singleCard?.riskMessages[0]).toBe("当前只做资格初筛和人工复核清单，不输出录取概率。");
+    expect(springCard?.keyRequirements).toContain("类别：只能在对应春考专业类别内初筛");
+    expect(springCard?.missingMaterials).toContain("春季高考类别分数线");
   });
 
   it("builds next actions from recommendation entry, gaps, and data warnings", () => {

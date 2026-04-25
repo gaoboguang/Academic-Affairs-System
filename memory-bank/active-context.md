@@ -205,6 +205,13 @@
 
 ## 当前重点
 
+- 2026-04-25 已按 v5 第三轮开发文档完成窗口 D6：单招、综评、春考路径初筛：
+  - 当前分支 `codex/r3-d6-vocational-spring-pathways`，从 D5 分支切出；本轮不执行 `git push`
+  - 后端规则引擎新增 `material_present_when` 条件，支持“只在社会人员身份成立时要求同等学力材料”这类条件式材料缺口，避免 D6 路径误报
+  - 单招路径已补中职/社会人员身份、专业类别或技能测试匹配、退役士兵测试方式、院校章程和分专业计划核验；综评路径已补高考报名、普通高中应届、综合素质评价、素质测试/面试、章程和分专业计划核验；春考本/专路径已补春考报名、专业类别、知识与技能成绩、类别分数线、分专业计划和章程核验
+  - 前端升学画像材料清单和 `/gaokao-pathways` 路径卡已补 D6 的报名、身份、类别、材料和人工复核文案，继续明确这些路径只做资格初筛，不输出录取概率
+  - 真实主库已执行 D6 bootstrap，备份为 `data/backups/app_before_pathway_bootstrap_2026_20260425_02.db`，新增规则 `14` 条，已有规则 `48` 条跳过/更新；新增 `docs/round3-vocational-spring-pathway-screening.md`
+  - 本轮验证：D6 定向后端 `5 passed`；D6 定向前端 `11 passed`；后端全量 `92 passed`；前端全量 `145 passed`；`frontend:build` 通过；`git diff --check` 通过
 - 2026-04-25 已按 v5 第三轮开发文档完成窗口 D5：山东普通类推荐算法加固：
   - 当前分支 `codex/r3-d5-shandong-general-recommendation-hardening`，从 D4 分支切出；本轮不执行 `git push`
   - 新增 `apps/backend/app/services/_recommendations_score_rank.py`，把一分一段换位次逻辑收成共享 helper；`_recommendations_score_projection.py` 与 `_recommendations_shandong_rush_stable_safe.py` 现共用省份、`score_type`、`subject_group` 过滤和目标年缺失回退口径

@@ -114,6 +114,12 @@ export function buildPathwayProfileSummary(profile: StudentPathwayProfile | null
       filled: Boolean(profile.subject_combination),
     },
     {
+      key: "spring_exam_category",
+      label: "春考类别",
+      value: profile.spring_exam_category || "未维护",
+      filled: Boolean(profile.spring_exam_category),
+    },
+    {
       key: "gaokao_registration",
       label: "高考报名",
       value: formatBooleanValue(profile.has_gaokao_registration),
@@ -124,6 +130,18 @@ export function buildPathwayProfileSummary(profile: StudentPathwayProfile | null
       label: "普通高中应届",
       value: formatBooleanValue(profile.is_fresh_graduate),
       filled: profile.is_fresh_graduate !== null && profile.is_fresh_graduate !== undefined,
+    },
+    {
+      key: "vocational_student",
+      label: "中职学生",
+      value: formatBooleanValue(profile.is_vocational_student),
+      filled: profile.is_vocational_student !== null && profile.is_vocational_student !== undefined,
+    },
+    {
+      key: "social_candidate",
+      label: "社会人员",
+      value: formatBooleanValue(profile.is_social_candidate),
+      filled: profile.is_social_candidate !== null && profile.is_social_candidate !== undefined,
     },
     {
       key: "junior_college",
@@ -267,6 +285,7 @@ function buildRequirementLines(
     .map((item) => item.rule_name)
     .filter((item): item is string => Boolean(item));
   const lines = uniqueNonEmpty([
+    ...d6PathwayRequirementHints(evaluation.pathway_code || pathway?.pathway_code),
     pathway?.batch_name ? `批次：${pathway.batch_name}` : "",
     pathway?.volunteer_mode ? `志愿方式：${pathway.volunteer_mode}` : "",
     ...ruleNames,
@@ -288,12 +307,52 @@ function buildRiskMessages(
   const boundary = typeof pathway?.notes_json?.boundary === "string" ? pathway.notes_json.boundary : "";
   const officialBoundary = typeof pathway?.notes_json?.official_boundary === "string" ? pathway.notes_json.official_boundary : "";
   const riskLevel = formatRiskLevel(pathway?.risk_level);
+  const d6Boundary = d6PathwayBoundaryMessage(evaluation.pathway_code || pathway?.pathway_code);
   return uniqueNonEmpty([
+    d6Boundary,
     ...warningMessages,
     boundary,
     officialBoundary,
     riskLevel,
   ]).slice(0, 4);
+}
+
+function d6PathwayRequirementHints(code?: string | null): string[] {
+  const mapping: Record<string, string[]> = {
+    vocational_single_exam: [
+      "报名：已完成山东高考报名，并核对目标院校单招报名时间",
+      "身份：中职应届、社会人员等身份需在画像中确认",
+      "测试：文化素质、专业技能、适应性测试或退役士兵测试方式需逐校核验",
+      "复核：缺院校章程或分专业计划时只能人工核验",
+    ],
+    vocational_comprehensive: [
+      "报名：已完成山东高考报名",
+      "身份：普通高中应届毕业生",
+      "材料：综合素质评价、素质测试或面试安排",
+      "复核：缺院校章程或分专业计划时只能人工核验",
+    ],
+    spring_exam_undergrad: [
+      "身份：春季高考考生",
+      "类别：只能在对应春考专业类别内初筛",
+      "材料：知识与技能考试成绩、类别分数线",
+      "复核：缺春考分专业计划或院校章程时只能人工核验",
+    ],
+    spring_exam_junior: [
+      "身份：春季高考考生",
+      "类别：只能在对应春考专业类别内初筛",
+      "材料：知识与技能考试成绩、类别分数线",
+      "复核：缺春考分专业计划或院校章程时只能人工核验",
+    ],
+  };
+  return code ? mapping[code] ?? [] : [];
+}
+
+function d6PathwayBoundaryMessage(code?: string | null): string {
+  if (!code) return "";
+  if (["vocational_single_exam", "vocational_comprehensive", "spring_exam_undergrad", "spring_exam_junior"].includes(code)) {
+    return "当前只做资格初筛和人工复核清单，不输出录取概率。";
+  }
+  return "";
 }
 
 function buildApplicableObject(pathway?: GaokaoPathwayRead): string {

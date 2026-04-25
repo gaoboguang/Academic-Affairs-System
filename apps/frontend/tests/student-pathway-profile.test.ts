@@ -117,6 +117,8 @@ describe("student pathway profile helpers", () => {
     expect(readiness.find((item) => item.key === "subject_combination")?.ready).toBe(true);
     expect(readiness.find((item) => item.key === "has_gaokao_registration")?.value).toBe("不符合 / 不接受");
     expect(materials.find((item) => item.key === "comprehensive_quality_evaluation")?.checked).toBe(true);
+    expect(materials.find((item) => item.key === "single_exam_college_chapter_plan")?.label).toBe("单招院校章程和分专业计划");
+    expect(materials.find((item) => item.key === "spring_exam_score_line")?.help).toContain("本科或专科批分数线");
   });
 
   it("aggregates missing materials across pathway evaluations", () => {
@@ -140,6 +142,7 @@ describe("student pathway profile helpers", () => {
     expect(gaps.find((item) => item.key === "subject_combination")?.label).toBe("选科组合");
     expect(gaps.find((item) => item.key === "comprehensive_quality_evaluation")?.label).toBe("综合素质评价材料");
     expect(formatPathwayMaterialKey("accept_service_commitment")).toBe("定向服务约束接受度");
+    expect(formatPathwayMaterialKey("comprehensive_college_chapter_plan")).toBe("综评院校章程和分专业计划");
   });
 
   it("summarizes evaluation statuses for the teacher-facing result strip", () => {

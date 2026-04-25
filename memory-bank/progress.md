@@ -8,6 +8,15 @@
 
 ## 2026-04-25 新增
 
+- 已完成 v5 第三轮窗口 D6：单招、综评、春考路径初筛：
+  - 从 D5 成果上切出 `codex/r3-d6-vocational-spring-pathways`
+  - `apps/backend/app/services/gaokao_pathways.py` 已为规则引擎新增 `material_present_when` 条件，社会人员同等学力材料现在只在确认社会人员身份时提示，不再误要求中职学生补社会人员材料
+  - 高职单招路径已补中职/社会人员身份、单招目标专业类别或技能测试匹配、退役士兵测试方式、院校章程和分专业计划人工核验；高职综评路径已补高考报名、普通高中应届、综合素质评价、素质测试/面试、章程和分专业计划核验；春考本/专路径已补春考报名、专业类别、知识与技能成绩、类别分数线、分专业计划和章程核验
+  - `apps/frontend/src/components/students/studentPathwayProfile.ts` 已新增 D6 材料清单；`apps/frontend/src/components/gaokao-pathways/pathwayCenter.ts` 已给单招、综评、春考路径卡补报名、身份、类别、材料和人工复核要求，继续明确“只做资格初筛，不输出录取概率”
+  - 真实 `data/app.db` 已运行 `npm run backend:bootstrap-pathways -- --target-year 2026 --json`，写入前备份 `data/backups/app_before_pathway_bootstrap_2026_20260425_02.db`，本次新增规则 `14` 条、跳过/更新已有规则 `48` 条
+  - 新增 `docs/round3-vocational-spring-pathway-screening.md`，并在 `docs/README.md` 加入入口
+  - 验证：D6 定向后端 `5 passed`；D6 定向前端 `11 passed`；后端全量 `92 passed`；前端全量 `25 files / 145 tests passed`；`frontend:build` 通过；`git diff --check` 通过
+
 - 已完成 v5 第三轮窗口 D5：山东普通类推荐算法加固：
   - 从 D4 成果上切出 `codex/r3-d5-shandong-general-recommendation-hardening`
   - 新增 `apps/backend/app/services/_recommendations_score_rank.py`，统一学生高考预估和山东普通类冲稳保推荐的分数换位次逻辑

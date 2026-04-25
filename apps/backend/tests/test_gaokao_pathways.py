@@ -23,7 +23,7 @@ def test_bootstrap_shandong_pathways_creates_core_paths(client):
     payload = response.json()
     assert payload["total_count"] >= 10
     assert payload["created_count"] >= 10
-    assert payload["rule_created_count"] >= 35
+    assert payload["rule_created_count"] >= 45
 
     list_response = client.get("/api/gaokao/pathways", params={"province": "山东"})
     assert list_response.status_code == 200
@@ -59,9 +59,40 @@ def test_bootstrap_shandong_pathways_creates_core_paths(client):
     single_pathway = _pathway_by_code(pathways, "vocational_single_exam")
     single_rules = client.get(f"/api/gaokao/pathways/{single_pathway['id']}/rules").json()
     assert {item["rule_code"] for item in single_rules}.issuperset(
-        {"d2_single_registration", "d2_single_candidate_scope", "d2_single_school_chapter"}
+        {
+            "d2_single_registration",
+            "d2_single_candidate_scope",
+            "d2_single_school_chapter",
+            "d6_single_major_category_match",
+            "d6_single_chapter_plan_material",
+            "d6_single_retired_soldier_review",
+        }
     )
     assert any(item["manual_review_required"] for item in single_rules if item["rule_code"].startswith("d2_"))
+
+    comprehensive_pathway = _pathway_by_code(pathways, "vocational_comprehensive")
+    comprehensive_rules = client.get(f"/api/gaokao/pathways/{comprehensive_pathway['id']}/rules").json()
+    assert {item["rule_code"] for item in comprehensive_rules}.issuperset(
+        {
+            "d6_comprehensive_registration",
+            "d2_comprehensive_candidate_scope",
+            "d2_comprehensive_quality_record",
+            "d6_comprehensive_test_material",
+            "d6_comprehensive_chapter_plan",
+        }
+    )
+
+    spring_pathway = _pathway_by_code(pathways, "spring_exam_undergrad")
+    spring_rules = client.get(f"/api/gaokao/pathways/{spring_pathway['id']}/rules").json()
+    assert {item["rule_code"] for item in spring_rules}.issuperset(
+        {
+            "d6_spring_undergrad_registration",
+            "d2_spring_undergrad_category",
+            "d6_spring_undergrad_score_and_skill",
+            "d6_spring_undergrad_score_line",
+            "d6_spring_undergrad_plan_chapter",
+        }
+    )
 
     second_response = client.post("/api/gaokao/pathways/bootstrap-shandong", params={"target_year": 2026})
     assert second_response.status_code == 200
@@ -177,6 +208,95 @@ def test_student_pathway_profile_missing_fields_are_readable(client):
     assert missing_by_key["subject_combination"]["material_label"] == "选科组合"
     assert missing_by_key["subject_combination"]["gap_type"] == "profile_field"
     assert "补充选科组合" in missing_by_key["subject_combination"]["next_action"]
+
+
+def test_d6_vocational_and_spring_pathways_surface_screening_requirements(client):
+    client.post("/api/gaokao/pathways/bootstrap-shandong", params={"target_year": 2026})
+    student_id = _first_student_id(client)
+
+    client.put(
+        f"/api/gaokao/students/{student_id}/pathway-profile",
+        json={
+            "province": "山东",
+            "candidate_type": "independent_recruitment",
+            "has_gaokao_registration": True,
+            "is_vocational_student": True,
+            "is_social_candidate": False,
+            "materials_json": {},
+        },
+    )
+    preview = client.post(
+        f"/api/gaokao/students/{student_id}/pathway-evaluations/preview",
+        params={"target_year": 2026, "province": "山东"},
+    ).json()
+    single_eval = _evaluation_by_code(preview["evaluations"], "vocational_single_exam")
+    single_missing = {item["material_key"]: item for item in single_eval["missing_materials_json"]}
+    assert single_eval["status"] == "insufficient_data"
+    assert "single_exam_major_category_match" in single_missing
+    assert "single_exam_college_chapter_plan" in single_missing
+    assert "high_school_equivalent" not in single_missing
+    assert any("退役士兵" in item["message"] for item in single_eval["warning_rules_json"])
+    assert "不能理解为录取概率" in single_eval["summary"]
+
+    client.put(
+        f"/api/gaokao/students/{student_id}/pathway-profile",
+        json={
+            "province": "山东",
+            "candidate_type": "independent_recruitment",
+            "has_gaokao_registration": True,
+            "is_vocational_student": False,
+            "is_social_candidate": True,
+            "materials_json": {},
+        },
+    )
+    social_preview = client.post(
+        f"/api/gaokao/students/{student_id}/pathway-evaluations/preview",
+        params={"target_year": 2026, "province": "山东"},
+    ).json()
+    social_single_eval = _evaluation_by_code(social_preview["evaluations"], "vocational_single_exam")
+    social_missing = {item["material_key"]: item for item in social_single_eval["missing_materials_json"]}
+    assert social_missing["high_school_equivalent"]["material_label"] == "高中阶段毕业证书或同等学力材料"
+
+    client.put(
+        f"/api/gaokao/students/{student_id}/pathway-profile",
+        json={
+            "province": "山东",
+            "candidate_type": "general",
+            "has_gaokao_registration": True,
+            "is_fresh_graduate": True,
+            "materials_json": {"comprehensive_quality_evaluation": True},
+        },
+    )
+    comprehensive_preview = client.post(
+        f"/api/gaokao/students/{student_id}/pathway-evaluations/preview",
+        params={"target_year": 2026, "province": "山东"},
+    ).json()
+    comprehensive_eval = _evaluation_by_code(comprehensive_preview["evaluations"], "vocational_comprehensive")
+    comprehensive_missing = {item["material_key"]: item for item in comprehensive_eval["missing_materials_json"]}
+    assert "comprehensive_test_or_interview" in comprehensive_missing
+    assert "comprehensive_college_chapter_plan" in comprehensive_missing
+    assert any("普通高中应届" in item["rule_name"] for item in comprehensive_eval["matched_rules_json"])
+
+    client.put(
+        f"/api/gaokao/students/{student_id}/pathway-profile",
+        json={
+            "province": "山东",
+            "candidate_type": "spring_exam",
+            "has_gaokao_registration": True,
+            "spring_exam_category": "软件与应用技术",
+            "materials_json": {},
+        },
+    )
+    spring_preview = client.post(
+        f"/api/gaokao/students/{student_id}/pathway-evaluations/preview",
+        params={"target_year": 2026, "province": "山东"},
+    ).json()
+    spring_eval = _evaluation_by_code(spring_preview["evaluations"], "spring_exam_undergrad")
+    spring_missing = {item["material_key"]: item for item in spring_eval["missing_materials_json"]}
+    assert any("专业类别一致" in item["rule_name"] for item in spring_eval["matched_rules_json"])
+    assert "spring_exam_skill_score" in spring_missing
+    assert "spring_exam_score_line" in spring_missing
+    assert "spring_exam_college_plan_chapter" in spring_missing
 
 
 def test_student_pathway_evaluations_can_be_persisted(client):
