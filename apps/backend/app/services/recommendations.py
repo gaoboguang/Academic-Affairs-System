@@ -70,6 +70,7 @@ from ._recommendations_settings import (
     update_recommendation_settings,
 )
 from ._recommendations_shared import _load_recommendation_thresholds
+from ._recommendations_shandong_rush_stable_safe import preview_shandong_rush_stable_safe_recommendations
 from ._recommendations_workbench import preview_volunteer_workbench
 
 
@@ -109,6 +110,7 @@ __all__ = [
     "list_province_score_transform_rules",
     "list_special_type_rules",
     "preview_volunteer_workbench",
+    "preview_shandong_rush_stable_safe_recommendations",
     "list_province_volunteer_rules",
     "list_recommendation_history",
     "list_subject_requirement_dicts",

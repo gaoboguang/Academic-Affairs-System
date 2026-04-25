@@ -8,6 +8,14 @@
 
 ## 2026-04-25 新增
 
+- 已完成 v4 下一轮窗口 B4：山东普通类冲稳保推荐算法与解释引擎：
+  - 从 B3 成果上接续创建 `codex/r2-b4-shandong-rush-stable-safe-recommendation`
+  - 新增 `POST /api/recommendations/shandong-rush-stable-safe/preview`，支持 `projection`、`manual_rank`、`manual_score` 三类学生位次来源；`projection` 读取 B3 的 `student_gaokao_score_projection`，`manual_score` 使用一分一段并在目标年缺失时回退最近上一年
+  - 新增 `apps/backend/app/services/_recommendations_shandong_rush_stable_safe.py`，按 2025/2024/2023 山东普通类投档位次加权生成“冲 / 稳 / 保 / 仅关注”，并输出开发文档要求的位次边际、分数/位次摘要、使用年份、历史摘要、风险码、解释文本和来源文档 ID
+  - 选科不符候选会被排除；近三年样本不足会降低置信度，只有单年样本时归为“仅关注”；缺目标年份计划或计划缩招会进入风险提示，计划缩招不允许进入“保”
+  - 新增 `docs/gaokao-shandong-rush-stable-safe-engine-2026-04-25.md`，给后续 C1 页面和 C2 输出链说明接口、字段、分层规则、风险码和边界
+  - 验证：`npm run backend:test -- apps/backend/tests/test_shandong_rush_stable_safe_recommendation.py -q` 为 `3 passed`；`npm run backend:test -- apps/backend/tests/test_recommendation_workflow.py apps/backend/tests/test_gaokao_score_projection.py apps/backend/tests/test_shandong_rush_stable_safe_recommendation.py -q` 为 `20 passed`；`npm run backend:data-health -- --json` 可运行但仍为 `warning`、P0 缺口 6 条；`git diff --check` 通过
+
 - 已完成 v4 下一轮窗口 B3：学生考试成绩到高考预估分 / 位次推算：
   - 从 B2 成果上接续创建 `codex/r2-b3-student-gaokao-score-projection`
   - 新增迁移 `20260425_0017_student_gaokao_score_projection.py` 与模型 `StudentGaokaoScoreProjection`，用于保存学生、目标年份、来源模式、预估分、预估位次、位次区间、置信度、所选考试和计算明细

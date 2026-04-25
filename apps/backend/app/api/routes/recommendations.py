@@ -38,6 +38,8 @@ from app.schemas.recommendation import (
     RecommendationSettingsPayload,
     RecommendationSettingsRead,
     RecommendationStrategyPresetPayload,
+    ShandongRushStableSafeRecommendationPayload,
+    ShandongRushStableSafeRecommendationResponse,
     SpecialTypeRuleBootstrapResponse,
     SpecialTypeRulePayload,
     SpecialTypeRuleRead,
@@ -436,6 +438,17 @@ def get_gaokao_score_projection(
     session: Session = Depends(get_db_session),
 ) -> StudentGaokaoScoreProjectionRead:
     return service.get_gaokao_score_projection(session, projection_id)
+
+
+@router.post(
+    "/recommendations/shandong-rush-stable-safe/preview",
+    response_model=ShandongRushStableSafeRecommendationResponse,
+)
+def preview_shandong_rush_stable_safe_recommendations(
+    payload: ShandongRushStableSafeRecommendationPayload,
+    session: Session = Depends(get_db_session),
+) -> ShandongRushStableSafeRecommendationResponse:
+    return service.preview_shandong_rush_stable_safe_recommendations(session, payload)
 
 
 @router.post("/recommendations/volunteer-workbench/preview", response_model=VolunteerWorkbenchPreviewResponse)

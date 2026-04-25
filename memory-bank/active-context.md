@@ -205,6 +205,14 @@
 
 ## 当前重点
 
+- 2026-04-25 已按 v4 下一轮开发文档完成窗口 B4：山东普通类冲稳保推荐算法与解释引擎：
+  - 当前分支 `codex/r2-b4-shandong-rush-stable-safe-recommendation` 从 B3 成果上接续；B1 官方文件仍以未跟踪 `data/imports/` 形式保留，本轮未纳入提交
+  - 新增 `POST /api/recommendations/shandong-rush-stable-safe/preview` 预览接口，不新增推荐结果持久化表，不写入真实主库
+  - 新增 `apps/backend/app/services/_recommendations_shandong_rush_stable_safe.py`，按 2025/2024/2023 山东普通类历史投档位次加权生成“冲 / 稳 / 保 / 仅关注”，并输出 `rank_margin`、`rank_margin_ratio`、`score_summary`、`years_used`、`historical_summary`、`risk_flags`、`explanation_text`、`source_document_ids`
+  - 支持 `projection` 读取 B3 的 `student_gaokao_score_projection` 快照，`manual_rank` 直接使用全省位次，`manual_score` 按一分一段换算位次；目标年一分一段缺失时回退最近上一年并标记风险
+  - 选科不符候选会被排除；三年样本不足会降低置信度，只有单年历史样本归为“仅关注”；缺少目标年份计划或计划缩招会进入风险提示，计划缩招不允许进入“保”
+  - 新增 `docs/gaokao-shandong-rush-stable-safe-engine-2026-04-25.md`，给后续 C1 页面和 C2 报表导出说明接口、字段、分层口径和风险码
+  - 本轮验证：B4 定向 `3 passed`；推荐域+B3+B4 `20 passed`；`backend:data-health -- --json` 可运行但真实主库仍为 `warning`、P0 缺口 6 条；`git diff --check` 通过
 - 2026-04-25 已按 v4 下一轮开发文档完成窗口 B3：学生考试成绩到高考预估分 / 位次推算：
   - 当前分支 `codex/r2-b3-student-gaokao-score-projection` 是从 B2 成果上接续；B1 官方文件仍以未跟踪 `data/imports/` 形式保留
   - 新增 `student_gaokao_score_projection` 表与迁移 `20260425_0017`，保存学生、目标年份、来源模式、预估分、预估位次、位次区间、置信度、所选考试和计算明细

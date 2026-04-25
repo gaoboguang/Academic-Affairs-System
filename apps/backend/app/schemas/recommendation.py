@@ -396,6 +396,76 @@ class StudentGaokaoScoreProjectionRead(ORMModel):
     is_active: bool = True
 
 
+class ShandongRushStableSafeRecommendationPayload(BaseModel):
+    student_id: int | None = None
+    projection_id: int | None = None
+    target_year: int = 2026
+    province: str = "山东"
+    student_type: str = "general"
+    batch: str | None = "常规批"
+    subject_combination: str | None = None
+    source_mode: str = "manual_rank"
+    manual_score: float | None = None
+    manual_rank: int | None = None
+    risk_preference: str = "balanced"
+    target_regions_json: list[str] = Field(default_factory=list)
+    school_level_tags_json: list[str] = Field(default_factory=list)
+    major_keyword: str | None = None
+    limit: int = 120
+
+
+class ShandongRushStableSafeCandidateRead(BaseModel):
+    college_id: int
+    college_name: str
+    college_code_snapshot: str | None = None
+    major_id: int | None = None
+    major_name: str | None = None
+    major_code_snapshot: str | None = None
+    bucket: str
+    bucket_label: str
+    rank_margin: int | None = None
+    rank_margin_ratio: float | None = None
+    score_summary: dict[str, object] = Field(default_factory=dict)
+    years_used: list[int] = Field(default_factory=list)
+    historical_summary: dict[str, object] = Field(default_factory=dict)
+    plan_count: int | None = None
+    subject_requirement: str | None = None
+    data_confidence: str
+    risk_flags: list[str] = Field(default_factory=list)
+    explanation_text: str
+    source_document_ids: list[int] = Field(default_factory=list)
+
+
+class ShandongRushStableSafeSummaryRead(BaseModel):
+    rush_count: int = 0
+    stable_count: int = 0
+    safe_count: int = 0
+    watch_count: int = 0
+    excluded_subject_mismatch_count: int = 0
+
+
+class ShandongRushStableSafeRecommendationResponse(BaseModel):
+    student_id: int | None = None
+    student_name: str | None = None
+    province: str
+    target_year: int
+    student_type: str
+    source_mode: str
+    predicted_score: float | None = None
+    predicted_rank: int
+    rank_range_low: int | None = None
+    rank_range_high: int | None = None
+    rank_projection_basis: str | None = None
+    risk_preference: str
+    data_years: list[int] = Field(default_factory=list)
+    input_notes: list[str] = Field(default_factory=list)
+    summary: ShandongRushStableSafeSummaryRead
+    rush: list[ShandongRushStableSafeCandidateRead] = Field(default_factory=list)
+    stable: list[ShandongRushStableSafeCandidateRead] = Field(default_factory=list)
+    safe: list[ShandongRushStableSafeCandidateRead] = Field(default_factory=list)
+    watch: list[ShandongRushStableSafeCandidateRead] = Field(default_factory=list)
+
+
 class VolunteerWorkbenchPreviewPayload(BaseModel):
     student_id: int
     exam_id: int
