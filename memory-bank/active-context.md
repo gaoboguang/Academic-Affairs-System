@@ -205,6 +205,12 @@
 
 ## 当前重点
 
+- 2026-04-25 已按 v4 下一轮开发文档完成窗口 A1：山东高考官方数据源登记与导入框架：
+  - 新增 `gaokao_source_document` 与 `gaokao_import_run`，迁移版本 `20260425_0016`；`admission_record`、`enrollment_plan` 及存在时的 raw 高考表会补可空 `source_document_id / import_run_id`
+  - 新增 `npm run backend:gaokao-sources`，用于准备 `data/imports/gaokao/official/`、`manual/`、错误报告和 raw 快照目录，并登记 v4 指定的山东省教育招生考试院、山东省教育厅和高校官网章程来源
+  - 新增 `npm run backend:gaokao-import-official`，用于登记人工下载的官方文件、SHA256 和待解析导入批次；A1 不解析投档表 / 一分一段 / 省控线，不写入业务数据
+  - 新增 `docs/gaokao-source-import-framework-2026-04-25.md` 作为 B1 接手入口；B1 应复用 `source_document_id / import_run_id`，不要重复建来源表
+  - 本轮验证：临时干净库 `alembic upgrade head` 通过；临时库 `backend:gaokao-sources -- --json` 与 `backend:gaokao-import-official` 通过；后端定向 `18 passed`；`backend:data-health -- --json` 仍为 `warning` 且 P0 缺口 6 条；`git diff --check` 通过
 - 2026-04-25 已按 v4 下一轮开发文档完成窗口 A0：数据库基线审计与数据缺口确认：
   - 新增 `docs/gaokao-data-baseline-2026-04-25.md`，记录当前 `data/app.db` 高考相关表清单、记录数、2023-2025 山东普通类覆盖、2026 数据状态、特殊类型初筛边界和 A1/B1 下一步
   - A0 未新增功能、未写入主库；`git pull --ff-only` 因本机 GitHub HTTPS 认证不可交互失败，但本地 `main` 已包含 `a7c7148` 与 `3b796b3`

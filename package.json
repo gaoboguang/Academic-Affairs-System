@@ -16,6 +16,8 @@
     "backend:merge-handoff": "node ./scripts/backend-cli.cjs merge-handoff",
     "backend:materialize-gaokao": "node ./scripts/backend-cli.cjs materialize-gaokao",
     "backend:bootstrap-special-types": "node ./scripts/backend-cli.cjs bootstrap-special-types",
+    "backend:gaokao-sources": "node ./scripts/backend-cli.cjs gaokao-sources",
+    "backend:gaokao-import-official": "node ./scripts/backend-cli.cjs gaokao-import-official",
     "backend:data-health": "node ./scripts/backend-cli.cjs data-health",
     "backend:p0-check": "node ./scripts/backend-cli.cjs p0-check",
     "backend:init-demo": "node ./scripts/backend-cli.cjs init-demo",

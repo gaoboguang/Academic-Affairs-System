@@ -129,6 +129,8 @@ class AdmissionRecord(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     max_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     plan_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     source_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_document_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    import_run_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     college = relationship("College")
     major = relationship("Major")
@@ -168,6 +170,8 @@ class EnrollmentPlan(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     student_type: Mapped[str] = mapped_column(String(50), default="general", nullable=False)
     source_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     import_batch_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    source_document_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    import_run_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     college = relationship("College")
     major = relationship("Major")

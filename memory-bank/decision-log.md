@@ -1,5 +1,11 @@
 # 决策日志
 
+## 2026-04-25：高考来源追溯单独建 source document / import run，不复用通用 import_job 承载逐行溯源
+
+- 决定：新增 `gaokao_source_document` 与 `gaokao_import_run`，把官方来源页面、本地下载文件、文件 SHA256、解析器名、导入行数、错误报告和 raw 快照路径作为高考数据专用追溯层；通用 `import_job` 仍保留给业务页导入中心聚合。
+- 原因：A0 已确认最近三年投档结果已有但来源追溯不足，且 B1 将同时处理投档表、一分一段、省控线等 raw 表和业务表；只靠 `import_job.result_json` 无法稳定给每条高考事实数据保留 `source_document_id`。
+- 约束：A1 只登记来源和待解析本地文件，不解析官方 XLS、不写入投档 / 一分一段 / 省控线业务数据；B1 必须复用 `source_document_id / import_run_id` 并补真实 `total_rows / success_rows / failed_rows / skipped_rows / error_report_path`。
+
 ## 2026-04-25：质量门禁改为分阶段包装，不降低检查强度
 
 - 决定：把根命令 `npm run check`、`npm run check:e2e`、`npm run check:all` 改为调用 `scripts/quality-gate.cjs`，由脚本按阶段执行原有后端测试、前端 lint、前端单测、前端构建和 Playwright E2E。

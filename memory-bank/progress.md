@@ -8,6 +8,15 @@
 
 ## 2026-04-25 新增
 
+- 已完成 v4 下一轮窗口 A1：山东高考官方数据源登记与导入框架：
+  - 新增模型与迁移 `20260425_0016_gaokao_source_import_framework.py`，创建 `gaokao_source_document`、`gaokao_import_run`
+  - `admission_record`、`enrollment_plan` 及已存在的 `score_rank_segment`、`gaokao_score_line`、`gaokao_admission_result`、`gaokao_admission_plan`、`gaokao_subject_requirement`、`gaokao_college_chapter_rule` 会按存在情况补 `source_document_id / import_run_id`
+  - 新增 `apps/backend/app/services/gaokao_imports.py`，默认登记 2023-2025 投档表、一分一段、省控线，2025/2026 选科要求和 2026 单招/综评政策来源
+  - 新增根命令 `npm run backend:gaokao-sources` 与 `npm run backend:gaokao-import-official`
+  - 新增 `docs/gaokao-source-import-framework-2026-04-25.md`，并同步 `docs/README.md`、`scripts/README.md`
+  - 当前 A1 只登记来源和待解析运行，不实现 B1 的具体 XLS 解析，不写入真实高考业务数据
+  - 验证：临时干净库 `backend:migrate` 通过；临时库 `backend:gaokao-sources -- --json` 登记 12 份来源文档；临时库 `backend:gaokao-import-official` 可登记本地文件和 pending run；后端定向 `18 passed`；`backend:data-health -- --json` 仍可运行，P0 缺口保持 6；`git diff --check` 通过
+
 - 已将 `codex/09-final-integration-acceptance` fast-forward 合并回 `main`，窗口 2-9 第一轮成果正式进入主线：
   - 功能整合提交为 `3b796b3 feat: integrate windows 2-9 final acceptance`
   - 合并后已执行 `npm run backend:data-health`，通过且仍保留 P0 缺口 `6` 条

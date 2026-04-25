@@ -21,6 +21,8 @@
 - `npm run backend:merge-handoff`
 - `npm run backend:materialize-gaokao`
 - `npm run backend:bootstrap-special-types -- --year 2025 --year 2026`
+- `npm run backend:gaokao-sources -- --json`
+- `npm run backend:gaokao-import-official -- --source-document-id <id> --file data/imports/gaokao/official/<year>/<file>`
 - `npm run backend:data-health`
 - `npm run backend:p0-check`
 - `npm run backend:init-demo`
@@ -64,6 +66,10 @@
   把已嵌入 `data/app.db` 的 raw 高考表整理到项目业务表；当前已覆盖普通类录取结果，以及普通类、春季高考、艺术类、单独招生、综合评价招生、体育类招生计划。执行前会自动备份主库，并输出执行前后的健康摘要。
 - [`bootstrap_special_type_rules.py`](./bootstrap_special_type_rules.py)
   装载山东特殊类型规则字典；当前用于春考、综评、单招、艺术、体育 fallback 的细分类别、关键词、核对清单和初筛优先级。执行前默认备份主库，并输出执行前后的健康摘要。
+- [`manage_gaokao_sources.py`](./manage_gaokao_sources.py)
+  登记山东高考官方来源文档，准备 `data/imports/gaokao/official/`、`manual/`、错误报告和 raw 快照目录；后续 B1/B2 导入器应先复用这里的 `source_document_id`。
+- [`import_gaokao_official.py`](./import_gaokao_official.py)
+  登记人工下载的官方文件，写入文件路径、SHA256 和一条待解析的 `gaokao_import_run`；当前不直接解析投档表、一分一段或省控线。
 - [`run_e2e_backend.py`](./run_e2e_backend.py)
   给 Playwright / E2E 提供临时后端服务。
 - [`backup.ps1`](./backup.ps1)
