@@ -6,7 +6,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
-from app.importers.base import RowError, read_template_rows, save_error_report
+from app.importers.base import (
+    RowError,
+    build_error_preview,
+    build_row_error,
+    read_template_rows,
+    resolve_import_status,
+    save_error_report,
+)
 from app.models import DictItem, DictType, SchoolClass, Semester, Subject, Teacher, TimetableBatch, TimetableEntry
 from app.schemas.common import ImportResult
 from app.utils.parsers import clean_text, parse_int
@@ -125,7 +132,7 @@ class TimetableImporter:
                 success_rows += 1
             except Exception as exc:
                 failed_rows += 1
-                row_errors.append(RowError(row_number=row_number, values=values, message=str(exc)))
+                row_errors.append(build_row_error(row_number=row_number, values=values, message=str(exc)))
 
         error_report_path = save_error_report(
             settings=self.settings,
@@ -135,11 +142,19 @@ class TimetableImporter:
         )
         return (
             ImportResult(
+                status=resolve_import_status(
+                    total_rows=len(rows),
+                    success_rows=success_rows,
+                    failed_rows=failed_rows,
+                    unresolved_rows=unresolved_rows,
+                ),
                 total_rows=len(rows),
                 success_rows=success_rows,
                 failed_rows=failed_rows,
                 skipped_rows=0,
+                created_rows=success_rows,
                 error_report_path=error_report_path,
+                error_preview=build_error_preview(row_errors),
                 message=f"课表导入完成，成功 {success_rows} 条，失败 {failed_rows} 条。",
             ),
             unresolved_rows,
@@ -212,4 +227,3 @@ class TimetableImporter:
         if not weeks or any(week is None or week < 1 for week in weeks):
             raise ValueError(f"周次规则无法识别: {raw_value}")
         return ParsedWeekRule(rule="custom", weeks=[int(week) for week in weeks if week is not None])
-

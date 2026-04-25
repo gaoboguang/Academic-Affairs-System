@@ -9,6 +9,7 @@
     <div v-if="loading" class="report-insight-placeholder">正在加载当前报表的导出前摘要...</div>
     <div v-else-if="error" class="report-insight-error">
       <el-alert type="error" show-icon :closable="false" :title="error" />
+      <p>这不会阻止导出，但建议先确认上方报表参数是否选对，再决定是否继续生成正式材料。</p>
       <div class="action-row toolbar-row">
         <el-button plain @click="$emit('retry')">重试摘要加载</el-button>
       </div>
@@ -102,6 +103,12 @@ defineEmits<{
   display: grid;
   gap: 12px;
   margin-bottom: 14px;
+}
+
+.report-insight-error p {
+  margin: 0;
+  color: #60748a;
+  line-height: 1.6;
 }
 
 .toolbar-row {

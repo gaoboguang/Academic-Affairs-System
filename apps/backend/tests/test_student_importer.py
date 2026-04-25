@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from io import BytesIO
 
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from sqlalchemy import func, select
 
 from app.importers.students import StudentImporter
@@ -58,11 +58,26 @@ def test_student_importer_creates_error_report(app, test_settings) -> None:
     assert imported_student is not None
 
     assert result.total_rows == 2
+    assert result.status == "partially_failed"
     assert result.success_rows == 1
     assert result.failed_rows == 1
+    assert result.created_rows == 1
     assert result.error_report_path is not None
     assert result.error_preview == ["第 3 行：学号不能为空"]
     assert imported_origin_province == "广东"
+    error_workbook = load_workbook(test_settings.project_root / result.error_report_path)
+    error_sheet = error_workbook["错误报告"]
+    assert [error_sheet.cell(row=1, column=index).value for index in range(1, 7)] == [
+        "行号",
+        "列名",
+        "字段名",
+        "原始值",
+        "错误原因",
+        "建议修复",
+    ]
+    assert error_sheet.cell(row=2, column=2).value == "学号"
+    assert error_sheet.cell(row=2, column=5).value == "学号不能为空"
+    assert "补齐" in str(error_sheet.cell(row=2, column=6).value)
 
 
 def test_student_importer_accepts_common_header_aliases(app, test_settings) -> None:
@@ -107,6 +122,8 @@ def test_student_importer_accepts_common_header_aliases(app, test_settings) -> N
 
     assert result.success_rows == 1
     assert result.failed_rows == 0
+    assert result.status == "success"
+    assert result.created_rows == 1
     assert result.error_preview == []
     assert result.notice_preview == []
     assert imported_student is not None

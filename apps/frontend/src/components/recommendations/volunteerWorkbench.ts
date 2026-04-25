@@ -555,6 +555,10 @@ export function buildVolunteerCandidateExplanationNotes(candidate: VolunteerWork
     notes.push("当前专业缺少专业线，先回退到院校线参考；同校不同专业结果仍可能继续变化。");
   }
 
+  if (candidate.risk_flags_json.includes("general_reference_fallback")) {
+    notes.push("当前缺少该类别专门录取结果，先按普通类录取结果做方向性参考；这不是该类别专门录取把握，正式填报前仍需结合类别公告、批次规则和学校章程复核。");
+  }
+
   if (candidate.reference_scope === "score_line") {
     notes.push("当前结果只按省级控制线做资格初筛，不能直接视作院校或专业录取把握。");
   }

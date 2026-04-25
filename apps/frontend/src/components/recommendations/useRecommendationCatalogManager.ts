@@ -3,6 +3,7 @@ import ElMessage from "element-plus/es/components/message/index";
 import type { UploadFile } from "element-plus";
 
 import { apiRequest, openFile, uploadFile } from "../../api/client";
+import { formatUserActionError } from "../../utils/userFeedback";
 import {
   baseSchoolLevelOptions,
   createCollegeForm,
@@ -24,7 +25,7 @@ import type {
 } from "./types";
 
 function reportError(error: unknown): void {
-  ElMessage.error((error as Error).message);
+  ElMessage.error(formatUserActionError("维护院校专业基础库", error, "先确认筛选条件、表单字段或导入模板正确；如果仍失败，请刷新当前页签后重试。"));
 }
 
 export function useRecommendationCatalogManager() {
@@ -263,7 +264,10 @@ export function useRecommendationCatalogManager() {
     try {
       admissionImportResult.value = await uploadFile<AdmissionImportResponse>("/api/admissions/import", uploadFileItem.raw);
       await Promise.all([loadCollegeDirectory(), loadMajorDirectory(), loadAdmissions()]);
-      ElMessage.success(admissionImportResult.value.message);
+      ElMessage({
+        type: admissionImportResult.value.failed_rows ? "warning" : "success",
+        message: admissionImportResult.value.message,
+      });
     } catch (error) {
       reportError(error);
     }

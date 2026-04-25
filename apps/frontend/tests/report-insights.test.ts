@@ -214,7 +214,7 @@ describe("report insights", () => {
         negative_score: 4,
         record_count: 7,
         class_names: ["高二1班"],
-        category_scores_json: { 常规管理: 18, 德育活动: 14 },
+        category_scores_json: { daily_management: 18, activity: 14 },
       },
       {
         teacher_id: 2,
@@ -226,7 +226,7 @@ describe("report insights", () => {
         negative_score: 7,
         record_count: 8,
         class_names: ["高二8班"],
-        category_scores_json: { 常规管理: 12, 德育活动: 9 },
+        category_scores_json: { daily_management: 12, activity: 9 },
       },
     ]);
 
@@ -234,7 +234,7 @@ describe("report insights", () => {
     expect(cards[0]?.summary).toContain("2 位教师");
     expect(cards[1]?.summary).toContain("周老师");
     expect(cards[2]?.summary).toContain("吴老师");
-    expect(cards[3]?.summary).toContain("常规管理");
+    expect(cards[3]?.summary).toContain("班级常规管理");
   });
 
   it("builds growth insight cards from student archive data", () => {

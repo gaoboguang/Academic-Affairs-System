@@ -28,6 +28,7 @@
       <div v-if="selectedTimetableFileName" class="hint-text">
         当前文件：{{ selectedTimetableFileName }}
       </div>
+      <ImportFeedbackPanel :result="importResult" />
     </section>
 
     <section class="soft-card panel-block">
@@ -62,6 +63,10 @@
           </el-table-column>
         </el-table>
       </div>
+      <el-empty
+        v-if="!timetableBatches.length"
+        description="当前学期还没有课表批次。请先选择学期、上传课表模板，再回到这里查看未匹配项。"
+      />
     </section>
 
     <section class="soft-card panel-block">
@@ -76,6 +81,10 @@
         </div>
       </div>
       <el-empty v-if="!selectedBatchId" description="请先选择一个课表批次" />
+      <el-empty
+        v-else-if="!timetableEntries.length"
+        description="当前批次没有符合筛选条件的课表条目。可以关闭“仅看未匹配”，或重新选择批次。"
+      />
       <div v-else class="table-shell">
         <el-table :data="timetableEntries" stripe>
           <el-table-column label="星期/节次" width="110">
@@ -129,13 +138,16 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
+import ImportFeedbackPanel from "../common/ImportFeedbackPanel.vue";
 import type { OptionItem } from "../../stores/reference";
+import type { ImportFeedbackResult } from "../../utils/importFeedback";
 import { batchTagType, formatBatchStatus, formatCourseTypeLabel, formatWeekRule } from "./helpers";
 import type { TimetableBatchItem, TimetableEntryItem } from "./types";
 
 const props = defineProps<{
   fileInputKey: number;
   selectedTimetableFileName: string;
+  importResult: (ImportFeedbackResult & { batch_id: number; unresolved_rows: number }) | null;
   importRemark: string;
   importing: boolean;
   canImport: boolean;

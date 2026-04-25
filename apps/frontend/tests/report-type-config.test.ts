@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildReportExportPayload,
+  formatReportExportParams,
   getMissingRequiredReportFields,
   getMissingRequiredReportFieldsMessage,
   getReportPrintPreviewPath,
@@ -99,5 +100,17 @@ describe("report type config", () => {
       semester_id: 5,
       rule_version_id: 3,
     });
+  });
+
+  it("formats stored export params with non-technical field labels", () => {
+    expect(
+      formatReportExportParams({
+        report_type: "student_analysis",
+        exam_id: 12,
+        student_id: 8,
+      }),
+    ).toBe("报表类型=学生成绩分析单 / 考试=12 / 学生=8");
+
+    expect(formatReportExportParams(null)).toBe("-");
   });
 });

@@ -4,9 +4,16 @@
 
 1. 先阅读 `AGENTS.md`、`memory-bank/project-context.md`、`memory-bank/active-context.md`。
 2. 2026-04-24 窗口 0 已生成当前多窗口接手入口：`docs/repo-audit.md`、`docs/mac-dev-setup.md`、`docs/development-roadmap.md`。后续 Codex 窗口应先读这三份，再进入自己的窗口任务。按 Codex App v3 补齐的 dated 状态锁定文件为 `docs/repo-audit-2026-04-24.md` 与 `docs/current-development-map-2026-04-24.md`，它们是对已有窗口 0 成果的补缺，不是新路线图；本轮验证已通过后端 `66 passed`、前端 lint、前端 `114 passed`、前端构建、数据健康、P0 验收和 `git diff --check`。
-3. 2026-04-24 窗口 1 已完成 Mac 启动体验收口：普通用户看 `docs/mac-user-startup-guide.md`，Codex / 开发窗口看 `docs/mac-developer-checklist.md`；`start-local-edu.command` 已补中文排障提示，`scripts/dev.sh` 已设为可执行，`npm run check` 已通过。
+3. 2026-04-24 窗口 1 已完成 Mac 启动体验收口；同日又修正了“终端关闭后前端掉线”的使用问题。普通用户优先双击 `start-local-edu.command` 或执行 `npm run start:local`，服务会后台运行，日志在 `data/logs/local-services/`；需要停止时执行 `npm run stop:local`。`npm run dev` 保留为前台开发调试模式，终端关闭后前端会停止。
 4. 如果任务涉及结构优化，先补看 `docs/README.md`、`docs/dev/README.md`、`scripts/README.md` 与 `handoffs/README.md`，再阅读 `docs/development_recommendations_2026-04-05.md`。
-5. 如继续把项目推进到交付可用，先阅读 `docs/development_plan_to_delivery_2026-04-24.md`；它按当前真实数据库统计整理了后续阶段、数据缺口、质量红线和交付验收清单。2026-04-24 阶段 0 安全底座已可验收，阶段 1 已先落地山东覆盖矩阵和导入审计摘要；阶段二也已先落地规则核对入口：`/recommendations` 的“特殊类型规则 / 赋分规则 / 选科字典”页签支持列表、筛选和 bootstrap，但完整编辑维护仍未做。
+5. 如继续把项目推进到交付可用，先阅读 `docs/development_plan_to_delivery_2026-04-24.md`；它按当前真实数据库统计整理了后续阶段、数据缺口、质量红线和交付验收清单。2026-04-24 阶段 0 安全底座已可验收，阶段 1 已落地山东覆盖矩阵、导入审计摘要、交付判断和特殊类型风险矩阵；阶段二也已先落地规则核对入口：`/recommendations` 的“特殊类型规则 / 赋分规则 / 选科字典”页签支持列表、筛选和 bootstrap，但完整编辑维护仍未做。
+6. 2026-04-24 窗口 2 已完成导入体验统一与只读导入中心：先看 `docs/import-system-audit-2026-04-24.md`。当前学生、教师、成绩、课表、录取数据、招生计划导入已统一结果面板、状态映射、摘要字段和错误报告结构；`/import-center` 已聚合模板下载、业务上传入口、`import_job`、`score_import_batch`、`timetable_batch`、`evaluation_batch`、错误报告、审计日志和撤销说明。当前不开放无 before-image 的自动删除式回滚；如未来要真回滚，先补影响行快照和恢复后重算策略，不要重写既有导入器。
+7. 2026-04-24 窗口 4 已完成 Stage B 推荐解释链补齐：先看 `docs/recommendation-stage-b-audit-2026-04-24.md`。当前 `general_reference_fallback`、`score_line`、`plan_only` 三类特殊类型边界已贯通工作台、候选说明、草稿打印、报表摘要、推荐结果 / 打印和 Excel 导出；定向测试、后端 / 前端全量与前端构建通过。窗口 9 已重新跑完整 E2E，当前 `npm run check:e2e` 为 `31 passed`。
+8. 2026-04-24 窗口 5 已完成核心教务链路回归审计：先看 `docs/core-academic-flow-audit-2026-04-24.md`。学生、教师、班级 / 课程 / 任教、考试、成绩、分析、课表、工作量、报表链路已按当前代码和测试记录梳理；本轮未做业务代码修改，原因是窗口 5 定向后端 `24 passed`、前端核心单测 `38 passed`、前端构建和定向 E2E `9 passed` 均通过，未发现必须马上修的小问题。继续基础教务链路时，优先小步补教师导入反馈、工作量子域边界或报表字段一致性，不要越界处理高考推荐 / 导入中心 / Mac 启动线。
+9. 2026-04-24 窗口 6 已完成报表、打印、Excel 导出一致性第一轮：先看 `docs/report-export-print-audit-2026-04-24.md`。本轮已统一 10 类报表输出矩阵，并修正推荐 / 志愿 Excel 风险码、学生名次字段、成长类型、班主任量化类型和报表中心导出记录参数的中文表达；本次继续在 `codex/06-report-export-consistency` 分支把志愿工作台风险提示改为复用 `recommendationCopy.ts` 共享标签，避免页面与打印 / Excel 风险标签漂移。最新复核验证为后端窗口 6 定向 `23 passed`、前端报表/推荐文案定向 `13 passed`、前端构建、报表相关 Playwright `4 passed` 和 `git diff --check`。后续如继续窗口 6，优先考虑文件名上下文快照和导出记录对象名快照，不要再重复修已对齐的风险码。
+10. 2026-04-24 窗口 7 已完成前端体验、导航与非程序员可读性第一轮：先看 `docs/frontend-navigation-audit-2026-04-24.md`。本轮已把高考数据页和侧栏里的 `DB RC1 / fallback / handoff` 等内部术语改成“本地高考只读库 / 应用侧主档补充 / 备用链接 / 待同步”，新增 `userFeedback.ts` 统一失败提示，并补导入中心、报表中心、课表工作量、评教量化、推荐历史等空态 / 错误下一步。验证为前端定向 `22 passed`、前端全量 `128 passed`、前端 lint、前端构建、定向 Playwright `2 passed` 和 `git diff --check`。后续继续窗口 7 时，优先给高考数据页字段说明抽屉、推荐页多标签用途说明、学生 / 教师 / 考试 / 分析中心局部错误态补同一套“下一步”提示。
+11. 2026-04-25 窗口 8 已完成测试体系、质量门禁与回归脚本收口：先看 `docs/test-quality-audit-2026-04-24.md` 和 `docs/codex-task-acceptance-checklist.md`。`npm run check / check:e2e / check:all` 现在由 `scripts/quality-gate.cjs` 分阶段执行并输出失败提示；完整门禁已通过，结果为后端 `69 passed`、前端 `22 files / 128 tests passed`、前端构建通过、E2E `31 passed`。后续窗口按验收清单选择定向命令，不要为了绿色结果删测试或跳过失败用例。
+12. 2026-04-25 窗口 9 已完成最终整合、冲突处理和发布前验收：先看 `docs/final-acceptance-report-2026-04-24.md`。当前分支为 `codex/09-final-integration-acceptance`；本轮确认无未合并文件、无冲突标记，完整验证已通过：后端 `69 passed`、前端 lint、前端 `22 files / 128 tests passed`、前端构建、E2E `31 passed`，`npm run backend:p0-check -- --json` 为 `ok: true`，备份包 `data/backups/p0_delivery_backup_20260425_084455.zip`。当前可以 Mac 本机试用和学校内部小范围流程试用；仍需保留 P0 数据风险说明，特殊类型推荐只能初筛，不能作为完整录取判断。
 6. 如只需要先做一轮环境收拾，直接执行 `npm run clean:local`；该命令当前只删可再生本地噪音，不会碰 `data/`、`handoffs/`、`.venv`、`node_modules`。如需要进一步给仓库瘦身，执行 `npm run clean:slim`，它会额外清掉 `apps/frontend/dist`、`apps/frontend/node_modules/.vite`、`apps/desktop/.dist` 与 `dist/desktop` 这类可再生产物。
 7. 本轮如继续高考志愿主线，补充阅读 `docs/gaokao_dev_bundle_v3/gaokao_dev_doc_v3.md` 与 `docs/gaokao_dev_bundle_v3/codex_prompt_gaokao_v3.txt`，但优先以新的交付计划文档约束近期范围：山东生源地、全国高校在山东招生数据、数据质量看板、普通类推荐可用、特殊类型安全初筛。
 8. 根目录后端统一入口已补齐，可直接使用 `npm run backend:migrate`、`npm run backend:init-demo`、`npm run backend:test` 与 `npm run backend:dev`。
@@ -91,6 +98,7 @@
 
 ## 当前最合理的下一步
 
+- 当前窗口 9 已恢复并确认完整绿色基线；继续任何改动前仍先看 `git status`，但当前可把 `npm run check:all` 的后端 `69 passed`、前端 `128 passed`、E2E `31 passed` 作为最新整体验收基线。
 - 如继续做结构优化，沿“抽纯计算/helper + 保持 facade、路由、schema 不动”的方式继续推进；当前已完成 `volunteerWorkbenchInsights.ts`、`_evaluation_batch_stats.py`、`_workload_calculation.py`，不要回头做大重构。
 - `useEvaluationQuantPage.ts` 如继续处理，优先按“模板 / 批次分析 / 量化规则 / 量化记录”再细分，而不是把逻辑堆回页面
 - `useTimetableWorkloadPage.ts` 如继续处理，优先按“导入 / 规则 / 结果”再细分，而不是把逻辑堆回页面
@@ -99,7 +107,7 @@
 - 如继续补应用侧数据库，优先沿 `ProvinceScoreTransformRule` / `SubjectRequirementDict` 两类表继续完善真实省份细则、更多匹配语义和管理页，而不是回头把规则信息重新硬编码到页面或直接改 handoff 原始表。
 - 如继续补“并库后”的数据库线，优先把 `gaokao_*` 原始表到应用侧结构化表的消费链继续收口，或继续增强 `backend:merge-handoff` 的增量同步 / 审计摘要；当前最不划算的是再回到“外部独立 gaokao 库才是唯一运行入口”的旧形态。
 - 如继续交付计划阶段二，规则核对入口已先落地只读版；下一步优先补完整编辑维护、山东普通类推荐验收样例、特殊类型三端一致初筛说明，或处理数据可用性缺口（一分一段 / 省控线 / 招生计划审计 / 章程待复核），不要重复做同一层看板。
-- 如继续交付计划阶段一，先看 `/gaokao-data` 的“山东覆盖”页签和 `npm run backend:data-health -- --json`；当前已经能展示按年份 / 类别 / 批次的覆盖矩阵与 `audit_summary`，下一步应补真实数据源或导入器，而不是再做同一层展示。
+- 如继续交付计划阶段一，先看 `/gaokao-data` 的“山东覆盖”页签和 `npm run backend:data-health -- --json`；当前已经能展示按年份 / 类别 / 批次的覆盖矩阵、`audit_summary`、`delivery_assessment` 和 `special_type_risks`。下一步应补真实数据源、导入器或数据修复流程，而不是再做同一层展示。
 - 如继续补“结构化整理”这条线，下一步优先把 `special_type_rule` 的规则消费面扩到数据页/规则管理页，或继续清洗春考专业类别、综评校测条件和单招职业适应性测试条件；不要再把这些规则写回前端或散落到 fallback 评分函数里。
 - 如继续补山东特殊类型实用性，下一步更适合把真实 raw/官方章程里的更细条件补入 `special_type_rule` 或章程限制链，并评估艺术/体育是否需要按统考类别进一步细分到学生 `art_track`；仍不能把规则字典误当成录取结果。
 - 如继续补职业方向这条线，优先清洗明显过宽的映射关系，再把高频专业做更细说明；当前基线已经足够让工作台和推荐解释“有内容”，下一步重点转到“更准”而不是“从 0 到 1”。

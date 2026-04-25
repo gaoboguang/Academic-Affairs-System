@@ -8,6 +8,7 @@ import { useGaokaoPlanningManager } from "./useGaokaoPlanningManager";
 import { useGaokaoVolunteerWorkspace } from "./useGaokaoVolunteerWorkspace";
 import { useRecommendationWorkflow } from "./useRecommendationWorkflow";
 import { useReferenceStore } from "../../stores/reference";
+import { formatUserActionError } from "../../utils/userFeedback";
 
 export function useRecommendationsPage() {
   const referenceStore = useReferenceStore();
@@ -70,7 +71,7 @@ export function useRecommendationsPage() {
         await workflow.viewScheme(workflow.historyItems.value[0]);
       }
     } catch (error) {
-      ElMessage.error((error as Error).message);
+      ElMessage.error(formatUserActionError("加载高考志愿页面", error, "确认本地服务已启动后刷新页面；若某个页签数据为空，可进入对应页签单独刷新。"));
     }
   });
 

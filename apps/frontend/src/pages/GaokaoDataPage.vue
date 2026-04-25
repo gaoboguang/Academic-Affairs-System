@@ -5,7 +5,7 @@
         <div class="page-eyebrow">高考数据 / 只读驾驶舱</div>
         <h2 class="page-title">高考数据</h2>
         <p class="page-subtitle">
-          先看冻结基线、待审阅项、单校证据链和山东首期监控，再决定是否需要向 Windows 数据库线发起 handoff 或 contract request。
+          先看数据来源、待审阅项、单校证据链和山东覆盖情况，再决定下一步优先补哪些数据。
         </p>
         <div class="page-chip-row">
           <span class="page-chip"><strong>当前版本</strong>{{ overview.data_version || "待确认" }}</span>
@@ -36,18 +36,18 @@
             help-text="已确认 chapter_url 的学校数与覆盖率。"
           />
           <MetricCard
-            label="fallback_url 覆盖"
+            label="备用链接覆盖"
             :value="overview.fallback_url_covered || 0"
             help-text="没有正式章程入口时可用于只读兜底的链接数。"
           />
           <MetricCard
             label="重复组"
-            :value="overview.duplicate_group_total ?? '待 handoff'"
+            :value="overview.duplicate_group_total ?? '待同步'"
             help-text="需要进一步人工裁决的重复院校组。"
           />
           <MetricCard
             label="同名跨站组"
-            :value="overview.same_name_cross_site_group_total ?? '待 handoff'"
+            :value="overview.same_name_cross_site_group_total ?? '待同步'"
             help-text="学校名称相同但来源站点不同的组数。"
           />
         </section>
@@ -57,7 +57,7 @@
             <div class="section-head compact">
               <div>
                 <h3>当前口径</h3>
-                <p>先说明这页数字来自哪里，避免把文档基线、应用侧 fallback 和 live 表结果混在一起理解。</p>
+                <p>先说明这页数字来自哪里，避免把冻结基线、只读库和应用侧数据混在一起理解。</p>
               </div>
             </div>
             <div class="overview-copy">
@@ -66,8 +66,8 @@
                 <span>{{ formatSourceMode(overview.source_mode) }}</span>
               </div>
               <p>
-                最近更新时间：{{ overview.last_updated_at || "待 handoff" }}；
-                最近批次：{{ overview.recent_batch_label || "待 handoff" }}；
+                最近更新时间：{{ overview.last_updated_at || "待同步" }}；
+                最近批次：{{ overview.recent_batch_label || "待同步" }}；
                 文档冻结时间：{{ overview.generated_at || "待确认" }}
               </p>
             </div>
@@ -109,7 +109,7 @@
           <div class="section-head">
             <div>
               <h3>核心表统计</h3>
-              <p>当前把 DB RC1 handoff 指标和应用侧可复用表放在一起看，方便区分“正式只读基线”和“当前前端已接上的模型”。</p>
+              <p>当前把高考只读库指标和应用侧可复用表放在一起看，方便区分“原始数据已到位”和“页面已能直接使用”。</p>
             </div>
           </div>
           <div class="table-shell">
@@ -182,6 +182,12 @@
                 <span>{{ dataHealth.generated_at || "待检查" }}</span>
               </div>
               <p>主库：{{ dataHealth.db_path || "待确认" }}</p>
+              <div v-if="dataHealth.delivery_assessment" class="delivery-assessment">
+                <el-tag :type="deliveryTagType(dataHealth.delivery_assessment.status)" effect="light">
+                  {{ dataHealth.delivery_assessment.label }}
+                </el-tag>
+                <span>{{ dataHealth.delivery_assessment.summary }}</span>
+              </div>
             </div>
             <ul v-if="dataHealth.gaps.length" class="health-gap-list">
               <li v-for="gap in dataHealth.gaps" :key="gap">{{ gap }}</li>
@@ -207,12 +213,61 @@
                 </el-table-column>
                 <el-table-column label="说明" min-width="240">
                   <template #default="{ row }">
-                    {{ row.notes?.join("；") || "-" }}
+                    {{ formatTableNotes(row) }}
                   </template>
                 </el-table-column>
               </el-table>
             </div>
           </article>
+        </section>
+
+        <section class="soft-card panel-block">
+          <div class="section-head">
+            <div>
+              <h3>考生类型可用性</h3>
+              <p>把普通类、春考、艺术、体育、单招、综评分开看，避免把“有计划”误解成“有录取把握”。</p>
+            </div>
+          </div>
+          <div class="table-shell">
+            <el-table :data="dataHealth.special_type_risks" stripe>
+              <el-table-column label="考生类型" min-width="150">
+                <template #default="{ row }">
+                  <div class="table-strong">{{ row.label }}</div>
+                  <div class="table-muted">{{ row.key }}</div>
+                </template>
+              </el-table-column>
+              <el-table-column label="可用性" min-width="170">
+                <template #default="{ row }">
+                  <el-tag :type="riskLevelTagType(row.risk_level)" effect="light">
+                    {{ row.readiness_label }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="当前数据" min-width="260">
+                <template #default="{ row }">
+                  <div class="risk-count-grid">
+                    <span>计划 {{ row.plan_count || row.raw_plan_count }}</span>
+                    <span>录取 {{ row.admission_count || row.raw_admission_count }}</span>
+                    <span>省控线 {{ row.score_line_count }}</span>
+                    <span>规则 {{ row.volunteer_rule_count }} / {{ row.special_rule_count }}</span>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="初筛方式" min-width="220">
+                <template #default="{ row }">
+                  {{ formatFallbackLabels(row.fallback_labels) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="说明" min-width="360">
+                <template #default="{ row }">
+                  <p class="risk-explanation">{{ row.explanation }}</p>
+                  <ul v-if="row.notes?.length" class="audit-note-list">
+                    <li v-for="note in row.notes" :key="note">{{ note }}</li>
+                  </ul>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
         </section>
 
         <section class="soft-card panel-block">
@@ -273,7 +328,7 @@
                       size="small"
                       effect="light"
                     >
-                      {{ item.key }}：{{ item.count }}
+                      {{ item.label || item.key }}：{{ item.count }}
                     </el-tag>
                     <span v-if="!row.student_types.length" class="table-muted">无分类</span>
                   </div>
@@ -287,6 +342,19 @@
               <el-table-column label="状态" width="110">
                 <template #default="{ row }">
                   <el-tag :type="statusTagType(row.status)" effect="light">{{ formatMonitorStatus(row.status) }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="可用性说明" min-width="320">
+                <template #default="{ row }">
+                  <div class="coverage-readiness">
+                    <el-tag :type="riskLevelTagType(row.risk_level)" size="small" effect="light">
+                      {{ row.readiness_label || formatMonitorStatus(row.status) }}
+                    </el-tag>
+                    <span>{{ row.explanation }}</span>
+                  </div>
+                  <ul v-if="row.notes?.length" class="audit-note-list">
+                    <li v-for="note in row.notes" :key="note">{{ note }}</li>
+                  </ul>
                 </template>
               </el-table-column>
             </el-table>
@@ -332,7 +400,7 @@
           <div class="section-head compact">
             <div>
               <h3>审阅队列</h3>
-              <p>先看哪类问题还在队列里，再决定是等待 Windows handoff，还是只在文档层跟进。</p>
+              <p>先看哪类问题还在队列里，再决定是等待下一批数据同步，还是先在文档层记录跟进。</p>
             </div>
             <div class="action-row">
               <el-select v-model="reviewFilter" class="review-filter" placeholder="审阅状态" @change="loadReviewSummary">
@@ -349,7 +417,7 @@
                 v-model="reviewKeyword"
                 class="review-filter"
                 clearable
-                placeholder="按学校名 / code / 省份 / 招生网关键词检索"
+                placeholder="按学校名 / 学校代码 / 省份 / 招生网关键词检索"
                 @keyup.enter="loadReviewSummary"
               />
               <el-button @click="loadReviewSummary">刷新</el-button>
@@ -358,7 +426,7 @@
           <div class="review-metrics">
             <article v-for="item in reviewSummary.counts" :key="item.code" class="review-metric-card">
               <span>{{ item.title }}</span>
-              <strong>{{ item.count ?? "待 handoff" }}</strong>
+              <strong>{{ item.count ?? "待同步" }}</strong>
               <p>{{ item.description }}</p>
             </article>
           </div>
@@ -416,7 +484,7 @@
                 <el-table-column label="学校" min-width="180">
                   <template #default="{ row }">
                     <div class="table-strong">{{ row.college_name || "-" }}</div>
-                    <div class="table-muted">ID {{ row.college_id ?? "-" }} / {{ row.college_code || "无 code" }}</div>
+                    <div class="table-muted">学校 ID {{ row.college_id ?? "-" }} / {{ row.college_code || "无学校代码" }}</div>
                     <div v-if="row.duplicate_group_key || row.same_name_group_key" class="inline-tag-row">
                       <el-tag v-if="row.duplicate_group_key" size="small" effect="light" type="warning">重复组</el-tag>
                       <el-tag v-if="row.same_name_group_key" size="small" effect="light" type="info">同名组</el-tag>
@@ -514,7 +582,7 @@
             </div>
             <div class="group-section">
               <div>
-                <strong>重复组（命中 {{ reviewSummary.duplicate_groups.length }} / 全量 {{ reviewSummary.duplicate_group_total ?? "待 handoff" }}）</strong>
+                <strong>重复组（命中 {{ reviewSummary.duplicate_groups.length }} / 全量 {{ reviewSummary.duplicate_group_total ?? "待同步" }}）</strong>
                 <ul class="group-list">
                   <li v-for="item in reviewSummary.duplicate_groups" :key="`duplicate_${item.key}`">
                     <div class="group-item-copy">
@@ -603,7 +671,7 @@
                 <el-empty v-if="!reviewSummary.duplicate_groups.length" description="暂无重复组明细" />
               </div>
               <div>
-                <strong>同名跨站组（命中 {{ reviewSummary.same_name_groups.length }} / 全量 {{ reviewSummary.same_name_cross_site_group_total ?? "待 handoff" }}）</strong>
+                <strong>同名跨站组（命中 {{ reviewSummary.same_name_groups.length }} / 全量 {{ reviewSummary.same_name_cross_site_group_total ?? "待同步" }}）</strong>
                 <ul class="group-list">
                   <li v-for="item in reviewSummary.same_name_groups" :key="`same_${item.key}`">
                     <div class="group-item-copy">
@@ -701,7 +769,7 @@
           <div class="section-head compact">
             <div>
               <h3>单校证据链</h3>
-              <p>按学校名、code 或 ID 搜索，也可以从审阅表和重复组里直接跳转到单校证据链。</p>
+              <p>按学校名、学校代码或学校 ID 搜索，也可以从审阅表和重复组里直接跳转到单校证据链。</p>
             </div>
             <div class="action-row">
               <el-autocomplete
@@ -711,7 +779,7 @@
                 :fetch-suggestions="fetchEvidenceSuggestions"
                 :loading="evidenceSearchLoading"
                 :trigger-on-focus="true"
-                placeholder="输入学校名 / code / ID，例如 山东示例大学 或 101"
+                placeholder="输入学校名 / 学校代码 / 学校 ID，例如 山东示例大学 或 101"
                 @input="handleEvidenceKeywordInput"
                 @select="handleEvidenceSuggestionSelect"
               >
@@ -719,7 +787,7 @@
                   <div class="evidence-suggestion">
                     <div class="table-strong">{{ item.college_name || `学校 ${item.college_id}` }}</div>
                     <div class="table-muted">
-                      ID {{ item.college_id }} / {{ item.college_code || "无 code" }} / {{ item.province || "省份待确认" }}
+                      学校 ID {{ item.college_id }} / {{ item.college_code || "无学校代码" }} / {{ item.province || "省份待确认" }}
                     </div>
                   </div>
                 </template>
@@ -736,16 +804,16 @@
           />
           <el-empty
             v-if="!evidence && !evidenceLoading && !evidenceError"
-            description="输入学校名、code 或 ID 后可查看证据链；如果当前只有应用侧主档，也会明确提示哪些字段仍待 handoff。"
+            description="输入学校名、学校代码或学校 ID 后可查看证据链；如果当前只有应用侧主档，也会明确提示哪些字段仍待同步。"
           />
           <article v-else-if="evidence" class="evidence-panel">
             <div class="evidence-head">
               <div>
                 <h3>{{ evidence.college_name || `学校 ${evidence.college_id}` }}</h3>
-                <p>{{ evidence.college_code || "无 code" }} · {{ evidence.province || "省份待确认" }}</p>
+                <p>{{ evidence.college_code || "无学校代码" }} · {{ evidence.province || "省份待确认" }}</p>
               </div>
               <el-tag :type="evidence.source_available ? 'success' : 'warning'" effect="light">
-                {{ evidence.source_available ? formatSourceMode(evidence.source_mode) : "Fallback" }}
+                {{ evidence.source_available ? formatSourceMode(evidence.source_mode) : "应用侧补充数据" }}
               </el-tag>
             </div>
             <el-alert
@@ -758,35 +826,35 @@
             <div class="evidence-grid">
               <div class="evidence-item">
                 <span>官方站</span>
-                <strong>{{ evidence.official_site || "待 handoff" }}</strong>
+                <strong>{{ evidence.official_site || "待同步" }}</strong>
               </div>
               <div class="evidence-item">
                 <span>招生网</span>
-                <strong>{{ evidence.recruit_site || "待 handoff" }}</strong>
+                <strong>{{ evidence.recruit_site || "待同步" }}</strong>
               </div>
               <div class="evidence-item">
                 <span>章程入口</span>
-                <strong>{{ evidence.chapter_url || "待 handoff" }}</strong>
+                <strong>{{ evidence.chapter_url || "待同步" }}</strong>
               </div>
               <div class="evidence-item">
-                <span>fallback_url</span>
-                <strong>{{ evidence.fallback_url || "待 handoff" }}</strong>
+                <span>备用链接</span>
+                <strong>{{ evidence.fallback_url || "待同步" }}</strong>
               </div>
               <div class="evidence-item">
                 <span>来源链接</span>
-                <strong>{{ evidence.source_url || "待 handoff" }}</strong>
+                <strong>{{ evidence.source_url || "待同步" }}</strong>
               </div>
               <div class="evidence-item">
                 <span>来源标题</span>
-                <strong>{{ evidence.source_title || "待 handoff" }}</strong>
+                <strong>{{ evidence.source_title || "待同步" }}</strong>
               </div>
               <div class="evidence-item">
                 <span>审阅状态</span>
-                <strong>{{ evidence.review_status || "待 handoff" }}</strong>
+                <strong>{{ evidence.review_status || "待同步" }}</strong>
               </div>
               <div class="evidence-item">
                 <span>抓取状态</span>
-                <strong>{{ evidence.retrieval_status || "待 handoff" }}</strong>
+                <strong>{{ evidence.retrieval_status || "待同步" }}</strong>
               </div>
             </div>
             <ul v-if="evidence.notes.length" class="note-list">
@@ -809,7 +877,7 @@
             <article class="review-metric-card">
               <span>已接入板块</span>
               <strong>{{ shandongMonitor.ready_section_total }}</strong>
-              <p>当前可直接展示或已有应用侧 fallback 的山东板块数。</p>
+              <p>当前可直接展示或已有应用侧补充口径的山东板块数。</p>
             </article>
             <article class="review-metric-card">
               <span>待补齐板块</span>
@@ -832,8 +900,8 @@
                 <el-tag :type="statusTagType(item.status)" effect="light">{{ formatMonitorStatus(item.status) }}</el-tag>
               </div>
               <div class="monitor-card-value">{{ item.record_total }}</div>
-              <p>最近时间：{{ item.latest_updated_at || "待 handoff" }}</p>
-              <p>批次：{{ item.latest_batch_label || "待 handoff" }}</p>
+              <p>最近时间：{{ item.latest_updated_at || "待同步" }}</p>
+              <p>批次：{{ item.latest_batch_label || "待同步" }}</p>
               <ul v-if="item.notes.length" class="note-list compact">
                 <li v-for="note in item.notes" :key="note">{{ note }}</li>
               </ul>
@@ -869,6 +937,7 @@ import {
   type GaokaoOverviewGapCard,
   type GaokaoOverviewTableStat as GaokaoTableStat,
 } from "../utils/gaokaoOverview";
+import { formatUserActionError } from "../utils/userFeedback";
 
 interface GaokaoDataOverview {
   source_mode: string;
@@ -902,11 +971,13 @@ interface GaokaoDataHealthTable {
   label: string;
   count: number;
   status: string;
+  explanation?: string | null;
   notes: string[];
 }
 
 interface GaokaoDataHealthType {
   key: string;
+  label?: string | null;
   count: number;
 }
 
@@ -925,6 +996,11 @@ interface GaokaoDataHealthCoverage {
   total: number;
   years: number[];
   missing_years: number[];
+  readiness: string;
+  readiness_label?: string | null;
+  risk_level: string;
+  explanation?: string | null;
+  notes: string[];
   student_types: GaokaoDataHealthType[];
   batch_distribution: GaokaoDataHealthType[];
   year_breakdown: GaokaoDataHealthYearBreakdown[];
@@ -942,6 +1018,40 @@ interface GaokaoDataAuditItem {
   notes: string[];
 }
 
+interface GaokaoDataFieldExplanation {
+  field: string;
+  label: string;
+  explanation: string;
+}
+
+interface GaokaoDataDeliveryAssessment {
+  status: string;
+  label: string;
+  summary: string;
+  pass_items: string[];
+  warning_items: string[];
+  blocking_items: string[];
+}
+
+interface GaokaoDataSpecialTypeRisk {
+  key: string;
+  label: string;
+  readiness: string;
+  readiness_label: string;
+  risk_level: string;
+  plan_count: number;
+  raw_plan_count: number;
+  admission_count: number;
+  raw_admission_count: number;
+  score_line_count: number;
+  volunteer_rule_count: number;
+  special_rule_count: number;
+  fallback_modes: string[];
+  fallback_labels: string[];
+  explanation: string;
+  notes: string[];
+}
+
 interface GaokaoDataHealth {
   db_path: string;
   exists: boolean;
@@ -949,8 +1059,11 @@ interface GaokaoDataHealth {
   schema_version?: string | null;
   province: string;
   expected_years: number[];
+  field_explanations: GaokaoDataFieldExplanation[];
+  delivery_assessment?: GaokaoDataDeliveryAssessment | null;
   tables: GaokaoDataHealthTable[];
   coverage: GaokaoDataHealthCoverage[];
+  special_type_risks: GaokaoDataSpecialTypeRisk[];
   audit_summary: GaokaoDataAuditItem[];
   gaps: string[];
   summary: string;
@@ -1128,8 +1241,11 @@ const dataHealth = reactive<GaokaoDataHealth>({
   schema_version: null,
   province: "山东",
   expected_years: [],
+  field_explanations: [],
+  delivery_assessment: null,
   tables: [],
   coverage: [],
+  special_type_risks: [],
   audit_summary: [],
   gaps: [],
   summary: "",
@@ -1232,7 +1348,7 @@ async function searchEvidenceColleges(query: string): Promise<GaokaoCollegeOptio
     evidenceCollegeOptions.value = payload;
     return payload;
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : "学校候选加载失败");
+    ElMessage.error(formatUserActionError("搜索学校候选", error, "请减少关键词长度，或直接输入学校 ID 后查看。"));
     evidenceCollegeOptions.value = [];
     return [];
   } finally {
@@ -1276,7 +1392,7 @@ async function loadEvidence(): Promise<void> {
     if (!collegeId) {
       evidenceError.value = evidenceKeyword.value.trim()
         ? "请输入学校 ID，或从候选列表中选择学校。"
-        : "请输入学校名、code 或学校 ID。";
+        : "请输入学校名、学校代码或学校 ID。";
       evidence.value = null;
       return;
     }
@@ -1299,7 +1415,7 @@ async function loadEvidence(): Promise<void> {
     }
   } catch (error) {
     evidence.value = null;
-    evidenceError.value = error instanceof Error ? error.message : "证据链加载失败";
+    evidenceError.value = formatUserActionError("加载单校证据链", error, "请换用学校代码或从候选列表选择学校后重试。");
   } finally {
     evidenceLoading.value = false;
   }
@@ -1336,8 +1452,8 @@ async function openEvidenceForCollege(
 function formatSourceMode(value?: string | null): string {
   const mapping: Record<string, string> = {
     doc_baseline: "同步板冻结基线",
-    db_rc1_live: "本地 RC1 只读表",
-    app_model_fallback: "应用侧主档 fallback",
+    db_rc1_live: "本地高考只读库",
+    app_model_fallback: "应用侧主档补充",
     mixed_read_only: "混合只读视图",
   };
   return (value ? mapping[value] : null) ?? "待确认";
@@ -1367,7 +1483,7 @@ function formatMonitorStatus(value?: string | null): string {
     missing: "缺失",
     ready: "已接入",
     partial: "部分可用",
-    waiting: "待 handoff",
+    waiting: "待同步",
     empty: "暂无数据",
     no_year_column: "缺年份列",
   };
@@ -1382,12 +1498,38 @@ function statusTagType(value?: string | null): "success" | "info" | "warning" | 
   return undefined;
 }
 
+function deliveryTagType(value?: string | null): "success" | "info" | "warning" | "danger" | undefined {
+  if (value === "pass") return "success";
+  if (value === "warning") return "warning";
+  if (value === "blocked") return "danger";
+  return "info";
+}
+
+function riskLevelTagType(value?: string | null): "success" | "info" | "warning" | "danger" | undefined {
+  if (value === "normal") return "success";
+  if (value === "warning") return "warning";
+  if (value === "blocking") return "danger";
+  return "info";
+}
+
 function formatYearList(years?: number[]): string {
   return years?.length ? years.join("、") : "无";
 }
 
 function formatDistribution(items?: GaokaoDataHealthType[], emptyText = "无"): string {
-  return items?.length ? items.map((item) => `${item.key}：${item.count}`).join("；") : emptyText;
+  return items?.length ? items.map((item) => `${item.label || item.key}：${item.count}`).join("；") : emptyText;
+}
+
+function formatFallbackLabels(items?: string[]): string {
+  return items?.length ? items.join("；") : "无初筛兜底";
+}
+
+function formatTableNotes(row: GaokaoDataHealthTable): string {
+  const parts = [...(row.notes || [])];
+  if (row.explanation) {
+    parts.unshift(row.explanation);
+  }
+  return parts.length ? parts.join("；") : "-";
 }
 
 function formatReviewFilter(value?: string | null): string {
@@ -1477,7 +1619,7 @@ function formatGroupChapterCell(member: GaokaoReviewGroupMember): string {
   if (!chapterValue) return "待补齐";
   const label = formatGroupCompareCell(chapterValue);
   if (!member.chapter_url && member.fallback_url) {
-    return `${label}（fallback）`;
+    return `${label}（备用）`;
   }
   return label;
 }
@@ -1486,7 +1628,7 @@ onMounted(async () => {
   try {
     await reloadAll();
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : "高考数据驾驶舱加载失败");
+    ElMessage.error(formatUserActionError("加载高考数据驾驶舱", error, "确认本地服务已启动后点击“刷新驾驶舱”。"));
   }
 });
 </script>
@@ -1814,6 +1956,33 @@ onMounted(async () => {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.delivery-assessment,
+.coverage-readiness {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: #667c90;
+  line-height: 1.55;
+}
+
+.coverage-readiness {
+  margin-bottom: 6px;
+}
+
+.risk-count-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+  color: #5f768a;
+  font-size: 13px;
+}
+
+.risk-explanation {
+  margin: 0 0 8px;
+  color: #526a7f;
+  line-height: 1.55;
 }
 
 .coverage-detail-table {

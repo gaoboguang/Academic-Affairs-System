@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from zipfile import BadZipFile
 
 from fastapi import HTTPException
+from openpyxl.utils.exceptions import InvalidFileException
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -275,9 +277,12 @@ def import_teachers(
     job = create_import_job(session, "teachers", filename)
     job.started_at = datetime.now()
     importer = TeacherImporter(session, settings)
-    result = importer.execute(filename=filename, content=content, strategy=strategy)
+    try:
+        result = importer.execute(filename=filename, content=content, strategy=strategy)
+    except (ValueError, InvalidFileException, BadZipFile) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     job.finished_at = datetime.now()
-    job.status = "success" if result.failed_rows == 0 else "partial_success"
+    job.status = result.status
     job.result_json = result.model_dump()
     write_audit_log(
         session,

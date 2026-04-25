@@ -48,6 +48,7 @@
           v-model:unresolvedOnly="unresolvedOnly"
           :file-input-key="fileInputKey"
           :selected-timetable-file-name="selectedTimetableFile?.name ?? ''"
+          :import-result="timetableImportResult"
           :importing="importing"
           :can-import="Boolean(selectedTimetableFile && selectedSemesterId)"
           :timetable-batches="timetableBatches"
@@ -138,6 +139,7 @@ const {
   selectedBatchId,
   unresolvedOnly,
   selectedTimetableFile,
+  timetableImportResult,
   fileInputKey,
   importRemark,
   importing,

@@ -235,13 +235,7 @@
         </el-upload>
         <el-button @click="reloadBatches">刷新批次</el-button>
       </div>
-      <el-alert
-        v-if="importResult"
-        :title="importResult.message"
-        type="success"
-        show-icon
-        :closable="false"
-      />
+      <ImportFeedbackPanel :result="importResult" />
       <el-table :data="scoreBatches" stripe style="margin-top: 16px">
         <el-table-column label="批次 ID" prop="id" width="90" />
         <el-table-column label="来源文件" prop="source_filename" min-width="180" />
@@ -266,6 +260,7 @@ import ElMessage from "element-plus/es/components/message/index";
 import type { UploadFile } from "element-plus";
 
 import { apiRequest, openFile, uploadFile } from "../api/client";
+import ImportFeedbackPanel from "../components/common/ImportFeedbackPanel.vue";
 import {
   buildExamSubjectOptions,
   getExamSubjectDefaultFullScore,
@@ -275,6 +270,7 @@ import {
   type ExamSubjectOption,
 } from "../components/exams/examSubjectConfig";
 import { useReferenceStore } from "../stores/reference";
+import { formatImportStatus, importStatusTagType, type ImportFeedbackResult } from "../utils/importFeedback";
 
 interface ExamItem {
   id: number;
@@ -318,11 +314,6 @@ interface ScoreBatch {
   status: string;
 }
 
-interface ImportResult {
-  message: string;
-  batch_id: number;
-}
-
 const referenceStore = useReferenceStore();
 const dialogVisible = ref(false);
 const subjectsDialogVisible = ref(false);
@@ -333,7 +324,7 @@ const importExamId = ref<number | null>(null);
 const savingExam = ref(false);
 const savingSubjects = ref(false);
 const importStrategy = ref("overwrite");
-const importResult = ref<ImportResult | null>(null);
+const importResult = ref<(ImportFeedbackResult & { batch_id: number }) | null>(null);
 
 const filters = reactive({
   name: "",
@@ -394,20 +385,11 @@ function examStatusType(status: string): "info" | "success" | "warning" {
 }
 
 function formatScoreBatchStatus(status: string): string {
-  const mapping: Record<string, string> = {
-    processing: "处理中",
-    success: "成功",
-    partial_success: "部分成功",
-    failed: "失败",
-  };
-  return mapping[status] ?? status;
+  return formatImportStatus(status);
 }
 
 function scoreBatchStatusType(status: string): "info" | "success" | "warning" | "danger" {
-  if (status === "success") return "success";
-  if (status === "partial_success") return "warning";
-  if (status === "failed") return "danger";
-  return "info";
+  return importStatusTagType(status);
 }
 
 function resetExamForm(): void {
@@ -583,7 +565,7 @@ async function openImport(row: ExamItem): Promise<void> {
 async function handleImport(uploadFileItem: UploadFile): Promise<void> {
   if (!uploadFileItem.raw || !importExamId.value) return;
   try {
-    importResult.value = await uploadFile<ImportResult>(
+    importResult.value = await uploadFile<ImportFeedbackResult & { batch_id: number }>(
       `/api/exams/${importExamId.value}/scores/import`,
       uploadFileItem.raw,
       {
@@ -591,7 +573,10 @@ async function handleImport(uploadFileItem: UploadFile): Promise<void> {
         rebuild: "true",
       },
     );
-    ElMessage.success(importResult.value.message);
+    ElMessage({
+      type: importResult.value.failed_rows ? "warning" : "success",
+      message: importResult.value.message,
+    });
     await reloadBatches();
   } catch (error) {
     ElMessage.error((error as Error).message);

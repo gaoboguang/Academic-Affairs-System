@@ -15,6 +15,7 @@
         </div>
       </div>
       <div class="action-row">
+        <el-button @click="router.push('/import-center')">导入中心</el-button>
         <el-button @click="router.push('/system-tools')">系统设置</el-button>
         <el-button type="primary" @click="reload">刷新概况</el-button>
       </div>
@@ -119,7 +120,9 @@
           <h3>最近导入</h3>
           <p>展示最近几次导入的类型、状态和来源文件，便于回看最近操作。</p>
         </div>
-        <span class="panel-caption">最近 {{ summary.recent_imports.length }} 条</span>
+        <el-button link type="primary" @click="router.push('/import-center')">
+          查看导入中心
+        </el-button>
       </div>
       <div class="table-shell">
         <el-table :data="recentImportRows" stripe>
@@ -151,6 +154,7 @@ import { useRouter } from "vue-router";
 
 import { apiRequest } from "../api/client";
 import MetricCard from "../components/MetricCard.vue";
+import { formatImportStatus as formatUnifiedImportStatus, importStatusTagType } from "../utils/importFeedback";
 
 interface ImportJob {
   id: number;
@@ -197,6 +201,7 @@ const quickActions = [
   { label: "基础数据", help: "维护学年、班级、字典和主数据。", path: "/base-data" },
   { label: "学生中心", help: "维护学生台账、导入导出和详情。", path: "/students" },
   { label: "考试成绩", help: "创建考试并导入成绩数据。", path: "/exams" },
+  { label: "导入中心", help: "查看模板、批次和错误报告。", path: "/import-center" },
   { label: "分析中心", help: "查看学生、班级和教师分析结果。", path: "/analytics" },
   { label: "课表工作量", help: "处理课表导入、修正和工作量计算。", path: "/workload" },
   { label: "升学推荐", help: "维护录取库并生成推荐方案。", path: "/recommendations" },
@@ -204,23 +209,33 @@ const quickActions = [
 
 const importJobTypeLabels: Record<string, string> = {
   student_import: "学生导入",
+  students: "学生导入",
   teacher_import: "教师导入",
+  teachers: "教师导入",
   exam_score_import: "成绩导入",
   score_import: "成绩导入",
+  scores: "成绩导入",
   timetable_import: "课表导入",
+  timetable: "课表导入",
   admission_import: "录取数据导入",
+  admissions: "录取数据导入",
+  enrollment_plans: "招生计划导入",
   evaluation_import: "评教导入",
+  evaluation: "评教导入",
   archive_import: "档案导入",
 };
 
 const importStatusLabels: Record<string, string> = {
   pending: "待处理",
+  running: "处理中",
   processing: "处理中",
   success: "成功",
+  partially_failed: "部分成功",
   partial_success: "部分成功",
   completed: "已完成",
   completed_with_unresolved: "待修正",
   failed: "失败",
+  rolled_back: "已回滚",
 };
 
 const summary = reactive<DashboardSummary>({
@@ -264,14 +279,11 @@ function formatImportJobType(jobType: string): string {
 }
 
 function formatImportStatus(status: string): string {
-  return importStatusLabels[status] ?? status.replace(/_/g, " ");
+  return importStatusLabels[status] ?? formatUnifiedImportStatus(status);
 }
 
 function formatImportStatusType(status: string): "success" | "warning" | "danger" | "info" {
-  if (status === "success" || status === "completed") return "success";
-  if (status === "partial_success" || status === "completed_with_unresolved") return "warning";
-  if (status === "failed") return "danger";
-  return "info";
+  return importStatusTagType(status);
 }
 
 async function reload(): Promise<void> {

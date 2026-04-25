@@ -93,28 +93,38 @@ def test_data_health_report_marks_p0_gaps(tmp_path: Path) -> None:
 
     assert report["exists"] is True
     assert report["schema_version"] == "20260424_0015_special_type_rule_schema"
+    assert report["field_explanations"]
+    assert report["delivery_assessment"]["status"] == "blocked"
     assert any("特殊类型已有招生计划但缺专门录取结果" in item for item in report["gaps"])
     assert any("一分一段缺少年份" in item for item in report["gaps"])
     assert any(item["key"] == "gaokao_policy_reference" and item["status"] == "gap" for item in report["tables"])
     assert report["expected_years"] == [2020, 2021, 2022, 2023, 2024, 2025]
     enrollment_coverage = next(item for item in report["coverage"] if item["key"] == "enrollment_plan")
     assert enrollment_coverage["missing_years"] == [2020, 2021, 2022, 2023, 2024]
+    assert enrollment_coverage["readiness"] == "partial"
+    assert enrollment_coverage["explanation"]
     assert enrollment_coverage["batch_distribution"] == [
-        {"key": "常规批", "count": 1},
-        {"key": "艺术类本科批", "count": 1},
+        {"key": "常规批", "label": "常规批", "count": 1},
+        {"key": "艺术类本科批", "label": "艺术类本科批", "count": 1},
     ]
     assert enrollment_coverage["year_breakdown"][0]["year"] == 2025
     assert enrollment_coverage["year_breakdown"][0]["batches"] == [
-        {"key": "常规批", "count": 1},
-        {"key": "艺术类本科批", "count": 1},
+        {"key": "常规批", "label": "常规批", "count": 1},
+        {"key": "艺术类本科批", "label": "艺术类本科批", "count": 1},
     ]
+    art_risk = next(item for item in report["special_type_risks"] if item["key"] == "art")
+    assert art_risk["readiness"] == "screening_only"
+    assert "缺少该类型专门录取结果" in art_risk["notes"][0]
     admission_audit = next(item for item in report["audit_summary"] if item["key"] == "admission_record")
     assert admission_audit["status"] == "gap"
     assert admission_audit["updated"] == 1
     assert admission_audit["pending_review"] == 0
     assert any("仅可做初筛" in note for note in admission_audit["notes"])
-    assert "数据健康检查" in format_data_health_report(report)
-    assert "导入审计摘要" in format_data_health_report(report)
+    formatted_report = format_data_health_report(report)
+    assert "数据健康检查" in formatted_report
+    assert "P0 交付判断" in formatted_report
+    assert "考生类型可用性" in formatted_report
+    assert "导入审计摘要" in formatted_report
 
 
 def test_data_health_report_handles_missing_database(tmp_path: Path) -> None:

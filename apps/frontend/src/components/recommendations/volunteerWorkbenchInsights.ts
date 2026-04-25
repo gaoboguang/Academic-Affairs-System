@@ -161,6 +161,22 @@ export function buildVolunteerBoundaryInsightCards(
       && !normalizeOptionalString(item.matched_rule_candidate_type ?? ""),
   ).length;
 
+  const generalReferenceFallbackCount = candidates.filter((item) =>
+    item.risk_flags_json.includes("general_reference_fallback"),
+  ).length;
+  if (generalReferenceFallbackCount) {
+    const fallbackAlert = alertMap.get("fallback_general_reference_data");
+    cards.push({
+      key: "general_reference_fallback",
+      title: fallbackAlert?.title ?? "普通类录取参考回退",
+      summary: `${generalReferenceFallbackCount} 条候选当前按普通类录取结果参考`,
+      detail:
+        fallbackAlert?.detail
+        ?? "这类结果说明当前缺少该类别专门录取结果，只能先借普通类录取结果做方向性筛选；正式填报前仍需结合该类别公告、批次规则和学校章程再复核。",
+      tone: fallbackAlert?.level === "warning" ? "warning" : "info",
+    });
+  }
+
   const collegeFallbackCount = candidates.filter((item) => item.reference_scope === "college" && item.major_id).length;
   if (collegeFallbackCount) {
     cards.push({
@@ -401,6 +417,22 @@ export function buildVolunteerDraftBoundaryInsightCards(
     });
   }
 
+  const generalReferenceFallbackCount = candidates.filter((item) =>
+    item.risk_flags_json.includes("general_reference_fallback"),
+  ).length;
+  if (generalReferenceFallbackCount) {
+    const fallbackAlert = alertMap.get("fallback_general_reference_data");
+    cards.push({
+      key: "general_reference_fallback",
+      title: fallbackAlert?.title ?? "草稿内含普通类录取参考回退",
+      summary: `${generalReferenceFallbackCount} 条已选志愿当前按普通类录取结果参考`,
+      detail:
+        fallbackAlert?.detail
+        ?? "这类志愿说明当前缺少该类别专门录取结果，只能先借普通类录取结果做方向性筛选；正式填报前仍需结合该类别公告、批次规则和学校章程再复核。",
+      tone: fallbackAlert?.level === "warning" ? "warning" : "info",
+    });
+  }
+
   const collegeFallbackCount = candidates.filter((item) => item.reference_scope === "college" && item.major_id).length;
   if (collegeFallbackCount) {
     cards.push({
@@ -408,6 +440,28 @@ export function buildVolunteerDraftBoundaryInsightCards(
       title: "草稿内含院校线回退",
       summary: `${collegeFallbackCount} 条已选志愿缺少专业线，只能先按院校线参考`,
       detail: "同校不同专业的真实录取难度仍可能继续分化，最终定稿前应结合专业线或章程再核对一次。",
+      tone: "warning",
+    });
+  }
+
+  const scoreLineReferenceCount = candidates.filter((item) => item.reference_scope === "score_line").length;
+  if (scoreLineReferenceCount) {
+    cards.push({
+      key: "score_line_reference",
+      title: "草稿内含省控线初筛",
+      summary: `${scoreLineReferenceCount} 条已选志愿当前仅按省控线做资格参考`,
+      detail: "这类志愿说明当前缺少该类别专门录取结果，只能先按山东控制线筛掉明显不满足线的计划；正式填报前仍需逐校核对录取与章程口径。",
+      tone: "warning",
+    });
+  }
+
+  const planOnlyReferenceCount = candidates.filter((item) => item.reference_scope === "plan_only").length;
+  if (planOnlyReferenceCount) {
+    cards.push({
+      key: "plan_only_reference",
+      title: "草稿内含计划清单初筛",
+      summary: `${planOnlyReferenceCount} 条已选志愿当前仅按当年招生计划做方向性初筛`,
+      detail: "这类志愿说明当前缺少该类别专门录取结果，也没有可直接复用的官方控制线；正式填报前必须结合该类别公告、章程和后续结果再复核。",
       tone: "warning",
     });
   }

@@ -36,6 +36,10 @@
             </template>
           </el-table-column>
         </el-table>
+        <el-empty
+          v-if="!ruleVersions.length"
+          description="还没有量化规则版本。请先新增规则版本，再配置规则项。"
+        />
       </div>
 
       <div class="soft-card inner-card">
@@ -93,6 +97,11 @@
             </template>
           </el-table-column>
         </el-table>
+        <el-empty
+          v-if="selectedRuleVersionId && !ruleItemRows.length"
+          description="当前规则版本还没有规则项。请点击“新增规则项”后保存。"
+        />
+        <el-empty v-if="!selectedRuleVersionId" description="请先在左侧选择一个规则版本" />
       </div>
     </div>
   </section>

@@ -80,6 +80,12 @@ def test_volunteer_draft_export_includes_missing_rule_and_general_rule_summaries
                   "title": "已回退到通用考生规则",
                   "detail": "当前未配置“general”专用规则，先按通用考生规则预览。",
               },
+              {
+                  "code": "fallback_general_reference_data",
+                  "level": "info",
+                  "title": "已回退到普通类录取参考",
+                  "detail": "当前缺少“spring_exam”专门录取结果，已先回退参考普通类录取结果；正式填报前建议结合学校公告和类别专门批次再复核。",
+              },
           ],
           "applicable_rules": [
               {
@@ -184,6 +190,8 @@ def test_volunteer_draft_export_includes_missing_rule_and_general_rule_summaries
               matched_rule_candidate_type="",
               matched_rule_is_baseline=False,
               match_tags_json=["专业线参考"],
+              student_type="spring_exam",
+              risk_flags_json=["general_reference_fallback"],
           ),
         build_candidate_row(
             order=3,
@@ -228,6 +236,7 @@ def test_volunteer_draft_export_includes_missing_rule_and_general_rule_summaries
     ]
     assert ("缺少目标年份规则", "1 条已选志愿当前缺少目标年份规则支撑", "当前未找到 广东 2025 年省份规则；该省现有 2026 年规则，志愿上限与单位类型需按当年公告人工复核。") in boundary_rows
     assert ("已回退到通用考生规则", "1 条已选志愿当前按通用考生规则解释", "当前未配置“general”专用规则，先按通用考生规则预览。") in boundary_rows
+    assert ("已回退到普通类录取参考", "1 条已选志愿当前按普通类录取结果参考", "当前缺少“spring_exam”专门录取结果，已先回退参考普通类录取结果；正式填报前建议结合学校公告和类别专门批次再复核。") in boundary_rows
     assert ("类别专用规则口径", "2 条已选志愿当前按普通类专用规则解释", "当前命中的省份规则已细分到普通类；同省同年其他类别可能适用不同的志愿上限、单位结构和选科口径。") in boundary_rows
     assert ("跨年份参考样本", "4 条已选志愿最近录取样本分布在 2025 / 2024 / 2023 年", "这些志愿当前涉及 广东 / 四川 等多个口径，最近录取样本也并非同一年；跨省或跨年份比较时，录取位次、最低分和冲稳保分组变化属于正常现象。") in boundary_rows
     assert ("跨省口径差异", "2 个省份口径混合", "这些志愿当前涉及 广东 / 四川 等多个口径，跨省比较时，录取位次、最低分和冲稳保分组变化属于正常现象。") in boundary_rows
@@ -256,6 +265,12 @@ def test_volunteer_draft_export_includes_missing_rule_and_general_rule_summaries
     ) in overview_rows
     assert (
         "边界概览",
+        "已回退到普通类录取参考",
+        "1 条已选志愿当前按普通类录取结果参考",
+        "当前缺少“spring_exam”专门录取结果，已先回退参考普通类录取结果；正式填报前建议结合学校公告和类别专门批次再复核。",
+    ) in overview_rows
+    assert (
+        "边界概览",
         "跨省口径差异",
         "2 个省份口径混合",
         "这些志愿当前涉及 广东 / 四川 等多个口径，跨省比较时，录取位次、最低分和冲稳保分组变化属于正常现象。",
@@ -272,6 +287,9 @@ def test_volunteer_draft_export_includes_missing_rule_and_general_rule_summaries
     assert "当前录取参考最近只到 2023 年，与 2026 目标年相差 3 年" in str(detail_sheet.cell(row=2, column=17).value)
     assert "通用规则" in str(detail_sheet.cell(row=3, column=15).value)
     assert "当前未配置“general”专用规则" in str(detail_sheet.cell(row=3, column=17).value)
+    assert "普通类录取结果做方向性参考" in str(detail_sheet.cell(row=3, column=17).value)
+    assert detail_sheet.cell(row=3, column=23).value == "缺少专门录取结果，按普通类参考"
+    assert detail_sheet.cell(row=5, column=23).value == "需复核选科要求"
 
 
 def test_recommendation_export_includes_stale_reference_year_summary(test_settings) -> None:
@@ -305,7 +323,7 @@ def test_recommendation_export_includes_stale_reference_year_summary(test_settin
                 "requires_long_training_path": False,
                 "career_match_summary": "测试职业说明",
                 "reason_text": "测试结果",
-                "risk_flags_json": [],
+                "risk_flags_json": ["sample_insufficient", "rank_missing"],
                 "snapshot_json": {
                     "reference_years": [2023],
                 },
@@ -316,6 +334,7 @@ def test_recommendation_export_includes_stale_reference_year_summary(test_settin
     workbook = load_exported_workbook(export_path, test_settings.project_root)
     risk_sheet = workbook["风险概览"]
     overview_sheet = workbook["导出前摘要"]
+    detail_sheet = workbook["推荐结果"]
     risk_rows = [
         (
             risk_sheet.cell(row=index, column=1).value,
@@ -347,6 +366,7 @@ def test_recommendation_export_includes_stale_reference_year_summary(test_settin
         "1 条结果最近录取样本与目标年份相差 2 年及以上",
         "这类推荐更适合作为方向性参考；若近一年录取数据尚未补齐，分层、排序和汇报口径都可能继续变化。",
     ) in overview_rows
+    assert detail_sheet.cell(row=2, column=13).value == "样本不足 / 缺少位次，分数参考"
 
 
 def test_recommendation_export_includes_history_comparison_rows(test_settings) -> None:

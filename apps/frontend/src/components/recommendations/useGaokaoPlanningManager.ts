@@ -5,6 +5,7 @@ import ElMessageBox from "element-plus/es/components/message-box/index";
 import type { UploadFile } from "element-plus";
 
 import { apiRequest, openFile, uploadFile } from "../../api/client";
+import { formatUserActionError } from "../../utils/userFeedback";
 import {
   createProvinceVolunteerRuleForm,
   gaokaoCandidateTypeOptions,
@@ -43,7 +44,7 @@ interface GaokaoPlanningManagerOptions {
 }
 
 function reportError(error: unknown): void {
-  ElMessage.error((error as Error).message);
+  ElMessage.error(formatUserActionError("维护高考规则或数据", error, "先确认筛选条件、导入模板或规则字段正确；如果仍失败，请刷新当前页签后重试。"));
 }
 
 function createYearOptions(values: number[]): number[] {
@@ -535,7 +536,10 @@ export function useGaokaoPlanningManager(options: GaokaoPlanningManagerOptions) 
       if (options.reloadCollegeDirectory) tasks.push(options.reloadCollegeDirectory());
       if (options.reloadMajorDirectory) tasks.push(options.reloadMajorDirectory());
       await Promise.all(tasks);
-      ElMessage.success(enrollmentPlanImportResult.value.message);
+      ElMessage({
+        type: enrollmentPlanImportResult.value.failed_rows ? "warning" : "success",
+        message: enrollmentPlanImportResult.value.message,
+      });
     } catch (error) {
       reportError(error);
     }

@@ -144,7 +144,7 @@ def import_admissions(
     importer = AdmissionImporter(session, settings)
     result, created_colleges, created_majors = importer.execute(filename=filename, content=content)
     job.finished_at = datetime.now()
-    job.status = "success" if result.failed_rows == 0 else "partial_success"
+    job.status = result.status
     job.result_json = {
         **result.model_dump(),
         "created_college_count": created_colleges,

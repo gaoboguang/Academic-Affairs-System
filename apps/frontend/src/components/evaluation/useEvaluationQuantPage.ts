@@ -4,6 +4,7 @@ import type { UploadFile } from "element-plus";
 
 import { apiRequest, openFile, uploadFile } from "../../api/client";
 import { useReferenceStore } from "../../stores/reference";
+import { formatUserActionError } from "../../utils/userFeedback";
 import { formatEvaluationBatchStatus, semesterLabel } from "./helpers";
 import type {
   EvaluationBatch,
@@ -28,7 +29,7 @@ import type {
 } from "./types";
 
 function reportError(error: unknown): void {
-  ElMessage.error((error as Error).message);
+  ElMessage.error(formatUserActionError("处理评教量化", error, "先确认模板、学期、批次或规则版本已选择；如果仍失败，请刷新数据后重试。"));
 }
 
 function currentMonthValue(): string {

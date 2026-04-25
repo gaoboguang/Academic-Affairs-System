@@ -37,17 +37,7 @@ if [ ! -x ".venv/bin/python" ]; then
   echo
 fi
 
-(
-  for _ in {1..60}; do
-    if curl -s -o /dev/null http://127.0.0.1:5173; then
-      open http://127.0.0.1:5173 >/dev/null 2>&1 || true
-      exit 0
-    fi
-    sleep 1
-  done
-) &
-
-npm run dev
+npm run start:local
 STATUS=$?
 
 if [ "$STATUS" -ne 0 ]; then
@@ -56,7 +46,7 @@ if [ "$STATUS" -ne 0 ]; then
   echo
   echo "可以按下面步骤手动排查："
   echo "  cd \"$ROOT_DIR\""
-  echo "  node scripts/dev-local.cjs --help"
+  echo "  npm run start:local"
   echo "  npm run dev"
   echo
   echo "常见原因："
@@ -65,6 +55,13 @@ if [ "$STATUS" -ne 0 ]; then
   echo "- 没有创建 .venv 或没有安装后端依赖"
   echo
   echo "详细说明见 docs/mac-user-startup-guide.md。"
+  read -r "?按回车关闭窗口..."
+else
+  echo
+  echo "服务已在后台运行。"
+  echo "现在可以关闭这个窗口；页面地址仍是 http://127.0.0.1:5173"
+  echo "如需查看启动日志，请打开 data/logs/local-services/"
+  echo
   read -r "?按回车关闭窗口..."
 fi
 

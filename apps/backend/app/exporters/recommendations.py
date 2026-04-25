@@ -8,6 +8,30 @@ from app.core.config import Settings
 from app.utils.parsers import make_timestamped_filename, relative_to_project
 
 
+RECOMMENDATION_RISK_FLAG_LABELS = {
+    "sample_insufficient": "样本不足",
+    "rank_missing": "缺少位次，分数参考",
+    "general_reference_fallback": "缺少专门录取结果，按普通类参考",
+    "score_line_reference_only": "缺少专门录取结果，按省控线初筛",
+    "cross_year_score_line_reference": "省控线按跨年份参考",
+    "plan_only_reference": "缺少专门结果，仅按计划清单初筛",
+    "chapter_pending_review": "章程待补链",
+    "chapter_special_requirement": "章程限制已提取",
+    "art_recommendation": "艺体推荐",
+    "track_unconfirmed": "艺体方向待确认",
+    "manual_formula_check": "需人工核对招生章程",
+    "whitelist_override": "白名单放宽",
+    "career_mapping_pending": "职业路径映射待维护",
+    "postgraduate_path_mismatch": "与读研接受度不匹配",
+    "certificate_path_mismatch": "与资格证接受度不匹配",
+    "long_training_path_mismatch": "与长培养周期接受度不匹配",
+    "public_service_path_mismatch": "与考公考编接受度不匹配",
+    "major_baseline_missing": "专业线缺失，按院校线参考",
+    "subject_requirement_check": "需复核选科要求",
+    "simulation_mode": "模拟测算",
+}
+
+
 def export_recommendation_summary(settings: Settings, meta: dict[str, object], rows: list[dict[str, object]]) -> str:
     workbook = Workbook()
     summary = workbook.active
@@ -82,7 +106,7 @@ def export_recommendation_summary(settings: Settings, meta: dict[str, object], r
                 _build_path_hint(row),
                 row.get("career_match_summary"),
                 row.get("reason_text"),
-                ",".join(row.get("risk_flags_json") or []),
+                _format_risk_flags(row.get("risk_flags_json")),
                 _read_snapshot_value(row, "chapter_url"),
                 _read_snapshot_value(row, "chapter_review_status"),
                 _read_snapshot_value(row, "chapter_campus_note"),
@@ -206,7 +230,7 @@ def export_volunteer_draft_summary(settings: Settings, meta: dict[str, object], 
                 _build_path_hint(row),
                 row.get("career_match_summary"),
                 row.get("reason_text"),
-                ",".join(row.get("risk_flags_json") or []),
+                _format_risk_flags(row.get("risk_flags_json")),
                 row.get("chapter_url"),
                 row.get("chapter_review_status"),
                 row.get("chapter_campus_note"),
@@ -229,6 +253,17 @@ def _build_path_hint(row: dict[str, object]) -> str:
     if row.get("requires_long_training_path") is True:
         hints.append("长培养周期")
     return " / ".join(hints)
+
+
+def _format_risk_flags(flags: object) -> str:
+    if not isinstance(flags, list) or not flags:
+        return "-"
+    labels = [
+        RECOMMENDATION_RISK_FLAG_LABELS.get(str(flag), str(flag))
+        for flag in flags
+        if str(flag or "").strip()
+    ]
+    return " / ".join(labels) or "-"
 
 
 def _read_snapshot_value(row: dict[str, object], key: str) -> object:
@@ -316,6 +351,12 @@ def _build_candidate_boundary_notes(row: dict[str, object], rule_alerts: list[di
 
     if row.get("reference_scope") == "college" and row.get("major_id") is not None:
         notes.append("当前专业缺少专业线，先回退到院校线参考；同校不同专业结果仍可能变化。")
+
+    if "general_reference_fallback" in risk_flags:
+        notes.append(
+            "当前缺少该类别专门录取结果，先按普通类录取结果做方向性参考；"
+            "这不是该类别专门录取把握，正式填报前仍需结合类别公告、批次规则和学校章程复核。"
+        )
 
     if row.get("reference_scope") == "score_line":
         notes.append("当前结果只按省级控制线做资格初筛，不能直接视作院校或专业录取把握。")
@@ -665,7 +706,10 @@ def _build_volunteer_draft_overview_group_label(key: object) -> str:
     }:
         return "规则差异摘要"
     if key in {
+        "general_reference_fallback",
         "college_fallback",
+        "score_line_reference",
+        "plan_only_reference",
         "mixed_reference_years",
         "stale_reference_years",
         "cross_province",

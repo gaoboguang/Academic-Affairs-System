@@ -2,12 +2,13 @@ import { computed } from "vue";
 import ElMessage from "element-plus/es/components/message/index";
 import ElMessageBox from "element-plus/es/components/message-box/index";
 
+import { formatUserActionError } from "../../utils/userFeedback";
 import { differsFromStrategyPreset } from "./recommendationStrategy";
 import { useRecommendationStrategyPresets } from "./useRecommendationStrategyPresets";
 import { useRecommendationStrategySettings } from "./useRecommendationStrategySettings";
 
 function reportError(error: unknown): void {
-  ElMessage.error((error as Error).message);
+  ElMessage.error(formatUserActionError("应用推荐策略", error, "先确认模板仍存在；如果仍失败，请刷新策略后重试。"));
 }
 
 export function useRecommendationStrategyManager() {

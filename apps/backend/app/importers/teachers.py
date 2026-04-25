@@ -7,7 +7,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
-from app.importers.base import RowError, read_template_rows, save_error_report
+from app.importers.base import (
+    RowError,
+    build_error_preview,
+    build_row_error,
+    read_template_rows,
+    resolve_import_status,
+    save_error_report,
+)
 from app.models import DictItem, DictType, Subject, Teacher
 from app.repositories.teachers import get_teacher_by_no
 from app.schemas.common import ImportResult
@@ -76,6 +83,8 @@ class TeacherImporter:
         success_rows = 0
         failed_rows = 0
         skipped_rows = 0
+        created_rows = 0
+        updated_rows = 0
         row_errors: list[RowError] = []
 
         for row_number, row_values in rows:
@@ -89,15 +98,17 @@ class TeacherImporter:
                         skipped_rows += 1
                         continue
                     self._apply(existing, payload)
+                    updated_rows += 1
                 else:
                     teacher = Teacher(teacher_no=payload.teacher_no, name=payload.name)
                     self.session.add(teacher)
                     self.session.flush()
                     self._apply(teacher, payload)
+                    created_rows += 1
                 success_rows += 1
             except Exception as exc:
                 failed_rows += 1
-                row_errors.append(RowError(row_number=row_number, values=row_values, message=str(exc)))
+                row_errors.append(build_row_error(row_number=row_number, values=row_values, message=str(exc)))
 
         error_report_path = save_error_report(
             settings=self.settings,
@@ -106,11 +117,19 @@ class TeacherImporter:
             errors=row_errors,
         )
         return ImportResult(
+            status=resolve_import_status(
+                total_rows=len(rows),
+                success_rows=success_rows,
+                failed_rows=failed_rows,
+            ),
             total_rows=len(rows),
             success_rows=success_rows,
             failed_rows=failed_rows,
             skipped_rows=skipped_rows,
+            created_rows=created_rows,
+            updated_rows=updated_rows,
             error_report_path=error_report_path,
+            error_preview=build_error_preview(row_errors),
             message=f"教师导入完成，成功 {success_rows} 条，失败 {failed_rows} 条。",
         )
 
@@ -166,4 +185,3 @@ class TeacherImporter:
         teacher.employment_status = payload.employment_status
         teacher.entry_date = payload.entry_date
         teacher.note = payload.note
-

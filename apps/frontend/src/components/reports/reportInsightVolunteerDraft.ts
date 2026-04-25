@@ -19,7 +19,10 @@ const VOLUNTEER_DRAFT_RULE_CARD_KEYS = new Set([
 ]);
 
 const VOLUNTEER_DRAFT_BOUNDARY_CARD_KEYS = new Set([
+  "general_reference_fallback",
   "college_fallback",
+  "score_line_reference",
+  "plan_only_reference",
   "mixed_reference_years",
   "stale_reference_years",
   "cross_province",

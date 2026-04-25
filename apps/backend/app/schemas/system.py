@@ -70,6 +70,64 @@ class SystemTemplateRead(BaseModel):
     download_url: str
 
 
+class ImportCenterTemplateRead(BaseModel):
+    job_type: str
+    job_type_label: str
+    template_name: str
+    file_name: str
+    download_url: str
+    business_path: str
+    guidance: str
+
+
+class ImportCenterSummaryRead(BaseModel):
+    total_batches: int = 0
+    failed_batches: int = 0
+    partial_batches: int = 0
+    error_report_count: int = 0
+
+
+class ImportCenterBatchRead(BaseModel):
+    id: str
+    numeric_id: int
+    source_type: str
+    source_type_label: str
+    job_type: str
+    job_type_label: str
+    source_filename: str | None = None
+    status: str
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    total_rows: int | None = None
+    success_rows: int | None = None
+    failed_rows: int | None = None
+    skipped_rows: int = 0
+    created_rows: int = 0
+    updated_rows: int = 0
+    error_report_path: str | None = None
+    business_path: str
+    template_download_url: str | None = None
+    rollback_supported: bool = False
+    rollback_hint: str
+    detail_summary: str
+
+
+class ImportCenterBatchDetailRead(BaseModel):
+    batch: ImportCenterBatchRead
+    result_json: dict | None = None
+    audit_logs: list[AuditLogRead] = Field(default_factory=list)
+    error_preview: list[str] = Field(default_factory=list)
+    notice_preview: list[str] = Field(default_factory=list)
+    rollback_steps: list[str] = Field(default_factory=list)
+
+
+class ImportCenterResponse(BaseModel):
+    generated_at: datetime
+    summary: ImportCenterSummaryRead
+    templates: list[ImportCenterTemplateRead] = Field(default_factory=list)
+    batches: list[ImportCenterBatchRead] = Field(default_factory=list)
+
+
 class DataQualityIssueRead(BaseModel):
     code: str
     title: str

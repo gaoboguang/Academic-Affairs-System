@@ -26,7 +26,19 @@
    按当前进度整理的交付版后续开发计划，适合继续推进到投入使用前先看。
 11. [`p0_delivery_runbook_2026-04-24.md`](./p0_delivery_runbook_2026-04-24.md)
    P0 本地交付验收手册，覆盖数据健康、备份恢复、恢复后启动和当前已知缺口。
-12. [`dev/README.md`](./dev/README.md)
+12. [`test-quality-audit-2026-04-24.md`](./test-quality-audit-2026-04-24.md)
+   窗口 8 的测试体系、质量门禁和回归脚本审计。
+13. [`codex-task-acceptance-checklist.md`](./codex-task-acceptance-checklist.md)
+   后续 Codex 窗口按改动类型选择验证命令的收尾清单。
+14. [`final-acceptance-report-2026-04-24.md`](./final-acceptance-report-2026-04-24.md)
+   窗口 9 的最终整合、质量门禁、P0 验收和是否建议试用结论。
+15. [`import-system-audit-2026-04-24.md`](./import-system-audit-2026-04-24.md)
+   窗口 2 的导入体系审计与统一治理记录，覆盖导入入口、错误报告、批次摘要、导入中心和回滚边界。
+16. [`report-export-print-audit-2026-04-24.md`](./report-export-print-audit-2026-04-24.md)
+   窗口 6 的报表、打印、Excel 导出一致性审计与修复记录。
+17. [`frontend-navigation-audit-2026-04-24.md`](./frontend-navigation-audit-2026-04-24.md)
+   窗口 7 的前端导航、空态、错误提示和非程序员可读性审计记录。
+18. [`dev/README.md`](./dev/README.md)
    当前开发主线、分工文档和 prompt 的索引。
 
 ## 当前仍在用的文档
@@ -53,6 +65,18 @@
   当前高考志愿主线到交付可用的后续计划和验收标准。
 - [`p0_delivery_runbook_2026-04-24.md`](./p0_delivery_runbook_2026-04-24.md)
   当前 P0 安全底座验收步骤和恢复演练入口。
+- [`test-quality-audit-2026-04-24.md`](./test-quality-audit-2026-04-24.md)
+  当前测试覆盖、质量门禁和 E2E 覆盖面的窗口 8 审计。
+- [`codex-task-acceptance-checklist.md`](./codex-task-acceptance-checklist.md)
+  后续 Codex 每个窗口的验收命令选择规则。
+- [`final-acceptance-report-2026-04-24.md`](./final-acceptance-report-2026-04-24.md)
+  窗口 9 的最终整合结果，包含完整验证、P0 备份恢复验收、Mac 启动方式和当前试用建议。
+- [`import-system-audit-2026-04-24.md`](./import-system-audit-2026-04-24.md)
+  窗口 2 对学生、教师、成绩、课表、录取数据、招生计划等导入入口与 `/import-center` 的统一治理记录。
+- [`report-export-print-audit-2026-04-24.md`](./report-export-print-audit-2026-04-24.md)
+  窗口 6 对报表中心、打印页和 Excel 导出的一致性审计与修复记录。
+- [`frontend-navigation-audit-2026-04-24.md`](./frontend-navigation-audit-2026-04-24.md)
+  窗口 7 对导航结构、复杂页说明、空态与错误提示的审计记录。
 - [`dev/`](./dev/)
   当前工作流文档和阶段计划。
 - [`../tests/README.md`](../tests/README.md)

@@ -91,7 +91,8 @@ export function pickTopCategory(items: AdviserQuantInsightData[]): { name: strin
     }
   }
   const rows = Array.from(scores.entries()).map(([name, score]) => ({ name, score }));
-  return pickMaxBy(rows, (item) => item.score);
+  const top = pickMaxBy(rows, (item) => item.score);
+  return top ? { ...top, name: adviserQuantCategoryLabel(top.name) } : null;
 }
 
 export function growthTypeLabel(value: string): string {
@@ -105,6 +106,21 @@ export function growthTypeLabel(value: string): string {
     mental_health: "心理关注",
     quality_eval: "综合素质评价",
     other: "其他",
+  };
+  return mapping[value] ?? value;
+}
+
+export function adviserQuantCategoryLabel(value: string): string {
+  const mapping: Record<string, string> = {
+    daily_management: "班级常规管理",
+    discipline: "卫生纪律",
+    home_school: "家校沟通",
+    activity: "活动组织",
+    guidance: "学生发展指导",
+    bonus: "特殊加分项",
+    penalty: "扣分项",
+    positive: "加分项",
+    negative: "扣分项",
   };
   return mapping[value] ?? value;
 }

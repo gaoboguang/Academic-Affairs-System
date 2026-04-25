@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
+from app.importers.base import IMPORT_STATUS_RUNNING
 from app.models import AuditLog, BackupRecord, ImportJob, ReportExportRecord, StoredFile
 
 
@@ -15,7 +16,7 @@ def list_recent_import_jobs(session: Session, limit: int = 5) -> Sequence[Import
 
 
 def create_import_job(session: Session, job_type: str, source_filename: str | None) -> ImportJob:
-    job = ImportJob(job_type=job_type, source_filename=source_filename, status="processing")
+    job = ImportJob(job_type=job_type, source_filename=source_filename, status=IMPORT_STATUS_RUNNING)
     session.add(job)
     session.flush()
     return job

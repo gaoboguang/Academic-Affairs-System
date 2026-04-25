@@ -61,13 +61,19 @@ http://127.0.0.1:5173
 
 ```bash
 cd /Users/gao/local-edu-tool
-npm run dev
+npm run start:local
 ```
 
-这个命令会同时启动：
+这个命令会在后台启动或复用：
 
 - 前端页面：`http://127.0.0.1:5173`
 - 后端服务：`http://127.0.0.1:8000`
+
+启动成功后，可以关闭终端窗口，服务仍会继续运行。日志在：
+
+```text
+data/logs/local-services/
+```
 
 ## 查看状态
 
@@ -87,9 +93,14 @@ npm run backend:data-health
 
 ## 关闭服务
 
-如果是双击启动，关闭打开的终端窗口即可。
+如果是双击启动或执行了 `npm run start:local`，关闭终端窗口不会停止服务。要停止后台服务，执行：
 
-如果是命令启动，在终端里按：
+```bash
+cd /Users/gao/local-edu-tool
+npm run stop:local
+```
+
+如果是开发调试时执行了 `npm run dev`，在那个终端里按：
 
 ```text
 Control + C
@@ -112,6 +123,8 @@ curl -s http://127.0.0.1:8000/api/system/health
 ```
 
 如果两个地址已经有响应，再次执行 `npm run dev` 会复用已有服务。
+
+日常使用优先执行 `npm run start:local`；`npm run dev` 更适合开发调试，因为终端关闭后前端服务会停止。
 
 ## 重要操作前
 

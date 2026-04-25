@@ -3,9 +3,10 @@ import ElMessage from "element-plus/es/components/message/index";
 import ElMessageBox from "element-plus/es/components/message-box/index";
 import type { RecommendationSettings, StrategyPresetFormState } from "./types";
 import { apiRequest } from "../../api/client";
+import { formatUserActionError } from "../../utils/userFeedback";
 
 function reportError(error: unknown): void {
-  ElMessage.error((error as Error).message);
+  ElMessage.error(formatUserActionError("处理策略模板", error, "先确认模板名称和当前策略设置；如果仍失败，请刷新策略后重试。"));
 }
 
 interface PresetOptions {

@@ -1,3 +1,5 @@
+import type { ImportFeedbackResult } from "../../utils/importFeedback";
+
 export type ResultGroupKey = "challenge" | "steady" | "safe";
 
 export interface CollegeItem {
@@ -148,18 +150,12 @@ export interface MajorEmploymentMappingPayload {
 
 export type BoolFilter = "all" | "true" | "false";
 
-export interface AdmissionImportResponse {
-  message: string;
-  success_rows: number;
-  failed_rows: number;
+export interface AdmissionImportResponse extends ImportFeedbackResult {
   created_college_count: number;
   created_major_count: number;
 }
 
-export interface EnrollmentPlanImportResponse {
-  message: string;
-  success_rows: number;
-  failed_rows: number;
+export interface EnrollmentPlanImportResponse extends ImportFeedbackResult {
   created_college_count: number;
   created_major_count: number;
 }

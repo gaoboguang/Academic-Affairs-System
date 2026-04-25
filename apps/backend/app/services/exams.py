@@ -212,14 +212,14 @@ def import_scores(
     batch.total_rows = result.total_rows
     batch.success_rows = result.success_rows
     batch.failed_rows = result.failed_rows
-    batch.status = "success" if result.failed_rows == 0 else "partial_success"
+    batch.status = result.status
     batch.error_report_path = result.error_report_path
 
     if rebuild:
         rebuild_exam_snapshots(session, exam, _get_rank_mode(session))
 
     job.finished_at = datetime.now()
-    job.status = batch.status
+    job.status = result.status
     job.result_json = {"exam_id": exam_id, "batch_id": batch.id, **result.model_dump()}
     write_audit_log(
         session,

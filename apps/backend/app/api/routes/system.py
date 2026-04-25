@@ -17,6 +17,8 @@ from app.schemas.system import (
     DataRepairExecutePayload,
     DataRepairExecuteResponse,
     DataRepairScanRead,
+    ImportCenterBatchDetailRead,
+    ImportCenterResponse,
     SystemConfigGroupRead,
     SystemConfigItemUpdatePayload,
     SystemTemplateRead,
@@ -110,6 +112,38 @@ def update_config_items(
 @router.get("/system/templates", response_model=list[SystemTemplateRead])
 def list_templates(settings: Settings = Depends(get_settings)) -> list[SystemTemplateRead]:
     return service.list_templates(settings)
+
+
+@router.get("/import-center/batches", response_model=ImportCenterResponse)
+def list_import_center_batches(
+    limit: int = Query(default=100, ge=1, le=300),
+    job_type: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    session: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+) -> ImportCenterResponse:
+    return service.list_import_center_batches(
+        session,
+        settings,
+        limit=limit,
+        job_type=job_type,
+        status=status,
+    )
+
+
+@router.get("/import-center/batches/{source_type}/{batch_id}", response_model=ImportCenterBatchDetailRead)
+def get_import_center_batch_detail(
+    source_type: str,
+    batch_id: int,
+    session: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+) -> ImportCenterBatchDetailRead:
+    return service.get_import_center_batch_detail(
+        session,
+        settings,
+        source_type=source_type,
+        batch_id=batch_id,
+    )
 
 
 @router.get("/system/templates/{template_name}/download")

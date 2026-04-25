@@ -7,7 +7,10 @@
       </div>
       <el-button :disabled="!results.length" @click="emit('export-results')">导出工作量</el-button>
     </div>
-    <el-empty v-if="!results.length" description="当前筛选条件下暂无工作量结果" />
+    <el-empty
+      v-if="!results.length"
+      description="当前还没有工作量结果。请先确认学期、规则版本和课表批次，再点击“计算工作量”。"
+    />
     <div v-else class="table-shell">
       <el-table :data="results" stripe>
         <el-table-column label="教师" prop="teacher_name" min-width="120" />
@@ -52,8 +55,12 @@
               <p>按课表条目拆分后的工作量贡献。</p>
             </div>
           </div>
+          <el-empty
+            v-if="!(activeResult.snapshot_json?.details ?? []).length"
+            description="当前结果没有课时明细。请回到课表批次确认是否已成功匹配教师、班级和学科。"
+          />
           <div class="table-shell">
-            <el-table :data="activeResult.snapshot_json?.details ?? []" stripe>
+            <el-table v-if="(activeResult.snapshot_json?.details ?? []).length" :data="activeResult.snapshot_json?.details ?? []" stripe>
               <el-table-column label="星期/节次" width="120">
                 <template #default="{ row }">
                   周{{ row.weekday }} / 第{{ row.period_no }}节

@@ -51,6 +51,7 @@ import { useRoute } from "vue-router";
 import { apiRequest } from "../api/client";
 import PrintInsightCards from "../components/reports/PrintInsightCards.vue";
 import { buildAdviserQuantInsightCards } from "../components/reports/reportInsights";
+import { adviserQuantCategoryLabel } from "../components/reports/reportInsightShared";
 
 interface AdviserQuantSummaryRead { teacher_id: number; teacher_name: string; semester_name?: string | null; rule_version_name?: string | null; total_score: number; positive_score: number; negative_score: number; record_count: number; class_names: string[]; category_scores_json?: Record<string, number> | null; }
 
@@ -67,7 +68,7 @@ function goBack(): void { window.history.back(); }
 function printPage(): void { window.print(); }
 function formatCategoryScores(value?: Record<string, number> | null): string {
   if (!value) return "-";
-  return Object.entries(value).map(([key, score]) => `${key}:${score}`).join(" / ");
+  return Object.entries(value).map(([key, score]) => `${adviserQuantCategoryLabel(key)}:${score}`).join(" / ");
 }
 
 async function loadPrintData(): Promise<void> {

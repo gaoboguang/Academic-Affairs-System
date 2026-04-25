@@ -9,7 +9,7 @@ from sqlalchemy import delete, desc, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import Settings
-from app.importers.base import RowError, save_error_report
+from app.importers.base import RowError, build_error_preview, build_row_error, resolve_import_status, save_error_report
 from app.importers.evaluation import EXPECTED_HEADERS, read_evaluation_rows
 from app.models import (
     EvaluationBatch,
@@ -95,7 +95,7 @@ def import_evaluation_batch(
         semester_id=semester_id,
         source_filename=filename,
         import_time=datetime.now(),
-        status="processing",
+        status="running",
     )
     session.add(batch)
     session.flush()
@@ -159,7 +159,7 @@ def import_evaluation_batch(
             success_rows += 1
         except Exception as exc:
             failed_rows += 1
-            row_errors.append(RowError(row_number=row_number, values=row, message=str(exc)))
+            row_errors.append(build_row_error(row_number=row_number, values=row, message=str(exc)))
 
     error_report_path = save_error_report(
         settings=settings,
@@ -177,14 +177,19 @@ def import_evaluation_batch(
 
     session.flush()
     rebuild_evaluation_summary(session, batch.id)
-    batch.status = "completed" if failed_rows == 0 else "partial_success"
+    status = resolve_import_status(total_rows=len(rows), success_rows=success_rows, failed_rows=failed_rows)
+    batch.status = status
     job.finished_at = datetime.now()
-    job.status = batch.status
+    job.status = status
     job.result_json = {
         "batch_id": batch.id,
+        "status": status,
+        "total_rows": len(rows),
         "success_rows": success_rows,
         "failed_rows": failed_rows,
+        "skipped_rows": 0,
         "error_report_path": error_report_path,
+        "error_preview": build_error_preview(row_errors),
     }
     write_audit_log(
         session,
@@ -195,12 +200,14 @@ def import_evaluation_batch(
         detail_json=job.result_json,
     )
     return EvaluationImportResponse(
+        status=status,
         batch_id=batch.id,
         total_rows=len(rows),
         success_rows=success_rows,
         failed_rows=failed_rows,
         skipped_rows=0,
         error_report_path=error_report_path,
+        error_preview=build_error_preview(row_errors),
         message=f"评教数据导入完成，成功 {success_rows} 条，失败 {failed_rows} 条。",
     )
 

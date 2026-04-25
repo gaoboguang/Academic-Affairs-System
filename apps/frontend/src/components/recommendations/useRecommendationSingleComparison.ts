@@ -3,13 +3,14 @@ import ElMessage from "element-plus/es/components/message/index";
 import type { Ref } from "vue";
 
 import { apiRequest } from "../../api/client";
+import { formatUserActionError } from "../../utils/userFeedback";
 import type {
   RecommendationHistoryItem,
   RecommendationResult,
 } from "./types";
 
 function reportError(error: unknown): void {
-  ElMessage.error((error as Error).message);
+  ElMessage.error(formatUserActionError("读取历史方案对比", error, "先确认已选择历史方案；如果仍失败，请重新打开当前方案后重试。"));
 }
 
 interface SingleComparisonOptions {

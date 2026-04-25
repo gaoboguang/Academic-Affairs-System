@@ -1005,6 +1005,7 @@ import {
   buildVolunteerEmploymentProfile,
   buildVolunteerRuleInsightCards,
 } from "./volunteerWorkbench";
+import { getRecommendationRiskFlagText } from "./recommendationCopy";
 
 import type {
   EmploymentDirectionItem,
@@ -1187,28 +1188,7 @@ function formatStudentType(value?: string | null): string {
 }
 
 function formatRiskFlag(value: string): string {
-  const mapping: Record<string, string> = {
-    sample_insufficient: "样本不足",
-    rank_missing: "缺少位次，分数参考",
-    general_reference_fallback: "缺少专门录取结果，按普通类参考",
-    score_line_reference_only: "缺少专门录取结果，按省控线初筛",
-    cross_year_score_line_reference: "省控线按跨年份参考",
-    plan_only_reference: "缺少专门结果，仅按计划清单初筛",
-    art_recommendation: "艺体推荐",
-    track_unconfirmed: "艺体方向待确认",
-    manual_formula_check: "需人工核对招生章程",
-    chapter_pending_review: "章程待补链",
-    chapter_special_requirement: "章程限制已提取",
-    whitelist_override: "白名单放宽",
-    major_baseline_missing: "专业线缺失，按院校线参考",
-    subject_requirement_check: "需复核选科要求",
-    career_mapping_pending: "职业路径映射待维护",
-    postgraduate_path_mismatch: "与读研接受度不匹配",
-    certificate_path_mismatch: "与资格证接受度不匹配",
-    long_training_path_mismatch: "与长培养周期接受度不匹配",
-    public_service_path_mismatch: "与考公考编接受度不匹配",
-  };
-  return mapping[value] ?? value;
+  return getRecommendationRiskFlagText(value);
 }
 
 function emptyResultGroupCopy(label: string): string {

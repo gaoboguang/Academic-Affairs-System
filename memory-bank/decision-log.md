@@ -1,5 +1,23 @@
 # 决策日志
 
+## 2026-04-25：质量门禁改为分阶段包装，不降低检查强度
+
+- 决定：把根命令 `npm run check`、`npm run check:e2e`、`npm run check:all` 改为调用 `scripts/quality-gate.cjs`，由脚本按阶段执行原有后端测试、前端 lint、前端单测、前端构建和 Playwright E2E。
+- 原因：窗口 8 的目标是让后续多窗口开发能清楚知道“跑到哪一步失败、失败意味着什么、下一步该做什么”。直接用 `&&` 串命令虽然能挡住失败，但对非程序员不够可读，也不利于交接。
+- 约束：该包装不能删减测试、不能吞失败、不能降低门禁；后续如果新增质量门禁，优先扩展 `quality-gate.cjs` 的阶段说明，并同步 `docs/codex-task-acceptance-checklist.md`。
+
+## 2026-04-24：导入中心先做只读聚合，不开放无快照的一键回滚
+
+- 决定：新增 `/import-center` 和 `/api/import-center/batches*` 聚合导入模板、批次、错误报告、审计日志和撤销说明；当前不提供自动删除式一键回滚。
+- 原因：学生、教师、录取数据、招生计划等导入没有统一保存逐行 before-image、影响主键清单和恢复后重算策略；直接按批次删除可能误删后续手工修正、分析快照或推荐引用。
+- 约束：撤销路径先固定为“导入前备份恢复 / 重新导入正确模板覆盖修正 / 回到业务页人工处理”。若未来要做真回滚，必须先补影响行快照、备份强制校验和恢复后重算。
+
+## 2026-04-24：普通用户启动改为后台常驻，`npm run dev` 保留为开发模式
+
+- 决定：新增 `npm run start:local` / `scripts/start-local-services.cjs` 作为普通用户启动入口，后台启动或复用前后端服务并写入 `data/logs/local-services/`；新增 `npm run stop:local` 作为对应停止入口；`start-local-edu.command` 改为调用 `start:local`。
+- 原因：用户反复遇到“后端还在、前端打不开”。根因是 `npm run dev` 是前台开发模式，终端关闭后前端 Vite 会停止，而后端可能残留为后台进程，造成状态不一致。普通使用应当允许双击启动后关闭终端窗口，因此需要和开发模式分开。
+- 约束：`npm run dev` 仍保留给开发调试使用，因为它能直接显示前后端日志；日常打开系统优先使用 `start-local-edu.command` 或 `npm run start:local`。
+
 ## 2026-04-22：应用侧先补齐 Stage B 规则支持表，不越界改 Windows 原始高考库
 
 - 决定：在 `data/app.db` 内新增 `province_score_transform_rule` 与 `subject_requirement_dict` 两张应用侧规则表，并补对应 CRUD / bootstrap / baseline；同时让 `gaokao` 驾驶舱在缺少原始 `gaokao_score_transform_rule` / `gaokao_subject_requirement_dict` 时优先回退到这两类应用侧表。

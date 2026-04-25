@@ -239,6 +239,49 @@
   - `data_health.py` 现在输出 `expected_years`、`missing_years`、按年明细、考生类型分布、批次/口径分布和 `audit_summary`
   - `/gaokao-data` 的“山东覆盖”页签可展开查看按年份 / 类别 / 批次的覆盖矩阵，并展示当前记录数、疑似重复、冲突、待人工复核和缺口说明
   - 当前真实主库仍保留数据缺口：招生计划缺 2021-2023，一分一段和省控线缺 2020-2023，特殊类型专门录取结果缺失且只能初筛，政策参考偏少，章程待复核 1748 条
+- 2026-04-24 已完成 Codex App 窗口 3：P0 数据健康与“山东覆盖”交付解释增强：
+  - `backend:data-health -- --json` 现新增 `field_explanations`、`delivery_assessment`、`special_type_risks`，核心表、年份覆盖、类型分布和审计摘要都带中文标签与解释
+  - `/gaokao-data` 的“山东覆盖”页签新增交付判断和“考生类型可用性”，普通类显示为主链可用，春季高考、艺术类、体育类、单独招生、综合评价招生明确标为初筛参考
+  - 特殊类型风险口径已固定：艺术 / 体育按省控线资格初筛；春考 / 单招 / 综评按计划清单初筛并可参考普通类录取结果；都不得包装成录取把握
+  - `docs/p0_delivery_runbook_2026-04-24.md` 已补非程序员读法：`pass / warning / blocked`、页面分区、特殊类型当前能做和不能做什么
+  - 本轮验证已通过后端定向 `15 passed`、后端全量 `66 passed`、前端 `20 passed / 120 passed`、前端构建、`backend:data-health`、`backend:data-health -- --json` 与 `backend:p0-check -- --json`
+- 2026-04-24 已完成 Codex App 窗口 2：统一导入中心与导入体验治理第一轮：
+  - 新增 `docs/import-system-audit-2026-04-24.md`，记录现有导入入口、后端接口、前端页面、模板、错误报告、批次记录、回滚缺口和下一步
+  - 学生、教师、成绩、课表、录取数据、招生计划导入已统一 `ImportResult` 摘要字段、状态语义、错误报告列和前端反馈组件
+  - 新状态为 `pending / running / success / failed / partially_failed / rolled_back`，旧 `processing / partial_success / completed_with_unresolved` 继续兼容
+  - 已补 `/import-center` 只读导入中心和 `/api/import-center/batches*` 聚合接口，集中展示模板下载、业务上传入口、批次列表、批次详情、错误报告、审计日志和撤销说明
+  - 当前明确不做一键自动删除式回滚：多数导入没有逐行 before-image 或影响范围快照，先通过备份恢复 / 重新导入覆盖修正兜底；如未来要做真回滚，需先补影响行快照和恢复后重算策略
+- 2026-04-24 已完成 Codex App 窗口 4：高考志愿 / 推荐中心 Stage B 解释链补齐：
+  - 新增 `docs/recommendation-stage-b-audit-2026-04-24.md`，审计当前推荐候选生成、冲稳保分组、规则命中、年份边界、特殊类型 fallback、职业解释和各输出面一致性
+  - `general_reference_fallback` 已统一下沉到工作台候选说明、工作台边界概览、志愿草稿打印 / 报表摘要、推荐结果 / 推荐打印和 Excel “边界概览 / 边界说明”
+  - `score_line` 与 `plan_only` 特殊类型初筛现在也会在草稿边界概览和报表中心 `volunteer_draft_summary` 中作为“边界概览”展示，不再混进普通风险卡
+  - 本轮定向后端、前端单测、前端全量测试、后端全量测试和前端构建均通过；当时 `npm run check:e2e` 曾为 `19 passed / 12 failed`，后续窗口 9 已完成整合并恢复到 `31 passed`
+- 2026-04-24 已完成 Codex App 窗口 6：报表、打印、Excel 导出一致性第一轮：
+  - 新增 `docs/report-export-print-audit-2026-04-24.md`，按 10 类报表记录报表中心入口、后端导出、打印页、Excel sheet、导出前摘要、风险表达和字段顺序
+  - 推荐报告和志愿草稿 Excel 明细的“风险提示”已从内部码改为中文口径；`simulation_mode` 也已补到前端 / 后端风险标签映射
+  - 学生成绩分析 Excel 的 `班名 / 年名` 已改为 `班级名次 / 年级名次`；成长档案 Excel 类型、班主任量化 Excel 明细类型、报表中心导出记录参数也已改为更适合老师阅读的中文表达
+  - 本轮验证：后端窗口 6 定向 `23 passed`、前端报表/推荐文案单测 `22 passed`、`npm run frontend:build`、报表相关 Playwright `4 passed`、`git diff --check` 均通过
+  - 2026-04-24 本次复核已在 `codex/06-report-export-consistency` 分支继续收口：志愿工作台风险提示改为复用 `recommendationCopy.ts`，避免页面与打印 / Excel 风险标签漂移；复核验证为后端窗口 6 定向 `23 passed`、前端报表/推荐文案定向 `13 passed`、`npm run frontend:build`、报表相关 Playwright `4 passed`、`git diff --check` 均通过
+- 2026-04-24 已完成 Codex App 窗口 7：前端体验、导航与非程序员可读性第一轮：
+  - 新增 `docs/frontend-navigation-audit-2026-04-24.md`，记录主导航入口、命名问题、复杂页面说明、空态缺口和后续建议，并已接入 `docs/README.md`
+  - 高考数据页用户可见的 `DB RC1 / fallback / handoff` 等内部表达已改为“本地高考只读库 / 应用侧主档补充 / 备用链接 / 待同步”
+  - 新增 `apps/frontend/src/utils/userFeedback.ts`，把页面失败提示统一为“动作 + 原因 + 下一步”；推荐、课表工作量、评教量化、导入中心、报表中心和高考证据链已接入第一轮
+  - 导入中心、报表中心、课表工作量、评教量化和推荐历史已补更明确的空态或失败后下一步；赋分规则展示不再直接露出压缩 JSON
+  - 本轮验证：前端定向单测 `22 passed`、前端全量 `128 passed`、`npm run frontend:lint`、`npm run frontend:build`、定向 Playwright `2 passed`、`git diff --check` 均通过
+- 2026-04-25 已完成 Codex App 窗口 8：测试体系、质量门禁与回归脚本：
+  - 新增 `scripts/quality-gate.cjs`，`npm run check / check:e2e / check:all` 现在按阶段输出用途、命令、失败提示和最终结论，原有检查强度不降低
+  - 新增 `docs/test-quality-audit-2026-04-24.md`，记录后端、前端、E2E 覆盖面、质量门禁语义和当前不足
+  - 新增 `docs/codex-task-acceptance-checklist.md`，按后端、前端、数据库、高考数据、报表导出、桌面端等改动类型列出必跑/选跑命令
+  - `tests/README.md`、`scripts/README.md`、`docs/README.md`、`README.md` 已接入质量门禁和验收清单入口
+  - 补 `test_data_health.py` 格式化输出断言，确保 P0 交付判断、考生类型可用性和导入审计摘要继续出现在 CLI 文本中
+  - E2E 中“推荐导出失败回退”断言已同步窗口 7 的统一错误提示格式；当前 `npm run check`、`npm run check:e2e`、`npm run check:all` 均已通过，其中完整门禁为后端 `69 passed`、前端 `22 files / 128 tests passed`、前端构建通过、E2E `31 passed`
+- 2026-04-25 已完成 Codex App 窗口 9：最终整合、冲突处理和发布前验收：
+  - 新建并切到 `codex/09-final-integration-acceptance`
+  - 新增 `docs/final-acceptance-report-2026-04-24.md`，记录窗口 0-8 成果整合、冲突检查、完整验证、P0 数据风险、Mac 启动方式和试用建议
+  - `README.md` 与 `docs/README.md` 已加入最终验收报告入口
+  - 冲突检查确认无未合并文件、无 `<<<<<<< / ======= / >>>>>>>` 冲突标记
+  - 本轮完整验证：`backend:test` 为 `69 passed`；`frontend:lint` 通过；`frontend:test` 为 `22 files / 128 tests passed`；`frontend:build` 通过；`backend:data-health` 通过但仍提示 P0 缺口 `6`；`backend:p0-check -- --json` 为 `ok: true`，备份包 `data/backups/p0_delivery_backup_20260425_084455.zip`；`check`、`check:e2e`、`check:all` 均通过，最终 E2E 为 `31 passed`
+  - 当前建议：可以 Mac 本机试用和学校内部小范围流程试用；高考特殊类型仍只能做初筛，不能作为完整录取判断
 - 2026-04-24 已继续推进阶段二规则核对入口：
   - `/recommendations` 在“特殊类型规则”之外，新增“赋分规则”和“选科字典”页签，分别查看 `province_score_transform_rule` 与 `subject_requirement_dict`
   - `useGaokaoPlanningManager.ts` 已接入两类规则的列表、筛选、bootstrap、统计与重置；`useRecommendationsPage.ts` 对三类规则字典采用页签懒加载，避免拖慢推荐主流程

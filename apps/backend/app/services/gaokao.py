@@ -2042,7 +2042,9 @@ def _latest_enrollment_plan_batch(session: Session) -> str | None:
 def _build_import_job_label(item: ImportJob) -> str:
     mapping = {
         "admission_import": "录取数据导入",
+        "admissions": "录取数据导入",
         "enrollment_plan_import": "招生计划导入",
+        "enrollment_plans": "招生计划导入",
         "gaokao_import": "高考数据导入",
     }
     return mapping.get(item.job_type, item.job_type.replace("_", " "))
@@ -2065,7 +2067,10 @@ def _normalize_import_batch_status(value: str | None) -> str:
         "completed": "success",
         "running": "processing",
         "processing": "processing",
+        "partially_failed": "partial",
+        "partial_success": "partial",
         "failed": "failed",
+        "rolled_back": "rolled_back",
     }
     return mapping.get(value or "", value or "success")
 

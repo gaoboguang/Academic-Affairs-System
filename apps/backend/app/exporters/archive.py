@@ -115,7 +115,7 @@ def export_growth_summary(
         detail_sheet.append(
             [
                 record.get("occurred_on"),
-                record.get("record_type"),
+                _growth_type_label(record.get("record_type")),
                 record.get("title"),
                 record.get("content"),
                 record.get("owner_name"),

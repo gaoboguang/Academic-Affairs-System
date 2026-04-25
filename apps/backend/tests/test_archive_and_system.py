@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from datetime import date, datetime
 from io import BytesIO
 from pathlib import Path
 
 from openpyxl import load_workbook
+from sqlalchemy import select
 
-from app.models import BackupRecord, ReportExportRecord, StoredFile
+from app.models import AuditLog, BackupRecord, Exam, ImportJob, ReportExportRecord, ScoreImportBatch, Semester, StoredFile
 
 
 def test_growth_archive_upload_and_report_export(client) -> None:
@@ -57,6 +59,8 @@ def test_growth_archive_upload_and_report_export(client) -> None:
     report_download = client.get(report_payload["download_url"])
     assert report_download.status_code == 200
     report_workbook = load_workbook(BytesIO(report_download.content))
+    record_sheet = report_workbook["成长记录"]
+    assert record_sheet.cell(row=2, column=2).value == "奖励记录"
     insight_sheet = report_workbook["摘要概览"]
     assert insight_sheet.cell(row=1, column=1).value == "标题"
     insight_titles = {
@@ -133,6 +137,80 @@ def test_runtime_file_download_rejects_invalid_paths(client) -> None:
     absolute_response = client.get("/api/system/files", params={"path": "/etc/hosts"})
     assert absolute_response.status_code == 400
     assert absolute_response.json()["detail"] == "非法文件路径"
+
+
+def test_import_center_lists_batches_and_details(client, app) -> None:
+    with app.state.db.session_scope() as session:
+        semester = session.scalar(select(Semester))
+        assert semester is not None
+        exam = Exam(
+            name="导入中心测试考试",
+            exam_type="monthly",
+            exam_date=date(2026, 4, 24),
+            semester_id=semester.id,
+            status="published",
+        )
+        session.add(exam)
+        session.flush()
+        score_batch = ScoreImportBatch(
+            exam_id=exam.id,
+            source_filename="scores.xlsx",
+            import_time=datetime(2026, 4, 24, 9, 30),
+            total_rows=2,
+            success_rows=1,
+            failed_rows=1,
+            status="partially_failed",
+            error_report_path="data/logs/score_import_errors.xlsx",
+        )
+        session.add(score_batch)
+        session.flush()
+        job = ImportJob(
+            job_type="scores",
+            source_filename="scores.xlsx",
+            started_at=datetime(2026, 4, 24, 9, 30),
+            finished_at=datetime(2026, 4, 24, 9, 31),
+            status="partially_failed",
+            result_json={
+                "batch_id": score_batch.id,
+                "status": "partially_failed",
+                "total_rows": 2,
+                "success_rows": 1,
+                "failed_rows": 1,
+                "skipped_rows": 0,
+                "error_report_path": "data/logs/score_import_errors.xlsx",
+                "error_preview": ["第 3 行：学生不存在"],
+            },
+        )
+        session.add(job)
+        session.flush()
+        session.add(
+            AuditLog(
+                module="exams",
+                action="import_scores",
+                target_type="score_import_batch",
+                target_id=str(score_batch.id),
+                detail_json={"batch_id": score_batch.id, "failed_rows": 1},
+            )
+        )
+        import_job_id = job.id
+
+    response = client.get("/api/import-center/batches")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["summary"]["total_batches"] >= 1
+    assert payload["summary"]["partial_batches"] >= 1
+    score_rows = [item for item in payload["batches"] if item["job_type"] == "scores"]
+    assert len([item for item in score_rows if item["source_filename"] == "scores.xlsx"]) == 1
+    assert score_rows[0]["status"] == "partially_failed"
+    assert score_rows[0]["template_download_url"].endswith("exam_scores_import_template.xlsx")
+    assert score_rows[0]["rollback_supported"] is False
+
+    detail_response = client.get(f"/api/import-center/batches/import_job/{import_job_id}")
+    assert detail_response.status_code == 200
+    detail = detail_response.json()
+    assert detail["batch"]["job_type_label"] == "成绩导入"
+    assert detail["error_preview"] == ["第 3 行：学生不存在"]
+    assert detail["rollback_steps"]
 
 
 def test_report_download_rejects_absolute_db_path(client, app, tmp_path: Path) -> None:

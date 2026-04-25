@@ -270,6 +270,22 @@ def _format_teacher_assignment(row: dict[str, object]) -> str:
     return " / ".join(segments) or "未命名任教拆分"
 
 
+def _format_adviser_item_type(value: object) -> str:
+    mapping = {
+        "daily_management": "班级常规管理",
+        "discipline": "卫生纪律",
+        "home_school": "家校沟通",
+        "activity": "活动组织",
+        "guidance": "学生发展指导",
+        "bonus": "特殊加分项",
+        "penalty": "扣分项",
+        "positive": "加分项",
+        "negative": "扣分项",
+    }
+    current = str(value or "").strip()
+    return mapping.get(current, current or "-")
+
+
 def _build_teacher_analysis_insight_rows(payload: dict[str, object]) -> list[dict[str, object]]:
     assignments = [item for item in payload.get("assignment_breakdown") or [] if isinstance(item, dict)]
     rows: list[dict[str, object]] = [
@@ -334,6 +350,12 @@ def _pick_top_category(items: list[dict[str, object]]) -> dict[str, object] | No
             scores[name] = scores.get(name, 0.0) + float(score)
     rows = [{"name": name, "score": score} for name, score in scores.items()]
     return _pick_max_by(rows, "score")
+
+
+def _format_category_scores(value: object) -> str:
+    if not isinstance(value, dict) or not value:
+        return "-"
+    return " / ".join(f"{_format_adviser_item_type(key)}:{score}" for key, score in value.items())
 
 
 def _build_evaluation_insight_rows(
@@ -432,7 +454,7 @@ def _build_adviser_quant_insight_rows(summary_rows: list[dict[str, object]]) -> 
         rows.append(
             {
                 "title": "高频得分类别",
-                "summary": f"{top_category.get('name')} 当前累计分值最高",
+                "summary": f"{_format_adviser_item_type(top_category.get('name'))} 当前累计分值最高",
                 "detail": f"累计分值 {_format_number(top_category.get('score'))}。导出前可结合规则版本确认该类别是否为本学期重点。",
                 "tone": "info",
             }
@@ -448,13 +470,13 @@ def export_student_analysis_report(settings: Settings, payload: dict[str, object
     summary.append(["考试", payload.get("exam_name")])
     summary.append(["学生", payload.get("student_name")])
     summary.append(["总分", payload.get("total_score")])
-    summary.append(["班名", payload.get("class_rank")])
-    summary.append(["年名", payload.get("grade_rank")])
+    summary.append(["班级名次", payload.get("class_rank")])
+    summary.append(["年级名次", payload.get("grade_rank")])
     summary.append(["上次考试", payload.get("previous_exam_name")])
     summary.append(["总分变化", payload.get("total_score_delta")])
 
     detail = workbook.create_sheet("学科明细")
-    detail.append(["科目", "分数", "班名", "年名", "班百分位", "年百分位", "分数变化", "名次变化"])
+    detail.append(["科目", "分数", "班级名次", "年级名次", "班百分位", "年百分位", "分数变化", "名次变化"])
     for row in payload.get("subjects", []):
         detail.append(
             [
@@ -644,7 +666,7 @@ def export_adviser_quant_summary_report(
                 row.get("negative_score"),
                 row.get("record_count"),
                 " / ".join(row.get("class_names") or []),
-                " / ".join(f"{key}:{value}" for key, value in category_scores.items()),
+                _format_category_scores(category_scores),
             ]
         )
 
@@ -657,7 +679,7 @@ def export_adviser_quant_summary_report(
                 row.get("class_name"),
                 row.get("record_month"),
                 row.get("item_name"),
-                row.get("item_type"),
+                _format_adviser_item_type(row.get("item_type")),
                 row.get("score"),
                 row.get("description"),
             ]

@@ -3,13 +3,14 @@ import ElMessage from "element-plus/es/components/message/index";
 import type { Ref } from "vue";
 
 import { apiRequest } from "../../api/client";
+import { formatUserActionError } from "../../utils/userFeedback";
 import type {
   RecommendationHistoryItem,
   RecommendationResult,
 } from "./types";
 
 function reportError(error: unknown): void {
-  ElMessage.error((error as Error).message);
+  ElMessage.error(formatUserActionError("读取多方案对比", error, "先减少对比方案数量或重新打开当前方案后重试。"));
 }
 
 interface MultiComparisonOptions {

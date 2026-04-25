@@ -13,20 +13,7 @@
       </div>
     </div>
 
-    <el-alert
-      v-if="enrollmentPlanImportResult"
-      class="result-alert"
-      :title="enrollmentPlanImportResult.message"
-      type="success"
-      show-icon
-      :closable="false"
-    >
-      <template #default>
-        成功 {{ enrollmentPlanImportResult.success_rows }} 行，失败 {{ enrollmentPlanImportResult.failed_rows }} 行，
-        新增院校 {{ enrollmentPlanImportResult.created_college_count }} 所，新增专业
-        {{ enrollmentPlanImportResult.created_major_count }} 个。
-      </template>
-    </el-alert>
+    <ImportFeedbackPanel :result="enrollmentPlanImportResult" />
 
     <div class="filter-grid">
       <el-select v-model="filters.year" clearable placeholder="年份">
@@ -88,6 +75,7 @@
 <script setup lang="ts">
 import type { UploadFile } from "element-plus";
 
+import ImportFeedbackPanel from "../common/ImportFeedbackPanel.vue";
 import type { CollegeItem, EnrollmentPlanItem, EnrollmentPlanImportResponse } from "./types";
 
 interface EnrollmentPlanFiltersState {

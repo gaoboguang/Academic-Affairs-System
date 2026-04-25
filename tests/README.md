@@ -1,9 +1,19 @@
 # 测试目录约定
 
 - `apps/backend/tests`：后端单元测试、接口测试和工作流回归测试的主入口
-- `tests/e2e`：当前已落地 Playwright 跨端流程，默认启动临时演示数据后端和 Vite 前端；`dashboard-smoke.spec.ts` 现有 30 条流程，覆盖工作台导航、学生详情、系统备份、考试到分析、推荐生成/导出、多方案对比、策略模板、历史回放、Stage B 主链路、批量混合生源地、缺少年份规则解释、模式兼容回退、高考志愿主流程、报表与打印预览，以及多条异常提示回归
-- `tests/e2e/fixtures`：稳定复用的 Excel 导入样例，当前包含成绩导入、错误成绩模板、录取导入、跨省录取导入 4 份 fixture
+- `tests/e2e`：当前已落地 Playwright 跨端流程，默认启动临时演示数据后端和 Vite 前端；`dashboard-smoke.spec.ts` 现有 31 条流程，覆盖工作台导航、学生详情、系统备份、考试到分析、推荐生成/导出、多方案对比、策略模板、历史回放、Stage B 主链路、批量混合生源地、缺少年份规则解释、模式兼容回退、高考志愿主流程、报表与打印预览，以及多条异常提示回归
+- `tests/e2e/fixtures`：稳定复用的 Excel 导入样例，当前包含成绩导入、错误成绩模板、录取导入、跨省录取导入、招生计划导入 5 份 fixture
 - 前端单元测试位于 `apps/frontend/tests`
+
+## 统一质量门禁
+
+- `npm run check`：后端全量测试、前端 lint、前端单测、前端构建。
+- `npm run check:e2e`：运行 `tests/e2e/dashboard-smoke.spec.ts`。
+- `npm run check:all`：先跑 `check`，再跑 `check:e2e`。
+
+这些命令由 `scripts/quality-gate.cjs` 分阶段输出。看到“质量门禁通过”表示对应范围通过；如果失败，先处理输出里的第一个失败阶段，不要删除或跳过测试。
+
+窗口级验收规则见 [`../docs/codex-task-acceptance-checklist.md`](../docs/codex-task-acceptance-checklist.md)，测试覆盖审计见 [`../docs/test-quality-audit-2026-04-24.md`](../docs/test-quality-audit-2026-04-24.md)。
 
 ## 2026-04-16 定向回归
 

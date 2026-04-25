@@ -79,29 +79,7 @@
           <el-button>导入学生</el-button>
         </el-upload>
       </div>
-      <el-alert
-        v-if="importResult"
-        :title="importResult.message"
-        :type="importAlertType"
-        show-icon
-        :closable="false"
-      />
-      <div v-if="importResult" class="import-feedback">
-        <p class="import-feedback-summary">{{ importSummary }}</p>
-        <p v-if="importResult.notice_preview?.length" class="import-feedback-title">本次导入提示</p>
-        <ul v-if="importResult.notice_preview?.length" class="import-feedback-list import-feedback-list-notice">
-          <li v-for="item in importResult.notice_preview" :key="item">{{ item }}</li>
-        </ul>
-        <p v-if="importResult.error_preview?.length" class="import-feedback-title">前三条错误</p>
-        <ul v-if="importResult.error_preview?.length" class="import-feedback-list">
-          <li v-for="item in importResult.error_preview" :key="item">{{ item }}</li>
-        </ul>
-        <div v-if="importResult.error_report_path" class="action-row import-feedback-actions">
-          <el-button link type="primary" @click="downloadImportErrorReport(importResult.error_report_path)">
-            下载错误报告
-          </el-button>
-        </div>
-      </div>
+      <ImportFeedbackPanel :result="importResult" />
     </section>
 
     <section class="soft-card panel-block">
@@ -276,8 +254,9 @@ import type { UploadFile } from "element-plus";
 import { useRouter } from "vue-router";
 
 import { apiRequest, openFile, uploadFile } from "../api/client";
+import ImportFeedbackPanel from "../components/common/ImportFeedbackPanel.vue";
 import { useReferenceStore } from "../stores/reference";
-import { buildImportErrorReportUrl, buildImportSummary, resolveImportAlertType } from "../utils/importFeedback";
+import type { ImportFeedbackResult } from "../utils/importFeedback";
 
 interface StudentItem {
   id: number;
@@ -301,17 +280,6 @@ interface StudentListResponse {
   page_size: number;
 }
 
-interface ImportResult {
-  message: string;
-  total_rows?: number;
-  success_rows?: number;
-  failed_rows?: number;
-  skipped_rows?: number;
-  error_report_path?: string;
-  error_preview?: string[];
-  notice_preview?: string[];
-}
-
 const referenceStore = useReferenceStore();
 const router = useRouter();
 const page = ref(1);
@@ -320,7 +288,7 @@ const importStrategy = ref("skip_existing");
 const dialogVisible = ref(false);
 const editingId = ref<number | null>(null);
 const submitting = ref(false);
-const importResult = ref<ImportResult | null>(null);
+const importResult = ref<ImportFeedbackResult | null>(null);
 
 const filters = reactive({
   student_no: "",
@@ -367,8 +335,6 @@ const importStrategyLabel = computed(() => {
   };
   return mapping[importStrategy.value] ?? importStrategy.value;
 });
-const importAlertType = computed(() => (importResult.value ? resolveImportAlertType(importResult.value) : "success"));
-const importSummary = computed(() => (importResult.value ? buildImportSummary(importResult.value) : ""));
 const overviewCards = computed(() => [
   {
     label: "当前页班级",
@@ -508,7 +474,7 @@ async function handleImport(uploadFileItem: UploadFile): Promise<void> {
   }
   try {
     importResult.value = null;
-    importResult.value = await uploadFile<ImportResult>("/api/students/import", uploadFileItem.raw, {
+    importResult.value = await uploadFile<ImportFeedbackResult>("/api/students/import", uploadFileItem.raw, {
       strategy: importStrategy.value,
     });
     ElMessage({
@@ -519,10 +485,6 @@ async function handleImport(uploadFileItem: UploadFile): Promise<void> {
   } catch (error) {
     ElMessage.error((error as Error).message);
   }
-}
-
-function downloadImportErrorReport(path: string): void {
-  openFile(buildImportErrorReportUrl(path));
 }
 
 function handlePageChange(nextPage: number): void {

@@ -5,9 +5,13 @@
 ## 优先使用的统一入口
 
 - 双击 [`../start-local-edu.command`](../start-local-edu.command)
-  macOS 下的图形化启动入口；会在仓库根目录执行 `npm run dev`，适合日常直接点开用。普通用户步骤见 [`../docs/mac-user-startup-guide.md`](../docs/mac-user-startup-guide.md)。
+  macOS 下的图形化启动入口；会在仓库根目录执行 `npm run start:local`，把前后端拉到后台运行，适合日常直接点开用。普通用户步骤见 [`../docs/mac-user-startup-guide.md`](../docs/mac-user-startup-guide.md)。
+- `npm run start:local`
+  后台启动或复用前后端服务，启动完成后可关闭终端；日志写入 `data/logs/local-services/`。
+- `npm run stop:local`
+  停止由 `start:local` 后台启动的服务。
 - `npm run dev`
-  同时拉起前后端开发服务，内部调用 `scripts/dev-local.cjs`。
+  同时拉起前后端开发服务，内部调用 `scripts/dev-local.cjs`；这是开发调试模式，终端关闭后前端服务会停止。
 - `npm run clean:local`
   清理仓库内明确可再生的本地噪音，如 `.DS_Store`、`__pycache__`、`.pytest_cache`、`*.egg-info`、`test-results`。
 - `npm run clean:slim`
@@ -21,19 +25,31 @@
 - `npm run backend:p0-check`
 - `npm run backend:init-demo`
 - `npm run backend:test`
+- `npm run check`
+  常规质量门禁：后端全量测试、前端静态检查、前端单测和前端构建。内部由 `scripts/quality-gate.cjs` 分阶段输出，失败时会提示下一步。
+- `npm run check:e2e`
+  跨端质量门禁：运行 `tests/e2e/dashboard-smoke.spec.ts`。
+- `npm run check:all`
+  完整质量门禁：先运行 `check`，再运行 `check:e2e`。
 
 如果只是日常开发，优先用上面这些入口，不要先记具体脚本名。
 
 ## 脚本职责
 
 - [`../start-local-edu.command`](../start-local-edu.command)
-  macOS 双击启动器；会先检查本机 `5173 / 8000` 是否已是可用服务，未启动时再执行 `npm run dev`。
+  macOS 双击启动器；会先检查本机 `5173 / 8000` 是否已是可用服务，未启动时再执行 `npm run start:local`，启动后服务留在后台。
+- [`start-local-services.cjs`](./start-local-services.cjs)
+  本地后台启动器，负责复用或后台启动前后端服务，并把日志写入 `data/logs/local-services/`。
+- [`stop-local-services.cjs`](./stop-local-services.cjs)
+  根据 `data/logs/local-services/*.pid.json` 停止后台启动器创建的服务。
 - [`backend-cli.cjs`](./backend-cli.cjs)
   后端统一命令入口，负责迁移、初始化、测试、开发启动。
 - [`check_data_health.py`](./check_data_health.py)
   检查 `data/app.db` 的 P0 数据健康状态，输出核心表数量、山东年份覆盖、考生类型覆盖和缺口摘要；支持 `--json`。
 - [`p0_delivery_check.py`](./p0_delivery_check.py)
   执行 P0 本地交付验收：数据健康、SQLite 完整性、备份包结构、临时恢复、恢复库健康检查和恢复后应用启动。
+- [`quality-gate.cjs`](./quality-gate.cjs)
+  把 `check / check:e2e / check:all` 包装成分阶段质量门禁，保留原有检查强度，同时让失败原因和下一步更容易读懂。
 - [`dev-local.cjs`](./dev-local.cjs)
   根目录统一开发启动器，负责前后端一起启动和端口预检；直接调用时也会从仓库根目录启动子命令。
 - [`dev.sh`](./dev.sh)

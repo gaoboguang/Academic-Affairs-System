@@ -6,7 +6,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
-from app.importers.base import RowError, read_template_rows, save_error_report
+from app.importers.base import (
+    RowError,
+    build_error_preview,
+    build_row_error,
+    read_template_rows,
+    resolve_import_status,
+    save_error_report,
+)
 from app.models import Exam, ExamSubject, ScoreImportBatch, ScoreRecord, Student, Subject
 from app.schemas.common import ImportResult
 from app.utils.parsers import clean_text
@@ -69,6 +76,8 @@ class ScoreImporter:
         success_rows = 0
         failed_rows = 0
         skipped_rows = 0
+        created_rows = 0
+        updated_rows = 0
         row_errors: list[RowError] = []
         seen_keys: set[tuple[int, int]] = set()
 
@@ -92,6 +101,7 @@ class ScoreImporter:
                         skipped_rows += 1
                         continue
                     self._apply(existing, payload, batch.id)
+                    updated_rows += 1
                 else:
                     record = ScoreRecord(
                         exam_id=self.exam.id,
@@ -101,11 +111,12 @@ class ScoreImporter:
                     self.session.add(record)
                     self.session.flush()
                     self._apply(record, payload, batch.id)
+                    created_rows += 1
 
                 success_rows += 1
             except Exception as exc:
                 failed_rows += 1
-                row_errors.append(RowError(row_number=row_number, values=row_values, message=str(exc)))
+                row_errors.append(build_row_error(row_number=row_number, values=row_values, message=str(exc)))
 
         error_report_path = save_error_report(
             settings=self.settings,
@@ -114,11 +125,19 @@ class ScoreImporter:
             errors=row_errors,
         )
         return ImportResult(
+            status=resolve_import_status(
+                total_rows=len(rows),
+                success_rows=success_rows,
+                failed_rows=failed_rows,
+            ),
             total_rows=len(rows),
             success_rows=success_rows,
             failed_rows=failed_rows,
             skipped_rows=skipped_rows,
+            created_rows=created_rows,
+            updated_rows=updated_rows,
             error_report_path=error_report_path,
+            error_preview=build_error_preview(row_errors),
             message=f"成绩导入完成，成功 {success_rows} 条，失败 {failed_rows} 条。",
         )
 
@@ -193,4 +212,3 @@ class ScoreImporter:
         record.raw_text = payload.raw_text
         record.import_batch_id = batch_id
         record.note = payload.note
-

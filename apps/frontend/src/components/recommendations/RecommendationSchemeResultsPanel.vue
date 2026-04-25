@@ -167,7 +167,10 @@
             </div>
           </article>
         </div>
-        <el-empty v-else description="暂无结果" />
+        <el-empty
+          v-else
+          :description="`当前${column.label}分组暂无结果。可检查招生计划、录取数据和冲稳保阈值是否覆盖该学生。`"
+        />
       </article>
     </div>
 

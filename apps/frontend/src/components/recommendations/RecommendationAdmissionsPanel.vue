@@ -13,20 +13,7 @@
       </div>
     </div>
 
-    <el-alert
-      v-if="admissionImportResult"
-      class="result-alert"
-      :title="admissionImportResult.message"
-      type="success"
-      show-icon
-      :closable="false"
-    >
-      <template #default>
-        成功 {{ admissionImportResult.success_rows }} 行，失败 {{ admissionImportResult.failed_rows }} 行，
-        新增院校 {{ admissionImportResult.created_college_count }} 所，新增专业
-        {{ admissionImportResult.created_major_count }} 个。
-      </template>
-    </el-alert>
+    <ImportFeedbackPanel :result="admissionImportResult" />
 
     <div class="filter-grid">
       <el-select v-model="filters.year" clearable placeholder="年份">
@@ -71,21 +58,14 @@
 <script setup lang="ts">
 import type { UploadFile } from "element-plus";
 
-import type { AdmissionRecord, CollegeItem } from "./types";
+import ImportFeedbackPanel from "../common/ImportFeedbackPanel.vue";
+import type { AdmissionImportResponse, AdmissionRecord, CollegeItem } from "./types";
 
 interface AdmissionFiltersState {
   year?: number;
   province: string;
   college_id?: number;
   student_type: string;
-}
-
-interface AdmissionImportResponse {
-  message: string;
-  success_rows: number;
-  failed_rows: number;
-  created_college_count: number;
-  created_major_count: number;
 }
 
 defineProps<{

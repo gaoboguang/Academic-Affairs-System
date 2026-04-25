@@ -5,6 +5,7 @@ import {
   buildRecommendationFallbackPriorityCopy,
   buildRecommendationReferenceCopy,
   buildRecommendationStaleReferenceNote,
+  formatRecommendationRiskFlags,
   getRecommendationReferenceYearGap,
 } from "../src/components/recommendations/recommendationCopy";
 
@@ -73,6 +74,21 @@ describe("recommendation copy", () => {
     ]);
   });
 
+  it("builds boundary notes for general admission reference fallback", () => {
+    expect(
+      buildRecommendationBoundaryNotes(
+        {
+          reference_scope: "major",
+          risk_flags_json: ["general_reference_fallback"],
+          snapshot_json: { reference_years: [2025] },
+        } as never,
+        2026,
+      ),
+    ).toEqual([
+      "当前缺少该类别专门录取结果，先按普通类录取结果做方向性参考；这不是该类别专门录取把握，正式填报前仍需结合类别公告、批次规则和学校章程复核。",
+    ]);
+  });
+
   it("builds fallback priority copy", () => {
     expect(
       buildRecommendationFallbackPriorityCopy({
@@ -83,5 +99,9 @@ describe("recommendation copy", () => {
         fallback_review_notes_json: ["核对艺术统考类别"],
       } as never),
     ).toBe("初筛优先级：优先核看（58）：细分类别：艺术音乐类；有省级控制线；计划数 30；核对清单：核对艺术统考类别");
+  });
+
+  it("formats risk flags as teacher-readable copy", () => {
+    expect(formatRecommendationRiskFlags(["sample_insufficient", "simulation_mode"])).toBe("样本不足 / 模拟测算");
   });
 });

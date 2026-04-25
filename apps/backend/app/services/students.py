@@ -511,7 +511,7 @@ def import_students(
     except (ValueError, InvalidFileException, BadZipFile) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     job.finished_at = datetime.now()
-    job.status = "success" if result.failed_rows == 0 else "partial_success"
+    job.status = result.status
     job.result_json = result.model_dump()
     write_audit_log(
         session,

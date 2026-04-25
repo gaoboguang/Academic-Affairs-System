@@ -60,7 +60,7 @@ def get_latest_effective_batch(session: Session, semester_id: int) -> TimetableB
         .where(
             TimetableBatch.semester_id == semester_id,
             TimetableBatch.is_active.is_(True),
-            TimetableBatch.status.in_(["completed", "completed_with_unresolved"]),
+            TimetableBatch.status.in_(["success", "partially_failed", "completed", "completed_with_unresolved"]),
         )
         .order_by(desc(TimetableBatch.import_time), desc(TimetableBatch.id))
     )

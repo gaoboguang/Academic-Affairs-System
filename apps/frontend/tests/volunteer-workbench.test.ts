@@ -573,6 +573,21 @@ describe("volunteer workbench helpers", () => {
     );
   });
 
+  it("explains when a special category falls back to general admission records", () => {
+    expect(
+      buildVolunteerCandidateExplanationNotes(
+        buildCandidate(6, {
+          student_type: "spring_exam",
+          risk_flags_json: ["general_reference_fallback"],
+        }),
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        "当前缺少该类别专门录取结果，先按普通类录取结果做方向性参考；这不是该类别专门录取把握，正式填报前仍需结合类别公告、批次规则和学校章程复核。",
+      ]),
+    );
+  });
+
   it("builds boundary insight cards from rule alerts and candidate fallbacks", () => {
     const cards = buildVolunteerBoundaryInsightCards(
       buildPreview({
@@ -848,6 +863,38 @@ describe("volunteer workbench helpers", () => {
     ]);
   });
 
+  it("builds preview boundary card for general admission reference fallback", () => {
+    const cards = buildVolunteerBoundaryInsightCards(
+      buildPreview({
+        candidates: [
+          buildCandidate(1, {
+            student_type: "spring_exam",
+            risk_flags_json: ["general_reference_fallback"],
+          }),
+        ],
+        rule_alerts: [
+          {
+            code: "fallback_general_reference_data",
+            level: "info",
+            title: "已回退到普通类录取参考",
+            detail: "当前缺少“spring_exam”专门录取结果，已先回退参考普通类录取结果；正式填报前建议结合学校公告和类别专门批次再复核。",
+          },
+        ],
+      }),
+    );
+
+    expect(cards).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "general_reference_fallback",
+          title: "已回退到普通类录取参考",
+          summary: "1 条候选当前按普通类录取结果参考",
+          tone: "info",
+        }),
+      ]),
+    );
+  });
+
   it("builds draft boundary insight cards for selected items", () => {
     const cards = buildVolunteerDraftBoundaryInsightCards(
       [
@@ -881,6 +928,68 @@ describe("volunteer workbench helpers", () => {
         expect.objectContaining({ key: "general_candidate_rule", summary: "1 条已选志愿当前按通用考生规则解释" }),
         expect.objectContaining({ key: "college_fallback", summary: "1 条已选志愿缺少专业线，只能先按院校线参考" }),
         expect.objectContaining({ key: "subject_check", summary: "1 条已选志愿仍需逐条核对选科限制" }),
+      ]),
+    );
+  });
+
+  it("builds draft boundary cards for special-category fallback scopes", () => {
+    const cards = buildVolunteerDraftBoundaryInsightCards(
+      [
+        {
+          order: 1,
+          plan_id: 1,
+          candidate: buildCandidate(1, {
+            student_type: "spring_exam",
+            risk_flags_json: ["general_reference_fallback"],
+          }),
+        },
+        {
+          order: 2,
+          plan_id: 2,
+          candidate: buildCandidate(2, {
+            student_type: "art",
+            reference_scope: "score_line",
+            risk_flags_json: ["score_line_reference_only"],
+          }),
+        },
+        {
+          order: 3,
+          plan_id: 3,
+          candidate: buildCandidate(3, {
+            student_type: "comprehensive_evaluation",
+            reference_scope: "plan_only",
+            risk_flags_json: ["plan_only_reference"],
+          }),
+        },
+      ],
+      buildRule(),
+      [
+        {
+          code: "fallback_general_reference_data",
+          level: "info",
+          title: "已回退到普通类录取参考",
+          detail: "当前缺少“spring_exam”专门录取结果，已先回退参考普通类录取结果；正式填报前建议结合学校公告和类别专门批次再复核。",
+        },
+      ],
+    );
+
+    expect(cards).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "general_reference_fallback",
+          title: "已回退到普通类录取参考",
+          summary: "1 条已选志愿当前按普通类录取结果参考",
+        }),
+        expect.objectContaining({
+          key: "score_line_reference",
+          title: "草稿内含省控线初筛",
+          summary: "1 条已选志愿当前仅按省控线做资格参考",
+        }),
+        expect.objectContaining({
+          key: "plan_only_reference",
+          title: "草稿内含计划清单初筛",
+          summary: "1 条已选志愿当前仅按当年招生计划做方向性初筛",
+        }),
       ]),
     );
   });

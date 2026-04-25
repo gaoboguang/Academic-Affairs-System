@@ -2,6 +2,7 @@ import { computed, reactive, ref } from "vue";
 import ElMessage from "element-plus/es/components/message/index";
 
 import { apiRequest } from "../../api/client";
+import { formatUserActionError } from "../../utils/userFeedback";
 import {
   buildRecommendationSettingsSnapshot,
   hasRecommendationSettingsPendingChanges,
@@ -9,7 +10,7 @@ import {
 import type { RecommendationSettings } from "./types";
 
 function reportError(error: unknown): void {
-  ElMessage.error((error as Error).message);
+  ElMessage.error(formatUserActionError("保存推荐策略", error, "先确认阈值、黑名单和白名单设置正确；如果仍失败，请刷新策略后重试。"));
 }
 
 const defaultRecommendationSettings: RecommendationSettings = {

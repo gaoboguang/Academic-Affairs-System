@@ -170,6 +170,20 @@ export function getMissingRequiredReportFieldsMessage(form: ReportPageFormState)
   return fields.length ? `请先补齐：${fields.join("、")}` : "";
 }
 
+export function formatReportExportParams(value?: Record<string, unknown> | null): string {
+  if (!value || !Object.keys(value).length) return "-";
+  return Object.entries(value)
+    .filter(([, item]) => item !== null && item !== undefined)
+    .map(([key, item]) => {
+      if (key === "report_type") {
+        return `报表类型=${getReportTypeLabel(String(item))}`;
+      }
+      const label = REPORT_FIELD_LABELS[key as ReportFormField] ?? key;
+      return `${label}=${item}`;
+    })
+    .join(" / ") || "-";
+}
+
 export function getReportRuleOptionScope(reportType: string): "workload" | "adviser" | null {
   return REPORT_TYPE_CONFIGS[reportType]?.ruleOptionScope ?? null;
 }

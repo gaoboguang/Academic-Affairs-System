@@ -72,13 +72,7 @@
         </el-upload>
         <el-button @click="openAssignmentDialog">维护任教关系</el-button>
       </div>
-      <el-alert
-        v-if="importResult"
-        :title="importResult.message"
-        type="success"
-        show-icon
-        :closable="false"
-      />
+      <ImportFeedbackPanel :result="importResult" />
     </section>
 
     <section class="soft-card panel-block">
@@ -330,7 +324,9 @@ import type { UploadFile } from "element-plus";
 import { useRouter } from "vue-router";
 
 import { apiRequest, openFile, uploadFile } from "../api/client";
+import ImportFeedbackPanel from "../components/common/ImportFeedbackPanel.vue";
 import { useReferenceStore } from "../stores/reference";
+import type { ImportFeedbackResult } from "../utils/importFeedback";
 
 interface TeacherItem {
   id: number;
@@ -362,11 +358,6 @@ interface AssignmentItem {
   weekly_periods_manual?: number;
 }
 
-interface ImportResult {
-  message: string;
-  error_report_path?: string;
-}
-
 const referenceStore = useReferenceStore();
 const router = useRouter();
 const importStrategy = ref("skip_existing");
@@ -375,7 +366,7 @@ const assignmentDialogVisible = ref(false);
 const assignmentFormVisible = ref(false);
 const editingId = ref<number | null>(null);
 const submitting = ref(false);
-const importResult = ref<ImportResult | null>(null);
+const importResult = ref<ImportFeedbackResult | null>(null);
 
 const filters = reactive({
   teacher_no: "",
@@ -561,10 +552,13 @@ async function handleImport(uploadFileItem: UploadFile): Promise<void> {
     return;
   }
   try {
-    importResult.value = await uploadFile<ImportResult>("/api/teachers/import", uploadFileItem.raw, {
+    importResult.value = await uploadFile<ImportFeedbackResult>("/api/teachers/import", uploadFileItem.raw, {
       strategy: importStrategy.value,
     });
-    ElMessage.success(importResult.value.message);
+    ElMessage({
+      type: importResult.value.failed_rows ? "warning" : "success",
+      message: importResult.value.message,
+    });
     await Promise.all([loadTeachers(), loadAssignments()]);
   } catch (error) {
     ElMessage.error((error as Error).message);

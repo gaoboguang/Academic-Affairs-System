@@ -5,6 +5,7 @@ import ElMessageBox from "element-plus/es/components/message-box/index";
 
 import { apiRequest, openFile } from "../../api/client";
 import { volunteerDraftPrintPreviewPath } from "../../utils/print";
+import { formatUserActionError } from "../../utils/userFeedback";
 import { uniqueStrings } from "./helpers";
 import { buildVolunteerDraftOutputWarningMessage } from "./recommendationOutputGuards";
 import {
@@ -50,7 +51,7 @@ interface VolunteerWorkspaceOptions {
 }
 
 function reportError(error: unknown): void {
-  ElMessage.error((error as Error).message);
+  ElMessage.error(formatUserActionError("处理学生志愿工作台", error, "先确认学生、考试、批次、规则和草稿状态正确；如果仍失败，请刷新候选池后重试。"));
 }
 
 async function confirmWarningAction(message: string, title: string, confirmButtonText: string): Promise<boolean> {

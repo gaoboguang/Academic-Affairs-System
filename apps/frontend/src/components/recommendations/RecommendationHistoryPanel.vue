@@ -63,7 +63,10 @@
         </template>
       </el-table-column>
     </el-table>
-    <el-empty v-if="!loadingHistory && !historyItems.length" description="暂无推荐历史" />
+    <el-empty
+      v-if="!loadingHistory && !historyItems.length"
+      description="暂无推荐历史。请先在左侧补齐学生、考试和省份规则，生成推荐方案后会自动出现在这里。"
+    />
   </section>
 </template>
 

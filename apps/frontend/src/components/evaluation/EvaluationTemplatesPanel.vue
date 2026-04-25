@@ -42,6 +42,10 @@
           </template>
         </el-table-column>
       </el-table>
+      <el-empty
+        v-if="!templates.length"
+        description="还没有评教模板。请先新增模板，再导入评教原始数据。"
+      />
     </section>
 
     <section class="soft-card panel-block">
@@ -74,10 +78,14 @@
         v-if="evaluationImportResult"
         class="result-alert"
         :title="evaluationImportResult.message"
-        type="success"
+        :type="evaluationImportResult.failed_rows ? 'warning' : 'success'"
         show-icon
         :closable="false"
-      />
+      >
+        <template #default>
+          成功 {{ evaluationImportResult.success_rows }} 行，失败 {{ evaluationImportResult.failed_rows }} 行。失败时请先检查模板列名、教师姓名和学期是否匹配。
+        </template>
+      </el-alert>
 
       <el-table :data="batches" stripe style="margin-top: 16px">
         <el-table-column label="模板" prop="template_name" min-width="180" />
@@ -98,6 +106,10 @@
           </template>
         </el-table-column>
       </el-table>
+      <el-empty
+        v-if="!batches.length"
+        description="暂无评教批次。请选择模板和学期，导入评教数据后再查看分析。"
+      />
     </section>
   </div>
 </template>

@@ -11,6 +11,7 @@ import {
   School,
   Setting,
   Tickets,
+  UploadFilled,
   UserFilled,
 } from "@element-plus/icons-vue";
 
@@ -116,6 +117,14 @@ export const navSections: AppNavSection[] = [
         tags: ["学生分析", "班级分析", "教师分析"],
       },
       {
+        path: "/import-center",
+        label: "导入中心",
+        description: "统一查看导入模板、批次、错误报告和撤销说明。",
+        helper: "导入完成后先看这里确认是否成功，再进入对应业务页面修正。",
+        icon: UploadFilled,
+        tags: ["模板下载", "批次记录", "错误报告"],
+      },
+      {
         path: "/workload",
         label: "课表工作量",
         description: "完成课表导入、修正、规则配置和工作量计算。",
@@ -141,10 +150,10 @@ export const navSections: AppNavSection[] = [
       {
         path: "/gaokao-data",
         label: "高考数据",
-        description: "查看 DB RC1 只读基线、审阅队列、证据链和山东监控。",
-        helper: "这里优先做只读驾驶舱，用来看懂数据库当前做到哪一步，不直接修改底层数据。",
+        description: "查看高考数据来源、缺口、审阅队列、证据链和山东覆盖情况。",
+        helper: "这里是只读看板，用来判断当前数据能支持哪些使用场景，不直接修改底层数据。",
         icon: DataAnalysis,
-        tags: ["DB RC1", "只读驾驶舱", "山东监控"],
+        tags: ["数据来源", "只读看板", "山东覆盖"],
       },
       {
         path: "/recommendations",

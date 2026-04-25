@@ -33,6 +33,18 @@ def build_invalid_score_workbook() -> bytes:
     return buffer.getvalue()
 
 
+def build_score_workbook_with_rows(exam_name: str, rows: list[list[object]]) -> bytes:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "数据"
+    sheet.append(["考试名称", "学号", "姓名", "班级", "科目", "分数", "缺考标记", "备注"])
+    for row in rows:
+        sheet.append([exam_name, *row])
+    buffer = BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()
+
+
 def create_published_exam_with_scores(client) -> tuple[int, dict]:
     exam_response = client.post(
         "/api/exams",
@@ -184,12 +196,14 @@ def test_student_analysis_export_keeps_summary_structure(client) -> None:
     assert summary_rows["考试"] == "2026届高一4月月考"
     assert summary_rows["学生"] == "张三"
     assert summary_rows["总分"] == 243
-    assert summary_rows["班名"] == 1
-    assert summary_rows["年名"] == 1
+    assert summary_rows["班级名次"] == 1
+    assert summary_rows["年级名次"] == 1
     assert "总分变化" in summary_rows
 
     detail_sheet = workbook["学科明细"]
     assert detail_sheet.cell(row=1, column=1).value == "科目"
+    assert detail_sheet.cell(row=1, column=3).value == "班级名次"
+    assert detail_sheet.cell(row=1, column=4).value == "年级名次"
     assert detail_sheet.max_row == 3
 
     insight_sheet = workbook["摘要概览"]
@@ -297,3 +311,122 @@ def test_exam_score_import_rejects_invalid_template(client) -> None:
     )
     assert import_response.status_code == 400
     assert import_response.json()["detail"] == "成绩导入模板表头不匹配，请先下载系统模板。"
+
+
+def test_exam_score_import_reports_duplicate_rows(client) -> None:
+    exam_name = "重复成绩导入测试"
+    exam_response = client.post(
+        "/api/exams",
+        json={
+            "name": exam_name,
+            "exam_type": "月考",
+            "exam_date": "2026-04-12",
+            "semester_id": 2,
+            "grade_scope_json": [1],
+            "is_trend_enabled": True,
+            "status": "draft",
+            "note": "",
+            "is_active": True,
+        },
+    )
+    assert exam_response.status_code == 200
+    exam_id = exam_response.json()["id"]
+
+    subject_response = client.post(
+        f"/api/exams/{exam_id}/subjects",
+        json=[
+            {
+                "subject_id": 1,
+                "full_score": 150,
+                "is_in_total": True,
+                "excellent_line": 110,
+                "pass_line": 90,
+                "sort_order": 1,
+                "is_active": True,
+            }
+        ],
+    )
+    assert subject_response.status_code == 200
+
+    import_response = client.post(
+        f"/api/exams/{exam_id}/scores/import",
+        data={"strategy": "overwrite", "rebuild": "false"},
+        files={
+            "file": (
+                "duplicate_scores.xlsx",
+                build_score_workbook_with_rows(
+                    exam_name,
+                    [
+                        ["2026001", "张三", "1班", "语文", "118", "", ""],
+                        ["2026001", "张三", "1班", "语文", "119", "", ""],
+                    ],
+                ),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert import_response.status_code == 200
+    payload = import_response.json()
+    assert payload["status"] == "partially_failed"
+    assert payload["success_rows"] == 1
+    assert payload["failed_rows"] == 1
+    assert payload["error_preview"] == ["第 3 行：同一学生同一科目在导入文件中重复出现"]
+    assert payload["error_report_path"]
+
+
+def test_exam_score_import_reports_identity_conflicts(client) -> None:
+    exam_name = "成绩身份冲突测试"
+    exam_response = client.post(
+        "/api/exams",
+        json={
+            "name": exam_name,
+            "exam_type": "月考",
+            "exam_date": "2026-04-13",
+            "semester_id": 2,
+            "grade_scope_json": [1],
+            "is_trend_enabled": True,
+            "status": "draft",
+            "note": "",
+            "is_active": True,
+        },
+    )
+    assert exam_response.status_code == 200
+    exam_id = exam_response.json()["id"]
+    subject_response = client.post(
+        f"/api/exams/{exam_id}/subjects",
+        json=[
+            {
+                "subject_id": 1,
+                "full_score": 150,
+                "is_in_total": True,
+                "excellent_line": 110,
+                "pass_line": 90,
+                "sort_order": 1,
+                "is_active": True,
+            }
+        ],
+    )
+    assert subject_response.status_code == 200
+
+    import_response = client.post(
+        f"/api/exams/{exam_id}/scores/import",
+        data={"strategy": "overwrite", "rebuild": "false"},
+        files={
+            "file": (
+                "conflict_scores.xlsx",
+                build_score_workbook_with_rows(
+                    exam_name,
+                    [["2026001", "李四", "1班", "语文", "118", "", ""]],
+                ),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert import_response.status_code == 200
+    payload = import_response.json()
+    assert payload["status"] == "failed"
+    assert payload["success_rows"] == 0
+    assert payload["failed_rows"] == 1
+    assert payload["error_preview"] == ["第 2 行：学号与姓名不匹配: 2026001"]

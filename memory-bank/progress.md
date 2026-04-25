@@ -33,6 +33,13 @@
   - README、`docs/README.md`、`scripts/README.md`、`docs/mac-dev-setup.md` 已加入两份新 Mac 文档入口
   - 本轮验证：脚本帮助输出通过；`npm run backend:data-health -- --json` 通过且仍显示 P0 缺口 `6` 条；`npm run check` 通过，含后端 `66 passed`、前端 lint、前端 `20 passed / 114 passed` 和前端构建；`git diff --check` 通过
 
+- 2026-04-24 已修正“每次启动前端掉线”的使用问题：
+  - 根因是 `npm run dev` 属于前台开发模式，终端关闭后前端 Vite 会停止；此前后端残留为后台进程，导致用户反复看到“后端正常但页面打不开”
+  - 新增 `scripts/start-local-services.cjs` 与根命令 `npm run start:local`，可后台启动或复用前后端服务，日志写入 `data/logs/local-services/`
+  - 新增 `scripts/stop-local-services.cjs` 与根命令 `npm run stop:local`
+  - `start-local-edu.command` 已改为调用 `npm run start:local`，双击启动后可关闭终端窗口，服务仍保持后台运行
+  - 已实际复现“后端正常、前端 5173 不通”的状态，再用 `npm run start:local -- --no-open` 拉起前端；当前 `5173` 返回 `200 OK`，`8000/api/system/health` 返回 `ok`
+
 - 2026-04-24 已完成交付计划 P0 第一段：
   - 新增 `apps/backend/app/utils/data_health.py` 与 `scripts/check_data_health.py`
   - 根目录新增统一入口 `npm run backend:data-health`
@@ -70,6 +77,67 @@
   - `/api/gaokao/data-health` 的 schema 已同步新增阶段一字段，`apps/frontend/src/pages/GaokaoDataPage.vue` 的“山东覆盖”页签已支持展开按年矩阵和查看导入审计摘要
   - 当前真实主库审计结果不伪造缺失数据：招生计划缺 2021-2023，一分一段和省控线缺 2020-2023，特殊类型专门录取结果缺失且只能初筛，政策参考偏少，章程限制链待复核 1748 条
   - 本轮验证：`npm run backend:test -- apps/backend/tests/test_data_health.py apps/backend/tests/test_gaokao_api.py -q` 为 `15 passed`；`npm run backend:data-health -- --json` 已确认输出阶段一矩阵和审计摘要；`npm run frontend:build` 通过
+
+- 2026-04-24 已完成 Codex App 窗口 3 的 P0 数据健康解释增强：
+  - `apps/backend/app/utils/data_health.py` 已新增字段解释、交付判断和特殊类型风险矩阵；CLI 输出会直接显示“可验收但有数据警告”和各类型可用性
+  - `/api/gaokao/data-health` schema 已同步新增 `field_explanations / delivery_assessment / special_type_risks`，`apps/backend/tests/test_data_health.py` 已补结构化断言
+  - `/gaokao-data` 的“山东覆盖”页签已新增交付判断卡片、覆盖矩阵可用性说明和“考生类型可用性”表，便于非程序员判断普通类主链、特殊类型初筛和 fallback 边界
+  - `docs/p0_delivery_runbook_2026-04-24.md` 已补 JSON 字段说明与非程序员读法；当前仍保持 6 条数据缺口，不把特殊类型初筛写成录取把握
+  - 本轮验证：`npm run backend:data-health`、`npm run backend:data-health -- --json`、`npm run backend:p0-check -- --json`（`ok: true`，备份 `data/backups/p0_delivery_backup_20260424_173236.zip`）、后端定向 `15 passed`、后端全量 `66 passed`、前端 `20 passed / 120 passed`、`npm run frontend:build` 均通过
+
+- 2026-04-24 已完成 Codex App 窗口 2 的导入体验第一轮统一：
+  - 新增 `docs/import-system-audit-2026-04-24.md`，盘点学生、教师、成绩、课表、录取数据、招生计划、评教等导入入口、模板、错误报告、批次记录和回滚缺口
+  - `ImportResult` 已统一补 `status / created_rows / updated_rows`，导入状态采用 `pending / running / success / failed / partially_failed / rolled_back`，并兼容旧 `processing / partial_success / completed_with_unresolved`
+  - 错误报告统一新增“列名 / 字段名 / 原始值 / 错误原因 / 建议修复”列，学生、教师、成绩、课表、录取、招生计划等导入器已接入结构化错误预览
+  - 前端新增 `ImportFeedbackPanel.vue`，学生、教师、成绩、课表、录取数据和招生计划导入入口已统一展示摘要、状态、前三条错误和错误报告下载
+  - 已补成绩导入重复行和身份冲突回归、学生错误报告标准列回归、前端导入反馈 helper 回归；随后已继续补齐只读“导入中心”和回滚边界说明
+
+- 2026-04-24 已继续完成 Codex App 窗口 2 的导入中心补尾：
+  - 新增 `/api/import-center/batches` 与 `/api/import-center/batches/{source_type}/{batch_id}`，聚合 `import_job`、`score_import_batch`、`timetable_batch`、`evaluation_batch`
+  - 新增 `/import-center` 页面，集中展示模板下载、进入业务页上传、批次列表、批次详情、错误报告下载、审计日志和撤销说明
+  - 工作台和侧栏已加入导入中心入口
+  - 当前回滚策略明确为“提示 + 备份恢复 / 重新导入覆盖修正”，不做无 before-image 的自动删除式回滚
+
+- 2026-04-24 已完成 Codex App 窗口 4 的 Stage B 推荐解释链补齐：
+  - 新增 `docs/recommendation-stage-b-audit-2026-04-24.md`，记录候选生成、冲稳保分组、规则命中、年份边界、特殊类型 fallback、职业解释和输出面一致性审计
+  - 工作台预览、候选说明、志愿草稿打印 / 报表摘要、推荐结果 / 推荐打印、`recommendation_summary` 与 `volunteer_draft_summary` Excel 现已统一展示“普通类录取参考回退”边界
+  - 草稿边界概览和报表中心 `volunteer_draft_summary` 也已补齐省控线初筛、计划清单初筛两类特殊类型 fallback，继续强调它们只是资格 / 方向性初筛
+  - 本轮验证：前端定向 `3 passed / 43 passed`、后端导出定向 `5 passed`、前端全量 `20 passed / 118 passed`、后端定向 `7 passed`、后端全量 `66 passed`、`npm run frontend:build` 和 `git diff --check` 均通过；`npm run check:e2e` 当前 `19 passed / 12 failed`，失败集中在当前并行导入链 / 推荐数据准备 / 默认生源地状态，不视为本次解释 helper 的通过项
+
+- 2026-04-24 已完成 Codex App 窗口 5 的核心教务链路回归审计：
+  - 新增 `docs/core-academic-flow-audit-2026-04-24.md`，按学生、教师、班级 / 课程 / 任教、考试、成绩、分析、课表、工作量和报表逐条记录当前链路、验证证据、风险和后续建议
+  - 本轮没有修改业务代码；定向验证未暴露窗口 5 范围内必须立即修复的空态、错误提示、按钮、参数、分页 / 筛选或导出字段问题
+  - 已执行窗口 5 后端定向测试 `24 passed`、前端核心单测 `38 passed`、`npm run frontend:build` 和窗口 5 相关 Playwright `9 passed`
+  - 当前仍不把导入中心、推荐解释、Mac 启动体验和高考数据缺口纳入窗口 5；这些继续按各自窗口接手文档处理
+
+- 2026-04-24 已完成 Codex App 窗口 6 的报表、打印、Excel 导出一致性第一轮：
+  - 新增 `docs/report-export-print-audit-2026-04-24.md`，覆盖 10 类报表的报表中心入口、后端导出、打印页、Excel sheet、导出前摘要、风险表达和字段顺序
+  - `apps/backend/app/exporters/recommendations.py` 已把推荐报告和志愿草稿 Excel 明细“风险提示”从内部码改为中文标签，并补 `simulation_mode` 标签；前端 `recommendationCopy.ts` 同步补同一标签
+  - `apps/backend/app/exporters/reports.py`、`archive.py` 已把学生名次字段、成长类型、班主任量化类型等导出字段改成非技术中文表达；`ReportsPage.vue` 的导出记录参数也改为中文字段名
+  - 本轮验证：后端窗口 6 定向 `23 passed`、前端 `22 passed`、`npm run frontend:build`、报表相关 Playwright `4 passed` 和 `git diff --check` 均通过
+  - 本次复核新建并切到 `codex/06-report-export-consistency`，继续把 `RecommendationVolunteerWorkbenchPanel.vue` 的风险提示改为复用 `recommendationCopy.ts` 共享标签；当前复核验证为后端窗口 6 定向 `23 passed`、前端报表/推荐文案定向 `13 passed`、`npm run frontend:build`、报表相关 Playwright `4 passed` 和 `git diff --check` 均通过
+
+- 2026-04-24 已完成 Codex App 窗口 7 的前端体验、导航与非程序员可读性第一轮：
+  - 新增 `docs/frontend-navigation-audit-2026-04-24.md`，并在 `docs/README.md` 加入入口
+  - 侧栏与高考数据页已把内部术语 `DB RC1 / fallback / handoff` 改为“本地高考只读库 / 应用侧主档补充 / 备用链接 / 待同步”等面向老师的表达
+  - 新增 `apps/frontend/src/utils/userFeedback.ts` 与 `apps/frontend/tests/user-feedback.test.ts`，失败提示现在包含动作、原因和下一步建议
+  - 导入中心、报表中心、课表工作量、评教量化、推荐历史和推荐输出链补了更明确的空态、错误态或下一步说明；赋分规则页不再直接显示压缩 JSON
+  - 本轮验证：定向前端单测 `22 passed`、全量前端单测 `128 passed`、`npm run frontend:lint`、`npm run frontend:build`、定向 Playwright `2 passed`、`git diff --check` 均通过
+
+- 2026-04-25 已完成 Codex App 窗口 8 的测试体系与质量门禁收口：
+  - 新增 `scripts/quality-gate.cjs`，并把 `package.json` 的 `check / check:e2e / check:all` 改成分阶段质量门禁输出
+  - 新增 `docs/test-quality-audit-2026-04-24.md` 与 `docs/codex-task-acceptance-checklist.md`
+  - `README.md`、`docs/README.md`、`scripts/README.md`、`tests/README.md` 已加入测试审计和验收清单入口，并修正 E2E 流程数与 fixture 数
+  - 补 `apps/backend/tests/test_data_health.py` 对 CLI 文本中“P0 交付判断 / 考生类型可用性 / 导入审计摘要”的断言
+  - 修正 `tests/e2e/dashboard-smoke.spec.ts` 中推荐报告导出失败回退的 toast 期望，使其匹配窗口 7 后统一的“动作失败。原因。建议”文案
+  - 本轮验证：`node scripts/quality-gate.cjs --list`、数据健康定向 `2 passed`、`git diff --check`、`npm run check`、`npm run check:e2e`、`npm run check:all` 均通过；完整门禁最终为后端 `69 passed`、前端 `22 files / 128 tests passed`、前端构建通过、E2E `31 passed`
+
+- 2026-04-25 已完成 Codex App 窗口 9 的最终整合与发布前验收：
+  - 新增 `docs/final-acceptance-report-2026-04-24.md`，按 v3 窗口 9 要求记录窗口 0-8 成果、冲突处理、完整检查、P0 数据风险、Mac 启动方式、试用建议和下一轮优先级
+  - `README.md` 与 `docs/README.md` 已加入最终验收报告入口
+  - 已确认当前工作区无未合并文件、无 Git 冲突标记；本轮未新增大功能、未做架构性重构
+  - 本轮验证：`npm run backend:test` 为 `69 passed`；`npm run frontend:lint` 通过；`npm run frontend:test` 为 `22 files / 128 tests passed`；`npm run frontend:build` 通过；`npm run backend:data-health` 通过但仍保留 P0 缺口 `6`；`npm run backend:p0-check -- --json` 为 `ok: true`，备份包 `data/backups/p0_delivery_backup_20260425_084455.zip`；`npm run check`、`npm run check:e2e`、`npm run check:all` 均通过，最终 E2E `31 passed`
+  - 当前建议：可以在 Mac 本机和学校内部小范围试用；普通类推荐可作为主链路参考，特殊类型仍只能初筛和人工核对，不得包装成录取把握
 
 - 2026-04-24 已新增交付版后续开发计划文档：
   - 新增 `docs/development_plan_to_delivery_2026-04-24.md`

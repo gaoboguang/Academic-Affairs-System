@@ -16,10 +16,19 @@
         </div>
       </div>
       <div class="action-row">
-        <el-button @click="loadOptions">刷新选项</el-button>
-        <el-button type="primary" plain @click="loadExportRecords">刷新记录</el-button>
+        <el-button :loading="optionsLoading" @click="loadOptions">刷新选项</el-button>
+        <el-button type="primary" plain :loading="recordsLoading" @click="loadExportRecords">刷新记录</el-button>
       </div>
     </header>
+
+    <el-alert
+      v-if="pageLoadError"
+      class="page-alert"
+      type="error"
+      show-icon
+      :closable="false"
+      :title="pageLoadError"
+    />
 
     <section class="overview-grid">
       <article class="soft-card overview-panel">
@@ -170,7 +179,7 @@
         </div>
       </div>
       <div class="table-shell">
-        <el-table :data="exportRecords" stripe>
+        <el-table :data="exportRecords" stripe v-loading="recordsLoading">
           <el-table-column label="报表名称" prop="report_name" min-width="180" />
           <el-table-column label="类型" min-width="140">
             <template #default="{ row }">
@@ -197,7 +206,10 @@
           </el-table-column>
         </el-table>
       </div>
-      <el-empty v-if="!exportRecords.length" description="暂无导出记录" />
+      <el-empty
+        v-if="!recordsLoading && !exportRecords.length"
+        description="暂无导出记录。请先在上方选择报表类型并补齐参数，再点击“生成报表”。"
+      />
     </section>
   </div>
 </template>
@@ -223,6 +235,7 @@ import {
 } from "../components/reports/reportInsights";
 import {
   buildReportExportPayload,
+  formatReportExportParams,
   getMissingRequiredReportFields,
   getMissingRequiredReportFieldsMessage,
   getReportPrintPreviewPath,
@@ -235,6 +248,7 @@ import {
   type OptionItem,
   useReferenceStore,
 } from "../stores/reference";
+import { formatUserActionError } from "../utils/userFeedback";
 
 interface ExamOption {
   id: number;
@@ -314,6 +328,9 @@ const reportInsightLoading = ref(false);
 const reportInsightLoaded = ref(false);
 const reportInsightError = ref("");
 const exporting = ref(false);
+const optionsLoading = ref(false);
+const recordsLoading = ref(false);
+const pageLoadError = ref("");
 const reportTypeOptions = REPORT_TYPE_OPTIONS;
 
 const form = reactive({
@@ -420,34 +437,49 @@ function exportStatusType(status: string): "success" | "info" | "danger" {
 }
 
 function formatParams(value?: Record<string, unknown> | null): string {
-  if (!value) return "-";
-  return Object.entries(value)
-    .map(([key, item]) => `${key}=${item}`)
-    .join(" / ");
+  return formatReportExportParams(value);
 }
 
 async function loadOptions(): Promise<void> {
-  await referenceStore.loadCore();
-  const [examPayload, studentPayload, teacherPayload, rulePayload, adviserRulePayload, draftPayload] = await Promise.all([
-    apiRequest<{ items: ExamOption[] }>("/api/exams?page=1&page_size=100"),
-    apiRequest<{ items: StudentOption[] }>("/api/students?page=1&page_size=200"),
-    apiRequest<{ items: TeacherOption[] }>("/api/teachers?page=1&page_size=200"),
-    apiRequest<RuleVersion[]>("/api/workload/rules"),
-    apiRequest<RuleVersion[]>("/api/adviser-quant/rules"),
-    apiRequest<VolunteerDraftOption[]>("/api/recommendations/volunteer-drafts"),
-  ]);
-  recommendationOptions.value = await apiRequest<RecommendationOption[]>("/api/recommendations/history");
-  evaluationBatchOptions.value = await apiRequest<EvaluationBatchOption[]>("/api/evaluation/batches");
-  volunteerDraftOptions.value = draftPayload;
-  examOptions.value = examPayload.items;
-  studentOptions.value = studentPayload.items;
-  teacherOptions.value = teacherPayload.items;
-  ruleVersions.value = rulePayload;
-  adviserRuleVersions.value = adviserRulePayload;
+  optionsLoading.value = true;
+  pageLoadError.value = "";
+  try {
+    await referenceStore.loadCore();
+    const [examPayload, studentPayload, teacherPayload, rulePayload, adviserRulePayload, draftPayload] = await Promise.all([
+      apiRequest<{ items: ExamOption[] }>("/api/exams?page=1&page_size=100"),
+      apiRequest<{ items: StudentOption[] }>("/api/students?page=1&page_size=200"),
+      apiRequest<{ items: TeacherOption[] }>("/api/teachers?page=1&page_size=200"),
+      apiRequest<RuleVersion[]>("/api/workload/rules"),
+      apiRequest<RuleVersion[]>("/api/adviser-quant/rules"),
+      apiRequest<VolunteerDraftOption[]>("/api/recommendations/volunteer-drafts"),
+    ]);
+    recommendationOptions.value = await apiRequest<RecommendationOption[]>("/api/recommendations/history");
+    evaluationBatchOptions.value = await apiRequest<EvaluationBatchOption[]>("/api/evaluation/batches");
+    volunteerDraftOptions.value = draftPayload;
+    examOptions.value = examPayload.items;
+    studentOptions.value = studentPayload.items;
+    teacherOptions.value = teacherPayload.items;
+    ruleVersions.value = rulePayload;
+    adviserRuleVersions.value = adviserRulePayload;
+  } catch (error) {
+    pageLoadError.value = formatUserActionError("刷新报表选项", error, "确认考试、学生、教师或推荐数据接口可用后重试。");
+    ElMessage.error(pageLoadError.value);
+  } finally {
+    optionsLoading.value = false;
+  }
 }
 
 async function loadExportRecords(): Promise<void> {
-  exportRecords.value = await apiRequest<ExportRecord[]>("/api/reports/exports");
+  recordsLoading.value = true;
+  pageLoadError.value = "";
+  try {
+    exportRecords.value = await apiRequest<ExportRecord[]>("/api/reports/exports");
+  } catch (error) {
+    pageLoadError.value = formatUserActionError("刷新导出记录", error, "确认本地服务已启动后重试；不影响你重新生成报表。");
+    ElMessage.error(pageLoadError.value);
+  } finally {
+    recordsLoading.value = false;
+  }
 }
 
 async function loadReportInsights(): Promise<void> {
@@ -459,21 +491,24 @@ async function loadReportInsights(): Promise<void> {
     return;
   }
   reportInsightLoading.value = true;
-  reportInsightData.value = await fetchReportInsightData(form, apiRequest, {
-    recommendationCompareSchemeId: currentRecommendationInsightContext.value.compareScheme?.scheme_id,
-  });
-  reportInsightLoading.value = false;
-  reportInsightLoaded.value = true;
+  try {
+    reportInsightData.value = await fetchReportInsightData(form, apiRequest, {
+      recommendationCompareSchemeId: currentRecommendationInsightContext.value.compareScheme?.scheme_id,
+    });
+    reportInsightLoaded.value = true;
+  } finally {
+    reportInsightLoading.value = false;
+  }
 }
 
 async function reloadReportInsights(): Promise<void> {
   try {
     await loadReportInsights();
-    } catch (error) {
-      reportInsightError.value = (error as Error).message;
-      reportInsightLoading.value = false;
-      reportInsightLoaded.value = true;
-    }
+  } catch (error) {
+    reportInsightError.value = formatUserActionError("加载导出前摘要", error, "先确认所选参数正确，再点击重试摘要加载。");
+    reportInsightLoading.value = false;
+    reportInsightLoaded.value = true;
+  }
 }
 
 async function exportReport(): Promise<void> {
@@ -492,7 +527,7 @@ async function exportReport(): Promise<void> {
     openFile(result.download_url);
     ElMessage.success("报表已生成");
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    ElMessage.error(formatUserActionError("生成报表", error, "先确认报表参数完整；如果仍失败，请回到对应业务页复核源数据。"));
   } finally {
     exporting.value = false;
   }
@@ -537,7 +572,7 @@ watch(
     try {
       await loadReportInsights();
     } catch (error) {
-      reportInsightError.value = (error as Error).message;
+      reportInsightError.value = formatUserActionError("加载导出前摘要", error, "先确认所选参数正确，再点击重试摘要加载。");
       reportInsightLoading.value = false;
       reportInsightLoaded.value = true;
       reportInsightData.value = createEmptyReportInsightDataState();
@@ -551,12 +586,16 @@ onMounted(async () => {
     await loadOptions();
     await loadExportRecords();
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    ElMessage.error(formatUserActionError("加载报表中心", error, "确认本地服务已启动后，分别点击“刷新选项”和“刷新记录”。"));
   }
 });
 </script>
 
 <style scoped>
+.page-alert {
+  margin-top: -4px;
+}
+
 .overview-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) repeat(3, minmax(0, 0.75fr));

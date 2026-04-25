@@ -38,11 +38,13 @@ class GaokaoDataHealthTableRead(BaseModel):
     label: str
     count: int = 0
     status: str = "empty"
+    explanation: str | None = None
     notes: list[str] = Field(default_factory=list)
 
 
 class GaokaoDataHealthTypeRead(BaseModel):
     key: str
+    label: str | None = None
     count: int = 0
 
 
@@ -61,6 +63,11 @@ class GaokaoDataHealthCoverageRead(BaseModel):
     total: int = 0
     years: list[int] = Field(default_factory=list)
     missing_years: list[int] = Field(default_factory=list)
+    readiness: str = "unknown"
+    readiness_label: str | None = None
+    risk_level: str = "normal"
+    explanation: str | None = None
+    notes: list[str] = Field(default_factory=list)
     student_types: list[GaokaoDataHealthTypeRead] = Field(default_factory=list)
     batch_distribution: list[GaokaoDataHealthTypeRead] = Field(default_factory=list)
     year_breakdown: list[GaokaoDataHealthYearBreakdownRead] = Field(default_factory=list)
@@ -78,6 +85,40 @@ class GaokaoDataAuditItemRead(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
+class GaokaoDataFieldExplanationRead(BaseModel):
+    field: str
+    label: str
+    explanation: str
+
+
+class GaokaoDataDeliveryAssessmentRead(BaseModel):
+    status: str
+    label: str
+    summary: str
+    pass_items: list[str] = Field(default_factory=list)
+    warning_items: list[str] = Field(default_factory=list)
+    blocking_items: list[str] = Field(default_factory=list)
+
+
+class GaokaoDataSpecialTypeRiskRead(BaseModel):
+    key: str
+    label: str
+    readiness: str
+    readiness_label: str
+    risk_level: str
+    plan_count: int = 0
+    raw_plan_count: int = 0
+    admission_count: int = 0
+    raw_admission_count: int = 0
+    score_line_count: int = 0
+    volunteer_rule_count: int = 0
+    special_rule_count: int = 0
+    fallback_modes: list[str] = Field(default_factory=list)
+    fallback_labels: list[str] = Field(default_factory=list)
+    explanation: str
+    notes: list[str] = Field(default_factory=list)
+
+
 class GaokaoDataHealthRead(BaseModel):
     db_path: str
     exists: bool
@@ -85,8 +126,11 @@ class GaokaoDataHealthRead(BaseModel):
     schema_version: str | None = None
     province: str = "山东"
     expected_years: list[int] = Field(default_factory=list)
+    field_explanations: list[GaokaoDataFieldExplanationRead] = Field(default_factory=list)
+    delivery_assessment: GaokaoDataDeliveryAssessmentRead | None = None
     tables: list[GaokaoDataHealthTableRead] = Field(default_factory=list)
     coverage: list[GaokaoDataHealthCoverageRead] = Field(default_factory=list)
+    special_type_risks: list[GaokaoDataSpecialTypeRiskRead] = Field(default_factory=list)
     audit_summary: list[GaokaoDataAuditItemRead] = Field(default_factory=list)
     gaps: list[str] = Field(default_factory=list)
     summary: str

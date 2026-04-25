@@ -5,6 +5,7 @@ import ElMessageBox from "element-plus/es/components/message-box/index";
 import { apiRequest, openFile } from "../../api/client";
 import { resolveRecommendationReportInsightContext } from "../reports/reportInsightRecommendation";
 import { recommendationPrintPreviewPath } from "../../utils/print";
+import { formatUserActionError } from "../../utils/userFeedback";
 import { buildRecommendationSchemeOutputWarningMessage } from "./recommendationOutputGuards";
 import type {
   ExportRecord,
@@ -13,12 +14,11 @@ import type {
 } from "./types";
 
 function reportError(error: unknown): void {
-  ElMessage.error((error as Error).message);
+  ElMessage.error(formatUserActionError("处理推荐方案输出", error, "先确认方案结果已加载；如果仍失败，请重新打开该方案后再打印或导出。"));
 }
 
 function reportExportError(error: unknown): void {
-  const message = (error as Error).message;
-  ElMessage.error(`推荐报告导出失败：${message}`);
+  ElMessage.error(formatUserActionError("导出推荐报告", error, "先确认方案结果已加载；如果仍失败，请重新打开该方案后再导出。"));
 }
 
 interface RecommendationSchemeExportOptions {

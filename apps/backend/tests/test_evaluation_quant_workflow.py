@@ -169,6 +169,9 @@ def test_evaluation_and_adviser_quant_workflow(client) -> None:
     quant_download_response = client.get(quant_report_response.json()["download_url"])
     assert quant_download_response.status_code == 200
     quant_workbook = load_workbook(BytesIO(quant_download_response.content))
+    quant_detail_sheet = quant_workbook["量化明细"]
+    assert quant_detail_sheet.cell(row=1, column=5).value == "类型"
+    assert quant_detail_sheet.cell(row=2, column=5).value == "家校沟通"
     quant_insight_sheet = quant_workbook["摘要概览"]
     assert quant_insight_sheet.cell(row=1, column=1).value == "标题"
     quant_titles = {

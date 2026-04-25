@@ -53,6 +53,10 @@
             </template>
           </el-table-column>
         </el-table>
+        <el-empty
+          v-if="!quantSummary.length"
+          description="当前筛选条件下暂无量化汇总。请先新增量化记录或调整学期、教师、规则版本。"
+        />
       </div>
       <div class="soft-card inner-card">
         <h4>明细</h4>
@@ -73,6 +77,10 @@
             </template>
           </el-table-column>
         </el-table>
+        <el-empty
+          v-if="!quantRecords.length"
+          description="当前筛选条件下暂无量化明细。新增记录后会在这里显示附件和分值。"
+        />
       </div>
     </div>
   </section>

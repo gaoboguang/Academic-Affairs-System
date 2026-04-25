@@ -11,13 +11,17 @@
 - 想先搞清楚顶层目录和文档入口：
   看 [`docs/README.md`](./docs/README.md)、[`scripts/README.md`](./scripts/README.md)、[`handoffs/README.md`](./handoffs/README.md)
 - 只想知道怎么运行和验证：
-  直接用 `npm run dev`、`npm run clean:local`、`npm run clean:slim`、`npm run check`、`npm run check:all`
+  直接用 `npm run start:local`、`npm run dev`、`npm run clean:local`、`npm run clean:slim`、`npm run check`、`npm run check:all`
 - 只想在 Mac 上双击启动：
   看 [`docs/mac-user-startup-guide.md`](./docs/mac-user-startup-guide.md)，开发窗口看 [`docs/mac-developer-checklist.md`](./docs/mac-developer-checklist.md)
 - 只想做 P0 交付验收：
   直接用 `npm run backend:p0-check`，步骤说明见 [`docs/p0_delivery_runbook_2026-04-24.md`](./docs/p0_delivery_runbook_2026-04-24.md)
 - 只想看测试布局：
   看 [`tests/README.md`](./tests/README.md)
+- 只想知道改完该跑哪些验收：
+  看 [`docs/codex-task-acceptance-checklist.md`](./docs/codex-task-acceptance-checklist.md)；测试体系审计见 [`docs/test-quality-audit-2026-04-24.md`](./docs/test-quality-audit-2026-04-24.md)
+- 只想看最终整合和能否试用：
+  看 [`docs/final-acceptance-report-2026-04-24.md`](./docs/final-acceptance-report-2026-04-24.md)
 - 想找项目级规则来源：
   `AGENTS.md` 由 [`rulesync.jsonc`](./rulesync.jsonc) 和项目内 `.rulesync/` 来源维护，不建议手改生成结果
 
@@ -99,11 +103,21 @@ local-edu-tool/
 
 ## 本地启动
 
-最省事的方式：
+普通使用最省事的方式：
+
+```bash
+npm run start:local
+```
+
+该命令会后台启动或复用前后端服务，启动成功后可以关闭终端。日志位于 `data/logs/local-services/`。
+
+开发调试时可以使用：
 
 ```bash
 npm run dev
 ```
+
+`npm run dev` 是前台开发模式，终端关闭后前端服务会停止。
 
 如果你在 macOS 上更希望直接双击启动，也可以在仓库根目录双击：
 
@@ -111,7 +125,7 @@ npm run dev
 
 普通用户步骤见 [`docs/mac-user-startup-guide.md`](./docs/mac-user-startup-guide.md)，开发检查清单见 [`docs/mac-developer-checklist.md`](./docs/mac-developer-checklist.md)。
 
-它会在根目录同时启动前后端开发服务，默认地址仍是：
+它会在根目录后台启动或复用前后端服务，默认地址仍是：
 
 - 前端：`http://127.0.0.1:5173`
 - 后端：`http://127.0.0.1:8000`
@@ -119,6 +133,12 @@ npm run dev
 
 启动前会先预检 `127.0.0.1:5173` 和 `127.0.0.1:8000`。
 如果端口已被占用，或当前上下文无权限监听，脚本会直接报清晰错误并退出，不再先半启动一个服务、再把另一侧连带带停。
+
+如需停止后台服务：
+
+```bash
+npm run stop:local
+```
 
 ### macOS / Linux
 

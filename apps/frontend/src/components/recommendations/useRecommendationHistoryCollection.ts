@@ -2,6 +2,7 @@ import { reactive, ref } from "vue";
 import ElMessage from "element-plus/es/components/message/index";
 
 import { apiRequest } from "../../api/client";
+import { formatUserActionError } from "../../utils/userFeedback";
 import type {
   HistoryFiltersState,
   RecommendationHistoryItem,
@@ -9,7 +10,7 @@ import type {
 } from "./types";
 
 function reportError(error: unknown): void {
-  ElMessage.error((error as Error).message);
+  ElMessage.error(formatUserActionError("读取推荐历史", error, "先确认已经生成过推荐方案；如果仍失败，请刷新推荐中心后重试。"));
 }
 
 export function useRecommendationHistoryCollection() {

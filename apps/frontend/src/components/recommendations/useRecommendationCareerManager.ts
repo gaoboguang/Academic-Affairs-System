@@ -3,6 +3,7 @@ import type { Ref } from "vue";
 import ElMessage from "element-plus/es/components/message/index";
 
 import { apiRequest } from "../../api/client";
+import { formatUserActionError } from "../../utils/userFeedback";
 import {
   createEmploymentDirectionForm,
   createMajorEmploymentMappingForm,
@@ -21,7 +22,7 @@ import type {
 } from "./types";
 
 function reportError(error: unknown): void {
-  ElMessage.error((error as Error).message);
+  ElMessage.error(formatUserActionError("维护职业方向或专业映射", error, "先确认筛选条件和表单字段正确；如果仍失败，请刷新当前页签后重试。"));
 }
 
 interface RecommendationCareerManagerOptions {

@@ -4,6 +4,7 @@ import ElMessageBox from "element-plus/es/components/message-box/index";
 import type { useReferenceStore } from "../../stores/reference";
 
 import { apiRequest } from "../../api/client";
+import { formatUserActionError } from "../../utils/userFeedback";
 import {
   buildRecommendationSubmissionWarningMessage,
   buildBatchRecommendationPayload,
@@ -24,7 +25,7 @@ import type {
 type ReferenceStore = ReturnType<typeof useReferenceStore>;
 
 function reportError(error: unknown): void {
-  ElMessage.error((error as Error).message);
+  ElMessage.error(formatUserActionError("生成推荐方案", error, "先确认学生、考试、位次或预估分数、招生计划和省份规则已准备好。"));
 }
 
 interface SubmitRecommendationOptions {

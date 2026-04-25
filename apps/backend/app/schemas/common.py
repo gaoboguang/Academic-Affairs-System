@@ -14,10 +14,13 @@ class PageMeta(BaseModel):
 
 
 class ImportResult(BaseModel):
+    status: str = "success"
     total_rows: int
     success_rows: int
     failed_rows: int
     skipped_rows: int = 0
+    created_rows: int = 0
+    updated_rows: int = 0
     error_report_path: str | None = None
     error_preview: list[str] = Field(default_factory=list)
     notice_preview: list[str] = Field(default_factory=list)

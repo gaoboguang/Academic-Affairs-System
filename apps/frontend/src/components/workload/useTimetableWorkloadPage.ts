@@ -4,6 +4,8 @@ import ElMessageBox from "element-plus/es/components/message-box/index";
 
 import { apiRequest, openFile, uploadFile } from "../../api/client";
 import { useReferenceStore } from "../../stores/reference";
+import { formatUserActionError } from "../../utils/userFeedback";
+import type { ImportFeedbackResult } from "../../utils/importFeedback";
 import { dimensionOptions, formatSemesterLabel, ruleVersionStatusOptions } from "./helpers";
 import type {
   CreateRuleForm,
@@ -20,7 +22,7 @@ import type {
 } from "./types";
 
 function reportError(error: unknown): void {
-  ElMessage.error((error as Error).message);
+  ElMessage.error(formatUserActionError("处理课表工作量", error, "先确认已选择学期、批次和规则版本；如果仍失败，请刷新页面数据后重试。"));
 }
 
 export function useTimetableWorkloadPage() {
@@ -41,6 +43,7 @@ export function useTimetableWorkloadPage() {
   const unresolvedOnly = ref(false);
 
   const selectedTimetableFile = ref<File | null>(null);
+  const timetableImportResult = ref<(ImportFeedbackResult & { batch_id: number; unresolved_rows: number }) | null>(null);
   const fileInputKey = ref(0);
   const importRemark = ref("");
 
@@ -275,7 +278,7 @@ export function useTimetableWorkloadPage() {
     if (!selectedSemesterId.value || !selectedTimetableFile.value) return;
     try {
       importing.value = true;
-      const payload = await uploadFile<{ batch_id: number; unresolved_rows: number; message: string }>(
+      const payload = await uploadFile<ImportFeedbackResult & { batch_id: number; unresolved_rows: number }>(
         "/api/timetable/import",
         selectedTimetableFile.value,
         {
@@ -283,7 +286,11 @@ export function useTimetableWorkloadPage() {
           remark: importRemark.value,
         },
       );
-      ElMessage.success(payload.message);
+      timetableImportResult.value = payload;
+      ElMessage({
+        type: payload.failed_rows || payload.unresolved_rows ? "warning" : "success",
+        message: payload.message,
+      });
       selectedBatchId.value = payload.batch_id;
       selectedTimetableFile.value = null;
       importRemark.value = "";
@@ -571,6 +578,7 @@ export function useTimetableWorkloadPage() {
     selectedBatchId,
     unresolvedOnly,
     selectedTimetableFile,
+    timetableImportResult,
     fileInputKey,
     importRemark,
     importing,

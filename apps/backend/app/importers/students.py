@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
-from app.importers.base import RowError, read_template_rows, save_error_report
+from app.importers.base import RowError, build_row_error, read_template_rows, resolve_import_status, save_error_report
 from app.models import DictItem, DictType, Grade, SchoolClass, Student
 from app.repositories.students import get_class_by_name, get_student_by_no
 from app.schemas.common import ImportResult
@@ -93,6 +93,8 @@ class StudentImporter:
         success_rows = 0
         failed_rows = 0
         skipped_rows = 0
+        created_rows = 0
+        updated_rows = 0
         row_errors: list[RowError] = []
 
         for row_number, row_values in rows:
@@ -111,16 +113,18 @@ class StudentImporter:
                         skipped_rows += 1
                         continue
                     self._apply(existing, payload)
+                    updated_rows += 1
                 else:
                     student = Student(student_no=payload.student_no, name=payload.name)
                     self.session.add(student)
                     self.session.flush()
                     self._apply(student, payload)
+                    created_rows += 1
 
                 success_rows += 1
             except Exception as exc:
                 failed_rows += 1
-                row_errors.append(RowError(row_number=row_number, values=row_values, message=str(exc)))
+                row_errors.append(build_row_error(row_number=row_number, values=row_values, message=str(exc)))
 
         error_report_path = save_error_report(
             settings=self.settings,
@@ -129,10 +133,17 @@ class StudentImporter:
             errors=row_errors,
         )
         return ImportResult(
+            status=resolve_import_status(
+                total_rows=len(rows),
+                success_rows=success_rows,
+                failed_rows=failed_rows,
+            ),
             total_rows=len(rows),
             success_rows=success_rows,
             failed_rows=failed_rows,
             skipped_rows=skipped_rows,
+            created_rows=created_rows,
+            updated_rows=updated_rows,
             error_report_path=error_report_path,
             error_preview=self._build_error_preview(row_errors),
             notice_preview=self._build_notice_preview(row_errors),

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime
+from zipfile import BadZipFile
 
 from fastapi import HTTPException
+from openpyxl.utils.exceptions import InvalidFileException
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, joinedload
 
@@ -255,7 +257,7 @@ def import_timetable(
         semester_id=semester_id,
         source_filename=filename,
         import_time=datetime.now(),
-        status="processing",
+        status="running",
         remark=remark,
     )
     session.add(batch)
@@ -264,11 +266,14 @@ def import_timetable(
     job.started_at = datetime.now()
 
     importer = TimetableImporter(session, settings, semester)
-    result, unresolved_rows = importer.execute(filename=filename, content=content, batch=batch)
+    try:
+        result, unresolved_rows = importer.execute(filename=filename, content=content, batch=batch)
+    except (ValueError, InvalidFileException, BadZipFile) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    batch.status = "completed_with_unresolved" if unresolved_rows else "completed"
+    batch.status = result.status
     job.finished_at = datetime.now()
-    job.status = batch.status
+    job.status = result.status
     job.result_json = {"batch_id": batch.id, "unresolved_rows": unresolved_rows, **result.model_dump()}
     write_audit_log(
         session,

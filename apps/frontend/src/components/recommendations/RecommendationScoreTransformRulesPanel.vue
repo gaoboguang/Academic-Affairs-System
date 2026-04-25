@@ -64,16 +64,16 @@
       <el-table-column label="成绩模式" prop="score_mode" min-width="130" />
       <el-table-column label="等级表" min-width="260">
         <template #default="{ row }">
-          <div v-if="row.grade_table_json.length" class="compact-json">
-            {{ compactJson(row.grade_table_json) }}
+          <div v-if="row.grade_table_json.length" class="rule-readable-list">
+            <span v-for="item in formatRuleObjectList(row.grade_table_json)" :key="item">{{ item }}</span>
           </div>
           <span v-else class="muted-copy">无</span>
         </template>
       </el-table-column>
       <el-table-column label="公式" min-width="220">
         <template #default="{ row }">
-          <div v-if="Object.keys(row.formula_json).length" class="compact-json">
-            {{ compactJson(row.formula_json) }}
+          <div v-if="Object.keys(row.formula_json).length" class="rule-readable-list">
+            <span v-for="item in formatRuleObject(row.formula_json)" :key="item">{{ item }}</span>
           </div>
           <span v-else class="muted-copy">无</span>
         </template>
@@ -110,9 +110,36 @@ const subjectCount = computed(() => new Set(props.rules.map((item) => item.subje
 const scoreModeCount = computed(() => new Set(props.rules.map((item) => item.score_mode)).size);
 const gradeTableRuleCount = computed(() => props.rules.filter((item) => item.grade_table_json.length).length);
 
-function compactJson(value: unknown): string {
-  const text = JSON.stringify(value);
-  return text.length > 120 ? `${text.slice(0, 120)}...` : text;
+const ruleFieldLabels: Record<string, string> = {
+  grade: "等级",
+  level: "等级",
+  min: "下限",
+  max: "上限",
+  score: "分值",
+  assigned_score: "赋分",
+  raw_min: "原始分下限",
+  raw_max: "原始分上限",
+  converted_min: "转换分下限",
+  converted_max: "转换分上限",
+  formula: "公式",
+  method: "方法",
+  description: "说明",
+};
+
+function formatRuleObjectList(value: Array<Record<string, unknown>>): string[] {
+  return value.slice(0, 4).map((item) => formatRuleObject(item).join("，"));
+}
+
+function formatRuleObject(value: Record<string, unknown>): string[] {
+  return Object.entries(value).map(([key, item]) => `${ruleFieldLabels[key] ?? key}：${formatRuleValue(item)}`);
+}
+
+function formatRuleValue(value: unknown): string {
+  if (Array.isArray(value)) return value.join("、");
+  if (value && typeof value === "object") {
+    return formatRuleObject(value as Record<string, unknown>).join("，");
+  }
+  return value === null || value === undefined || value === "" ? "未填写" : String(value);
 }
 </script>
 
@@ -158,13 +185,12 @@ function compactJson(value: unknown): string {
   line-height: 1.5;
 }
 
-.compact-json {
+.rule-readable-list {
+  display: grid;
+  gap: 4px;
   color: #40566b;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
-  white-space: normal;
-  overflow-wrap: anywhere;
 }
 
 .muted-copy {

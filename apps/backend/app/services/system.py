@@ -10,12 +10,25 @@ from uuid import uuid4
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from fastapi import HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.bootstrap import ensure_runtime_directories
 from app.db.session import DatabaseManager
-from app.models import AuditLog, BackupRecord, ConfigItem, ReportExportRecord, StoredFile
+from app.importers.base import normalize_import_status
+from app.models import (
+    AuditLog,
+    BackupRecord,
+    ConfigItem,
+    EvaluationBatch,
+    EvaluationResponse,
+    ImportJob,
+    ReportExportRecord,
+    ScoreImportBatch,
+    StoredFile,
+    TimetableBatch,
+    TimetableEntry,
+)
 from app.repositories.system import (
     get_backup_record,
     get_stored_file,
@@ -32,6 +45,11 @@ from app.schemas.system import (
     DataRepairExecutePayload,
     DataRepairExecuteResponse,
     DataRepairScanRead,
+    ImportCenterBatchDetailRead,
+    ImportCenterBatchRead,
+    ImportCenterResponse,
+    ImportCenterSummaryRead,
+    ImportCenterTemplateRead,
     SystemConfigGroupRead,
     SystemConfigItemRead,
     SystemConfigItemUpdatePayload,
@@ -45,6 +63,75 @@ CONFIG_GROUP_TITLES = {
     "analytics": "成绩分析参数",
     "recommendation": "推荐策略参数",
     "system": "系统运行参数",
+}
+
+IMPORT_CENTER_TYPES = {
+    "students": {
+        "label": "学生信息导入",
+        "business_path": "/students",
+        "template": "students_import_template.xlsx",
+        "guidance": "先下载学生模板，按学号或学籍号维护唯一身份，再回到学生中心上传。",
+        "rollback": "学生导入当前没有逐行回滚记录；需要撤销时优先恢复导入前备份，或按学号重新导入正确台账覆盖修正。",
+    },
+    "teachers": {
+        "label": "教师信息导入",
+        "business_path": "/teachers",
+        "template": "teachers_import_template.xlsx",
+        "guidance": "先下载教师模板，使用工号作为稳定身份，再回到教师中心上传。",
+        "rollback": "教师导入当前没有逐行回滚记录；需要撤销时优先恢复导入前备份，或按工号重新导入正确台账覆盖修正。",
+    },
+    "scores": {
+        "label": "成绩导入",
+        "business_path": "/exams",
+        "template": "exam_scores_import_template.xlsx",
+        "guidance": "先在考试成绩页创建考试并配置科目，再下载成绩模板上传。",
+        "rollback": "成绩导入可用同一考试的覆盖/跳过策略重新导入修正；当前不自动删除批次内成绩，避免误删后续分析快照。",
+    },
+    "timetable": {
+        "label": "课表导入",
+        "business_path": "/workload",
+        "template": "timetable_import_template.xlsx",
+        "guidance": "先下载课表模板，确认学期、教师、班级和学科名称，再回到课表工作量页上传。",
+        "rollback": "课表工作量默认读取最新有效课表批次；需要撤销时重新导入正确批次并复核未匹配项，当前不自动删除历史批次。",
+    },
+    "admissions": {
+        "label": "录取数据导入",
+        "business_path": "/recommendations",
+        "template": "admission_records_import_template.xlsx",
+        "guidance": "先下载录取数据模板，确认省份、年份、批次、院校和专业口径，再回到高考志愿页上传。",
+        "rollback": "录取数据会影响推荐参考口径；当前没有逐行回滚记录，导入前应先创建备份。",
+    },
+    "enrollment_plans": {
+        "label": "招生计划导入",
+        "business_path": "/recommendations",
+        "template": "enrollment_plans_import_template.xlsx",
+        "guidance": "先下载招生计划模板，确认省份、年份、批次、选科和计划数，再回到高考志愿页上传。",
+        "rollback": "招生计划会影响候选池；当前没有逐行回滚记录，导入前应先创建备份。",
+    },
+    "evaluation": {
+        "label": "评教数据导入",
+        "business_path": "/evaluation-quant",
+        "template": "evaluation_import_template.xlsx",
+        "guidance": "先在评教量化页确认模板和学期，再下载评教模板上传。",
+        "rollback": "评教批次当前保留历史记录；需要撤销时恢复备份或重新导入正确批次并重新分析。",
+    },
+}
+
+IMPORT_JOB_TYPE_ALIASES = {
+    "student_import": "students",
+    "teacher_import": "teachers",
+    "exam_score_import": "scores",
+    "score_import": "scores",
+    "timetable_import": "timetable",
+    "admission_import": "admissions",
+    "evaluation_import": "evaluation",
+}
+
+IMPORT_SOURCE_LABELS = {
+    "import_job": "通用导入任务",
+    "score_import_batch": "成绩批次",
+    "timetable_batch": "课表批次",
+    "evaluation_batch": "评教批次",
 }
 
 
@@ -165,6 +252,400 @@ def get_template_path(settings, template_name: str) -> Path:
         template_name,
         not_found_detail="模板文件不存在",
     )
+
+
+def list_import_center_batches(
+    session: Session,
+    settings,
+    *,
+    limit: int = 100,
+    job_type: str | None = None,
+    status: str | None = None,
+) -> ImportCenterResponse:
+    batches = _build_import_center_batches(session, settings, limit=max(limit, 20))
+    if job_type:
+        normalized_job_type = _normalize_import_job_type(job_type)
+        batches = [item for item in batches if item.job_type == normalized_job_type]
+    if status:
+        normalized_status = normalize_import_status(status)
+        batches = [item for item in batches if item.status == normalized_status]
+    batches = batches[:limit]
+    return ImportCenterResponse(
+        generated_at=datetime.now(),
+        summary=_build_import_center_summary(batches),
+        templates=_build_import_center_templates(),
+        batches=batches,
+    )
+
+
+def get_import_center_batch_detail(
+    session: Session,
+    settings,
+    *,
+    source_type: str,
+    batch_id: int,
+) -> ImportCenterBatchDetailRead:
+    batch = _find_import_center_batch(session, settings, source_type=source_type, batch_id=batch_id)
+    if not batch:
+        raise HTTPException(status_code=404, detail="导入批次不存在")
+    result_json = _read_batch_result_json(session, batch)
+    return ImportCenterBatchDetailRead(
+        batch=batch,
+        result_json=result_json,
+        audit_logs=_list_import_batch_audit_logs(session, batch),
+        error_preview=_string_list(result_json.get("error_preview") if result_json else None),
+        notice_preview=_string_list(result_json.get("notice_preview") if result_json else None),
+        rollback_steps=_build_rollback_steps(batch),
+    )
+
+
+def _build_import_center_templates() -> list[ImportCenterTemplateRead]:
+    rows: list[ImportCenterTemplateRead] = []
+    for job_type, meta in IMPORT_CENTER_TYPES.items():
+        template_file = str(meta["template"])
+        rows.append(
+            ImportCenterTemplateRead(
+                job_type=job_type,
+                job_type_label=str(meta["label"]),
+                template_name=str(meta["label"]),
+                file_name=template_file,
+                download_url=_runtime_file_url(f"data/templates/{template_file}"),
+                business_path=str(meta["business_path"]),
+                guidance=str(meta["guidance"]),
+            )
+        )
+    return rows
+
+
+def _build_import_center_summary(batches: list[ImportCenterBatchRead]) -> ImportCenterSummaryRead:
+    return ImportCenterSummaryRead(
+        total_batches=len(batches),
+        failed_batches=sum(1 for item in batches if item.status == "failed"),
+        partial_batches=sum(1 for item in batches if item.status == "partially_failed"),
+        error_report_count=sum(1 for item in batches if item.error_report_path),
+    )
+
+
+def _build_import_center_batches(session: Session, settings, *, limit: int) -> list[ImportCenterBatchRead]:
+    rows: list[ImportCenterBatchRead] = []
+    related_keys: set[tuple[str, int]] = set()
+    jobs = session.scalars(
+        select(ImportJob).order_by(desc(ImportJob.started_at), desc(ImportJob.created_at), desc(ImportJob.id)).limit(limit)
+    ).all()
+    for job in jobs:
+        row = _serialize_import_job_batch(job)
+        rows.append(row)
+        related_key = _related_batch_key(row, job.result_json)
+        if related_key:
+            related_keys.add(related_key)
+
+    for score_batch in session.scalars(
+        select(ScoreImportBatch).order_by(desc(ScoreImportBatch.import_time), desc(ScoreImportBatch.id)).limit(limit)
+    ).all():
+        key = ("score_import_batch", score_batch.id)
+        if key not in related_keys:
+            rows.append(_serialize_score_batch(score_batch))
+
+    for timetable_batch in session.scalars(
+        select(TimetableBatch).order_by(desc(TimetableBatch.import_time), desc(TimetableBatch.id)).limit(limit)
+    ).all():
+        key = ("timetable_batch", timetable_batch.id)
+        if key not in related_keys:
+            rows.append(_serialize_timetable_batch(session, timetable_batch))
+
+    for evaluation_batch in session.scalars(
+        select(EvaluationBatch).order_by(desc(EvaluationBatch.import_time), desc(EvaluationBatch.id)).limit(limit)
+    ).all():
+        key = ("evaluation_batch", evaluation_batch.id)
+        if key not in related_keys:
+            rows.append(_serialize_evaluation_batch(session, evaluation_batch))
+
+    return sorted(rows, key=_import_batch_sort_key, reverse=True)[:limit]
+
+
+def _find_import_center_batch(
+    session: Session,
+    settings,
+    *,
+    source_type: str,
+    batch_id: int,
+) -> ImportCenterBatchRead | None:
+    if source_type == "import_job":
+        item = session.get(ImportJob, batch_id)
+        return _serialize_import_job_batch(item) if item else None
+    if source_type == "score_import_batch":
+        item = session.get(ScoreImportBatch, batch_id)
+        return _serialize_score_batch(item) if item else None
+    if source_type == "timetable_batch":
+        item = session.get(TimetableBatch, batch_id)
+        return _serialize_timetable_batch(session, item) if item else None
+    if source_type == "evaluation_batch":
+        item = session.get(EvaluationBatch, batch_id)
+        return _serialize_evaluation_batch(session, item) if item else None
+    return None
+
+
+def _serialize_import_job_batch(job: ImportJob) -> ImportCenterBatchRead:
+    result = job.result_json or {}
+    job_type = _normalize_import_job_type(job.job_type)
+    meta = _import_type_meta(job_type)
+    status = normalize_import_status(str(result.get("status") or job.status))
+    return ImportCenterBatchRead(
+        id=f"import_job:{job.id}",
+        numeric_id=job.id,
+        source_type="import_job",
+        source_type_label=IMPORT_SOURCE_LABELS["import_job"],
+        job_type=job_type,
+        job_type_label=str(meta["label"]),
+        source_filename=job.source_filename,
+        status=status,
+        started_at=job.started_at or job.created_at,
+        finished_at=job.finished_at,
+        total_rows=_optional_int(result.get("total_rows")),
+        success_rows=_optional_int(result.get("success_rows")),
+        failed_rows=_optional_int(result.get("failed_rows")),
+        skipped_rows=_int_value(result.get("skipped_rows")),
+        created_rows=_int_value(result.get("created_rows")),
+        updated_rows=_int_value(result.get("updated_rows")),
+        error_report_path=_optional_str(result.get("error_report_path")),
+        business_path=str(meta["business_path"]),
+        template_download_url=_template_url(meta),
+        rollback_supported=False,
+        rollback_hint=str(meta["rollback"]),
+        detail_summary=_build_detail_summary(result),
+    )
+
+
+def _serialize_score_batch(batch: ScoreImportBatch) -> ImportCenterBatchRead:
+    meta = _import_type_meta("scores")
+    return ImportCenterBatchRead(
+        id=f"score_import_batch:{batch.id}",
+        numeric_id=batch.id,
+        source_type="score_import_batch",
+        source_type_label=IMPORT_SOURCE_LABELS["score_import_batch"],
+        job_type="scores",
+        job_type_label=str(meta["label"]),
+        source_filename=batch.source_filename,
+        status=normalize_import_status(batch.status),
+        started_at=batch.import_time,
+        finished_at=None,
+        total_rows=batch.total_rows,
+        success_rows=batch.success_rows,
+        failed_rows=batch.failed_rows,
+        skipped_rows=0,
+        error_report_path=batch.error_report_path,
+        business_path=str(meta["business_path"]),
+        template_download_url=_template_url(meta),
+        rollback_supported=False,
+        rollback_hint=str(meta["rollback"]),
+        detail_summary=f"考试 ID {batch.exam_id}，成功 {batch.success_rows} 行，失败 {batch.failed_rows} 行。",
+    )
+
+
+def _serialize_timetable_batch(session: Session, batch: TimetableBatch) -> ImportCenterBatchRead:
+    meta = _import_type_meta("timetable")
+    total_rows = session.scalar(select(func.count()).select_from(TimetableEntry).where(TimetableEntry.batch_id == batch.id)) or 0
+    unresolved_rows = (
+        session.scalar(
+            select(func.count())
+            .select_from(TimetableEntry)
+            .where(TimetableEntry.batch_id == batch.id, TimetableEntry.mapping_status != "matched")
+        )
+        or 0
+    )
+    return ImportCenterBatchRead(
+        id=f"timetable_batch:{batch.id}",
+        numeric_id=batch.id,
+        source_type="timetable_batch",
+        source_type_label=IMPORT_SOURCE_LABELS["timetable_batch"],
+        job_type="timetable",
+        job_type_label=str(meta["label"]),
+        source_filename=batch.source_filename,
+        status=normalize_import_status(batch.status),
+        started_at=batch.import_time,
+        finished_at=None,
+        total_rows=total_rows,
+        success_rows=total_rows - unresolved_rows,
+        failed_rows=unresolved_rows,
+        skipped_rows=0,
+        error_report_path=None,
+        business_path=str(meta["business_path"]),
+        template_download_url=_template_url(meta),
+        rollback_supported=False,
+        rollback_hint=str(meta["rollback"]),
+        detail_summary=f"学期 ID {batch.semester_id}，课表条目 {total_rows} 条，待修正 {unresolved_rows} 条。",
+    )
+
+
+def _serialize_evaluation_batch(session: Session, batch: EvaluationBatch) -> ImportCenterBatchRead:
+    meta = _import_type_meta("evaluation")
+    response_count = (
+        session.scalar(select(func.count()).select_from(EvaluationResponse).where(EvaluationResponse.batch_id == batch.id))
+        or 0
+    )
+    return ImportCenterBatchRead(
+        id=f"evaluation_batch:{batch.id}",
+        numeric_id=batch.id,
+        source_type="evaluation_batch",
+        source_type_label=IMPORT_SOURCE_LABELS["evaluation_batch"],
+        job_type="evaluation",
+        job_type_label=str(meta["label"]),
+        source_filename=batch.source_filename,
+        status=normalize_import_status(batch.status),
+        started_at=batch.import_time,
+        finished_at=None,
+        total_rows=response_count,
+        success_rows=response_count,
+        failed_rows=0,
+        skipped_rows=0,
+        error_report_path=None,
+        business_path=str(meta["business_path"]),
+        template_download_url=_template_url(meta),
+        rollback_supported=False,
+        rollback_hint=str(meta["rollback"]),
+        detail_summary=f"模板 ID {batch.template_id}，评教响应 {response_count} 条。",
+    )
+
+
+def _read_batch_result_json(session: Session, batch: ImportCenterBatchRead) -> dict | None:
+    if batch.source_type == "import_job":
+        item = session.get(ImportJob, batch.numeric_id)
+        return item.result_json if item else None
+    related_job = _find_related_import_job(session, batch)
+    return related_job.result_json if related_job else None
+
+
+def _find_related_import_job(session: Session, batch: ImportCenterBatchRead) -> ImportJob | None:
+    jobs = session.scalars(
+        select(ImportJob)
+        .where(ImportJob.job_type.in_(_job_type_aliases_for(batch.job_type)))
+        .order_by(desc(ImportJob.started_at), desc(ImportJob.created_at), desc(ImportJob.id))
+        .limit(200)
+    ).all()
+    for job in jobs:
+        if _related_batch_key(_serialize_import_job_batch(job), job.result_json) == (batch.source_type, batch.numeric_id):
+            return job
+    return None
+
+
+def _list_import_batch_audit_logs(session: Session, batch: ImportCenterBatchRead) -> list[AuditLogRead]:
+    targets = [(batch.source_type, str(batch.numeric_id))]
+    if batch.source_type != "import_job":
+        related_job = _find_related_import_job(session, batch)
+        if related_job:
+            targets.append(("import_job", str(related_job.id)))
+    conditions = [
+        (AuditLog.target_type == target_type) & (AuditLog.target_id == target_id)
+        for target_type, target_id in targets
+    ]
+    if not conditions:
+        return []
+    logs = session.scalars(
+        select(AuditLog)
+        .where(or_(*conditions))
+        .order_by(desc(AuditLog.created_at), desc(AuditLog.id))
+        .limit(20)
+    ).all()
+    return [AuditLogRead.model_validate(item) for item in logs]
+
+
+def _related_batch_key(batch: ImportCenterBatchRead, result_json: dict | None) -> tuple[str, int] | None:
+    if not result_json:
+        return None
+    batch_id = _optional_int(result_json.get("batch_id"))
+    if batch_id is None:
+        return None
+    if batch.job_type == "scores":
+        return ("score_import_batch", batch_id)
+    if batch.job_type == "timetable":
+        return ("timetable_batch", batch_id)
+    if batch.job_type == "evaluation":
+        return ("evaluation_batch", batch_id)
+    return None
+
+
+def _build_rollback_steps(batch: ImportCenterBatchRead) -> list[str]:
+    if batch.rollback_supported:
+        return ["确认影响范围", "创建当前备份", "执行批次回滚", "重新查看业务页面和审计日志"]
+    return [
+        "当前批次不支持自动逐行回滚，页面只给出撤销说明，不直接删除业务数据。",
+        "如必须恢复导入前状态，先到系统设置创建当前备份，再选择导入前备份恢复。",
+        "如果只是少量字段错误，优先回到对应业务页面下载模板，按稳定标识重新导入正确文件覆盖修正。",
+    ]
+
+
+def _build_detail_summary(result: dict) -> str:
+    total_rows = _optional_int(result.get("total_rows"))
+    success_rows = _optional_int(result.get("success_rows"))
+    failed_rows = _optional_int(result.get("failed_rows"))
+    if total_rows is None:
+        return "该批次未记录行级摘要，请查看业务页或审计日志。"
+    return f"共 {total_rows} 行，成功 {success_rows or 0} 行，失败 {failed_rows or 0} 行。"
+
+
+def _normalize_import_job_type(job_type: str) -> str:
+    return IMPORT_JOB_TYPE_ALIASES.get(job_type, job_type)
+
+
+def _job_type_aliases_for(job_type: str) -> list[str]:
+    aliases = [job_type]
+    aliases.extend(alias for alias, target in IMPORT_JOB_TYPE_ALIASES.items() if target == job_type)
+    return aliases
+
+
+def _import_type_meta(job_type: str) -> dict[str, str]:
+    return IMPORT_CENTER_TYPES.get(
+        job_type,
+        {
+            "label": job_type.replace("_", " "),
+            "business_path": "/system-tools",
+            "template": "",
+            "guidance": "该导入类型暂无专用模板说明，请查看对应业务页面。",
+            "rollback": "该导入类型暂无自动回滚能力，建议通过备份恢复或业务页手工修正。",
+        },
+    )
+
+
+def _template_url(meta: dict[str, str]) -> str | None:
+    template_file = str(meta.get("template") or "")
+    if not template_file:
+        return None
+    return _runtime_file_url(f"data/templates/{template_file}")
+
+
+def _runtime_file_url(path: str) -> str:
+    from urllib.parse import quote
+
+    return f"/api/system/files?path={quote(path, safe='')}"
+
+
+def _import_batch_sort_key(item: ImportCenterBatchRead) -> tuple[datetime, int]:
+    return (item.started_at or item.finished_at or datetime.min, item.numeric_id)
+
+
+def _optional_int(value: object) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+
+
+def _int_value(value: object) -> int:
+    return _optional_int(value) or 0
+
+
+def _optional_str(value: object) -> str | None:
+    if value in (None, ""):
+        return None
+    return str(value)
+
+
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value]
 
 
 def get_data_repair_scan(session: Session) -> DataRepairScanRead:

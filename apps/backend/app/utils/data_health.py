@@ -30,7 +30,46 @@ CORE_TABLES: tuple[tuple[str, str], ...] = (
 
 SHANDONG_ALIASES = ("山东", "山东省", "sd", "shandong")
 SPECIAL_STUDENT_TYPES = ("art", "sports", "spring_exam", "independent_recruitment", "comprehensive_evaluation")
+STUDENT_TYPE_ORDER = (
+    "general",
+    "spring_exam",
+    "art",
+    "sports",
+    "independent_recruitment",
+    "comprehensive_evaluation",
+)
 DEFAULT_EXPECTED_YEARS = (2020, 2021, 2022, 2023, 2024, 2025)
+STUDENT_TYPE_LABELS = {
+    "general": "普通类",
+    "spring_exam": "春季高考",
+    "art": "艺术类",
+    "sports": "体育类",
+    "independent_recruitment": "单独招生",
+    "comprehensive_evaluation": "综合评价招生",
+    "summer_total": "夏季高考一分一段",
+    "province_rule": "省级政策规则",
+    "pending_manual_review": "待人工复核",
+    "pending_manual_review_with_official_candidate": "待人工复核（已有官方候选）",
+    "confirmed_manual_dispatch_check": "已人工核对（派发检查）",
+    "confirmed_manual_review": "已人工核对",
+    "partially_filled": "部分补齐",
+    "confirmed_manual_live_check": "已人工核对（实时检查）",
+    "confirmed_manual_web_search": "已人工核对（网页检索）",
+    "普通类": "普通类",
+    "春季高考": "春季高考",
+    "艺术类": "艺术类",
+    "体育类": "体育类",
+    "单独招生": "单独招生",
+    "综合评价招生": "综合评价招生",
+}
+RAW_STUDENT_TYPE_ALIASES = {
+    "普通类": "general",
+    "春季高考": "spring_exam",
+    "艺术类": "art",
+    "体育类": "sports",
+    "单独招生": "independent_recruitment",
+    "综合评价招生": "comprehensive_evaluation",
+}
 
 
 def build_data_health_report(
@@ -48,8 +87,16 @@ def build_data_health_report(
             "schema_version": None,
             "province": province,
             "expected_years": list(expected_years),
+            "field_explanations": _field_explanations(),
+            "delivery_assessment": _build_delivery_assessment(
+                [f"数据库文件不存在：{db_path}"],
+                [],
+                [],
+                [],
+            ),
             "tables": [],
             "coverage": [],
+            "special_type_risks": [],
             "audit_summary": [],
             "gaps": [f"数据库文件不存在：{db_path}"],
             "summary": "数据库文件不存在",
@@ -62,6 +109,7 @@ def build_data_health_report(
         coverage = _build_coverage(conn, schema, province=province, expected_years=expected_years)
         gaps = _build_gap_summary(conn, schema, coverage, expected_years=expected_years)
         audit_summary = _build_audit_summary(conn, schema, coverage, expected_years=expected_years)
+        special_type_risks = _build_special_type_risks(conn, schema, province=province)
         schema_version = _read_schema_version(conn, schema)
 
     return {
@@ -71,8 +119,16 @@ def build_data_health_report(
         "schema_version": schema_version,
         "province": province,
         "expected_years": list(expected_years),
+        "field_explanations": _field_explanations(),
+        "delivery_assessment": _build_delivery_assessment(
+            gaps,
+            table_stats,
+            audit_summary,
+            special_type_risks,
+        ),
         "tables": table_stats,
         "coverage": coverage,
+        "special_type_risks": special_type_risks,
         "audit_summary": audit_summary,
         "gaps": gaps,
         "summary": _build_summary_line(table_stats, gaps),
@@ -93,12 +149,37 @@ def format_data_health_report(report: dict[str, Any]) -> str:
         notes = f"；{'；'.join(item['notes'])}" if item.get("notes") else ""
         lines.append(f"- {item['label']} ({item['key']}): {item['count']} [{item['status']}]{notes}")
 
+    delivery = report.get("delivery_assessment") or {}
+    if delivery:
+        lines.append("")
+        lines.append("P0 交付判断:")
+        lines.append(f"- {delivery.get('label') or delivery.get('status')}: {delivery.get('summary') or ''}")
+        for item in delivery.get("blocking_items") or []:
+            lines.append(f"- 阻断: {item}")
+        for item in delivery.get("warning_items") or []:
+            lines.append(f"- 警告: {item}")
+
+    special_type_risks = report.get("special_type_risks") or []
+    if special_type_risks:
+        lines.append("")
+        lines.append("考生类型可用性:")
+        for item in special_type_risks:
+            fallback_text = f"；fallback: {' / '.join(item.get('fallback_labels') or [])}" if item.get("fallback_labels") else ""
+            lines.append(
+                f"- {item['label']}: {item.get('readiness_label') or item.get('readiness')}；"
+                f"计划 {item.get('plan_count', 0)}；录取 {item.get('admission_count', 0)}；"
+                f"省控线 {item.get('score_line_count', 0)}；规则 {item.get('volunteer_rule_count', 0)}"
+                f"/{item.get('special_rule_count', 0)}{fallback_text}"
+            )
+            for note in item.get("notes") or []:
+                lines.append(f"  - {note}")
+
     lines.append("")
     lines.append("山东覆盖摘要:")
     for item in report.get("coverage", []):
         years = ", ".join(str(year) for year in item.get("years", [])) or "无"
         type_parts = [
-            f"{entry['key']}={entry['count']}"
+            f"{entry.get('label') or entry['key']}={entry['count']}"
             for entry in item.get("student_types", [])
         ]
         type_text = "；".join(type_parts) if type_parts else "无分类"
@@ -137,6 +218,36 @@ def report_as_json(report: dict[str, Any]) -> str:
     return json.dumps(report, ensure_ascii=False, indent=2)
 
 
+def _field_explanations() -> list[dict[str, str]]:
+    return [
+        {
+            "field": "tables",
+            "label": "核心表数量",
+            "explanation": "检查交付前必须存在的业务表、raw 高考表和规则表是否有记录。",
+        },
+        {
+            "field": "coverage",
+            "label": "山东覆盖矩阵",
+            "explanation": "按数据域查看山东当前覆盖了哪些年份、考生类型和批次。",
+        },
+        {
+            "field": "special_type_risks",
+            "label": "考生类型可用性",
+            "explanation": "把普通类、春考、艺术、体育、单招、综评分开判断，避免把初筛当成完整录取把握。",
+        },
+        {
+            "field": "audit_summary",
+            "label": "导入审计摘要",
+            "explanation": "用于补数据前后对照当前记录数、疑似重复、冲突和待人工复核数量。",
+        },
+        {
+            "field": "delivery_assessment",
+            "label": "P0 交付判断",
+            "explanation": "把健康检查结果分成通过、警告和阻断，方便非程序员判断下一步。",
+        },
+    ]
+
+
 def _build_table_stats(conn: sqlite3.Connection, schema: "_Schema") -> list[dict[str, Any]]:
     stats = []
     for table, label in CORE_TABLES:
@@ -161,6 +272,7 @@ def _build_table_stats(conn: sqlite3.Connection, schema: "_Schema") -> list[dict
                 "label": label,
                 "count": count,
                 "status": status,
+                "explanation": _table_explanation(table),
                 "notes": notes,
             }
         )
@@ -215,38 +327,90 @@ def _build_coverage(
                 ''',
                 params,
             ).fetchall():
-                student_types.append({"key": str(row["key"]), "count": int(row["count"])})
+                key = str(row["key"])
+                student_types.append({"key": key, "label": _label_for_key(key), "count": int(row["count"])})
         total = _count_with_where(conn, table, where, params)
-        items.append(
-            {
-                "key": table,
-                "label": label,
-                "status": "ok" if total else "empty",
-                "total": total,
-                "years": years,
-                "missing_years": sorted(set(expected_years) - set(years)),
-                "student_types": student_types,
-                "batch_distribution": _distribution(
-                    conn,
-                    schema,
-                    table,
-                    schema.pick_column(table, *batch_columns),
-                    where,
-                    params,
-                ),
-                "year_breakdown": _year_breakdown(
-                    conn,
-                    schema,
-                    table,
-                    year_column,
-                    type_column if type_column in schema.columns(table) else None,
-                    schema.pick_column(table, *batch_columns),
-                    where,
-                    params,
-                ),
-            }
-        )
+        item = {
+            "key": table,
+            "label": label,
+            "status": "ok" if total else "empty",
+            "total": total,
+            "years": years,
+            "missing_years": sorted(set(expected_years) - set(years)),
+            "student_types": student_types,
+            "batch_distribution": _distribution(
+                conn,
+                schema,
+                table,
+                schema.pick_column(table, *batch_columns),
+                where,
+                params,
+            ),
+            "year_breakdown": _year_breakdown(
+                conn,
+                schema,
+                table,
+                year_column,
+                type_column if type_column in schema.columns(table) else None,
+                schema.pick_column(table, *batch_columns),
+                where,
+                params,
+            ),
+        }
+        items.append(_enrich_coverage_item(item))
     return items
+
+
+def _enrich_coverage_item(item: dict[str, Any]) -> dict[str, Any]:
+    key = str(item["key"])
+    missing_years = list(item.get("missing_years") or [])
+    total = int(item.get("total") or 0)
+    notes: list[str] = []
+    readiness = "ready"
+    risk_level = "normal"
+    if item.get("status") == "missing":
+        readiness = "missing"
+        risk_level = "blocking"
+        notes.append("表不存在，不能参与当前数据判断。")
+    elif item.get("status") == "no_year_column":
+        readiness = "unknown"
+        risk_level = "warning"
+        notes.append("缺少年份列，无法判断哪些年份可用。")
+    elif total == 0:
+        readiness = "empty"
+        risk_level = "warning"
+        notes.append("当前没有山东口径记录。")
+    elif missing_years:
+        readiness = "partial"
+        risk_level = "warning"
+        notes.append(f"缺少年份：{_join_years(missing_years)}。")
+
+    type_keys = _coverage_type_keys(item)
+    if key == "admission_record" and type_keys and type_keys <= {"general"}:
+        readiness = "partial"
+        risk_level = "warning"
+        notes.append("当前录取结果主要支撑普通类；特殊类型不能按完整录取线理解。")
+    elif key == "gaokao_admission_result" and type_keys and type_keys <= {"general"}:
+        readiness = "partial"
+        risk_level = "warning"
+        notes.append("raw 录取结果当前主要是普通类口径。")
+    elif key == "gaokao_score_line" and total:
+        notes.append("省控线可用于艺术/体育资格线初筛，但不能替代院校或专业录取结果。")
+    elif key == "enrollment_plan" and set(SPECIAL_STUDENT_TYPES).intersection(type_keys):
+        notes.append("招生计划说明可报方向和容量，不等同于录取把握。")
+    elif key == "gaokao_college_chapter_rule" and total:
+        notes.append("章程限制链仍需结合待复核状态判断可信度。")
+    elif key == "gaokao_policy_reference" and total < 10:
+        readiness = "partial"
+        risk_level = "warning"
+        notes.append("政策参考数量偏少，交付前还需要补官方政策和填报规则。")
+
+    item["readiness"] = readiness
+    item["readiness_label"] = _readiness_label(readiness)
+    item["risk_level"] = risk_level
+    item["explanation"] = _coverage_explanation(key)
+    item["notes"] = notes
+    return item
 
 
 def _build_audit_summary(
@@ -301,10 +465,10 @@ def _build_audit_summary(
         elif key == "admission_record":
             plan_types = _coverage_type_keys(coverage_by_key.get("enrollment_plan"))
             admission_types = _coverage_type_keys(coverage_item)
-            missing_special = sorted(set(SPECIAL_STUDENT_TYPES).intersection(plan_types) - admission_types)
+            missing_special = _sort_student_types(set(SPECIAL_STUDENT_TYPES).intersection(plan_types) - admission_types)
             if missing_special:
                 status = "gap"
-                notes.append(f"特殊类型缺专门录取结果，仅可做初筛：{', '.join(missing_special)}")
+                notes.append(f"特殊类型缺专门录取结果，仅可做初筛：{_format_student_type_list(missing_special)}")
         elif key == "gaokao_policy_reference" and total < 10:
             status = "gap"
             notes.append(f"政策参考数量偏少：{total}")
@@ -355,9 +519,9 @@ def _build_gap_summary(
 
     admission_types = _coverage_type_keys(by_key.get("admission_record"))
     plan_types = _coverage_type_keys(by_key.get("enrollment_plan"))
-    missing_special_results = sorted(set(SPECIAL_STUDENT_TYPES).intersection(plan_types) - admission_types)
+    missing_special_results = _sort_student_types(set(SPECIAL_STUDENT_TYPES).intersection(plan_types) - admission_types)
     if missing_special_results:
-        gaps.append(f"特殊类型已有招生计划但缺专门录取结果：{', '.join(missing_special_results)}")
+        gaps.append(f"特殊类型已有招生计划但缺专门录取结果：{_format_student_type_list(missing_special_results)}")
 
     enrollment_year_counts = _year_counts(conn, schema, "enrollment_plan")
     for year in (2024, 2025):
@@ -385,6 +549,187 @@ def _build_gap_summary(
             gaps.append(f"招生章程限制链仍有 {pending} 条待人工复核")
 
     return gaps
+
+
+def _build_special_type_risks(
+    conn: sqlite3.Connection,
+    schema: "_Schema",
+    *,
+    province: str,
+) -> list[dict[str, Any]]:
+    plan_counts = _normalized_type_counts(conn, schema, "enrollment_plan", "student_type", province=province)
+    raw_plan_counts = _normalized_type_counts(conn, schema, "gaokao_admission_plan", "candidate_type", province=province)
+    admission_counts = _normalized_type_counts(conn, schema, "admission_record", "student_type", province=province)
+    raw_admission_counts = _normalized_type_counts(conn, schema, "gaokao_admission_result", "candidate_type", province=province)
+    score_line_counts = _normalized_type_counts(conn, schema, "gaokao_score_line", "candidate_type", province=province)
+    volunteer_rule_counts = _normalized_type_counts(conn, schema, "province_volunteer_rule", "candidate_type", province=province)
+    special_rule_counts = _normalized_type_counts(conn, schema, "special_type_rule", "student_type", province=province)
+
+    items: list[dict[str, Any]] = []
+    for student_type in STUDENT_TYPE_ORDER:
+        plan_count = plan_counts.get(student_type, 0)
+        raw_plan_count = raw_plan_counts.get(student_type, 0)
+        admission_count = admission_counts.get(student_type, 0)
+        raw_admission_count = raw_admission_counts.get(student_type, 0)
+        score_line_count = score_line_counts.get(student_type, 0)
+        volunteer_rule_count = volunteer_rule_counts.get(student_type, 0)
+        special_rule_count = special_rule_counts.get(student_type, 0)
+        effective_plan_count = plan_count or raw_plan_count
+        effective_admission_count = admission_count or raw_admission_count
+        fallback_modes: list[str] = []
+        notes: list[str] = []
+
+        if student_type == "general":
+            if effective_admission_count:
+                readiness = "ready"
+                risk_level = "normal"
+                explanation = "普通类已有 2020-2025 录取结果，可作为当前推荐主链路的主要参考。"
+                if plan_count and plan_count < 1000:
+                    notes.append("招生计划仍需继续核验年度完整性。")
+            else:
+                readiness = "missing"
+                risk_level = "blocking"
+                explanation = "普通类缺少录取结果，不能支撑主推荐链路。"
+        elif effective_plan_count == 0:
+            readiness = "missing"
+            risk_level = "blocking"
+            explanation = "当前没有看到该类型招生计划，不能做候选池或初筛。"
+        elif effective_admission_count:
+            readiness = "partial"
+            risk_level = "warning"
+            explanation = "已有少量专门录取结果，但仍需按年份、批次和来源继续核验完整性。"
+        elif student_type in {"art", "sports"} and score_line_count:
+            readiness = "screening_only"
+            risk_level = "warning"
+            fallback_modes.append("score_line_reference")
+            explanation = "当前有招生计划和省控线，可做资格线初筛；缺少专门录取结果，不能判断院校录取把握。"
+        elif student_type in {"art", "sports"}:
+            readiness = "screening_only"
+            risk_level = "warning"
+            fallback_modes.append("plan_only_reference")
+            explanation = "当前有招生计划但缺少专门录取结果和完整省控线；只能做方向性初筛，必须人工复核资格线。"
+        else:
+            readiness = "screening_only"
+            risk_level = "warning"
+            fallback_modes.extend(["plan_only_reference", "general_reference_fallback"])
+            explanation = "当前有招生计划和规则字典，但缺少专门录取结果；只能做方向性初筛，部分场景会参考普通类结果并显式标风险。"
+
+        if student_type != "general" and not effective_admission_count:
+            notes.append("缺少该类型专门录取结果，页面、打印和导出都必须显示初筛或 fallback 风险。")
+        if not volunteer_rule_count:
+            risk_level = "warning" if risk_level == "normal" else risk_level
+            notes.append("缺少省份志愿规则，规则上限和批次解释需要人工复核。")
+        if student_type != "general" and not special_rule_count:
+            risk_level = "warning" if risk_level == "normal" else risk_level
+            notes.append("缺少特殊类型细分类别规则，无法给出细分核对清单。")
+        if student_type in {"art", "sports"} and not score_line_count:
+            notes.append("缺少该类型省控线，资格线初筛也不完整。")
+
+        items.append(
+            {
+                "key": student_type,
+                "label": STUDENT_TYPE_LABELS[student_type],
+                "readiness": readiness,
+                "readiness_label": _readiness_label(readiness),
+                "risk_level": risk_level,
+                "plan_count": plan_count,
+                "raw_plan_count": raw_plan_count,
+                "admission_count": admission_count,
+                "raw_admission_count": raw_admission_count,
+                "score_line_count": score_line_count,
+                "volunteer_rule_count": volunteer_rule_count,
+                "special_rule_count": special_rule_count,
+                "fallback_modes": fallback_modes,
+                "fallback_labels": [_fallback_label(mode) for mode in fallback_modes],
+                "explanation": explanation,
+                "notes": notes,
+            }
+        )
+    return items
+
+
+def _normalized_type_counts(
+    conn: sqlite3.Connection,
+    schema: "_Schema",
+    table: str,
+    type_column: str,
+    *,
+    province: str,
+) -> dict[str, int]:
+    if not schema.has_table(table) or type_column not in schema.columns(table):
+        return {}
+    province_column = schema.pick_column(table, "province", "student_province")
+    where, params = _province_where(schema, table, province_column, province)
+    rows = conn.execute(
+        f'''
+        SELECT COALESCE("{type_column}", '未分类') AS key, COUNT(*) AS count
+        FROM "{table}"
+        {where}
+        GROUP BY COALESCE("{type_column}", '未分类')
+        ''',
+        params,
+    ).fetchall()
+    counts: dict[str, int] = {}
+    for row in rows:
+        normalized = _normalize_student_type(str(row["key"]))
+        counts[normalized] = counts.get(normalized, 0) + int(row["count"])
+    return counts
+
+
+def _build_delivery_assessment(
+    gaps: list[str],
+    table_stats: list[dict[str, Any]],
+    audit_summary: list[dict[str, Any]],
+    special_type_risks: list[dict[str, Any]],
+) -> dict[str, Any]:
+    blocking_items: list[str] = []
+    warning_items: list[str] = []
+    pass_items: list[str] = []
+
+    missing_tables = [item["label"] for item in table_stats if item.get("status") == "missing"]
+    empty_tables = [item["label"] for item in table_stats if item.get("status") == "empty"]
+    if missing_tables:
+        blocking_items.append(f"核心表缺失：{'、'.join(missing_tables)}")
+    if empty_tables:
+        blocking_items.append(f"核心表为空：{'、'.join(empty_tables)}")
+    for item in audit_summary:
+        if int(item.get("conflicts") or 0) > 0:
+            blocking_items.append(f"{item['label']} 仍有 {item['conflicts']} 条疑似冲突")
+
+    for gap in gaps:
+        warning_items.append(gap)
+    for item in special_type_risks:
+        if item.get("readiness") == "screening_only":
+            warning_items.append(f"{item['label']} 当前只能初筛，不能当作完整录取把握")
+        elif item.get("readiness") == "missing":
+            blocking_items.append(f"{item['label']} 缺少招生计划或关键规则，暂不能使用")
+
+    if not blocking_items:
+        pass_items.append("主库可读取，核心表未缺失，P0 备份恢复检查可继续执行。")
+    if not gaps:
+        pass_items.append("当前 P0 规则内未发现数据缺口。")
+
+    if blocking_items:
+        status = "blocked"
+        label = "阻断交付"
+        summary = "存在核心表缺失、空表或冲突，先不要交付给日常使用。"
+    elif warning_items:
+        status = "warning"
+        label = "可验收但有数据警告"
+        summary = "P0 安全底座可继续验收，但数据可用性仍需补齐和人工复核。"
+    else:
+        status = "pass"
+        label = "P0 可通过"
+        summary = "当前健康检查未发现阻断项或 P0 数据缺口。"
+
+    return {
+        "status": status,
+        "label": label,
+        "summary": summary,
+        "pass_items": _dedupe_text(pass_items),
+        "warning_items": _dedupe_text(warning_items),
+        "blocking_items": _dedupe_text(blocking_items),
+    }
 
 
 def _year_counts(conn: sqlite3.Connection, schema: "_Schema", table: str) -> dict[int, int]:
@@ -415,7 +760,7 @@ def _distribution(
     if not column or column not in schema.columns(table):
         return []
     return [
-        {"key": str(row["key"]), "count": int(row["count"])}
+        {"key": str(row["key"]), "label": _label_for_key(str(row["key"])), "count": int(row["count"])}
         for row in conn.execute(
             f'''
             SELECT COALESCE("{column}", '未分类') AS key, COUNT(*) AS count
@@ -588,11 +933,11 @@ def _province_where(
 def _coverage_type_keys(item: dict[str, Any] | None) -> set[str]:
     if not item:
         return set()
-    return {str(entry["key"]) for entry in item.get("student_types", [])}
+    return {_normalize_student_type(str(entry["key"])) for entry in item.get("student_types", [])}
 
 
 def _empty_coverage(table: str, label: str, status: str) -> dict[str, Any]:
-    return {
+    item = {
         "key": table,
         "label": label,
         "status": status,
@@ -603,6 +948,7 @@ def _empty_coverage(table: str, label: str, status: str) -> dict[str, Any]:
         "batch_distribution": [],
         "year_breakdown": [],
     }
+    return _enrich_coverage_item(item)
 
 
 def _format_monitor_status_for_audit(value: str) -> str:
@@ -612,6 +958,94 @@ def _format_monitor_status_for_audit(value: str) -> str:
         "empty": "当前没有山东口径记录",
     }
     return mapping.get(value, value)
+
+
+def _readiness_label(value: str) -> str:
+    mapping = {
+        "ready": "可作为主链路参考",
+        "partial": "部分可用，需看缺口",
+        "screening_only": "只能初筛",
+        "missing": "暂不可用",
+        "empty": "暂无数据",
+        "unknown": "口径待确认",
+    }
+    return mapping.get(value, value)
+
+
+def _fallback_label(value: str) -> str:
+    mapping = {
+        "score_line_reference": "省控线资格参考",
+        "plan_only_reference": "计划清单初筛",
+        "general_reference_fallback": "普通类录取结果参考",
+    }
+    return mapping.get(value, value)
+
+
+def _label_for_key(value: str) -> str:
+    return STUDENT_TYPE_LABELS.get(value, value)
+
+
+def _format_student_type_list(values: list[str]) -> str:
+    return "、".join(STUDENT_TYPE_LABELS.get(value, value) for value in values)
+
+
+def _sort_student_types(values: set[str]) -> list[str]:
+    order = {value: index for index, value in enumerate(STUDENT_TYPE_ORDER)}
+    return sorted(values, key=lambda value: (order.get(value, len(order)), value))
+
+
+def _normalize_student_type(value: str) -> str:
+    cleaned = value.strip()
+    if cleaned in RAW_STUDENT_TYPE_ALIASES:
+        return RAW_STUDENT_TYPE_ALIASES[cleaned]
+    lowered = cleaned.lower()
+    return RAW_STUDENT_TYPE_ALIASES.get(lowered, lowered)
+
+
+def _table_explanation(table: str) -> str:
+    mapping = {
+        "college": "应用侧院校主档，供页面、推荐和导出使用。",
+        "major": "应用侧专业主档，供专业匹配和推荐结果使用。",
+        "college_major": "院校与专业的关联表，决定候选能否落到专业层。",
+        "enrollment_plan": "应用侧招生计划，表示某年某类考生有哪些可报方向和计划容量。",
+        "admission_record": "应用侧录取结果，是普通类推荐主链路最重要的录取参考。",
+        "province_volunteer_rule": "省份志愿规则，用于解释批次、志愿数量、志愿单位和调剂规则。",
+        "province_score_transform_rule": "赋分/成绩转换规则，用于解释高考模式和赋分口径。",
+        "subject_requirement_dict": "选科要求字典，用于把原始选科描述转成可筛选条件。",
+        "special_type_rule": "特殊类型规则字典，用于春考、艺体、单招、综评的初筛类别和核对清单。",
+        "employment_direction": "职业方向库，用于职业偏好和专业方向解释。",
+        "major_employment_mapping": "专业就业映射，用于职业匹配排序和解释。",
+        "score_rank_segment": "一分一段，用于把分数转换为位次或进行跨年参考。",
+        "gaokao_admission_plan": "raw 招生计划，保留原始高考数据事实。",
+        "gaokao_admission_result": "raw 录取结果，保留原始录取事实。",
+        "gaokao_score_line": "raw 省控线/批次线，可用于资格线参考。",
+        "gaokao_batch_dict": "raw 批次词典，用于解释批次口径。",
+        "gaokao_policy_reference": "raw 政策参考，用于填报政策和边界说明。",
+        "gaokao_college_chapter_rule": "raw 招生章程限制链，用于语言、体检、校区、单科等人工复核。",
+    }
+    return mapping.get(table, "项目数据表。")
+
+
+def _coverage_explanation(key: str) -> str:
+    mapping = {
+        "enrollment_plan": "判断山东哪些年份、考生类型和批次有招生计划；计划存在不等于录取把握。",
+        "admission_record": "判断山东哪些年份和类型有录取结果；推荐的录取把握必须优先看这里。",
+        "score_rank_segment": "判断山东一分一段覆盖哪些年份；缺少年份会影响分数到位次映射。",
+        "gaokao_admission_plan": "raw 招生计划原始事实，用于和应用侧招生计划互相核对。",
+        "gaokao_admission_result": "raw 录取结果原始事实，用于和应用侧录取记录互相核对。",
+        "gaokao_score_line": "省控线/批次线覆盖情况，艺术和体育当前主要靠它做资格线初筛。",
+        "gaokao_policy_reference": "政策参考覆盖情况，决定填报规则和边界说明是否足够。",
+        "gaokao_college_chapter_rule": "招生章程限制链覆盖情况，决定语言、体检、单科等风险是否可复核。",
+    }
+    return mapping.get(key, "按年份、类别和批次统计当前山东数据覆盖。")
+
+
+def _dedupe_text(items: list[str]) -> list[str]:
+    result: list[str] = []
+    for item in items:
+        if item and item not in result:
+            result.append(item)
+    return result
 
 
 def _read_schema_version(conn: sqlite3.Connection, schema: "_Schema") -> str | None:

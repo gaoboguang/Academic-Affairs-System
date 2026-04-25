@@ -1,4 +1,5 @@
 import type { OptionItem } from "../../stores/reference";
+import { formatImportStatus, importStatusTagType } from "../../utils/importFeedback";
 import type { RuleVersionItem, TimetableBatchItem, TimetableEntryItem } from "./types";
 
 export const dimensionOptions = [
@@ -37,20 +38,11 @@ export function ruleLabel(item: RuleVersionItem): string {
 }
 
 export function formatBatchStatus(status: string): string {
-  const mapping: Record<string, string> = {
-    completed: "已完成",
-    completed_with_unresolved: "待修正",
-    processing: "处理中",
-    failed: "失败",
-  };
-  return mapping[status] ?? status;
+  return formatImportStatus(status);
 }
 
 export function batchTagType(status: string): "success" | "warning" | "info" | "danger" {
-  if (status === "completed") return "success";
-  if (status === "completed_with_unresolved") return "warning";
-  if (status === "failed") return "danger";
-  return "info";
+  return importStatusTagType(status);
 }
 
 export function ruleStatusTagType(status: string): "success" | "info" | "warning" {

@@ -30,6 +30,13 @@ describe("report insight volunteer draft", () => {
         tone: "info",
       },
       {
+        key: "general_reference_fallback",
+        title: "草稿内含普通类录取参考回退",
+        summary: "1 条已选志愿当前按普通类录取结果参考",
+        detail: "测试普通类回退说明",
+        tone: "info",
+      },
+      {
         key: "subject_check",
         title: "草稿内仍有选科待核对项",
         summary: "1 条已选志愿仍需逐条核对选科限制",
@@ -50,7 +57,10 @@ describe("report insight volunteer draft", () => {
       {
         key: "boundary",
         title: "边界概览",
-        cards: [expect.objectContaining({ key: "cross_province" })],
+        cards: expect.arrayContaining([
+          expect.objectContaining({ key: "cross_province" }),
+          expect.objectContaining({ key: "general_reference_fallback" }),
+        ]),
       },
       {
         key: "risk",
