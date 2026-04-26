@@ -229,6 +229,167 @@ class StudentBulkDeleteExecuteResponse(BaseModel):
     blocked: list[StudentBulkDeleteExecuteItem] = Field(default_factory=list)
 
 
+class StudentClassTransferBaseRequest(BaseModel):
+    student_ids: list[int] = Field(min_length=1, max_length=1000)
+    target_class_id: int
+    effective_on: date
+    reason: str = Field(min_length=1, max_length=255)
+    note: str | None = Field(default=None, max_length=1000)
+    operator_name: str | None = Field(default=None, max_length=80)
+    allow_cross_grade: bool = False
+
+    @field_validator("student_ids")
+    @classmethod
+    def validate_student_ids(cls, value: list[int]) -> list[int]:
+        normalized: list[int] = []
+        seen: set[int] = set()
+        for student_id in value:
+            if student_id <= 0:
+                raise ValueError("学生 ID 必须为正整数")
+            if student_id in seen:
+                continue
+            seen.add(student_id)
+            normalized.append(student_id)
+        if not normalized:
+            raise ValueError("请至少选择 1 名学生")
+        return normalized
+
+    @field_validator("target_class_id")
+    @classmethod
+    def validate_target_class_id(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("目标班级 ID 必须为正整数")
+        return value
+
+    @field_validator("reason")
+    @classmethod
+    def trim_required_text(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("文本不能为空")
+        return normalized
+
+    @field_validator("note", "operator_name")
+    @classmethod
+    def trim_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
+class StudentClassTransferPreviewRequest(StudentClassTransferBaseRequest):
+    pass
+
+
+class StudentClassTransferExecuteRequest(StudentClassTransferBaseRequest):
+    confirm_token: str = Field(min_length=16, max_length=128)
+    confirm_text: str = Field(min_length=1, max_length=80)
+
+    @field_validator("confirm_token", "confirm_text")
+    @classmethod
+    def trim_confirm_fields(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("确认信息不能为空")
+        return normalized
+
+
+class StudentClassTransferPreviewItem(BaseModel):
+    student_id: int
+    student_no: str | None = None
+    student_name: str | None = None
+    from_grade_id: int | None = None
+    from_grade_name: str | None = None
+    from_class_id: int | None = None
+    from_class_name: str | None = None
+    to_grade_id: int | None = None
+    to_grade_name: str | None = None
+    to_class_id: int | None = None
+    to_class_name: str | None = None
+    status: Literal["transferable", "blocked"]
+    reason: str | None = None
+    message: str
+    warnings: list[str] = Field(default_factory=list)
+
+
+class StudentClassTransferPreviewResponse(BaseModel):
+    total: int
+    transferable_count: int
+    blocked_count: int
+    target_class_id: int
+    target_class_name: str
+    target_grade_id: int | None = None
+    target_grade_name: str | None = None
+    effective_on: date
+    required_confirm_text: str
+    confirm_token: str
+    items: list[StudentClassTransferPreviewItem] = Field(default_factory=list)
+    warnings: list[StudentClassTransferPreviewItem] = Field(default_factory=list)
+    blocked: list[StudentClassTransferPreviewItem] = Field(default_factory=list)
+
+
+class StudentClassTransferExecuteItem(BaseModel):
+    student_id: int
+    batch_item_id: int | None = None
+    student_no: str | None = None
+    student_name: str | None = None
+    from_grade_id: int | None = None
+    from_grade_name: str | None = None
+    from_class_id: int | None = None
+    from_class_name: str | None = None
+    to_grade_id: int | None = None
+    to_grade_name: str | None = None
+    to_class_id: int | None = None
+    to_class_name: str | None = None
+    status: Literal["success", "blocked", "failed"]
+    message: str
+    error_message: str | None = None
+    before_snapshot_json: dict | None = None
+    after_snapshot_json: dict | None = None
+
+
+class StudentClassTransferExecuteResponse(BaseModel):
+    total: int
+    success_count: int
+    failed_count: int
+    blocked_count: int
+    status: Literal["success", "partially_failed", "failed"]
+    message: str
+    batch_id: int | None = None
+    audit_log_id: int | None = None
+    items: list[StudentClassTransferExecuteItem] = Field(default_factory=list)
+    success_items: list[StudentClassTransferExecuteItem] = Field(default_factory=list)
+    failed_items: list[StudentClassTransferExecuteItem] = Field(default_factory=list)
+    blocked: list[StudentClassTransferExecuteItem] = Field(default_factory=list)
+
+
+class StudentClassTransferHistoryItem(BaseModel):
+    event_type: Literal["class_transfer"] = "class_transfer"
+    title: str
+    summary: str
+    batch_id: int
+    item_id: int
+    student_id: int
+    student_no: str | None = None
+    student_name: str | None = None
+    from_grade_id: int | None = None
+    from_grade_name: str | None = None
+    from_class_id: int | None = None
+    from_class_name: str | None = None
+    to_grade_id: int | None = None
+    to_grade_name: str | None = None
+    to_class_id: int | None = None
+    to_class_name: str | None = None
+    effective_on: date
+    reason: str
+    note: str | None = None
+    operator_name: str | None = None
+    status: str
+    error_message: str | None = None
+    created_at: datetime
+
+
 class StudentClassHistoryRead(BaseModel):
     id: int
     grade_id: int | None = None

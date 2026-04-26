@@ -2,6 +2,13 @@
 
 ## 当前状态
 
+- 2026-04-26 已按第四轮 v6 开发文档完成窗口 E3：批量调班后端与历史记录：
+  - 当前分支 `codex/r4-e3-student-bulk-class-transfer-backend`，从 E2 分支切出；本轮不执行 `git push`
+  - 新增 `student_class_transfer_batch` / `student_class_transfer_item` 调班审计表和迁移 `20260426_0019_student_class_transfer_schema.py`，保留批次、逐学生明细、来源班级、目标班级、生效日期、原因、备注、操作人、执行状态和前后快照
+  - 新增 `POST /api/students/class-transfer/preview`、`POST /api/students/class-transfer`、`GET /api/students/{student_id}/class-transfer-history`；执行调班会校验确认 token / 确认文字，更新学生当前年级班级，刷新班级人数，写入 `StudentClassHistory` 和 `audit_log`
+  - 预检会阻断学生不存在 / 已停用、学生已在目标班级、目标班级不存在或停用、未确认跨年级调班等情况；允许无当前班级学生直接调入并给中文 warning
+  - 本轮未改前端、成长档案展示页、学生详情页、高考路径或推荐模块；后续 E4 应直接复用本轮三个后端接口，把成功调班历史作为系统事件展示，不要写入人工成长记录表
+  - 验证：`npm run backend:test -- apps/backend/tests/test_student_class_transfer.py -q` 为 `3 passed`；`npm run backend:migrate` 通过，真实主库升到 `20260426_0019`；`npm run backend:test -- apps/backend/tests -q` 为 `99 passed`；`git diff --check` 通过
 - 2026-04-26 已按第四轮 v6 开发文档完成窗口 E2：学生批量删除前端：
   - 当前分支 `codex/r4-e2-student-bulk-delete-frontend`，从 E1 批量删除后端分支切出；本轮不执行 `git push`
   - `apps/frontend/src/pages/StudentsPage.vue` 已新增学生表格多选、批量操作区和“批量删除学生”入口；删除弹窗先调用 E1 的 `POST /api/students/bulk-delete/preview`，展示选中数量、可停用数量、阻断数量、逐学生关联数据风险和中文说明

@@ -17,6 +17,11 @@ from app.schemas.student import (
     StudentBulkDeletePreviewResponse,
     StudentCareerPreferencePayload,
     StudentCareerPreferenceRead,
+    StudentClassTransferExecuteRequest,
+    StudentClassTransferExecuteResponse,
+    StudentClassTransferHistoryItem,
+    StudentClassTransferPreviewRequest,
+    StudentClassTransferPreviewResponse,
     StudentListResponse,
     StudentPayload,
     StudentProfileRead,
@@ -117,6 +122,22 @@ def execute_student_bulk_delete(
     return service.execute_student_bulk_delete(session, payload)
 
 
+@router.post("/class-transfer/preview", response_model=StudentClassTransferPreviewResponse)
+def preview_student_class_transfer(
+    payload: StudentClassTransferPreviewRequest,
+    session: Session = Depends(get_db_session),
+) -> StudentClassTransferPreviewResponse:
+    return service.preview_student_class_transfer(session, payload)
+
+
+@router.post("/class-transfer", response_model=StudentClassTransferExecuteResponse)
+def execute_student_class_transfer(
+    payload: StudentClassTransferExecuteRequest,
+    session: Session = Depends(get_db_session),
+) -> StudentClassTransferExecuteResponse:
+    return service.execute_student_class_transfer(session, payload)
+
+
 @router.get("/{student_id}/profile", response_model=StudentProfileRead)
 def get_student_profile(
     student_id: int,
@@ -131,6 +152,14 @@ def get_student_career_preference(
     session: Session = Depends(get_db_session),
 ) -> StudentCareerPreferenceRead | None:
     return service.get_student_career_preference(session, student_id)
+
+
+@router.get("/{student_id}/class-transfer-history", response_model=list[StudentClassTransferHistoryItem])
+def list_student_class_transfer_history(
+    student_id: int,
+    session: Session = Depends(get_db_session),
+) -> list[StudentClassTransferHistoryItem]:
+    return service.list_student_class_transfer_history(session, student_id)
 
 
 @router.post("/{student_id}/career-preference", response_model=StudentCareerPreferenceRead)

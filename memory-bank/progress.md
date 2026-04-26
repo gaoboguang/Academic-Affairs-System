@@ -8,6 +8,14 @@
 
 ## 2026-04-26 新增
 
+- 已完成 v6 第四轮窗口 E3：批量调班后端与历史记录：
+  - 从 E2 分支切出 `codex/r4-e3-student-bulk-class-transfer-backend`
+  - 新增模型与迁移：`student_class_transfer_batch`、`student_class_transfer_item`、`20260426_0019_student_class_transfer_schema.py`
+  - 新增后端接口 `POST /api/students/class-transfer/preview`、`POST /api/students/class-transfer`、`GET /api/students/{student_id}/class-transfer-history`
+  - 批量调班执行会写批次和逐学生明细，记录 from/to 年级班级快照、前后学生快照、生效日期、原因、备注和操作人；同时更新 `Student.current_grade_id/current_class_id`，刷新班级人数，写 `StudentClassHistory` 和 `audit_log`
+  - 预检 / 执行支持学生不存在或停用、已在目标班级、目标班级不存在或停用、跨年级未确认等阻断；后续 E4 可直接把历史接口返回的 `class_transfer` 事件展示到学生详情和成长档案
+  - 验证：E3 定向后端 `3 passed`；`backend:migrate` 通过并升级真实主库到 `20260426_0019`；后端全量 `99 passed`；`git diff --check` 通过
+
 - 已完成 v6 第四轮窗口 E2：学生批量删除前端：
   - 从 E1 后端成果切出 `codex/r4-e2-student-bulk-delete-frontend`
   - `apps/frontend/src/pages/StudentsPage.vue` 已新增学生列表多选、批量操作区和“批量删除学生”弹窗

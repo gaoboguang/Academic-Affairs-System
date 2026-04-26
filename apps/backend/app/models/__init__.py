@@ -37,7 +37,15 @@ from app.models.recommendation import (
     VolunteerDraft,
     VolunteerDraftItem,
 )
-from app.models.student import Student, StudentAttachment, StudentCareerPreference, StudentClassHistory, StudentGuardian
+from app.models.student import (
+    Student,
+    StudentAttachment,
+    StudentCareerPreference,
+    StudentClassHistory,
+    StudentClassTransferBatch,
+    StudentClassTransferItem,
+    StudentGuardian,
+)
 from app.models.system import AuditLog, BackupRecord, ConfigItem, ImportJob, ReportExportRecord, StoredFile
 from app.models.teacher import (
     ClassAdviserAssignment,
@@ -102,6 +110,8 @@ __all__ = [
     "StudentAttachment",
     "StudentCareerPreference",
     "StudentClassHistory",
+    "StudentClassTransferBatch",
+    "StudentClassTransferItem",
     "StudentGaokaoScoreProjection",
     "StudentGrowthAttachment",
     "StudentGrowthRecord",

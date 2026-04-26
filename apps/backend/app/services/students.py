@@ -27,6 +27,8 @@ from app.models import (
     StudentAttachment,
     StudentCareerPreference,
     StudentClassHistory,
+    StudentClassTransferBatch,
+    StudentClassTransferItem,
     StudentGaokaoScoreProjection,
     StudentGuardian,
     StudentGrowthRecord,
@@ -57,6 +59,13 @@ from app.schemas.student import (
     StudentCareerPreferencePayload,
     StudentCareerPreferenceRead,
     StudentClassHistoryRead,
+    StudentClassTransferExecuteItem,
+    StudentClassTransferExecuteRequest,
+    StudentClassTransferExecuteResponse,
+    StudentClassTransferHistoryItem,
+    StudentClassTransferPreviewItem,
+    StudentClassTransferPreviewRequest,
+    StudentClassTransferPreviewResponse,
     StudentExamTrendItem,
     StudentGuardianPayload,
     StudentGuardianRead,
@@ -528,6 +537,582 @@ def _snapshot_student_for_bulk_delete(student: Student) -> dict:
         "origin_province": student.origin_province,
         "is_active": student.is_active,
     }
+
+
+_CLASS_TRANSFER_TOKEN_VERSION = "student-class-transfer-v1"
+
+
+def preview_student_class_transfer(
+    session: Session,
+    payload: StudentClassTransferPreviewRequest,
+) -> StudentClassTransferPreviewResponse:
+    return _build_class_transfer_preview(session, payload)
+
+
+def execute_student_class_transfer(
+    session: Session,
+    payload: StudentClassTransferExecuteRequest,
+) -> StudentClassTransferExecuteResponse:
+    preview = _build_class_transfer_preview(session, payload)
+    if payload.confirm_token != preview.confirm_token:
+        raise HTTPException(status_code=400, detail="调班确认已过期，请重新预检后再执行")
+    if payload.confirm_text != preview.required_confirm_text:
+        raise HTTPException(status_code=400, detail=f"确认文字不正确，请输入：{preview.required_confirm_text}")
+
+    target_class = _get_transfer_target_class(session, payload.target_class_id)
+    target_grade_id = target_class.grade_id
+    target_grade_name = target_class.grade.name if target_class.grade else None
+    source_class_ids = {
+        item.from_class_id for item in preview.items if item.status == "transferable" and item.from_class_id
+    }
+    batch = StudentClassTransferBatch(
+        source_class_id=next(iter(source_class_ids)) if len(source_class_ids) == 1 else None,
+        target_class_id=target_class.id,
+        target_grade_id=target_grade_id,
+        effective_on=payload.effective_on,
+        reason=payload.reason,
+        note=payload.note,
+        operator_name=payload.operator_name,
+        status="pending",
+        requested_count=preview.total,
+        confirm_text=preview.required_confirm_text,
+    )
+    session.add(batch)
+    session.flush()
+
+    execute_items: list[StudentClassTransferExecuteItem] = []
+    refreshed_classes: set[int] = {target_class.id}
+    for preview_item in preview.items:
+        if preview_item.status == "blocked":
+            transfer_item = StudentClassTransferItem(
+                batch_id=batch.id,
+                requested_student_id=preview_item.student_id,
+                student_id=preview_item.student_id if preview_item.student_no else None,
+                student_no_snapshot=preview_item.student_no,
+                student_name_snapshot=preview_item.student_name,
+                from_grade_id=preview_item.from_grade_id,
+                from_grade_name_snapshot=preview_item.from_grade_name,
+                from_class_id=preview_item.from_class_id,
+                from_class_name_snapshot=preview_item.from_class_name,
+                to_grade_id=preview_item.to_grade_id,
+                to_grade_name_snapshot=preview_item.to_grade_name,
+                to_class_id=preview_item.to_class_id,
+                to_class_name_snapshot=preview_item.to_class_name,
+                status="blocked",
+                error_message=preview_item.reason,
+            )
+            session.add(transfer_item)
+            session.flush()
+            execute_items.append(
+                StudentClassTransferExecuteItem(
+                    student_id=preview_item.student_id,
+                    batch_item_id=transfer_item.id,
+                    student_no=preview_item.student_no,
+                    student_name=preview_item.student_name,
+                    from_grade_id=preview_item.from_grade_id,
+                    from_grade_name=preview_item.from_grade_name,
+                    from_class_id=preview_item.from_class_id,
+                    from_class_name=preview_item.from_class_name,
+                    to_grade_id=preview_item.to_grade_id,
+                    to_grade_name=preview_item.to_grade_name,
+                    to_class_id=preview_item.to_class_id,
+                    to_class_name=preview_item.to_class_name,
+                    status="blocked",
+                    message=preview_item.message,
+                    error_message=preview_item.reason,
+                )
+            )
+            continue
+
+        student = get_student(session, preview_item.student_id)
+        if not student or not student.is_active:
+            transfer_item = StudentClassTransferItem(
+                batch_id=batch.id,
+                requested_student_id=preview_item.student_id,
+                student_id=student.id if student else None,
+                student_no_snapshot=student.student_no if student else preview_item.student_no,
+                student_name_snapshot=student.name if student else preview_item.student_name,
+                from_grade_id=preview_item.from_grade_id,
+                from_grade_name_snapshot=preview_item.from_grade_name,
+                from_class_id=preview_item.from_class_id,
+                from_class_name_snapshot=preview_item.from_class_name,
+                to_grade_id=preview_item.to_grade_id,
+                to_grade_name_snapshot=preview_item.to_grade_name,
+                to_class_id=preview_item.to_class_id,
+                to_class_name_snapshot=preview_item.to_class_name,
+                status="failed",
+                error_message="执行时学生状态已变化，未调班",
+            )
+            session.add(transfer_item)
+            session.flush()
+            execute_items.append(
+                StudentClassTransferExecuteItem(
+                    student_id=preview_item.student_id,
+                    batch_item_id=transfer_item.id,
+                    student_no=preview_item.student_no,
+                    student_name=preview_item.student_name,
+                    from_grade_id=preview_item.from_grade_id,
+                    from_grade_name=preview_item.from_grade_name,
+                    from_class_id=preview_item.from_class_id,
+                    from_class_name=preview_item.from_class_name,
+                    to_grade_id=preview_item.to_grade_id,
+                    to_grade_name=preview_item.to_grade_name,
+                    to_class_id=preview_item.to_class_id,
+                    to_class_name=preview_item.to_class_name,
+                    status="failed",
+                    message="执行时学生状态已变化，未调班",
+                    error_message="学生不存在或已停用",
+                )
+            )
+            continue
+
+        before_snapshot = _snapshot_student_for_class_transfer(student)
+        old_class_id = student.current_class_id
+        if old_class_id:
+            refreshed_classes.add(old_class_id)
+        student.current_grade_id = target_grade_id
+        student.current_class_id = target_class.id
+        student.current_grade = target_class.grade
+        student.current_class = target_class
+        _record_class_transfer_history(
+            session,
+            student,
+            target_grade_id=target_grade_id,
+            target_class_id=target_class.id,
+            effective_on=payload.effective_on,
+            reason=f"调班：{payload.reason}",
+        )
+        session.flush()
+        after_snapshot = _snapshot_student_for_class_transfer(student)
+        transfer_item = StudentClassTransferItem(
+            batch_id=batch.id,
+            requested_student_id=student.id,
+            student_id=student.id,
+            student_no_snapshot=student.student_no,
+            student_name_snapshot=student.name,
+            from_grade_id=before_snapshot["current_grade_id"],
+            from_grade_name_snapshot=before_snapshot["current_grade_name"],
+            from_class_id=before_snapshot["current_class_id"],
+            from_class_name_snapshot=before_snapshot["current_class_name"],
+            to_grade_id=target_grade_id,
+            to_grade_name_snapshot=target_grade_name,
+            to_class_id=target_class.id,
+            to_class_name_snapshot=target_class.name,
+            before_snapshot_json=before_snapshot,
+            after_snapshot_json=after_snapshot,
+            status="success",
+        )
+        session.add(transfer_item)
+        session.flush()
+        execute_items.append(
+            StudentClassTransferExecuteItem(
+                student_id=student.id,
+                batch_item_id=transfer_item.id,
+                student_no=student.student_no,
+                student_name=student.name,
+                from_grade_id=before_snapshot["current_grade_id"],
+                from_grade_name=before_snapshot["current_grade_name"],
+                from_class_id=before_snapshot["current_class_id"],
+                from_class_name=before_snapshot["current_class_name"],
+                to_grade_id=target_grade_id,
+                to_grade_name=target_grade_name,
+                to_class_id=target_class.id,
+                to_class_name=target_class.name,
+                status="success",
+                message=_build_class_transfer_success_message(before_snapshot, target_grade_name, target_class.name),
+                before_snapshot_json=before_snapshot,
+                after_snapshot_json=after_snapshot,
+            )
+        )
+
+    for class_id in refreshed_classes:
+        _refresh_class_student_count(session, class_id)
+
+    success_items = [item for item in execute_items if item.status == "success"]
+    failed_items = [item for item in execute_items if item.status != "success"]
+    blocked_items = [item for item in execute_items if item.status == "blocked"]
+    if success_items and failed_items:
+        operation_status = "partially_failed"
+    elif success_items:
+        operation_status = "success"
+    else:
+        operation_status = "failed"
+    batch.status = operation_status
+    batch.success_count = len(success_items)
+    batch.failed_count = len(failed_items)
+    batch.blocked_count = len(blocked_items)
+    batch.finished_at = datetime.now()
+    session.flush()
+
+    audit_log = write_audit_log(
+        session,
+        module="students",
+        action="class_transfer",
+        target_type="student_class_transfer_batch",
+        target_id=str(batch.id),
+        detail_json={
+            "operation_type": "class_transfer",
+            "batch_id": batch.id,
+            "target_class_id": payload.target_class_id,
+            "target_class_name": target_class.name,
+            "target_grade_id": target_grade_id,
+            "target_grade_name": target_grade_name,
+            "effective_on": payload.effective_on.isoformat(),
+            "reason": payload.reason,
+            "note": payload.note,
+            "operator_name": payload.operator_name,
+            "requested_student_ids": payload.student_ids,
+            "required_confirm_text": preview.required_confirm_text,
+            "status": operation_status,
+            "success_count": len(success_items),
+            "failed_count": len(failed_items),
+            "blocked_count": len(blocked_items),
+            "items": [item.model_dump(mode="json") for item in execute_items],
+        },
+    )
+    message = f"已完成 {len(success_items)} 名学生调班；{len(failed_items)} 名未调班。"
+    return StudentClassTransferExecuteResponse(
+        total=preview.total,
+        success_count=len(success_items),
+        failed_count=len(failed_items),
+        blocked_count=len(blocked_items),
+        status=operation_status,
+        message=message,
+        batch_id=batch.id,
+        audit_log_id=audit_log.id,
+        items=execute_items,
+        success_items=success_items,
+        failed_items=failed_items,
+        blocked=blocked_items,
+    )
+
+
+def list_student_class_transfer_history(
+    session: Session,
+    student_id: int,
+) -> list[StudentClassTransferHistoryItem]:
+    _ensure_student_exists(session, student_id)
+    rows = session.execute(
+        select(StudentClassTransferItem, StudentClassTransferBatch)
+        .join(StudentClassTransferBatch, StudentClassTransferBatch.id == StudentClassTransferItem.batch_id)
+        .where(
+            StudentClassTransferItem.student_id == student_id,
+            StudentClassTransferItem.status == "success",
+            StudentClassTransferItem.is_active.is_(True),
+            StudentClassTransferBatch.is_active.is_(True),
+        )
+        .order_by(
+            StudentClassTransferBatch.effective_on.desc(),
+            StudentClassTransferItem.id.desc(),
+        )
+    ).all()
+    return [
+        _serialize_class_transfer_history_item(item, batch)
+        for item, batch in rows
+    ]
+
+
+def _build_class_transfer_preview(
+    session: Session,
+    payload: StudentClassTransferPreviewRequest,
+) -> StudentClassTransferPreviewResponse:
+    target_class = _get_transfer_target_class(session, payload.target_class_id)
+    students = _load_students_for_bulk_operation(session, payload.student_ids)
+    items = [
+        _build_class_transfer_preview_item(
+            student_id,
+            students.get(student_id),
+            target_class,
+            payload,
+        )
+        for student_id in payload.student_ids
+    ]
+    transferable = [item for item in items if item.status == "transferable"]
+    blocked = [item for item in items if item.status == "blocked"]
+    target_grade_name = target_class.grade.name if target_class.grade else None
+    required_confirm_text = f"确认调班 {len(transferable)} 名学生"
+    response = StudentClassTransferPreviewResponse(
+        total=len(payload.student_ids),
+        transferable_count=len(transferable),
+        blocked_count=len(blocked),
+        target_class_id=target_class.id,
+        target_class_name=target_class.name,
+        target_grade_id=target_class.grade_id,
+        target_grade_name=target_grade_name,
+        effective_on=payload.effective_on,
+        required_confirm_text=required_confirm_text,
+        confirm_token="pending",
+        items=items,
+        warnings=[item for item in transferable if item.warnings],
+        blocked=blocked,
+    )
+    response.confirm_token = _build_class_transfer_confirm_token(payload, response)
+    return response
+
+
+def _get_transfer_target_class(session: Session, target_class_id: int) -> SchoolClass:
+    target_class = session.scalar(
+        select(SchoolClass)
+        .where(SchoolClass.id == target_class_id)
+        .options(joinedload(SchoolClass.grade))
+    )
+    if not target_class:
+        raise HTTPException(status_code=404, detail="目标班级不存在")
+    if not target_class.is_active:
+        raise HTTPException(status_code=400, detail="目标班级已停用")
+    return target_class
+
+
+def _build_class_transfer_preview_item(
+    student_id: int,
+    student: Student | None,
+    target_class: SchoolClass,
+    payload: StudentClassTransferPreviewRequest,
+) -> StudentClassTransferPreviewItem:
+    target_grade_name = target_class.grade.name if target_class.grade else None
+    if not student or not student.is_active:
+        return StudentClassTransferPreviewItem(
+            student_id=student_id,
+            student_no=student.student_no if student else None,
+            student_name=student.name if student else None,
+            to_grade_id=target_class.grade_id,
+            to_grade_name=target_grade_name,
+            to_class_id=target_class.id,
+            to_class_name=target_class.name,
+            status="blocked",
+            reason="学生不存在或已停用",
+            message="学生不存在或已停用，已阻断调班",
+        )
+
+    from_grade_name = student.current_grade.name if student.current_grade else None
+    from_class_name = student.current_class.name if student.current_class else None
+    if student.current_class_id == target_class.id:
+        return StudentClassTransferPreviewItem(
+            student_id=student.id,
+            student_no=student.student_no,
+            student_name=student.name,
+            from_grade_id=student.current_grade_id,
+            from_grade_name=from_grade_name,
+            from_class_id=student.current_class_id,
+            from_class_name=from_class_name,
+            to_grade_id=target_class.grade_id,
+            to_grade_name=target_grade_name,
+            to_class_id=target_class.id,
+            to_class_name=target_class.name,
+            status="blocked",
+            reason="学生已在目标班级",
+            message="该学生已经在目标班级，无需调班",
+        )
+
+    if (
+        student.current_grade_id
+        and target_class.grade_id
+        and student.current_grade_id != target_class.grade_id
+        and not payload.allow_cross_grade
+    ):
+        return StudentClassTransferPreviewItem(
+            student_id=student.id,
+            student_no=student.student_no,
+            student_name=student.name,
+            from_grade_id=student.current_grade_id,
+            from_grade_name=from_grade_name,
+            from_class_id=student.current_class_id,
+            from_class_name=from_class_name,
+            to_grade_id=target_class.grade_id,
+            to_grade_name=target_grade_name,
+            to_class_id=target_class.id,
+            to_class_name=target_class.name,
+            status="blocked",
+            reason="跨年级调班未确认",
+            message="学生当前年级与目标班级年级不同，请确认跨年级调班后再执行",
+        )
+
+    warnings: list[str] = []
+    if not student.current_class_id:
+        warnings.append("学生当前没有班级，将直接转入目标班级")
+    elif not student.current_class:
+        warnings.append("学生当前班级记录缺失，将按学生档案中的班级 ID 留痕")
+    if (
+        student.current_grade_id
+        and target_class.grade_id
+        and student.current_grade_id != target_class.grade_id
+        and payload.allow_cross_grade
+    ):
+        warnings.append("这是跨年级调班，已按请求确认执行")
+
+    return StudentClassTransferPreviewItem(
+        student_id=student.id,
+        student_no=student.student_no,
+        student_name=student.name,
+        from_grade_id=student.current_grade_id,
+        from_grade_name=from_grade_name,
+        from_class_id=student.current_class_id,
+        from_class_name=from_class_name,
+        to_grade_id=target_class.grade_id,
+        to_grade_name=target_grade_name,
+        to_class_id=target_class.id,
+        to_class_name=target_class.name,
+        status="transferable",
+        message=(
+            f"可从 {_combine_grade_class_name(from_grade_name, from_class_name)} "
+            f"调入 {_combine_grade_class_name(target_grade_name, target_class.name)}"
+        ),
+        warnings=warnings,
+    )
+
+
+def _build_class_transfer_confirm_token(
+    payload: StudentClassTransferPreviewRequest,
+    preview: StudentClassTransferPreviewResponse,
+) -> str:
+    token_payload = {
+        "version": _CLASS_TRANSFER_TOKEN_VERSION,
+        "student_ids": payload.student_ids,
+        "target_class_id": payload.target_class_id,
+        "effective_on": payload.effective_on.isoformat(),
+        "reason": payload.reason,
+        "note": payload.note,
+        "operator_name": payload.operator_name,
+        "allow_cross_grade": payload.allow_cross_grade,
+        "required_confirm_text": preview.required_confirm_text,
+        "items": [
+            {
+                "student_id": item.student_id,
+                "status": item.status,
+                "from_grade_id": item.from_grade_id,
+                "from_class_id": item.from_class_id,
+                "to_grade_id": item.to_grade_id,
+                "to_class_id": item.to_class_id,
+            }
+            for item in preview.items
+        ],
+    }
+    raw_value = json.dumps(token_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw_value.encode("utf-8")).hexdigest()
+
+
+def _snapshot_student_for_class_transfer(student: Student) -> dict:
+    return {
+        "id": student.id,
+        "student_no": student.student_no,
+        "name": student.name,
+        "status": student.status,
+        "current_grade_id": student.current_grade_id,
+        "current_grade_name": student.current_grade.name if student.current_grade else None,
+        "current_class_id": student.current_class_id,
+        "current_class_name": student.current_class.name if student.current_class else None,
+        "is_active": student.is_active,
+    }
+
+
+def _record_class_transfer_history(
+    session: Session,
+    student: Student,
+    *,
+    target_grade_id: int | None,
+    target_class_id: int,
+    effective_on: date,
+    reason: str,
+) -> None:
+    current_open_history = next(
+        (
+            item
+            for item in student.class_histories
+            if item.is_active and item.end_date is None
+        ),
+        None,
+    )
+    if (
+        current_open_history
+        and current_open_history.grade_id == target_grade_id
+        and current_open_history.class_id == target_class_id
+    ):
+        current_open_history.reason = reason
+        current_open_history.start_date = effective_on
+        session.flush()
+        return
+    if current_open_history:
+        current_open_history.end_date = effective_on
+
+    existing_target_history = next(
+        (
+            item
+            for item in student.class_histories
+            if item.is_active
+            and item.grade_id == target_grade_id
+            and item.class_id == target_class_id
+            and item.start_date == effective_on
+        ),
+        None,
+    )
+    if existing_target_history:
+        existing_target_history.end_date = None
+        existing_target_history.reason = reason
+    else:
+        student.class_histories.append(
+            StudentClassHistory(
+                grade_id=target_grade_id,
+                class_id=target_class_id,
+                start_date=effective_on,
+                end_date=None,
+                reason=reason,
+            )
+        )
+    session.flush()
+
+
+def _build_class_transfer_success_message(
+    before_snapshot: dict,
+    target_grade_name: str | None,
+    target_class_name: str,
+) -> str:
+    from_name = _combine_grade_class_name(
+        before_snapshot.get("current_grade_name"),
+        before_snapshot.get("current_class_name"),
+    )
+    to_name = _combine_grade_class_name(target_grade_name, target_class_name)
+    return f"已调班：{from_name} -> {to_name}"
+
+
+def _serialize_class_transfer_history_item(
+    item: StudentClassTransferItem,
+    batch: StudentClassTransferBatch,
+) -> StudentClassTransferHistoryItem:
+    from_name = _combine_grade_class_name(item.from_grade_name_snapshot, item.from_class_name_snapshot)
+    to_name = _combine_grade_class_name(item.to_grade_name_snapshot, item.to_class_name_snapshot)
+    summary = f"{batch.effective_on.isoformat()} 班级调整：{from_name} -> {to_name}，原因：{batch.reason}"
+    if batch.note:
+        summary = f"{summary}。备注：{batch.note}"
+    return StudentClassTransferHistoryItem(
+        title="班级调整",
+        summary=summary,
+        batch_id=batch.id,
+        item_id=item.id,
+        student_id=item.student_id or item.requested_student_id,
+        student_no=item.student_no_snapshot,
+        student_name=item.student_name_snapshot,
+        from_grade_id=item.from_grade_id,
+        from_grade_name=item.from_grade_name_snapshot,
+        from_class_id=item.from_class_id,
+        from_class_name=item.from_class_name_snapshot,
+        to_grade_id=item.to_grade_id,
+        to_grade_name=item.to_grade_name_snapshot,
+        to_class_id=item.to_class_id,
+        to_class_name=item.to_class_name_snapshot,
+        effective_on=batch.effective_on,
+        reason=batch.reason,
+        note=batch.note,
+        operator_name=batch.operator_name,
+        status=item.status,
+        error_message=item.error_message,
+        created_at=item.created_at,
+    )
+
+
+def _combine_grade_class_name(grade_name: str | None, class_name: str | None) -> str:
+    if grade_name and class_name:
+        return f"{grade_name} {class_name}"
+    return class_name or grade_name or "未分班"
 
 
 def get_student_profile(session: Session, student_id: int) -> StudentProfileRead:

@@ -2,6 +2,12 @@
 
 ## 当前主线状态（2026-04-26）
 
+- 已按 `Codex-App-第四轮开发计划-学生批量操作调班与数据库补齐-v6.md` 完成窗口 E3，当前分支 `codex/r4-e3-student-bulk-class-transfer-backend`：新增批量调班后端、调班批次/明细和学生调班历史接口，不执行 `git push`。
+- E3 后端能力：`POST /api/students/class-transfer/preview` 返回可调班 / 被阻断清单、目标班级、来源班级、中文 warning、`required_confirm_text` 和 `confirm_token`；`POST /api/students/class-transfer` 校验 token 与确认文字后，逐学生更新当前年级班级，写 `student_class_transfer_batch` / `student_class_transfer_item`，同步写 `StudentClassHistory`，刷新班级人数并写 `audit_log`。
+- E3 历史接口：`GET /api/students/{student_id}/class-transfer-history` 返回成功调班记录，包含 `event_type=class_transfer`、title、summary、from/to 年级班级、生效日期、原因、备注、操作人和批次/明细 ID；E4 应把它作为系统事件聚合到学生详情和成长档案，不要写入人工 `student_growth_record`。
+- E3 新增文件：`apps/backend/alembic/versions/20260426_0019_student_class_transfer_schema.py`、`apps/backend/tests/test_student_class_transfer.py`；主要修改文件：`apps/backend/app/models/student.py`、`apps/backend/app/models/__init__.py`、`apps/backend/app/schemas/student.py`、`apps/backend/app/services/students.py`、`apps/backend/app/api/routes/students.py`。
+- E3 验证：`npm run backend:test -- apps/backend/tests/test_student_class_transfer.py -q` 为 `3 passed`；`npm run backend:migrate` 通过并把真实主库升级到 `20260426_0019`；`npm run backend:test -- apps/backend/tests -q` 为 `99 passed`；`git diff --check` 通过。
+- 下一步：E4 做批量调班前端和成长档案展示时，复用 E2 已落地的学生列表多选 / 批量操作区，调用 E3 的 preview / execute / history 接口；E4 会修改 `StudentsPage.vue`、`StudentDetailPage.vue`、`GrowthArchivePage.vue`，应避免重做后端逻辑。
 - 已按 `Codex-App-第四轮开发计划-学生批量操作调班与数据库补齐-v6.md` 完成窗口 E2，当前分支 `codex/r4-e2-student-bulk-delete-frontend`：在学生列表页接入 E1 批量删除后端能力，不执行 `git push`。
 - E2 前端能力：学生列表现在支持多选，列表头部有“批量操作 / 批量删除学生”；删除弹窗要求填写原因并先调用 `POST /api/students/bulk-delete/preview`，展示选中学生、可停用数量、被阻断数量、每名学生的关联数据风险和“只停用主档、保留历史数据”的说明。
 - E2 执行策略：前端不自己拼确认规则，直接使用后端返回的 `required_confirm_text` 和 `confirm_token`；用户必须输入确认文字后才调用 `POST /api/students/bulk-delete`。执行结果会在弹窗中显示成功 / 失败 / 阻断明细，并刷新学生列表。
