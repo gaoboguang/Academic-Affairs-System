@@ -8,6 +8,15 @@
 
 ## 2026-04-26 新增
 
+- 已完成 v6 第四轮窗口 E8：最终集成、测试和交接：
+  - 从 E7 成果切出 `codex/r4-e8-final-integration`
+  - 新增 `docs/round4-final-acceptance-report.md`，统一记录第四轮 E0-E7 的集成状态、批量删除、批量调班、成长档案展示、数据库补齐、剩余缺口、验证结果和合并结论
+  - 更新 `docs/README.md`、`memory-bank/active-context.md`、`memory-bank/handoff.md` 和本进展记录
+  - 数据健康复核：`backend:data-health -- --json` 通过，schema_version=`20260426_0019`，状态 `warning`，P0 缺口 4 条；一分一段 `22388` 条覆盖 2020-2025，省控线 / 批次线 `74` 条覆盖 2020-2025
+  - P0 验收：`backend:p0-check -- --json` 为 `ok: true`，备份包 `data/backups/p0_delivery_backup_20260426_175940.zip`，恢复校验通过
+  - 验证：`backend:migrate` 通过；`npm run check` 通过（后端 101 passed、前端 lint、前端 28 files / 157 tests passed、前端构建）；`npm run check:all` 通过（E2E 32 passed）；`git diff --check` 通过
+  - 结论：第四轮可本地合并 `main`；不执行 `git push`
+
 - 已完成 v6 第四轮窗口 E7：数据健康、报表和使用说明：
   - 从 E6 当前工作区切出 `codex/r4-e7-data-health-reports-docs`
   - `apps/backend/app/utils/data_health.py` 已把默认覆盖年份扩到 2020-2026，同时把 2026 未发布项从历史补齐缺口中排除，避免 P0 缺口虚增

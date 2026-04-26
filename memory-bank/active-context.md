@@ -2,6 +2,13 @@
 
 ## 当前状态
 
+- 2026-04-26 已按第四轮 v6 开发文档完成窗口 E8：最终集成、测试和交接：
+  - 当前分支 `codex/r4-e8-final-integration`，从 E7 成果切出；本轮不执行 `git push`
+  - 新增 `docs/round4-final-acceptance-report.md`，统一记录 E0-E7 整合结论、批量删除、批量调班、成长档案系统事件、数据库补齐结果、剩余不可补缺口和完整验证结果
+  - `backend:data-health -- --json` 当前 schema_version=`20260426_0019`、状态 `warning`、P0 缺口 4 条；2020-2022 一分一段和省控线已补齐，剩余为特殊类型专门录取结果、2024 招生计划完整性、政策参考和章程人工复核
+  - `backend:p0-check -- --json` 为 `ok: true`，备份包 `data/backups/p0_delivery_backup_20260426_175940.zip`，恢复校验通过
+  - 验证：`backend:migrate` 通过；`npm run check` 通过（后端 101 passed、前端 28 files / 157 tests passed、lint 和构建通过）；`npm run check:all` 通过（E2E 32 passed）；`git diff --check` 通过
+  - 结论：第四轮可本地合并 `main`；不 push，上传仍交给用户的 GitHub Desktop 或手动流程
 - 2026-04-26 已按第四轮 v6 开发文档完成窗口 E7：数据健康、报表和使用说明：
   - 当前分支 `codex/r4-e7-data-health-reports-docs`，从 E6 当前工作区切出；本轮不执行 `git push`
   - `backend:data-health` 的默认覆盖年份已扩到 2020-2026；2026 会进入年份覆盖矩阵，但未发布的一分一段、省控线、普通类计划和投档结果不再被误算成历史补齐缺口

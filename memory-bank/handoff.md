@@ -2,12 +2,19 @@
 
 ## 当前主线状态（2026-04-26）
 
+- 已按 `Codex-App-第四轮开发计划-学生批量操作调班与数据库补齐-v6.md` 完成窗口 E8，当前分支 `codex/r4-e8-final-integration`：第四轮最终集成、完整测试和交接。本轮不执行 `git push`。
+- E8 文档：新增 `docs/round4-final-acceptance-report.md`，并接入 `docs/README.md`；报告记录批量删除、批量调班、成长档案展示、数据库补齐结果、剩余不可补缺口、测试结果和合并结论。
+- E8 数据健康：`npm run backend:data-health -- --json` 通过，schema_version=`20260426_0019`，状态 `warning`，P0 缺口 4 条；2020-2022 一分一段和省控线已不再是缺口。
+- E8 P0 验收：`npm run backend:p0-check -- --json` 为 `ok: true`，备份包 `data/backups/p0_delivery_backup_20260426_175940.zip`，备份结构、恢复数据健康和恢复后启动校验均通过。
+- E8 完整验证：`npm run backend:migrate` 通过；`npm run check` 通过（后端 101 passed、前端 lint、前端 28 files / 157 tests passed、前端构建）；`npm run check:all` 通过（E2E 32 passed）；`git diff --check` 通过。
+- E8 结论：第四轮可本地合并 `main`；上传仍不要让 Codex 执行 `git push`，由用户使用 GitHub Desktop 或手动方式处理。
+- 下一步建议：进入下一轮前先确认 `main` 是否已包含 E8；后续优先考虑成长档案打印 / 导出纳入调班系统事件、2024/2025 招生计划完整性核验、政策参考补充、章程限制链逐源复核，以及 2026 官方普通类计划 / 一分一段 / 省控线发布后的增量导入。
 - 已按 `Codex-App-第四轮开发计划-学生批量操作调班与数据库补齐-v6.md` 完成窗口 E7，当前分支 `codex/r4-e7-data-health-reports-docs`：增强数据健康展示、打印覆盖报告和老师使用说明，不执行 `git push`。
 - E7 数据健康口径：`DEFAULT_EXPECTED_YEARS` 已扩到 2020-2026；2026 会显示在覆盖矩阵中，但一分一段、省控线、普通类正式计划和投档结果未发布时不会被计入历史补齐缺口。真实 `backend:data-health -- --json` 当前仍为 `warning`，P0 缺口 4 条。
 - E7 前端能力：`/gaokao-data` 的“山东覆盖”页签新增“数据库补齐结果说明”和“2020-2026 年份覆盖矩阵”；新增 `/print/gaokao-data-coverage/:storageKey` 打印页，可把当前 data-health 结果打印或保存为 PDF。
 - E7 文档：新增 `docs/round4-user-guide-student-bulk-actions.md` 与 `docs/round4-user-guide-data-completion.md`，并接入 `docs/README.md`。
 - E7 验证：`npm run backend:test -- apps/backend/tests/test_data_health.py -q` 为 `3 passed`；`npm run frontend:test -- tests/gaokao-data-report.test.ts` 为 `3 passed`；`npm run frontend:build` 通过；`npm run backend:data-health -- --json` 通过。
-- 下一步建议：进入 E8 最终集成时，按开发文档运行 `backend:migrate`、`backend:data-health`、`backend:p0-check`、`check`、`check:all` 和 `git diff --check`，并生成 `docs/round4-final-acceptance-report.md`。不要在 E8 继续新增功能。
+- E7 后续建议已由 E8 完成；保留本条作为历史记录，后续不需要再重复执行 E8 文档生成任务。
 - 已按 `Codex-App-第四轮开发计划-学生批量操作调班与数据库补齐-v6.md` 完成窗口 E6，当前分支 `codex/r4-e6-data-completion-imports`：补齐 2020-2022 山东官方一分一段与省控线 / 批次线导入，不执行 `git push`。
 - E6 数据写入：导入前备份为 `data/backups/app_before_e6_data_completion_import_20260426_135630.db`；真实 `data/app.db` 已新增 2020 一分一段 `3769` 条、省控线 `11` 条，2021 一分一段 `3681` 条、省控线 `11` 条，2022 一分一段 `3672` 条、省控线 `11` 条。
 - E6 来源追溯：本轮补齐对应 `source_document` 与 `gaokao_import_run`；成功 import run 为 `10-15`，官方文件 SHA256 和来源 ID 已记录在 `docs/round4-data-completion-result.md`。自动联网下载曾因官网 HTTPS 超时失败，最终改用已下载到 `data/imports/gaokao/official/{year}/` 的同一官方文件并以 SHA256 留痕。
