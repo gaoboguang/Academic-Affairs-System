@@ -1325,11 +1325,13 @@ def _safe_filename(value: str) -> str:
 
 def _get_b1_source_document(session: Session, *, year: int, source_type: str) -> GaokaoSourceDocument:
     document = session.scalar(
-        select(GaokaoSourceDocument).where(
+        select(GaokaoSourceDocument)
+        .where(
             GaokaoSourceDocument.province == "山东",
             GaokaoSourceDocument.year == year,
             GaokaoSourceDocument.source_type == source_type,
         )
+        .order_by(GaokaoSourceDocument.id)
     )
     if document is None:
         raise ValueError(f"missing B1 source document: {year} {source_type}")
