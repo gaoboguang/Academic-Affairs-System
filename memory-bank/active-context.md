@@ -2,6 +2,13 @@
 
 ## 当前状态
 
+- 2026-04-26 已按第四轮 v6 开发文档完成窗口 E5：数据库补齐审计与数据源计划：
+  - 当前分支 `codex/r4-e5-data-completion-audit-plan`，从 E4 当前工作区切出；本轮不执行 `git push`
+  - 新增 `docs/round4-data-completion-plan.md`，记录当前 `backend:data-health` 结果：`schema_version=20260426_0019`，状态 `warning`，P0 缺口仍为 6 条
+  - 新增 `docs/round4-official-source-checklist.md`，把 2020-2022 一分一段、2020-2022 省控线 / 批次线列为 E6 可优先补齐项；把 2023 招生计划、2024/2025 招生计划完整性、2026 普通类正式计划、政策参考和章程限制链按可导入 / 需人工下载 / 需人工复核 / 官方未发布拆开
+  - `docs/README.md` 已加入 E0/E5 文档入口；本轮未修改导入脚本、后端业务代码、前端页面、迁移或 `data/app.db`
+  - E6 下一步应先备份主库，再扩展 2020-2022 官方来源种子和导入脚本；不能把招生计划补充信息当完整计划，不能把 2026 未发布普通类数据写成已导入
+  - 验证：`npm run backend:data-health -- --json` 通过；`npm run backend:gaokao-sources -- --list --json` 通过；新增官网 URL 已用 `curl` 确认返回 `200`；待最终执行 `git diff --check`
 - 2026-04-26 已按第四轮 v6 开发文档完成窗口 E4：批量调班前端与成长档案展示：
   - 当前分支 `codex/r4-e4-class-transfer-frontend-growth-archive`，从 E3 调班后端分支切出；本轮不执行 `git push`
   - `apps/frontend/src/pages/StudentsPage.vue` 已复用 E2 的学生多选和批量操作区，新增“批量调班”入口；新增 `StudentClassTransferDialog.vue` 调用 E3 的 `POST /api/students/class-transfer/preview` 与 `POST /api/students/class-transfer`

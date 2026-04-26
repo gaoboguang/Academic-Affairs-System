@@ -8,6 +8,14 @@
 
 ## 2026-04-26 新增
 
+- 已完成 v6 第四轮窗口 E5：数据库补齐审计与数据源计划：
+  - 从 E4 当前工作区切出 `codex/r4-e5-data-completion-audit-plan`
+  - 新增 `docs/round4-data-completion-plan.md`，明确当前主库 `schema_version=20260426_0019`、P0 缺口 6 条、逐项补齐方式和 E6 导入顺序
+  - 新增 `docs/round4-official-source-checklist.md`，列出 2020-2022 一分一段、2020-2022 省控线 / 批次线、2024/2025 招生计划补充信息、2026 已登记政策和章程复核的来源处理边界
+  - 更新 `docs/README.md`，把第四轮 E0/E5 文档加入当前文档入口
+  - 本轮只做审计和计划，未修改导入脚本、业务代码、迁移或 `data/app.db`
+  - 验证：`backend:data-health -- --json` 通过；`backend:gaokao-sources -- --list --json` 通过；新增官网 URL 已确认返回 `200`
+
 - 已完成 v6 第四轮窗口 E4：批量调班前端与成长档案展示：
   - 从 E3 后端成果切出 `codex/r4-e4-class-transfer-frontend-growth-archive`
   - 学生列表复用 E2 的多选和批量操作区，新增“批量调班”入口；调班弹窗会先调用后端预检接口，再用后端确认文字和 token 执行调班

@@ -2,6 +2,10 @@
 
 ## 当前主线状态（2026-04-26）
 
+- 已按 `Codex-App-第四轮开发计划-学生批量操作调班与数据库补齐-v6.md` 完成窗口 E5，当前分支 `codex/r4-e5-data-completion-audit-plan`：新增数据库补齐计划和官方来源检查清单，不执行 `git push`。
+- E5 文档：`docs/round4-data-completion-plan.md` 记录当前 `backend:data-health` 为 `schema_version=20260426_0019`、状态 `warning`、P0 缺口 6 条，并给出 E6 的导入顺序；`docs/round4-official-source-checklist.md` 列出 2020-2022 一分一段、省控线、招生计划补充信息、2026 政策和章程复核来源边界。
+- E5 边界：本轮未修改 `data/app.db`、导入脚本、后端业务代码、迁移或前端页面；没有伪造数据，也没有把 2026 未发布普通类计划写成已导入。
+- E5 对 E6 的建议：优先补 2020-2022 一分一段和省控线，先扩展来源种子 / 下载登记 / SHA256 / import_run，再写库；2023 招生计划需用户提供官方文件或可核验官方附件；2024/2025 分专业计划补充信息只能做完整性核验，不能当完整计划；章程限制链不能批量关闭待复核。
 - 已按 `Codex-App-第四轮开发计划-学生批量操作调班与数据库补齐-v6.md` 完成窗口 E4，当前分支 `codex/r4-e4-class-transfer-frontend-growth-archive`：新增批量调班前端、学生详情调班历史和成长档案系统事件展示，不执行 `git push`。
 - E4 前端能力：学生列表复用 E2 的多选和批量操作区，新增“批量调班”；`StudentClassTransferDialog.vue` 支持目标班级、生效日期、原因、备注和跨年级确认，先调用 `POST /api/students/class-transfer/preview`，再用后端返回的 `required_confirm_text` / `confirm_token` 执行 `POST /api/students/class-transfer`。
 - E4 展示策略：`StudentDetailPage.vue` 在“学籍历史”中展示调班记录表，并在“成长档案”标签展示“班级调整”系统事件；`GrowthArchivePage.vue` 聚合 `GET /api/students/{student_id}/class-transfer-history` 为时间线系统事件，新增“全部 / 成长记录 / 班级调整”筛选，不写入人工 `student_growth_record`。
