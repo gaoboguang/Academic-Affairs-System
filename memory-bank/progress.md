@@ -8,6 +8,16 @@
 
 ## 2026-04-26 新增
 
+- 已完成 v6 第四轮窗口 E4：批量调班前端与成长档案展示：
+  - 从 E3 后端成果切出 `codex/r4-e4-class-transfer-frontend-growth-archive`
+  - 学生列表复用 E2 的多选和批量操作区，新增“批量调班”入口；调班弹窗会先调用后端预检接口，再用后端确认文字和 token 执行调班
+  - 新增 `apps/frontend/src/components/students/StudentClassTransferDialog.vue` 与 `apps/frontend/src/components/students/studentClassTransfer.ts`，支持目标班级、生效日期、调班原因、备注、跨年级确认、预检明细、阻断原因和执行结果展示
+  - 学生详情页“学籍历史”已新增调班记录表，“成长档案”标签已展示班级调整系统事件
+  - 成长档案页已把调班历史聚合进时间线，新增“全部 / 成长记录 / 班级调整”筛选；调班事件只作为系统事件展示，不写入人工成长记录表
+  - 新增 `apps/frontend/tests/student-class-transfer.test.ts`，覆盖确认文字、班级流向、调班系统事件文案和执行结果提示
+  - 本轮未修改后端、迁移、高考路径、推荐模块或报表导出
+  - 验证：E4 定向前端 `3 passed`；`frontend:lint` 通过；前端全量 `27 files / 154 tests passed`；`frontend:build` 通过；`git diff --check` 通过
+
 - 已完成 v6 第四轮窗口 E3：批量调班后端与历史记录：
   - 从 E2 分支切出 `codex/r4-e3-student-bulk-class-transfer-backend`
   - 新增模型与迁移：`student_class_transfer_batch`、`student_class_transfer_item`、`20260426_0019_student_class_transfer_schema.py`

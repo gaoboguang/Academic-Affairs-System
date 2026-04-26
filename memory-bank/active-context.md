@@ -2,6 +2,15 @@
 
 ## 当前状态
 
+- 2026-04-26 已按第四轮 v6 开发文档完成窗口 E4：批量调班前端与成长档案展示：
+  - 当前分支 `codex/r4-e4-class-transfer-frontend-growth-archive`，从 E3 调班后端分支切出；本轮不执行 `git push`
+  - `apps/frontend/src/pages/StudentsPage.vue` 已复用 E2 的学生多选和批量操作区，新增“批量调班”入口；新增 `StudentClassTransferDialog.vue` 调用 E3 的 `POST /api/students/class-transfer/preview` 与 `POST /api/students/class-transfer`
+  - 调班弹窗支持选择目标班级、生效日期、调班原因、备注和跨年级确认；预检展示可调班 / 被阻断 / warning，执行时复用后端 `required_confirm_text` 与 `confirm_token`
+  - `apps/frontend/src/pages/StudentDetailPage.vue` 已在“学籍历史”中增加调班记录表，并在“成长档案”标签展示班级调整系统事件
+  - `apps/frontend/src/pages/GrowthArchivePage.vue` 已把调班历史聚合为班级调整系统事件，新增“全部 / 成长记录 / 班级调整”时间线筛选；系统事件不写入也不伪装成人工 `student_growth_record`
+  - 新增 `apps/frontend/src/components/students/studentClassTransfer.ts` 与 `apps/frontend/tests/student-class-transfer.test.ts`，覆盖确认文字、班级流向、时间线文案和结果提示 helper
+  - 本轮未改后端、迁移、高考路径、推荐模块或报表导出；后续 E8 若做最终集成，可考虑把成长档案打印 / 导出是否也纳入调班系统事件列为后续增强
+  - 验证：`npm run frontend:test -- tests/student-class-transfer.test.ts` 为 `3 passed`；`npm run frontend:lint` 通过；`npm run frontend:test` 为 `27 files / 154 tests passed`；`npm run frontend:build` 通过；`git diff --check` 通过
 - 2026-04-26 已按第四轮 v6 开发文档完成窗口 E3：批量调班后端与历史记录：
   - 当前分支 `codex/r4-e3-student-bulk-class-transfer-backend`，从 E2 分支切出；本轮不执行 `git push`
   - 新增 `student_class_transfer_batch` / `student_class_transfer_item` 调班审计表和迁移 `20260426_0019_student_class_transfer_schema.py`，保留批次、逐学生明细、来源班级、目标班级、生效日期、原因、备注、操作人、执行状态和前后快照

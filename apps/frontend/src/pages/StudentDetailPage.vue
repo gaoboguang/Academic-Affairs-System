@@ -20,7 +20,7 @@
       </div>
       <div class="action-row">
         <el-button @click="router.push('/students')">返回列表</el-button>
-        <el-button @click="router.push('/growth-archive')">成长档案</el-button>
+        <el-button @click="router.push(`/growth-archive?student_id=${studentId}`)">成长档案</el-button>
         <el-button @click="router.push(`/gaokao-pathways?student_id=${studentId}`)">升学方案</el-button>
         <el-button type="primary" @click="router.push('/recommendations')">升学推荐</el-button>
       </div>
@@ -139,6 +139,12 @@
 
         <el-tab-pane label="学籍历史">
           <section class="soft-card detail-card">
+            <div class="section-head compact">
+              <div>
+                <h3>班级历史</h3>
+                <p>来自学生主档的学籍历史段，用于查看曾经所在年级和班级。</p>
+              </div>
+            </div>
             <div class="table-shell">
               <el-table :data="profile.class_histories" stripe>
                 <el-table-column label="年级" prop="grade_name" min-width="120" />
@@ -149,6 +155,27 @@
               </el-table>
             </div>
             <el-empty v-if="!profile.class_histories.length" description="暂无班级变动历史" />
+            <div class="section-split"></div>
+            <div class="section-head compact">
+              <div>
+                <h3>调班记录</h3>
+                <p>来自批量调班批次的系统记录，保留生效日期、原因、备注和操作人。</p>
+              </div>
+            </div>
+            <div class="table-shell">
+              <el-table :data="classTransferHistory" stripe>
+                <el-table-column label="生效日期" prop="effective_on" width="120" />
+                <el-table-column label="班级调整" min-width="240">
+                  <template #default="{ row }">
+                    {{ formatClassTransferRoute(row) }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="原因" prop="reason" min-width="160" />
+                <el-table-column label="备注" prop="note" min-width="180" />
+                <el-table-column label="操作人" prop="operator_name" width="120" />
+              </el-table>
+            </div>
+            <el-empty v-if="!classTransferHistory.length" description="暂无调班记录" />
           </section>
         </el-tab-pane>
 
@@ -207,6 +234,16 @@
 
         <el-tab-pane label="成长档案">
           <section class="soft-card detail-card">
+            <div v-if="classTransferHistory.length" class="system-event-list">
+              <article v-for="item in classTransferHistory" :key="item.item_id" class="system-event-card">
+                <el-tag type="info" effect="light">班级调整</el-tag>
+                <div>
+                  <strong>{{ item.title }}</strong>
+                  <p>{{ formatClassTransferEventSummary(item) }}</p>
+                  <span v-if="item.note">备注：{{ item.note }}</span>
+                </div>
+              </article>
+            </div>
             <div class="table-shell">
               <el-table :data="profile.recent_growth_records" stripe>
                 <el-table-column label="日期" prop="occurred_on" width="120" />
@@ -216,7 +253,10 @@
                 <el-table-column label="附件数" prop="attachment_count" width="100" />
               </el-table>
             </div>
-            <el-empty v-if="!profile.recent_growth_records.length" description="暂无成长档案记录" />
+            <el-empty
+              v-if="!profile.recent_growth_records.length && !classTransferHistory.length"
+              description="暂无成长记录或系统事件"
+            />
           </section>
         </el-tab-pane>
 
@@ -296,6 +336,11 @@ import { useRoute, useRouter } from "vue-router";
 
 import { apiRequest, openFile, uploadFile } from "../api/client";
 import StudentPathwayProfilePanel from "../components/students/StudentPathwayProfilePanel.vue";
+import {
+  formatClassTransferEventSummary,
+  formatClassTransferRoute,
+  type ClassTransferHistoryItem,
+} from "../components/students/studentClassTransfer";
 
 interface GuardianItem {
   id: number;
@@ -389,6 +434,7 @@ interface StudentProfile {
 const route = useRoute();
 const router = useRouter();
 const profile = ref<StudentProfile | null>(null);
+const classTransferHistory = ref<ClassTransferHistoryItem[]>([]);
 const studentId = computed(() => Number(route.params.studentId));
 const uploadingAttachment = ref(false);
 const attachmentDraft = reactive({
@@ -486,6 +532,20 @@ async function loadProfile(): Promise<void> {
   }
 }
 
+async function loadClassTransferHistory(): Promise<void> {
+  try {
+    classTransferHistory.value = await apiRequest<ClassTransferHistoryItem[]>(
+      `/api/students/${studentId.value}/class-transfer-history`,
+    );
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  }
+}
+
+async function loadDetail(): Promise<void> {
+  await Promise.all([loadProfile(), loadClassTransferHistory()]);
+}
+
 async function handleAttachmentUpload(uploadFileItem: UploadFile): Promise<void> {
   if (!uploadFileItem.raw) return;
   try {
@@ -531,7 +591,7 @@ async function removeAttachment(attachmentId: number): Promise<void> {
   }
 }
 
-onMounted(loadProfile);
+onMounted(loadDetail);
 </script>
 
 <style scoped>
@@ -546,6 +606,40 @@ onMounted(loadProfile);
 .stat-card,
 .detail-card {
   padding: 24px;
+}
+
+.system-event-list {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.system-event-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 14px 16px;
+  border: 1px solid rgba(145, 163, 176, 0.24);
+  border-radius: 8px;
+  background: rgba(248, 250, 252, 0.92);
+}
+
+.system-event-card strong {
+  color: #1f3448;
+}
+
+.system-event-card p {
+  margin: 6px 0 0;
+  color: #415a70;
+  line-height: 1.6;
+}
+
+.system-event-card span {
+  display: block;
+  margin-top: 4px;
+  color: #6d8194;
+  font-size: 13px;
 }
 
 .hero-summary-card {

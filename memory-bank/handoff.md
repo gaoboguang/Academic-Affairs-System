@@ -2,6 +2,12 @@
 
 ## 当前主线状态（2026-04-26）
 
+- 已按 `Codex-App-第四轮开发计划-学生批量操作调班与数据库补齐-v6.md` 完成窗口 E4，当前分支 `codex/r4-e4-class-transfer-frontend-growth-archive`：新增批量调班前端、学生详情调班历史和成长档案系统事件展示，不执行 `git push`。
+- E4 前端能力：学生列表复用 E2 的多选和批量操作区，新增“批量调班”；`StudentClassTransferDialog.vue` 支持目标班级、生效日期、原因、备注和跨年级确认，先调用 `POST /api/students/class-transfer/preview`，再用后端返回的 `required_confirm_text` / `confirm_token` 执行 `POST /api/students/class-transfer`。
+- E4 展示策略：`StudentDetailPage.vue` 在“学籍历史”中展示调班记录表，并在“成长档案”标签展示“班级调整”系统事件；`GrowthArchivePage.vue` 聚合 `GET /api/students/{student_id}/class-transfer-history` 为时间线系统事件，新增“全部 / 成长记录 / 班级调整”筛选，不写入人工 `student_growth_record`。
+- E4 新增文件：`apps/frontend/src/components/students/StudentClassTransferDialog.vue`、`apps/frontend/src/components/students/studentClassTransfer.ts`、`apps/frontend/tests/student-class-transfer.test.ts`；主要修改文件：`apps/frontend/src/pages/StudentsPage.vue`、`apps/frontend/src/pages/StudentDetailPage.vue`、`apps/frontend/src/pages/GrowthArchivePage.vue`。
+- E4 验证：`npm run frontend:test -- tests/student-class-transfer.test.ts` 为 `3 passed`；`npm run frontend:lint` 通过；`npm run frontend:test` 为 `27 files / 154 tests passed`；`npm run frontend:build` 通过；`git diff --check` 通过。
+- 下一步：第四轮学生批量操作主线 E1-E4 已闭环；E5/E6/E7 可继续数据库补齐线，E8 最终集成时需把批量删除、批量调班、成长档案系统事件和数据补齐结果统一验收。成长档案打印 / 导出是否也要纳入调班系统事件可作为 E8 或后续增强确认。
 - 已按 `Codex-App-第四轮开发计划-学生批量操作调班与数据库补齐-v6.md` 完成窗口 E3，当前分支 `codex/r4-e3-student-bulk-class-transfer-backend`：新增批量调班后端、调班批次/明细和学生调班历史接口，不执行 `git push`。
 - E3 后端能力：`POST /api/students/class-transfer/preview` 返回可调班 / 被阻断清单、目标班级、来源班级、中文 warning、`required_confirm_text` 和 `confirm_token`；`POST /api/students/class-transfer` 校验 token 与确认文字后，逐学生更新当前年级班级，写 `student_class_transfer_batch` / `student_class_transfer_item`，同步写 `StudentClassHistory`，刷新班级人数并写 `audit_log`。
 - E3 历史接口：`GET /api/students/{student_id}/class-transfer-history` 返回成功调班记录，包含 `event_type=class_transfer`、title、summary、from/to 年级班级、生效日期、原因、备注、操作人和批次/明细 ID；E4 应把它作为系统事件聚合到学生详情和成长档案，不要写入人工 `student_growth_record`。

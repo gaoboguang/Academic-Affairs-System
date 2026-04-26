@@ -95,6 +95,15 @@
             <span class="bulk-action-label">批量操作</span>
             <span class="bulk-selection-count">已选 {{ selectedRows.length }} 名</span>
             <el-button
+              type="primary"
+              plain
+              :icon="TransferIcon"
+              :disabled="selectedRows.length === 0"
+              @click="openClassTransferDialog"
+            >
+              批量调班
+            </el-button>
+            <el-button
               type="danger"
               plain
               :icon="DeleteIcon"
@@ -274,12 +283,19 @@
       :student-labels="bulkDeleteStudentLabels"
       @completed="handleBulkDeleteCompleted"
     />
+    <StudentClassTransferDialog
+      v-model="classTransferDialogVisible"
+      :student-ids="classTransferStudentIds"
+      :student-labels="classTransferStudentLabels"
+      :class-options="referenceStore.classes"
+      @completed="handleClassTransferCompleted"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { Delete as DeleteIcon } from "@element-plus/icons-vue";
+import { Delete as DeleteIcon, Switch as TransferIcon } from "@element-plus/icons-vue";
 import ElMessage from "element-plus/es/components/message/index";
 import type { UploadFile } from "element-plus";
 import { useRouter } from "vue-router";
@@ -287,6 +303,7 @@ import { useRouter } from "vue-router";
 import { apiRequest, openFile, uploadFile } from "../api/client";
 import ImportFeedbackPanel from "../components/common/ImportFeedbackPanel.vue";
 import StudentBulkDeleteDialog from "../components/students/StudentBulkDeleteDialog.vue";
+import StudentClassTransferDialog from "../components/students/StudentClassTransferDialog.vue";
 import { useReferenceStore } from "../stores/reference";
 import type { ImportFeedbackResult } from "../utils/importFeedback";
 
@@ -326,6 +343,9 @@ const studentTableRef = ref<{ clearSelection: () => void } | null>(null);
 const bulkDeleteDialogVisible = ref(false);
 const bulkDeleteStudentIds = ref<number[]>([]);
 const bulkDeleteStudentLabels = ref<string[]>([]);
+const classTransferDialogVisible = ref(false);
+const classTransferStudentIds = ref<number[]>([]);
+const classTransferStudentLabels = ref<string[]>([]);
 
 const filters = reactive({
   student_no: "",
@@ -504,6 +524,20 @@ function openBulkDeleteDialog(): void {
 
 function handleBulkDeleteCompleted(): void {
   void loadStudents();
+}
+
+function openClassTransferDialog(): void {
+  if (!selectedRows.value.length) {
+    ElMessage.warning("请先勾选需要调班的学生");
+    return;
+  }
+  classTransferStudentIds.value = selectedStudentIds.value;
+  classTransferStudentLabels.value = selectedRows.value.map(formatStudentLabel);
+  classTransferDialogVisible.value = true;
+}
+
+function handleClassTransferCompleted(): void {
+  void Promise.all([referenceStore.loadCore(), loadStudents()]);
 }
 
 async function submitForm(): Promise<void> {

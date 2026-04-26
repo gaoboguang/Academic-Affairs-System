@@ -5,11 +5,12 @@
         <div class="page-eyebrow">学生中心 / 成长档案</div>
         <h2 class="page-title">成长档案</h2>
         <p class="page-subtitle">
-          以时间线方式维护学生成长记录，支持附件上传、分类筛选和单个学生档案摘要导出。
+          以时间线方式维护学生成长记录，并展示批量调班生成的班级调整系统事件。
         </p>
         <div class="page-chip-row">
           <span class="page-chip"><strong>当前学生</strong>{{ selectedStudentName }}</span>
-          <span class="page-chip"><strong>记录数</strong>{{ total }}</span>
+          <span class="page-chip"><strong>时间线条目</strong>{{ timelineTotal }}</span>
+          <span class="page-chip"><strong>班级调整</strong>{{ classTransferRecords.length }}</span>
           <span class="page-chip"><strong>附件数</strong>{{ attachmentCount }}</span>
           <span class="page-chip"><strong>筛选类型</strong>{{ selectedRecordTypeLabel }}</span>
         </div>
@@ -25,7 +26,7 @@
       <article class="soft-card overview-panel">
         <div class="overview-kicker">时间线视图</div>
         <h3>{{ selectedStudentName }}</h3>
-        <p>奖励、处分、活动、谈话、家校沟通和心理关注都收在同一条成长时间线里，附件也跟随记录保存。</p>
+        <p>奖励、处分、活动、谈话、家校沟通和班级调整都收在同一条时间线里，人工记录仍可继续挂接附件。</p>
       </article>
       <article v-for="item in overviewCards" :key="item.label" class="soft-card overview-card" :class="item.tone">
         <span>{{ item.label }}</span>
@@ -50,7 +51,20 @@
             :value="student.id"
           />
         </el-select>
-        <el-select v-model="selectedRecordType" clearable placeholder="记录类型">
+        <el-select v-model="selectedTimelineType" placeholder="时间线类型">
+          <el-option
+            v-for="item in timelineTypeOptions"
+            :key="item.value"
+            :label="item.label"
+            :value="item.value"
+          />
+        </el-select>
+        <el-select
+          v-model="selectedRecordType"
+          clearable
+          placeholder="记录类型"
+          :disabled="selectedTimelineType === 'class_transfer'"
+        >
           <el-option
             v-for="item in recordTypeOptions"
             :key="item.value"
@@ -74,8 +88,8 @@
 
     <section class="metric-grid">
       <div class="soft-card stat-card">
-        <div class="metric-label">当前学生记录数</div>
-        <div class="metric-value">{{ total }}</div>
+        <div class="metric-label">当前时间线条目</div>
+        <div class="metric-value">{{ timelineTotal }}</div>
       </div>
       <div class="soft-card stat-card">
         <div class="metric-label">已上传附件数</div>
@@ -86,13 +100,13 @@
     <section class="soft-card panel-block">
       <div class="section-head">
         <div>
-          <h3>成长记录</h3>
-          <p>支持奖励、处分、活动、干部任职、谈话、家校沟通、心理关注和综合素质评价等类型。</p>
+          <h3>成长时间线</h3>
+          <p>人工成长记录可以编辑和删除；班级调整来自调班批次，只作为系统事件展示。</p>
         </div>
       </div>
       <el-empty v-if="!selectedStudentId" description="请先选择学生" />
       <div v-else class="table-shell">
-        <el-table :data="records" stripe>
+        <el-table :data="timelineRecords" stripe>
           <el-table-column label="日期" prop="occurred_on" width="120" />
           <el-table-column label="类型" min-width="120">
             <template #default="{ row }">
@@ -124,11 +138,15 @@
           </el-table-column>
           <el-table-column label="操作" width="130" fixed="right">
             <template #default="{ row }">
-              <el-button link type="primary" @click="openEditDialog(row)">编辑</el-button>
-              <el-button link type="danger" @click="deleteRecord(row.id)">删除</el-button>
+              <template v-if="row.kind === 'growth_record'">
+                <el-button link type="primary" @click="openEditDialog(row)">编辑</el-button>
+                <el-button link type="danger" @click="deleteRecord(row.id)">删除</el-button>
+              </template>
+              <span v-else class="system-event-label">系统事件</span>
             </template>
           </el-table-column>
         </el-table>
+        <el-empty v-if="!timelineRecords.length" description="当前筛选条件下暂无时间线记录" />
       </div>
     </section>
 
@@ -210,8 +228,13 @@
 import { computed, onMounted, ref } from "vue";
 import ElMessage from "element-plus/es/components/message/index";
 import ElMessageBox from "element-plus/es/components/message-box/index";
+import { useRoute } from "vue-router";
 
 import { apiRequest, openFile, uploadFile } from "../api/client";
+import {
+  formatClassTransferEventSummary,
+  type ClassTransferHistoryItem,
+} from "../components/students/studentClassTransfer";
 import { growthSummaryPrintPreviewPath } from "../utils/print";
 
 interface StudentOption {
@@ -234,6 +257,7 @@ interface RecordAttachment {
 
 interface GrowthRecord {
   id: number;
+  kind?: "growth_record";
   student_id: number;
   student_name?: string | null;
   occurred_on: string;
@@ -245,6 +269,27 @@ interface GrowthRecord {
   is_active: boolean;
   attachments: RecordAttachment[];
 }
+
+interface GrowthTimelineRecord extends GrowthRecord {
+  kind: "growth_record";
+}
+
+interface ClassTransferTimelineRecord {
+  id: number;
+  kind: "class_transfer";
+  student_id: number;
+  occurred_on: string;
+  record_type: "class_transfer";
+  title: string;
+  content: string;
+  owner_name?: string | null;
+  note?: string | null;
+  is_active: boolean;
+  attachments: [];
+  transfer: ClassTransferHistoryItem;
+}
+
+type TimelineRecord = GrowthTimelineRecord | ClassTransferTimelineRecord;
 
 interface GrowthListResponse {
   items: GrowthRecord[];
@@ -274,10 +319,18 @@ const recordTypeOptions = [
   { value: "other", label: "其他" },
 ];
 
+const timelineTypeOptions = [
+  { value: "all", label: "全部" },
+  { value: "growth_record", label: "成长记录" },
+  { value: "class_transfer", label: "班级调整" },
+];
+
+const route = useRoute();
 const studentOptions = ref<StudentOption[]>([]);
-const records = ref<GrowthRecord[]>([]);
-const total = ref(0);
+const growthRecords = ref<GrowthTimelineRecord[]>([]);
+const classTransferRecords = ref<ClassTransferTimelineRecord[]>([]);
 const selectedStudentId = ref<number | null>(null);
+const selectedTimelineType = ref<"all" | "growth_record" | "class_transfer">("all");
 const selectedRecordType = ref<string | null>(null);
 const selectedDateRange = ref<string[]>([]);
 const dialogVisible = ref(false);
@@ -294,8 +347,22 @@ const form = ref<FormState>({
   attachments: [],
 });
 
+const timelineRecords = computed<TimelineRecord[]>(() => {
+  const source =
+    selectedTimelineType.value === "growth_record"
+      ? growthRecords.value
+      : selectedTimelineType.value === "class_transfer"
+        ? classTransferRecords.value
+        : [...growthRecords.value, ...classTransferRecords.value];
+  return [...source].sort((left, right) => {
+    const leftDate = left.occurred_on || "";
+    const rightDate = right.occurred_on || "";
+    return rightDate.localeCompare(leftDate);
+  });
+});
+const timelineTotal = computed(() => timelineRecords.value.length);
 const attachmentCount = computed(() =>
-  records.value.reduce((sum, item) => sum + item.attachments.length, 0),
+  growthRecords.value.reduce((sum, item) => sum + item.attachments.length, 0),
 );
 const selectedStudentName = computed(() => {
   if (!selectedStudentId.value) return "未选择学生";
@@ -303,12 +370,17 @@ const selectedStudentName = computed(() => {
   return current ? `${current.student_no} - ${current.name}` : "未选择学生";
 });
 const selectedRecordTypeLabel = computed(
-  () => recordTypeOptions.find((item) => item.value === selectedRecordType.value)?.label ?? "全部类型",
+  () => {
+    const timelineLabel = timelineTypeOptions.find((item) => item.value === selectedTimelineType.value)?.label ?? "全部";
+    const recordLabel = recordTypeOptions.find((item) => item.value === selectedRecordType.value)?.label;
+    if (selectedTimelineType.value === "class_transfer") return timelineLabel;
+    return recordLabel ? `${timelineLabel} / ${recordLabel}` : timelineLabel;
+  },
 );
 const overviewCards = computed(() => [
   {
     label: "时间线条目",
-    value: total.value,
+    value: timelineTotal.value,
     help: "当前学生在当前筛选条件下的记录总数。",
     tone: "tone-blue",
   },
@@ -319,14 +391,16 @@ const overviewCards = computed(() => [
     tone: "tone-amber",
   },
   {
-    label: "记录类型",
-    value: new Set(records.value.map((item) => item.record_type)).size,
-    help: "当前结果里出现的记录类型数量。",
+    label: "班级调整",
+    value: classTransferRecords.value.length,
+    help: "批量调班生成的系统事件数量。",
     tone: "tone-slate",
   },
 ]);
 
 function typeLabel(value: string): string {
+  if (value === "class_transfer") return "班级调整";
+  if (value === "growth_record") return "成长记录";
   return recordTypeOptions.find((item) => item.value === value)?.label ?? value;
 }
 
@@ -348,6 +422,10 @@ function resetForm(): void {
 async function loadStudents(): Promise<void> {
   const payload = await apiRequest<{ items: StudentOption[] }>("/api/students?page=1&page_size=200");
   studentOptions.value = payload.items;
+  const queryStudentId = Number(route.query.student_id);
+  if (!selectedStudentId.value && Number.isFinite(queryStudentId) && queryStudentId > 0) {
+    selectedStudentId.value = queryStudentId;
+  }
   if (!selectedStudentId.value && payload.items.length) {
     selectedStudentId.value = payload.items[0].id;
   }
@@ -355,23 +433,41 @@ async function loadStudents(): Promise<void> {
 
 async function loadRecords(): Promise<void> {
   if (!selectedStudentId.value) {
-    records.value = [];
-    total.value = 0;
+    growthRecords.value = [];
+    classTransferRecords.value = [];
     return;
   }
+  const shouldLoadGrowth = selectedTimelineType.value !== "class_transfer";
+  const shouldLoadClassTransfer =
+    selectedTimelineType.value === "class_transfer" ||
+    (selectedTimelineType.value === "all" && !selectedRecordType.value);
   const params = new URLSearchParams();
   if (selectedRecordType.value) params.set("record_type", selectedRecordType.value);
   if (selectedDateRange.value[0]) params.set("start_date", selectedDateRange.value[0]);
   if (selectedDateRange.value[1]) params.set("end_date", selectedDateRange.value[1]);
   const query = params.toString();
-  const payload = await apiRequest<GrowthListResponse>(
-    `/api/archives/students/${selectedStudentId.value}/records${query ? `?${query}` : ""}`,
-  );
-  records.value = payload.items;
-  total.value = payload.total;
+  if (shouldLoadGrowth) {
+    const payload = await apiRequest<GrowthListResponse>(
+      `/api/archives/students/${selectedStudentId.value}/records${query ? `?${query}` : ""}`,
+    );
+    growthRecords.value = payload.items.map((item) => ({ ...item, kind: "growth_record" }));
+  } else {
+    growthRecords.value = [];
+  }
+  if (shouldLoadClassTransfer) {
+    const history = await apiRequest<ClassTransferHistoryItem[]>(
+      `/api/students/${selectedStudentId.value}/class-transfer-history`,
+    );
+    classTransferRecords.value = history
+      .filter((item) => isWithinDateRange(item.effective_on))
+      .map(mapClassTransferToTimelineRecord);
+  } else {
+    classTransferRecords.value = [];
+  }
 }
 
 function resetFilters(): void {
+  selectedTimelineType.value = "all";
   selectedRecordType.value = null;
   selectedDateRange.value = [];
   loadRecords().catch((error) => ElMessage.error((error as Error).message));
@@ -386,7 +482,7 @@ function openCreateDialog(): void {
   dialogVisible.value = true;
 }
 
-function openEditDialog(row: GrowthRecord): void {
+function openEditDialog(row: GrowthTimelineRecord): void {
   form.value = {
     id: row.id,
     occurred_on: row.occurred_on,
@@ -398,6 +494,29 @@ function openEditDialog(row: GrowthRecord): void {
     attachments: row.attachments.map((item) => item.file),
   };
   dialogVisible.value = true;
+}
+
+function isWithinDateRange(value: string): boolean {
+  if (selectedDateRange.value[0] && value < selectedDateRange.value[0]) return false;
+  if (selectedDateRange.value[1] && value > selectedDateRange.value[1]) return false;
+  return true;
+}
+
+function mapClassTransferToTimelineRecord(item: ClassTransferHistoryItem): ClassTransferTimelineRecord {
+  return {
+    id: item.item_id,
+    kind: "class_transfer",
+    student_id: item.student_id,
+    occurred_on: item.effective_on,
+    record_type: "class_transfer",
+    title: item.title,
+    content: formatClassTransferEventSummary(item),
+    owner_name: item.operator_name,
+    note: item.note,
+    is_active: true,
+    attachments: [],
+    transfer: item,
+  };
 }
 
 async function handleAttachmentUpload(event: Event): Promise<void> {
@@ -643,6 +762,11 @@ onMounted(async () => {
 
 .hint-text {
   color: #60748a;
+  font-size: 13px;
+}
+
+.system-event-label {
+  color: #6d8194;
   font-size: 13px;
 }
 
