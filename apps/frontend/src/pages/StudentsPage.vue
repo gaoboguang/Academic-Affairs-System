@@ -10,6 +10,7 @@
         <div class="page-chip-row">
           <span class="page-chip"><strong>学生总数</strong>{{ students.total }}</span>
           <span class="page-chip"><strong>当前页记录</strong>{{ students.items.length }}</span>
+          <span class="page-chip"><strong>已选学生</strong>{{ selectedRows.length }}</span>
           <span class="page-chip"><strong>启用筛选</strong>{{ activeFilterCount }}</span>
           <span class="page-chip"><strong>导入策略</strong>{{ importStrategyLabel }}</span>
         </div>
@@ -88,10 +89,32 @@
           <h3>学生列表</h3>
           <p>列表保留基础身份、当前班级、生源地和联系方式，详情页承接更深的信息。</p>
         </div>
-        <span class="panel-caption">共 {{ students.total }} 条</span>
+        <div class="list-action-stack">
+          <span class="panel-caption">共 {{ students.total }} 条</span>
+          <div class="bulk-action-controls">
+            <span class="bulk-action-label">批量操作</span>
+            <span class="bulk-selection-count">已选 {{ selectedRows.length }} 名</span>
+            <el-button
+              type="danger"
+              plain
+              :icon="DeleteIcon"
+              :disabled="selectedRows.length === 0"
+              @click="openBulkDeleteDialog"
+            >
+              批量删除学生
+            </el-button>
+          </div>
+        </div>
       </div>
       <div class="table-shell">
-        <el-table :data="students.items" stripe>
+        <el-table
+          ref="studentTableRef"
+          :data="students.items"
+          stripe
+          row-key="id"
+          @selection-change="handleSelectionChange"
+        >
+          <el-table-column type="selection" width="48" />
           <el-table-column label="学号" prop="student_no" min-width="120" />
           <el-table-column label="姓名" prop="name" min-width="100" />
           <el-table-column label="性别" prop="gender" width="80" />
@@ -244,17 +267,26 @@
         <el-button type="primary" :loading="submitting" @click="submitForm">保存</el-button>
       </template>
     </el-dialog>
+
+    <StudentBulkDeleteDialog
+      v-model="bulkDeleteDialogVisible"
+      :student-ids="bulkDeleteStudentIds"
+      :student-labels="bulkDeleteStudentLabels"
+      @completed="handleBulkDeleteCompleted"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
+import { Delete as DeleteIcon } from "@element-plus/icons-vue";
 import ElMessage from "element-plus/es/components/message/index";
 import type { UploadFile } from "element-plus";
 import { useRouter } from "vue-router";
 
 import { apiRequest, openFile, uploadFile } from "../api/client";
 import ImportFeedbackPanel from "../components/common/ImportFeedbackPanel.vue";
+import StudentBulkDeleteDialog from "../components/students/StudentBulkDeleteDialog.vue";
 import { useReferenceStore } from "../stores/reference";
 import type { ImportFeedbackResult } from "../utils/importFeedback";
 
@@ -289,6 +321,11 @@ const dialogVisible = ref(false);
 const editingId = ref<number | null>(null);
 const submitting = ref(false);
 const importResult = ref<ImportFeedbackResult | null>(null);
+const selectedRows = ref<StudentItem[]>([]);
+const studentTableRef = ref<{ clearSelection: () => void } | null>(null);
+const bulkDeleteDialogVisible = ref(false);
+const bulkDeleteStudentIds = ref<number[]>([]);
+const bulkDeleteStudentLabels = ref<string[]>([]);
 
 const filters = reactive({
   student_no: "",
@@ -335,6 +372,7 @@ const importStrategyLabel = computed(() => {
   };
   return mapping[importStrategy.value] ?? importStrategy.value;
 });
+const selectedStudentIds = computed(() => selectedRows.value.map((student) => student.id));
 const overviewCards = computed(() => [
   {
     label: "当前页班级",
@@ -404,6 +442,7 @@ async function loadStudents(): Promise<void> {
       students,
       await apiRequest<StudentListResponse>(`/api/students?${query.toString()}`),
     );
+    clearSelectedStudents();
   } catch (error) {
     ElMessage.error((error as Error).message);
   }
@@ -438,6 +477,33 @@ async function openEdit(row: StudentItem): Promise<void> {
 
 function openDetail(row: StudentItem): void {
   router.push(`/students/${row.id}`);
+}
+
+function formatStudentLabel(student: StudentItem): string {
+  return `${student.name}（${student.student_no}）`;
+}
+
+function handleSelectionChange(rows: StudentItem[]): void {
+  selectedRows.value = rows;
+}
+
+function clearSelectedStudents(): void {
+  selectedRows.value = [];
+  studentTableRef.value?.clearSelection();
+}
+
+function openBulkDeleteDialog(): void {
+  if (!selectedRows.value.length) {
+    ElMessage.warning("请先勾选需要批量删除的学生");
+    return;
+  }
+  bulkDeleteStudentIds.value = selectedStudentIds.value;
+  bulkDeleteStudentLabels.value = selectedRows.value.map(formatStudentLabel);
+  bulkDeleteDialogVisible.value = true;
+}
+
+function handleBulkDeleteCompleted(): void {
+  void loadStudents();
 }
 
 async function submitForm(): Promise<void> {
@@ -659,6 +725,36 @@ const provinceOptions = [
   font-size: 13px;
 }
 
+.list-action-stack {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.bulk-action-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border: 1px solid rgba(145, 163, 176, 0.24);
+  border-radius: 8px;
+  background: rgba(248, 250, 252, 0.92);
+}
+
+.bulk-action-label {
+  color: #1f3448;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.bulk-selection-count {
+  color: #6d8194;
+  font-size: 13px;
+}
+
 .pager-row {
   display: flex;
   justify-content: flex-end;
@@ -680,6 +776,10 @@ const provinceOptions = [
 @media (max-width: 900px) {
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .list-action-stack {
+    justify-content: flex-start;
   }
 }
 </style>

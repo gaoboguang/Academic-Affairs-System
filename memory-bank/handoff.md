@@ -2,6 +2,12 @@
 
 ## 当前主线状态（2026-04-26）
 
+- 已按 `Codex-App-第四轮开发计划-学生批量操作调班与数据库补齐-v6.md` 完成窗口 E2，当前分支 `codex/r4-e2-student-bulk-delete-frontend`：在学生列表页接入 E1 批量删除后端能力，不执行 `git push`。
+- E2 前端能力：学生列表现在支持多选，列表头部有“批量操作 / 批量删除学生”；删除弹窗要求填写原因并先调用 `POST /api/students/bulk-delete/preview`，展示选中学生、可停用数量、被阻断数量、每名学生的关联数据风险和“只停用主档、保留历史数据”的说明。
+- E2 执行策略：前端不自己拼确认规则，直接使用后端返回的 `required_confirm_text` 和 `confirm_token`；用户必须输入确认文字后才调用 `POST /api/students/bulk-delete`。执行结果会在弹窗中显示成功 / 失败 / 阻断明细，并刷新学生列表。
+- E2 新增文件：`apps/frontend/src/components/students/StudentBulkDeleteDialog.vue`、`apps/frontend/src/components/students/studentBulkDelete.ts`、`apps/frontend/tests/student-bulk-delete.test.ts`；主要修改文件：`apps/frontend/src/pages/StudentsPage.vue`。本轮未改学生详情、成长档案、升学画像、高考路径或后端接口。
+- E2 验证：`npm run frontend:test -- tests/student-bulk-delete.test.ts` 为 `4 passed`；`npm run frontend:test` 为 `26 files / 151 tests passed`；`npm run frontend:build` 通过；`npm run frontend:lint` 通过；`git diff --check` 通过。
+- 下一步：E3 可以继续做批量调班后端与历史记录；E4 会和 E2 同改 `StudentsPage.vue`，应复用本轮已落地的多选状态和批量操作区，不要重新做一套选择工具条。
 - 已按 `Codex-App-第四轮开发计划-学生批量操作调班与数据库补齐-v6.md` 完成窗口 E1，当前分支 `codex/r4-e1-student-bulk-delete-backend`：新增学生批量删除后端预检与执行接口，不执行 `git push`。
 - E1 后端能力：`POST /api/students/bulk-delete/preview` 返回可删除 / 被阻断清单、中文影响提示、关联数据计数、`required_confirm_text` 和 `confirm_token`；`POST /api/students/bulk-delete` 校验 token 与确认文字后只停用学生主档，即 `Student.is_active=False`，不物理删除成绩、成长档案、附件、推荐记录、志愿草稿、升学画像或路径评估。
 - E1 审计策略：本轮未新增批量操作表或 Alembic 迁移，复用 `audit_log` 写结构化 `bulk_delete` 记录；学生列表默认隐藏停用学生，新增 `include_inactive=true` 供审计或后续恢复入口查看。后续 E2 前端应直接使用后端返回的 `required_confirm_text`，不要自己拼确认文案。

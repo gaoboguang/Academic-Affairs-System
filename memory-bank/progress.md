@@ -8,6 +8,15 @@
 
 ## 2026-04-26 新增
 
+- 已完成 v6 第四轮窗口 E2：学生批量删除前端：
+  - 从 E1 后端成果切出 `codex/r4-e2-student-bulk-delete-frontend`
+  - `apps/frontend/src/pages/StudentsPage.vue` 已新增学生列表多选、批量操作区和“批量删除学生”弹窗
+  - 弹窗会先调用 `POST /api/students/bulk-delete/preview`，展示可停用 / 被阻断数量、逐学生关联数据风险和软删除说明
+  - 执行时复用后端 `required_confirm_text` 与 `confirm_token`，必须输入确认文字后才调用 `POST /api/students/bulk-delete`；结果会展示成功、失败和阻断明细，并刷新学生列表
+  - 新增 `apps/frontend/src/components/students/StudentBulkDeleteDialog.vue`、`apps/frontend/src/components/students/studentBulkDelete.ts` 与 `apps/frontend/tests/student-bulk-delete.test.ts`，覆盖预检/执行弹窗、关联数据文案、确认判断和结果提示
+  - 本轮未修改学生详情、成长档案、升学画像或后端业务接口
+  - 验证：E2 定向前端 `4 passed`；前端全量 `26 files / 151 tests passed`；`frontend:build` 通过；`frontend:lint` 通过；`git diff --check` 通过
+
 - 已完成 v6 第四轮窗口 E1：学生批量删除后端：
   - 从 E0 基线切出 `codex/r4-e1-student-bulk-delete-backend`
   - 新增后端接口 `POST /api/students/bulk-delete/preview` 与 `POST /api/students/bulk-delete`

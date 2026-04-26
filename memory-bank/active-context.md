@@ -2,6 +2,13 @@
 
 ## 当前状态
 
+- 2026-04-26 已按第四轮 v6 开发文档完成窗口 E2：学生批量删除前端：
+  - 当前分支 `codex/r4-e2-student-bulk-delete-frontend`，从 E1 批量删除后端分支切出；本轮不执行 `git push`
+  - `apps/frontend/src/pages/StudentsPage.vue` 已新增学生表格多选、批量操作区和“批量删除学生”入口；删除弹窗先调用 E1 的 `POST /api/students/bulk-delete/preview`，展示选中数量、可停用数量、阻断数量、逐学生关联数据风险和中文说明
+  - 前端执行删除时使用后端返回的 `required_confirm_text` 与 `confirm_token`，必须输入确认文字后才调用 `POST /api/students/bulk-delete`；执行结果会展示成功 / 失败 / 阻断明细，并刷新学生列表
+  - 新增 `apps/frontend/src/components/students/StudentBulkDeleteDialog.vue`、`apps/frontend/src/components/students/studentBulkDelete.ts` 与 `apps/frontend/tests/student-bulk-delete.test.ts`，把预检/执行弹窗、关联数据文案、确认判断和结果提示从页面中收出来并补单测
+  - 本轮未改学生详情、成长档案、升学画像、高考路径或后端接口；后续 E3 可继续从 E1/E2 成果上做批量调班后端，E4 若改学生列表需与 E2 的多选和批量操作区合并
+  - 验证：`npm run frontend:test -- tests/student-bulk-delete.test.ts` 为 `4 passed`；`npm run frontend:test` 为 `26 files / 151 tests passed`；`npm run frontend:build` 通过；`npm run frontend:lint` 通过；`git diff --check` 通过
 - 2026-04-26 已按第四轮 v6 开发文档完成窗口 E1：学生批量删除后端：
   - 当前分支 `codex/r4-e1-student-bulk-delete-backend`，从 E0 审计基线切出；本轮不执行 `git push`
   - 新增 `POST /api/students/bulk-delete/preview` 和 `POST /api/students/bulk-delete`，批量删除只做 `Student.is_active=False` 软删除，不物理删除成绩、成长档案、附件、推荐记录、志愿草稿、升学画像和路径评估
