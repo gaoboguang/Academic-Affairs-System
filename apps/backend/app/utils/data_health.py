@@ -1179,7 +1179,7 @@ def _estimate_duplicates(conn: sqlite3.Connection, schema: "_Schema", table: str
             schema.pick_column(table, "college_id", "college_code", "school_code", "college_name"),
             schema.pick_column(table, "major_id", "major_code", "major_name", "spname"),
             schema.pick_column(table, "student_type", "candidate_type", "score_type", "policy_type", "review_status"),
-            schema.pick_column(table, "subject_group", "line_type", "title"),
+            schema.pick_column(table, "art_track", "subject_group", "line_type", "title"),
             schema.pick_column(table, "batch", "batch_name", "batch_type", "admission_batch"),
             schema.pick_column(table, "score", "min_score", "control_score"),
             schema.pick_column(table, "url", "source_url", "local_path"),
