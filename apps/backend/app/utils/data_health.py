@@ -38,7 +38,8 @@ STUDENT_TYPE_ORDER = (
     "independent_recruitment",
     "comprehensive_evaluation",
 )
-DEFAULT_EXPECTED_YEARS = (2020, 2021, 2022, 2023, 2024, 2025)
+PENDING_PUBLICATION_YEAR = 2026
+DEFAULT_EXPECTED_YEARS = (2020, 2021, 2022, 2023, 2024, 2025, PENDING_PUBLICATION_YEAR)
 STUDENT_TYPE_LABELS = {
     "general": "普通类",
     "spring_exam": "春季高考",
@@ -703,6 +704,7 @@ def _build_coverage(
 def _enrich_coverage_item(item: dict[str, Any]) -> dict[str, Any]:
     key = str(item["key"])
     missing_years = list(item.get("missing_years") or [])
+    actionable_missing_years = _actionable_missing_years(missing_years)
     total = int(item.get("total") or 0)
     notes: list[str] = []
     readiness = "ready"
@@ -719,10 +721,12 @@ def _enrich_coverage_item(item: dict[str, Any]) -> dict[str, Any]:
         readiness = "empty"
         risk_level = "warning"
         notes.append("当前没有山东口径记录。")
-    elif missing_years:
+    elif actionable_missing_years:
         readiness = "partial"
         risk_level = "warning"
-        notes.append(f"缺少年份：{_join_years(missing_years)}。")
+        notes.append(f"缺少年份：{_join_years(actionable_missing_years)}。")
+    elif PENDING_PUBLICATION_YEAR in missing_years:
+        notes.append(f"{PENDING_PUBLICATION_YEAR} 年数据待官方发布，未发布前不作为历史补齐缺口。")
 
     type_keys = _coverage_type_keys(item)
     if key == "admission_record" and type_keys and type_keys <= {"general"}:
@@ -782,7 +786,7 @@ def _build_audit_summary(
 
         if coverage_item:
             total = int(coverage_item.get("total") or 0)
-            missing_years = list(coverage_item.get("missing_years") or [])
+            missing_years = _actionable_missing_years(list(coverage_item.get("missing_years") or []))
             if coverage_item.get("status") in {"missing", "no_year_column"}:
                 status = str(coverage_item.get("status"))
                 notes.append(_format_monitor_status_for_audit(status))
@@ -850,9 +854,10 @@ def _build_gap_summary(
 ) -> list[str]:
     gaps: list[str] = []
     by_key = {item["key"]: item for item in coverage}
+    completed_years = tuple(year for year in expected_years if year < PENDING_PUBLICATION_YEAR)
 
     admission_years = set(by_key.get("admission_record", {}).get("years", []))
-    missing_admission_years = sorted(set(expected_years) - admission_years)
+    missing_admission_years = sorted(set(completed_years) - admission_years)
     if missing_admission_years:
         gaps.append(f"应用侧录取结果缺少年份：{_join_years(missing_admission_years)}")
 
@@ -869,12 +874,12 @@ def _build_gap_summary(
             gaps.append(f"山东招生计划 {year} 年数量偏少：{count} 条，需继续核验完整性")
 
     score_rank_years = set(by_key.get("score_rank_segment", {}).get("years", []))
-    missing_rank_years = sorted(set(expected_years) - score_rank_years)
+    missing_rank_years = sorted(set(completed_years) - score_rank_years)
     if missing_rank_years:
         gaps.append(f"一分一段缺少年份：{_join_years(missing_rank_years)}")
 
     score_line_years = set(by_key.get("gaokao_score_line", {}).get("years", []))
-    missing_line_years = sorted(set(expected_years) - score_line_years)
+    missing_line_years = sorted(set(completed_years) - score_line_years)
     if missing_line_years:
         gaps.append(f"省控线/批次线缺少年份：{_join_years(missing_line_years)}")
 
@@ -888,6 +893,10 @@ def _build_gap_summary(
             gaps.append(f"招生章程限制链仍有 {pending} 条待人工复核")
 
     return gaps
+
+
+def _actionable_missing_years(years: list[int]) -> list[int]:
+    return sorted(year for year in years if year < PENDING_PUBLICATION_YEAR)
 
 
 def _build_special_type_risks(

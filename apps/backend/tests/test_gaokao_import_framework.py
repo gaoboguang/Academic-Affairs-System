@@ -154,6 +154,61 @@ def test_import_score_rank_file_writes_segments_and_updates_run(app, test_settin
     assert count_with_source == 4
 
 
+def test_import_2020_score_rank_file_handles_compact_header(app, test_settings) -> None:
+    with app.state.db.session_scope() as session:
+        _create_b1_raw_tables(session)
+        seed_default_gaokao_sources(session, test_settings)
+        document = session.scalar(
+            select(GaokaoSourceDocument).where(
+                GaokaoSourceDocument.year == 2020,
+                GaokaoSourceDocument.source_type == "score_rank_segment",
+            )
+        )
+        assert document is not None
+        source_document_id = document.id
+
+    local_file = test_settings.data_dir / "imports" / "gaokao" / "official" / "2020" / "score-rank.xls"
+    local_file.parent.mkdir(parents=True, exist_ok=True)
+    local_file.write_text(
+        """
+        <table>
+          <tr><td>2020夏季高考文化总成绩一分一段表</td></tr>
+          <tr><td>分数段</td><td>选考物理</td><td>选考化学</td><td>全体</td></tr>
+          <tr><td>本段人数</td><td>累计人数</td><td>本段人数</td><td>累计人数</td><td>本段人数</td><td>累计人数</td></tr>
+          <tr><td>696</td><td>9</td><td>56</td><td>8</td><td>55</td><td>9</td><td>56</td></tr>
+        </table>
+        """,
+        encoding="utf-8",
+    )
+
+    with app.state.db.session_scope() as session:
+        _create_b1_raw_tables(session)
+        _document, run = register_gaokao_local_file(
+            session,
+            test_settings,
+            source_document_id=source_document_id,
+            file_path=local_file,
+            importer_name="shandong_score_rank_segment",
+        )
+        stats = import_registered_gaokao_file(session, test_settings, import_run_id=run.id)
+        groups = {
+            row[0]
+            for row in session.execute(
+                text(
+                    """
+                    SELECT subject_group
+                    FROM score_rank_segment
+                    WHERE year = 2020 AND source_document_id = :source_document_id
+                    """
+                ),
+                {"source_document_id": source_document_id},
+            ).all()
+        }
+
+    assert stats.success_rows == 3
+    assert groups == {"physics", "chemistry", "all"}
+
+
 def test_b1_core_import_uses_existing_local_file_without_download(app, test_settings, tmp_path: Path) -> None:
     with app.state.db.session_scope() as session:
         _create_b1_raw_tables(session)

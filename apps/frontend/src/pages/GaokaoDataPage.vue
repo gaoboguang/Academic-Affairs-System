@@ -17,6 +17,7 @@
       </div>
       <div class="action-row">
         <el-button @click="reloadAll">刷新驾驶舱</el-button>
+        <el-button @click="openDataCoverageReportPrintPreview">打印覆盖报告</el-button>
         <el-button type="primary" @click="activeTab = 'evidence'">查看证据页</el-button>
       </div>
     </header>
@@ -216,6 +217,31 @@
           <MetricCard label="P0 缺口" :value="dataHealth.gaps.length" help-text="按交付计划 P0 规则自动识别出的数据缺口。" />
         </section>
 
+        <section class="soft-card panel-block">
+          <div class="section-head">
+            <div>
+              <h3>数据库补齐结果说明</h3>
+              <p>把 E6 已补齐、仍部分补齐、官方未发布和需人工复核的数据拆开显示，避免只看记录数误判。</p>
+            </div>
+            <el-button @click="openDataCoverageReportPrintPreview">打印覆盖报告</el-button>
+          </div>
+          <div class="completion-card-grid">
+            <article
+              v-for="item in dataCompletionCards"
+              :key="item.key"
+              class="completion-card"
+              :class="`tone-${item.tone}`"
+            >
+              <div class="completion-card-head">
+                <strong>{{ item.title }}</strong>
+                <el-tag :type="coverageToneTagType(item.tone)" effect="light">{{ item.statusLabel }}</el-tag>
+              </div>
+              <p>{{ item.summary }}</p>
+              <span>{{ item.detail }}</span>
+            </article>
+          </div>
+        </section>
+
         <section class="dashboard-grid">
           <article class="soft-card panel-block">
             <div class="section-head compact">
@@ -319,6 +345,41 @@
               </el-table-column>
             </el-table>
           </div>
+        </section>
+
+        <section class="soft-card panel-block">
+          <div class="section-head">
+            <div>
+              <h3>2020-2026 年份覆盖矩阵</h3>
+              <p>横向查看一分一段、省控线、招生计划、政策参考和章程复核进度；2026 未发布项单独标为待发布。</p>
+            </div>
+          </div>
+          <div class="coverage-matrix-shell">
+            <table class="coverage-matrix-table">
+              <thead>
+                <tr>
+                  <th>数据域</th>
+                  <th v-for="year in dataHealth.expected_years" :key="year">{{ year }}</th>
+                  <th>当前记录</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in coverageMatrixRows" :key="row.key">
+                  <td>
+                    <strong>{{ row.label }}</strong>
+                    <span>{{ row.readinessLabel }}</span>
+                  </td>
+                  <td v-for="cell in row.cells" :key="`${row.key}_${cell.year}`">
+                    <el-tooltip :content="cell.detail" placement="top">
+                      <el-tag :type="coverageToneTagType(cell.tone)" effect="light">{{ cell.label }}</el-tag>
+                    </el-tooltip>
+                  </td>
+                  <td>{{ row.total }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <el-empty v-if="!coverageMatrixRows.length" description="暂无覆盖矩阵，请刷新数据健康检查" />
         </section>
 
         <section class="soft-card panel-block">
@@ -976,8 +1037,16 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import ElMessage from "element-plus/es/components/message/index";
 
-import { apiRequest } from "../api/client";
+import { apiRequest, openFile } from "../api/client";
 import MetricCard from "../components/MetricCard.vue";
+import {
+  buildCoverageMatrixRows,
+  buildDataCompletionPrintPayload,
+  buildDataCompletionResultCards,
+  GAOKAO_DATA_COVERAGE_PRINT_STORAGE_PREFIX,
+  type CoverageMatrixRow,
+  type DataCompletionCard,
+} from "../components/gaokao-data/dataCompletionReport";
 import {
   formatGaokaoCollegeEvidenceOptionLabel,
   resolveGaokaoEvidenceCollegeId,
@@ -988,6 +1057,7 @@ import {
   type GaokaoOverviewGapCard,
   type GaokaoOverviewTableStat as GaokaoTableStat,
 } from "../utils/gaokaoOverview";
+import { gaokaoDataCoveragePrintPreviewPath } from "../utils/print";
 import { formatUserActionError } from "../utils/userFeedback";
 
 interface GaokaoDataOverview {
@@ -1375,6 +1445,8 @@ const dataHealthSummary = computed(() => {
     { missing: 0, empty: 0, gap: 0 },
   );
 });
+const dataCompletionCards = computed<DataCompletionCard[]>(() => buildDataCompletionResultCards(dataHealth));
+const coverageMatrixRows = computed<CoverageMatrixRow[]>(() => buildCoverageMatrixRows(dataHealth));
 
 async function reloadAll(): Promise<void> {
   await Promise.all([loadOverview(), loadDataHealth(), loadImportBatches(), loadReviewSummary(), loadShandongMonitor()]);
@@ -1392,6 +1464,16 @@ async function loadImportBatches(): Promise<void> {
 async function loadDataHealth(): Promise<void> {
   const payload = await apiRequest<GaokaoDataHealth>("/api/gaokao/data-health");
   Object.assign(dataHealth, payload);
+}
+
+function openDataCoverageReportPrintPreview(): void {
+  if (!dataHealth.exists || !dataHealth.coverage.length) {
+    ElMessage.warning("请先刷新高考数据健康检查后再打印覆盖报告。");
+    return;
+  }
+  const storageKey = `${GAOKAO_DATA_COVERAGE_PRINT_STORAGE_PREFIX}${Date.now()}`;
+  window.localStorage.setItem(storageKey, JSON.stringify(buildDataCompletionPrintPayload(dataHealth)));
+  openFile(gaokaoDataCoveragePrintPreviewPath(storageKey));
 }
 
 async function loadReviewSummary(): Promise<void> {
@@ -1597,6 +1679,10 @@ function riskLevelTagType(value?: string | null): "success" | "info" | "warning"
   return "info";
 }
 
+function coverageToneTagType(value: "success" | "warning" | "danger" | "info"): "success" | "info" | "warning" | "danger" {
+  return value;
+}
+
 function formatYearList(years?: number[]): string {
   return years?.length ? years.join("、") : "无";
 }
@@ -1747,6 +1833,99 @@ onMounted(async () => {
 .overview-highlight span {
   color: #6b7f92;
   font-size: 13px;
+}
+
+.completion-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.completion-card {
+  display: grid;
+  gap: 8px;
+  min-height: 142px;
+  padding: 14px;
+  border: 1px solid #d8e1ea;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.completion-card.tone-success {
+  border-color: #9ed6b6;
+  background: #f3fbf6;
+}
+
+.completion-card.tone-warning {
+  border-color: #f0d39a;
+  background: #fffaf0;
+}
+
+.completion-card.tone-danger {
+  border-color: #f2b5b5;
+  background: #fff5f5;
+}
+
+.completion-card.tone-info {
+  border-color: #b7d1ef;
+  background: #f4f8ff;
+}
+
+.completion-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.completion-card p,
+.completion-card span {
+  margin: 0;
+  color: #4f6275;
+  line-height: 1.6;
+}
+
+.completion-card span {
+  font-size: 13px;
+}
+
+.coverage-matrix-shell {
+  overflow-x: auto;
+}
+
+.coverage-matrix-table {
+  width: 100%;
+  min-width: 960px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.coverage-matrix-table th,
+.coverage-matrix-table td {
+  padding: 11px 10px;
+  border-bottom: 1px solid #e5edf5;
+  text-align: left;
+  vertical-align: top;
+}
+
+.coverage-matrix-table th {
+  color: #5f7386;
+  font-weight: 700;
+  background: #f7fafc;
+}
+
+.coverage-matrix-table td:first-child {
+  min-width: 180px;
+}
+
+.coverage-matrix-table td:first-child strong,
+.coverage-matrix-table td:first-child span {
+  display: block;
+}
+
+.coverage-matrix-table td:first-child span {
+  margin-top: 4px;
+  color: #6b7f92;
 }
 
 .review-filter,

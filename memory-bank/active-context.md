@@ -2,6 +2,22 @@
 
 ## 当前状态
 
+- 2026-04-26 已按第四轮 v6 开发文档完成窗口 E7：数据健康、报表和使用说明：
+  - 当前分支 `codex/r4-e7-data-health-reports-docs`，从 E6 当前工作区切出；本轮不执行 `git push`
+  - `backend:data-health` 的默认覆盖年份已扩到 2020-2026；2026 会进入年份覆盖矩阵，但未发布的一分一段、省控线、普通类计划和投档结果不再被误算成历史补齐缺口
+  - `/gaokao-data` 的“山东覆盖”页签新增“数据库补齐结果说明”和“2020-2026 年份覆盖矩阵”，把已补齐、部分补齐、官方未发布、需人工下载、需人工复核分开展示
+  - 新增 `/print/gaokao-data-coverage/:storageKey` 可打印覆盖报告，复用当前 data-health 结果，不新增复杂业务算法，不改变 E6 导入逻辑
+  - 新增 `docs/round4-user-guide-student-bulk-actions.md` 与 `docs/round4-user-guide-data-completion.md`，并接入 `docs/README.md`
+  - 验证：`npm run backend:test -- apps/backend/tests/test_data_health.py -q` 为 `3 passed`；`npm run frontend:test -- tests/gaokao-data-report.test.ts` 为 `3 passed`；`npm run frontend:build` 通过；`npm run backend:data-health -- --json` 通过且 P0 缺口仍为 4 条
+- 2026-04-26 已按第四轮 v6 开发文档完成窗口 E6：2020-2022 山东官方一分一段与省控线导入：
+  - 当前分支 `codex/r4-e6-data-completion-imports`，从 E5 当前工作区切出；本轮不执行 `git push`
+  - 已扩展山东官方来源种子与 B1 官方导入器，补齐 2020/2021/2022 一分一段和省控线 / 批次线的 `source_document`、本地官方文件解析、SHA256 校验和 `gaokao_import_run`
+  - 导入前已备份真实主库：`data/backups/app_before_e6_data_completion_import_20260426_135630.db`
+  - 已写入真实 `data/app.db`：2020 一分一段 `3769` 条、省控线 `11` 条；2021 一分一段 `3681` 条、省控线 `11` 条；2022 一分一段 `3672` 条、省控线 `11` 条
+  - 导入后 `backend:data-health` 显示一分一段覆盖 2020-2025、总数 `22388`；省控线覆盖 2020-2025、总数 `74`；P0 缺口从 6 条降为 4 条
+  - 新增 `docs/round4-data-completion-result.md`，记录导入命令、来源 ID、import_run ID、官方文件 SHA256、自动下载超时降级到本地官方文件的过程、剩余不可自动补齐项和 E7 建议
+  - `docs/README.md` 已加入 E6 结果文档入口；本轮未导入不可核验的招生计划、未关闭章程待复核链、未伪造 2026 普通类正式计划
+  - 验证：`npm run backend:migrate` 通过；导入框架定向测试 `8 passed`；后端全量 `100 passed`；`npm run backend:data-health -- --json` 通过但保留 4 条 P0 数据缺口；`npm run backend:p0-check -- --json` 为 `ok: true`，备份包 `data/backups/p0_delivery_backup_20260426_140156.zip`；`git diff --check` 通过
 - 2026-04-26 已按第四轮 v6 开发文档完成窗口 E5：数据库补齐审计与数据源计划：
   - 当前分支 `codex/r4-e5-data-completion-audit-plan`，从 E4 当前工作区切出；本轮不执行 `git push`
   - 新增 `docs/round4-data-completion-plan.md`，记录当前 `backend:data-health` 结果：`schema_version=20260426_0019`，状态 `warning`，P0 缺口仍为 6 条

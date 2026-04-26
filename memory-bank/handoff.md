@@ -2,6 +2,19 @@
 
 ## 当前主线状态（2026-04-26）
 
+- 已按 `Codex-App-第四轮开发计划-学生批量操作调班与数据库补齐-v6.md` 完成窗口 E7，当前分支 `codex/r4-e7-data-health-reports-docs`：增强数据健康展示、打印覆盖报告和老师使用说明，不执行 `git push`。
+- E7 数据健康口径：`DEFAULT_EXPECTED_YEARS` 已扩到 2020-2026；2026 会显示在覆盖矩阵中，但一分一段、省控线、普通类正式计划和投档结果未发布时不会被计入历史补齐缺口。真实 `backend:data-health -- --json` 当前仍为 `warning`，P0 缺口 4 条。
+- E7 前端能力：`/gaokao-data` 的“山东覆盖”页签新增“数据库补齐结果说明”和“2020-2026 年份覆盖矩阵”；新增 `/print/gaokao-data-coverage/:storageKey` 打印页，可把当前 data-health 结果打印或保存为 PDF。
+- E7 文档：新增 `docs/round4-user-guide-student-bulk-actions.md` 与 `docs/round4-user-guide-data-completion.md`，并接入 `docs/README.md`。
+- E7 验证：`npm run backend:test -- apps/backend/tests/test_data_health.py -q` 为 `3 passed`；`npm run frontend:test -- tests/gaokao-data-report.test.ts` 为 `3 passed`；`npm run frontend:build` 通过；`npm run backend:data-health -- --json` 通过。
+- 下一步建议：进入 E8 最终集成时，按开发文档运行 `backend:migrate`、`backend:data-health`、`backend:p0-check`、`check`、`check:all` 和 `git diff --check`，并生成 `docs/round4-final-acceptance-report.md`。不要在 E8 继续新增功能。
+- 已按 `Codex-App-第四轮开发计划-学生批量操作调班与数据库补齐-v6.md` 完成窗口 E6，当前分支 `codex/r4-e6-data-completion-imports`：补齐 2020-2022 山东官方一分一段与省控线 / 批次线导入，不执行 `git push`。
+- E6 数据写入：导入前备份为 `data/backups/app_before_e6_data_completion_import_20260426_135630.db`；真实 `data/app.db` 已新增 2020 一分一段 `3769` 条、省控线 `11` 条，2021 一分一段 `3681` 条、省控线 `11` 条，2022 一分一段 `3672` 条、省控线 `11` 条。
+- E6 来源追溯：本轮补齐对应 `source_document` 与 `gaokao_import_run`；成功 import run 为 `10-15`，官方文件 SHA256 和来源 ID 已记录在 `docs/round4-data-completion-result.md`。自动联网下载曾因官网 HTTPS 超时失败，最终改用已下载到 `data/imports/gaokao/official/{year}/` 的同一官方文件并以 SHA256 留痕。
+- E6 数据健康：导入后 `npm run backend:data-health -- --json` 显示 `score_rank_segment=22388`、年份覆盖 `2020-2025`；`gaokao_score_line=74`、年份覆盖 `2020-2025`；P0 缺口从 6 条降为 4 条。
+- E6 边界：本轮未导入不可核验的 2023/2024/2025 招生计划补充文件，未把政策参考数量偏低包装为已完成，未批量关闭 `gaokao_college_chapter_rule` 待复核链，未伪造 2026 普通类正式计划。
+- E6 验证：`npm run backend:migrate` 通过；`npm run backend:test -- apps/backend/tests/test_gaokao_import_framework.py -q` 为 `8 passed`；`npm run backend:test -- apps/backend/tests -q` 为 `100 passed`；`npm run backend:p0-check -- --json` 为 `ok: true`，备份包 `data/backups/p0_delivery_backup_20260426_140156.zip`；`git diff --check` 通过。
+- 下一步建议：E7 若继续数据库补齐，优先处理“可核验官方文件但未结构化”的招生计划完整性和政策参考来源；对章程待复核链只做审计摘要或逐源核验，不要批量标记完成；继续保留“特殊类型专门录取结果缺失只能初筛”的边界。
 - 已按 `Codex-App-第四轮开发计划-学生批量操作调班与数据库补齐-v6.md` 完成窗口 E5，当前分支 `codex/r4-e5-data-completion-audit-plan`：新增数据库补齐计划和官方来源检查清单，不执行 `git push`。
 - E5 文档：`docs/round4-data-completion-plan.md` 记录当前 `backend:data-health` 为 `schema_version=20260426_0019`、状态 `warning`、P0 缺口 6 条，并给出 E6 的导入顺序；`docs/round4-official-source-checklist.md` 列出 2020-2022 一分一段、省控线、招生计划补充信息、2026 政策和章程复核来源边界。
 - E5 边界：本轮未修改 `data/app.db`、导入脚本、后端业务代码、迁移或前端页面；没有伪造数据，也没有把 2026 未发布普通类计划写成已导入。
@@ -99,7 +112,7 @@
 ## 下一次接手先做什么
 
 1. 先阅读 `AGENTS.md`、`memory-bank/project-context.md`、`memory-bank/active-context.md`。
-2. 如继续第四轮 v6，先读 `/Users/gao/Downloads/Codex-App-第四轮开发计划-学生批量操作调班与数据库补齐-v6.md` 和 `docs/round4-baseline-audit.md`。E0、E1 已完成，后续按窗口边界推进：E2 做学生批量删除前端，调用 E1 的 preview / execute 接口并使用 `required_confirm_text` 做二次确认；E3 做批量调班后端和历史记录；E4 做批量调班前端与成长档案系统事件；E5 做数据库补齐审计计划，E6 执行可补数据导入，E7 做数据健康展示和用户说明，E8 最终集成验收。不要在 E1-E4 重写第三轮高考路径或推荐报表主线。
+2. 如继续第四轮 v6，先读 `/Users/gao/Downloads/Codex-App-第四轮开发计划-学生批量操作调班与数据库补齐-v6.md`、`docs/round4-baseline-audit.md`、`docs/round4-data-completion-result.md`、`docs/round4-user-guide-student-bulk-actions.md` 与 `docs/round4-user-guide-data-completion.md`。E0-E7 已完成，下一步应进入 E8 最终集成验收，检查批量删除、批量调班、成长档案系统事件、数据补齐结果、不可补数据原因和第三轮高考路径/推荐链路未被破坏；不要在 E8 继续新增功能。
 2. 如继续第三轮 v5，先读 `/Users/gao/Downloads/Codex-App-第三轮开发计划-山东升学方案库与多路径规则引擎-v5.md`、`docs/round3-shandong-pathway-rules.md`、`docs/round3-student-pathway-profile.md`、`docs/round3-gaokao-pathway-center.md`、`docs/round3-shandong-general-recommendation-hardening.md`、`docs/round3-vocational-spring-pathway-screening.md` 和 `docs/round3-special-early-art-sports-pathways.md`。D1 已完成路径表、画像表、评估表和三态规则引擎；D2 已完成官方规则字典、来源追溯和真实主库 bootstrap；D3 已完成学生详情页“升学画像”入口、材料缺口汇总和老师可读提示；D4 已完成 `/gaokao-pathways` 方案中心、路径卡、详情抽屉、数据风险和普通类推荐入口；D5 已完成普通类推荐算法加固、共享分数换位次、选科解析测试和 2026 官方计划缺失提示；D6 已完成单招、综评、春考本/专路径初筛细化；D7 已完成艺体、体育、提前批、特殊类型、体育单招和高水平运动队路径初筛细化。下一步优先进入 D8：第三轮最终集成、报告和验收，继续保留资格初筛 / 人工复核边界，不要把特殊路径说成录取概率。
 2. 如继续 v4 Round 2 收口，先读 `docs/round2-gaokao-recommendation-final-report.md`、`docs/gaokao-data-coverage-after-round2.md`、`docs/gaokao-shandong-2023-2025-coverage.md`、`docs/gaokao-2026-data-watchlist.md`、`docs/gaokao-data-baseline-2026-04-25.md`、`docs/gaokao-source-import-framework-2026-04-25.md` 与 `docs/gaokao-shandong-rush-stable-safe-engine-2026-04-25.md`。下一步优先完成 C3 剩余验收、提交 `codex/r2-final-gaokao-recommendation-integration`，并在 GitHub 认证恢复后推送/合并；不要伪造 2026 普通类计划或投档结果，不要把校内考试名次直接当山东全省位次。
 3. 2026-04-24 窗口 0 已生成当前多窗口接手入口：`docs/repo-audit.md`、`docs/mac-dev-setup.md`、`docs/development-roadmap.md`。后续 Codex 窗口应先读这三份，再进入自己的窗口任务。按 Codex App v3 补齐的 dated 状态锁定文件为 `docs/repo-audit-2026-04-24.md` 与 `docs/current-development-map-2026-04-24.md`，它们是对已有窗口 0 成果的补缺，不是新路线图；本轮验证已通过后端 `66 passed`、前端 lint、前端 `114 passed`、前端构建、数据健康、P0 验收和 `git diff --check`。

@@ -148,9 +148,9 @@ def test_data_health_report_marks_p0_gaps(tmp_path: Path) -> None:
     assert any("特殊类型已有招生计划但缺专门录取结果" in item for item in report["gaps"])
     assert any("一分一段缺少年份" in item for item in report["gaps"])
     assert any(item["key"] == "gaokao_policy_reference" and item["status"] == "gap" for item in report["tables"])
-    assert report["expected_years"] == [2020, 2021, 2022, 2023, 2024, 2025]
+    assert report["expected_years"] == [2020, 2021, 2022, 2023, 2024, 2025, 2026]
     enrollment_coverage = next(item for item in report["coverage"] if item["key"] == "enrollment_plan")
-    assert enrollment_coverage["missing_years"] == [2020, 2021, 2022, 2023, 2024]
+    assert enrollment_coverage["missing_years"] == [2020, 2021, 2022, 2023, 2024, 2026]
     assert enrollment_coverage["readiness"] == "partial"
     assert enrollment_coverage["explanation"]
     assert enrollment_coverage["batch_distribution"] == [
@@ -183,6 +183,105 @@ def test_data_health_report_marks_p0_gaps(tmp_path: Path) -> None:
     assert "考生类型可用性" in formatted_report
     assert "2026 数据发布状态" in formatted_report
     assert "导入审计摘要" in formatted_report
+
+
+def test_data_health_2026_pending_year_does_not_create_historical_gap(tmp_path: Path) -> None:
+    db_path = tmp_path / "app.db"
+    historical_years = [2020, 2021, 2022, 2023, 2024, 2025]
+    with sqlite3.connect(db_path) as conn:
+        conn.executescript(
+            """
+            CREATE TABLE alembic_version (version_num TEXT NOT NULL);
+            INSERT INTO alembic_version VALUES ('20260426_0019_student_class_transfer_schema');
+
+            CREATE TABLE college (id INTEGER PRIMARY KEY);
+            CREATE TABLE major (id INTEGER PRIMARY KEY);
+            CREATE TABLE college_major (id INTEGER PRIMARY KEY);
+            CREATE TABLE enrollment_plan (
+                id INTEGER PRIMARY KEY,
+                year INTEGER,
+                province TEXT,
+                student_type TEXT,
+                batch TEXT
+            );
+            CREATE TABLE admission_record (
+                id INTEGER PRIMARY KEY,
+                year INTEGER,
+                province TEXT,
+                student_type TEXT,
+                batch TEXT
+            );
+            CREATE TABLE province_volunteer_rule (id INTEGER PRIMARY KEY);
+            CREATE TABLE province_score_transform_rule (id INTEGER PRIMARY KEY);
+            CREATE TABLE subject_requirement_dict (id INTEGER PRIMARY KEY);
+            CREATE TABLE special_type_rule (id INTEGER PRIMARY KEY);
+            CREATE TABLE employment_direction (id INTEGER PRIMARY KEY);
+            CREATE TABLE major_employment_mapping (id INTEGER PRIMARY KEY);
+            CREATE TABLE score_rank_segment (
+                id INTEGER PRIMARY KEY,
+                year INTEGER,
+                province TEXT,
+                score_type TEXT
+            );
+            CREATE TABLE gaokao_admission_plan (
+                id INTEGER PRIMARY KEY,
+                year INTEGER,
+                province TEXT,
+                candidate_type TEXT,
+                batch TEXT
+            );
+            CREATE TABLE gaokao_admission_result (
+                id INTEGER PRIMARY KEY,
+                year INTEGER,
+                province TEXT,
+                candidate_type TEXT,
+                batch TEXT
+            );
+            CREATE TABLE gaokao_score_line (
+                id INTEGER PRIMARY KEY,
+                year INTEGER,
+                province TEXT,
+                candidate_type TEXT,
+                batch TEXT
+            );
+            CREATE TABLE gaokao_batch_dict (id INTEGER PRIMARY KEY);
+            CREATE TABLE gaokao_policy_reference (
+                id INTEGER PRIMARY KEY,
+                year INTEGER,
+                province TEXT,
+                policy_type TEXT
+            );
+            CREATE TABLE gaokao_college_chapter_rule (
+                id INTEGER PRIMARY KEY,
+                year INTEGER,
+                province TEXT,
+                review_status TEXT
+            );
+            """
+        )
+        for index, year in enumerate(historical_years, start=1):
+            conn.execute(
+                "INSERT INTO admission_record (id, year, province, student_type, batch) VALUES (?, ?, ?, ?, ?)",
+                (index, year, "山东", "general", "常规批"),
+            )
+            conn.execute(
+                "INSERT INTO score_rank_segment (id, year, province, score_type) VALUES (?, ?, ?, ?)",
+                (index, year, "山东", "summer_total"),
+            )
+            conn.execute(
+                "INSERT INTO gaokao_score_line (id, year, province, candidate_type, batch) VALUES (?, ?, ?, ?, ?)",
+                (index, year, "山东", "普通类", "一段线"),
+            )
+
+    report = build_data_health_report(db_path)
+
+    assert report["expected_years"][-1] == 2026
+    assert not any("一分一段缺少年份：2026" in item for item in report["gaps"])
+    assert not any("省控线/批次线缺少年份：2026" in item for item in report["gaps"])
+    rank_coverage = next(item for item in report["coverage"] if item["key"] == "score_rank_segment")
+    assert rank_coverage["missing_years"] == [2026]
+    assert rank_coverage["readiness"] == "ready"
+    assert any("待官方发布" in note for note in rank_coverage["notes"])
 
 
 def test_data_health_report_handles_missing_database(tmp_path: Path) -> None:

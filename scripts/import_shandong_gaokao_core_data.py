@@ -21,10 +21,10 @@ from app.services.gaokao_official_importers import (  # noqa: E402
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Import 2023-2025 Shandong official gaokao admission, score-rank and score-line data."
+        description="Import Shandong official gaokao admission, score-rank and score-line data."
     )
     parser.add_argument("--db", type=Path, default=None, help="SQLite app database path.")
-    parser.add_argument("--year", type=int, action="append", choices=[2023, 2024, 2025], help="Limit import year.")
+    parser.add_argument("--year", type=int, action="append", choices=[2020, 2021, 2022, 2023, 2024, 2025], help="Limit import year.")
     parser.add_argument(
         "--source-type",
         action="append",
@@ -76,14 +76,12 @@ def main() -> int:
     if args.json:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
-        print("山东 2023-2025 官方核心数据导入完成")
-        for item in payload["documents"]:
-            source = item["source_document"]
-            summary = item["summary"]
+        print("山东官方核心数据导入完成")
+        for item in payload["imports"]:
             print(
-                f"- {source['year']} {source['source_type']}: "
-                f"成功 {summary['success_rows']}，失败 {summary['failed_rows']}，"
-                f"新增 {summary['created_rows']}，更新 {summary['updated_rows']}"
+                f"- {item['year']} {item['source_type']}: "
+                f"成功 {item['success_rows']}，失败 {item['failed_rows']}，"
+                f"新增 {item['created_rows']}，更新 {item['updated_rows']}"
             )
         print(f"- 覆盖文档：{payload.get('coverage_doc')}")
     return 0

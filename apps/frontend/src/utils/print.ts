@@ -45,3 +45,7 @@ export function shandongRecommendationPrintPreviewPath(storageKey: string): stri
 export function gaokaoPathwayPrintPreviewPath(storageKey: string): string {
   return `/print/gaokao-pathway-report/${encodeURIComponent(storageKey)}`;
 }
+
+export function gaokaoDataCoveragePrintPreviewPath(storageKey: string): string {
+  return `/print/gaokao-data-coverage/${encodeURIComponent(storageKey)}`;
+}

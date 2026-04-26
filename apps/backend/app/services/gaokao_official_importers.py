@@ -30,11 +30,12 @@ from app.services.gaokao_imports import (
 from app.utils.parsers import relative_to_project
 
 
-B1_PARSER_VERSION = "b1-official-20260425"
-B1_DATA_VERSION_LABEL = "shandong_b1_official_20260425"
+B1_PARSER_VERSION = "e6-official-core-20260426"
+B1_DATA_VERSION_LABEL = "shandong_official_core_20260426"
 B1_USER_AGENT = "local-edu-tool-b1-official-import/2026-04-25"
-B1_COVERAGE_DOC = "docs/gaokao-shandong-2023-2025-coverage.md"
-B1_YEARS = (2023, 2024, 2025)
+B1_COVERAGE_DOC = "docs/gaokao-shandong-2020-2025-coverage.md"
+B1_IMPORT_YEARS = (2023, 2024, 2025)
+B1_COVERAGE_YEARS = (2020, 2021, 2022, 2023, 2024, 2025)
 B1_SOURCE_TYPES = ("admission_result", "score_rank_segment", "score_line")
 _COLUMN_CACHE: dict[tuple[str, str], set[str]] = {}
 
@@ -46,6 +47,12 @@ DEFAULT_OFFICIAL_FILE_URLS: dict[tuple[int, str], str] = {
     (2023, "score_rank_segment"): "https://www.sdzk.cn/Floadup/file/20230625/6382330466178390033845468.xls",
     (2024, "score_rank_segment"): "https://www.sdzk.cn/Floadup/file/20240625/6385492724297110442689837.xls",
     (2025, "score_rank_segment"): "https://www.sdzk.cn/Floadup/file/20250625/6388646133710894671069456.xls",
+    (2020, "score_rank_segment"): "https://www.sdzk.cn/Floadup/file/20200726/6373137724431062332329137.xls",
+    (2021, "score_rank_segment"): "https://www.sdzk.cn/Floadup/file/20210625/6376023552787296505320142.xls",
+    (2022, "score_rank_segment"): "https://www.sdzk.cn/Floadup/file/20220626/6379183893483079468961719.xls",
+    (2020, "score_line"): "https://www.sdzk.cn/Floadup/image/20250618/6388585391998227954417320.png",
+    (2021, "score_line"): "https://www.sdzk.cn/Floadup/image/20250618/6388585383987448818844597.png",
+    (2022, "score_line"): "https://www.sdzk.cn/Floadup/image/20250618/6388583976098931994629755.png",
     (2023, "score_line"): "https://www.sdzk.cn/Floadup/image/20250618/6388585429679669883269908.png",
     (2024, "score_line"): "https://www.sdzk.cn/Floadup/image/20250618/6388585458310919561839075.png",
     (2025, "score_line"): "https://www.sdzk.cn/Floadup/file/20250625/6388646601596985266621362.pdf",
@@ -59,6 +66,12 @@ PUBLISHED_DATES: dict[tuple[int, str], str] = {
     (2023, "score_rank_segment"): "2023-06-25",
     (2024, "score_rank_segment"): "2024-06-25",
     (2025, "score_rank_segment"): "2025-06-25",
+    (2020, "score_rank_segment"): "2020-07-26",
+    (2021, "score_rank_segment"): "2021-06-25",
+    (2022, "score_rank_segment"): "2022-06-26",
+    (2020, "score_line"): "2020-07-26",
+    (2021, "score_line"): "2021-06-25",
+    (2022, "score_line"): "2022-06-25",
     (2023, "score_line"): "2023-06-25",
     (2024, "score_line"): "2024-06-25",
     (2025, "score_line"): "2025-06-25",
@@ -66,6 +79,45 @@ PUBLISHED_DATES: dict[tuple[int, str], str] = {
 
 
 SCORE_LINE_ROWS: dict[int, tuple[tuple[str, str, str, int, str], ...]] = {
+    2020: (
+        ("普通类", "常规批", "special_type_control", 532, "特殊类型招生控制线；根据官方分数线图片校对。"),
+        ("普通类", "常规批", "first_section", 449, "普通类一段线；根据官方分数线图片校对。"),
+        ("普通类", "常规批", "second_section", 150, "普通类二段线；根据官方分数线图片校对。"),
+        ("普通类", "常规批", "3plus2_vocational_qualification", 399, "3+2 对口贯通分段培养高职志愿填报资格线；根据官方分数线图片校对。"),
+        ("普通类", "高水平运动队", "high_level_sports_preferential_65", 291, "享受 65% 优惠政策的高水平运动员文化录取控制线。"),
+        ("艺术类", "本科", "undergrad_culture_literature_directing_broadcast_photo", 381, "文学编导、播音主持、摄影类本科文化控制线；根据官方分数线图片校对。"),
+        ("艺术类", "本科", "undergrad_culture_art_music_calligraphy", 314, "美术、音乐、书法类本科文化控制线；根据官方分数线图片校对。"),
+        ("艺术类", "本科", "undergrad_culture_dance_performance_fashion", 291, "舞蹈、影视戏剧表演、服装表演类本科文化控制线；根据官方分数线图片校对。"),
+        ("艺术类", "专科", "junior_culture_control", 150, "艺术类专科文化控制线；根据官方分数线图片校对。"),
+        ("体育类", "本科/专科", "first_section_composite", 561, "体育类一段线，划线成绩为综合分；根据官方分数线图片校对。"),
+        ("体育类", "本科/专科", "second_section_composite", 457, "体育类二段线，划线成绩为综合分；根据官方分数线图片校对。"),
+    ),
+    2021: (
+        ("普通类", "常规批", "special_type_control", 518, "特殊类型招生控制线；根据官方分数线图片校对。"),
+        ("普通类", "常规批", "first_section", 444, "普通类一段线；根据官方分数线图片校对。"),
+        ("普通类", "常规批", "second_section", 150, "普通类二段线；根据官方分数线图片校对。"),
+        ("普通类", "常规批", "3plus2_vocational_qualification", 394, "3+2 对口贯通分段培养高职志愿填报资格线；根据官方分数线图片校对。"),
+        ("普通类", "高水平运动队", "high_level_sports_preferential_65", 288, "享受 65% 优惠政策的高水平运动员文化录取控制线。"),
+        ("艺术类", "本科", "undergrad_culture_literature_directing_broadcast_photo", 444, "文学编导、播音主持、摄影类本科文化控制线；根据官方分数线图片校对。"),
+        ("艺术类", "本科", "undergrad_culture_art_music_calligraphy_aviation", 333, "美术、音乐、书法、航空服务艺术类本科文化控制线；根据官方分数线图片校对。"),
+        ("艺术类", "本科", "undergrad_culture_dance_performance_opera_fashion", 288, "舞蹈、影视戏剧表演、服装表演类本科文化控制线；根据官方分数线图片校对。"),
+        ("艺术类", "专科", "junior_culture_control", 150, "艺术类专科文化控制线；根据官方分数线图片校对。"),
+        ("体育类", "本科/专科", "first_section_composite", 569, "体育类一段线，划线成绩为综合分；根据官方分数线图片校对。"),
+        ("体育类", "本科/专科", "second_section_composite", 470, "体育类二段线，划线成绩为综合分；根据官方分数线图片校对。"),
+    ),
+    2022: (
+        ("普通类", "常规批", "special_type_control", 513, "特殊类型招生控制线；根据官方分数线图片校对。"),
+        ("普通类", "常规批", "first_section", 437, "普通类一段线；根据官方分数线图片校对。"),
+        ("普通类", "常规批", "second_section", 150, "普通类二段线；根据官方分数线图片校对。"),
+        ("普通类", "常规批", "3plus2_vocational_qualification", 387, "3+2 对口贯通分段培养高职志愿填报资格线；根据官方分数线图片校对。"),
+        ("普通类", "高水平运动队", "high_level_sports_preferential_65", 284, "享受 65% 优惠政策的高水平运动员文化录取控制线。"),
+        ("艺术类", "本科", "undergrad_culture_literature_directing_broadcast_photo", 437, "文学编导、播音主持、摄影类本科文化控制线；根据官方分数线图片校对。"),
+        ("艺术类", "本科", "undergrad_culture_art_music_calligraphy_aviation", 327, "美术、音乐、书法、航空服务艺术类本科文化控制线；根据官方分数线图片校对。"),
+        ("艺术类", "本科", "undergrad_culture_dance_performance_opera_fashion", 284, "舞蹈、影视戏剧表演、服装表演类本科文化控制线；根据官方分数线图片校对。"),
+        ("艺术类", "专科", "junior_culture_control", 150, "艺术类专科文化控制线；根据官方分数线图片校对。"),
+        ("体育类", "本科/专科", "first_section_composite", 583, "体育类一段线，划线成绩为综合分；根据官方分数线图片校对。"),
+        ("体育类", "本科/专科", "second_section_composite", 474, "体育类二段线，划线成绩为综合分；根据官方分数线图片校对。"),
+    ),
     2023: (
         ("普通类", "常规批", "special_type_control", 520, "特殊类型招生控制线；根据官方分数线图片校对。"),
         ("普通类", "常规批", "first_section", 443, "普通类一段线；根据官方分数线图片校对。"),
@@ -173,7 +225,7 @@ def import_b1_shandong_core(
     settings: Settings,
     *,
     download_missing: bool,
-    years: tuple[int, ...] = B1_YEARS,
+    years: tuple[int, ...] = B1_IMPORT_YEARS,
     source_types: tuple[str, ...] = B1_SOURCE_TYPES,
     coverage_doc: Path | None = None,
 ) -> dict[str, Any]:
@@ -282,18 +334,18 @@ def write_b1_coverage_doc(session: Session, settings: Settings, doc_path: Path) 
     doc_path.parent.mkdir(parents=True, exist_ok=True)
     generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     lines = [
-        "# 山东高考 2023-2025 普通类核心数据覆盖报告",
+        "# 山东高考 2020-2025 普通类核心数据覆盖报告",
         "",
         f"- 生成时间：{generated_at}",
-        "- 执行窗口：B1，2023-2025 山东普通类核心数据导入",
-        "- 数据范围：山东普通类常规批第 1 次志愿投档情况表、一分一段表、各类别分数线 / 省控线",
+        "- 执行窗口：B1/E6，2020-2025 山东普通类核心数据导入",
+        "- 数据范围：山东普通类常规批第 1 次志愿投档情况表、一分一段表、各类别分数线 / 省控线；其中 E6 重点补 2020-2022 一分一段和分数线。",
         "",
         "## 1. 覆盖矩阵",
         "",
         "| 年份 | 应用侧录取结果 | raw 投档结果 | 一分一段 | 省控线 / 分数线 | source_document 追溯结论 |",
         "| --- | ---: | ---: | ---: | ---: | --- |",
     ]
-    for year in B1_YEARS:
+    for year in B1_COVERAGE_YEARS:
         item = coverage["years"][year]
         lines.append(
             "| {year} | {admission_record_total} / {admission_record_with_source} | "
@@ -327,7 +379,7 @@ def write_b1_coverage_doc(session: Session, settings: Settings, doc_path: Path) 
             "## 3. B1 判断",
             "",
             f"- 普通类推荐最低数据条件：{coverage['ordinary_recommendation_readiness_label']}。",
-            "- 2023-2025 普通类投档表均已保留最低位次，后续推荐算法应继续优先使用位次，不直接用裸分跨年比较。",
+            "- 2020-2025 普通类投档表已保留最低位次；后续推荐算法应继续优先使用位次，不直接用裸分跨年比较。",
             "- 2026 普通类正式招生计划、投档结果、一分一段和省控线未在本窗口伪造；仍保持待官方发布 / 待导入语义。",
             "- 分数线来源中 2023、2024 为官方页面图片，2025 为官方 PDF；当前导入保留原始文件和 SHA256，并把结构化分数线作为 B1 校对数据写入。",
             "",
@@ -339,7 +391,7 @@ def write_b1_coverage_doc(session: Session, settings: Settings, doc_path: Path) 
         for item in coverage["missing_files"]:
             lines.append(f"- {item}")
     else:
-        lines.append("- B1 范围内 2023-2025 投档表、一分一段、分数线官方文件均已登记本地文件。")
+        lines.append("- 2020-2025 核心范围内投档表、一分一段、分数线官方文件均已登记本地文件。")
     lines.extend(
         [
             "- 2023 招生计划缺失、2024 招生计划偏少不是本窗口投档 / 一分一段 / 省控线导入能完全解决的问题，后续应由招生计划专项继续核验。",
@@ -353,7 +405,7 @@ def write_b1_coverage_doc(session: Session, settings: Settings, doc_path: Path) 
 
 def build_b1_coverage(session: Session) -> dict[str, Any]:
     years: dict[int, dict[str, Any]] = {}
-    for year in B1_YEARS:
+    for year in B1_COVERAGE_YEARS:
         admission_total, admission_with_source = _count_table(
             session,
             "admission_record",
@@ -421,7 +473,7 @@ def build_b1_coverage(session: Session) -> dict[str, Any]:
         years[year]["raw_admission_with_source"] > 0
         and years[year]["score_rank_with_source"] > 0
         and years[year]["score_line_with_source"] > 0
-        for year in B1_YEARS
+        for year in B1_IMPORT_YEARS
     )
     return {
         "years": years,
@@ -899,17 +951,7 @@ def _parse_score_rank_rows(path: Path, document: GaokaoSourceDocument) -> list[d
     header_index = _find_header_index(table, required=("分数段", "全体"))
     group_row = table[header_index]
     subheader_row = table[header_index + 1]
-    group_starts: list[tuple[int, str]] = []
-    current_group: str | None = None
-    max_columns = max(len(group_row), len(subheader_row))
-    for index in range(1, max_columns):
-        group_value = _cell_text(group_row[index] if index < len(group_row) else "")
-        if group_value:
-            current_group = _normalize_subject_group(group_value)
-        subheader_value = _cell_text(subheader_row[index] if index < len(subheader_row) else "")
-        next_subheader_value = _cell_text(subheader_row[index + 1] if index + 1 < len(subheader_row) else "")
-        if current_group and subheader_value == "本段人数" and next_subheader_value == "累计人数":
-            group_starts.append((index, current_group))
+    group_starts = _detect_score_rank_group_starts(group_row, subheader_row)
 
     now = _now_text()
     parsed: list[dict[str, Any]] = []
@@ -1171,11 +1213,41 @@ def _normalize_subject_group(value: str) -> str:
         "选考物理": "physics",
         "选考化学": "chemistry",
         "选考生物": "biology",
+        "选考政治": "politics",
         "选考思想政治": "politics",
         "选考历史": "history",
         "选考地理": "geography",
     }
     return mapping.get(_cell_text(value), _cell_text(value))
+
+
+def _detect_score_rank_group_starts(group_row: list[Any], subheader_row: list[Any]) -> list[tuple[int, str]]:
+    group_starts: list[tuple[int, str]] = []
+    # Some older official Excel-HTML files omit the blank cells created by colspan
+    # in the group header row. The subheader still has paired 本段人数/累计人数
+    # columns, so reconstruct starts from the compact group labels before trying
+    # the normal merged-cell shape.
+    if _cell_text(subheader_row[0] if subheader_row else "") == "本段人数":
+        compact_groups = [_normalize_subject_group(value) for value in group_row[1:] if _cell_text(value)]
+        for group_index, subject_group in enumerate(compact_groups):
+            column = 1 + group_index * 2
+            subheader_value = _cell_text(subheader_row[column - 1] if column - 1 < len(subheader_row) else "")
+            next_subheader_value = _cell_text(subheader_row[column] if column < len(subheader_row) else "")
+            if subheader_value == "本段人数" and next_subheader_value == "累计人数":
+                group_starts.append((column, subject_group))
+        return group_starts
+
+    current_group: str | None = None
+    max_columns = max(len(group_row), len(subheader_row))
+    for index in range(1, max_columns):
+        group_value = _cell_text(group_row[index] if index < len(group_row) else "")
+        if group_value:
+            current_group = _normalize_subject_group(group_value)
+        subheader_value = _cell_text(subheader_row[index] if index < len(subheader_row) else "")
+        next_subheader_value = _cell_text(subheader_row[index + 1] if index + 1 < len(subheader_row) else "")
+        if current_group and subheader_value == "本段人数" and next_subheader_value == "累计人数":
+            group_starts.append((index, current_group))
+    return group_starts
 
 
 def _cell_text(value: Any) -> str:
@@ -1270,7 +1342,7 @@ def _list_b1_source_documents(session: Session) -> list[GaokaoSourceDocument]:
             select(GaokaoSourceDocument)
             .where(
                 GaokaoSourceDocument.province == "山东",
-                GaokaoSourceDocument.year.in_(B1_YEARS),
+                GaokaoSourceDocument.year.in_(B1_COVERAGE_YEARS),
                 GaokaoSourceDocument.source_type.in_(B1_SOURCE_TYPES),
             )
             .order_by(GaokaoSourceDocument.year, GaokaoSourceDocument.source_type)

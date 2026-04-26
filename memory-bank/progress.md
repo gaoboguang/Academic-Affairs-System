@@ -8,6 +8,24 @@
 
 ## 2026-04-26 新增
 
+- 已完成 v6 第四轮窗口 E7：数据健康、报表和使用说明：
+  - 从 E6 当前工作区切出 `codex/r4-e7-data-health-reports-docs`
+  - `apps/backend/app/utils/data_health.py` 已把默认覆盖年份扩到 2020-2026，同时把 2026 未发布项从历史补齐缺口中排除，避免 P0 缺口虚增
+  - `apps/frontend/src/pages/GaokaoDataPage.vue` 已在“山东覆盖”页签新增“数据库补齐结果说明”和“2020-2026 年份覆盖矩阵”
+  - 新增 `apps/frontend/src/components/gaokao-data/dataCompletionReport.ts`、`apps/frontend/src/pages/GaokaoDataCoveragePrintPage.vue` 和 `/print/gaokao-data-coverage/:storageKey`，支持打印或保存高考数据覆盖报告
+  - 新增 `docs/round4-user-guide-student-bulk-actions.md`、`docs/round4-user-guide-data-completion.md`，并更新 `docs/README.md`
+  - 验证：data-health 定向后端 `3 passed`；高考数据报告前端 helper `3 passed`；`frontend:build` 通过；`backend:data-health -- --json` 通过且仍为 4 条 P0 数据警告
+
+- 已完成 v6 第四轮窗口 E6：2020-2022 山东官方一分一段与省控线导入：
+  - 从 E5 成果切出 `codex/r4-e6-data-completion-imports`
+  - 扩展 `apps/backend/app/services/gaokao_imports.py` 与 `gaokao_official_importers.py`，补齐 2020-2022 山东官方一分一段和省控线来源、附件解析、SHA256 校验、导入批次记录和覆盖文档输出
+  - `scripts/import_shandong_gaokao_core_data.py` 已支持 `--year 2020/2021/2022`，并修正非 JSON 输出的导入结果遍历
+  - 新增 `test_import_2020_score_rank_file_handles_compact_header`，锁定 2020 Excel-HTML 紧凑表头解析；2020/2021/2022 一分一段分别成功解析 `3769 / 3681 / 3672` 条
+  - 真实 `data/app.db` 已在导入前备份到 `data/backups/app_before_e6_data_completion_import_20260426_135630.db`；导入后新增 2020-2022 一分一段共 `11122` 条、省控线共 `33` 条
+  - 导入后 `backend:data-health` 显示一分一段覆盖 2020-2025、总数 `22388`；省控线覆盖 2020-2025、总数 `74`；P0 缺口从 6 条降为 4 条
+  - 新增 `docs/round4-data-completion-result.md`，并更新 `docs/README.md`；文档保留自动下载超时、改用本地官方文件导入、剩余招生计划 / 政策参考 / 章程复核边界
+  - 验证：`backend:migrate` 通过；E6 定向后端 `8 passed`；后端全量 `100 passed`；`backend:data-health -- --json` 通过但状态仍为 `warning`；`backend:p0-check -- --json` 为 `ok: true`，备份包 `data/backups/p0_delivery_backup_20260426_140156.zip`；`git diff --check` 通过
+
 - 已完成 v6 第四轮窗口 E5：数据库补齐审计与数据源计划：
   - 从 E4 当前工作区切出 `codex/r4-e5-data-completion-audit-plan`
   - 新增 `docs/round4-data-completion-plan.md`，明确当前主库 `schema_version=20260426_0019`、P0 缺口 6 条、逐项补齐方式和 E6 导入顺序

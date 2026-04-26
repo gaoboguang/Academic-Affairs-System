@@ -40,29 +40,35 @@
    第四轮 E5 的数据库补齐审计、可补项计划和 E6 导入任务清单。
 18. [`round4-official-source-checklist.md`](./round4-official-source-checklist.md)
    第四轮 E5 的山东官方来源核对清单，区分可导入、需人工下载、需复核和未发布数据。
-19. [`gaokao-source-import-framework-2026-04-25.md`](./gaokao-source-import-framework-2026-04-25.md)
+19. [`round4-data-completion-result.md`](./round4-data-completion-result.md)
+   第四轮 E6 的数据库补齐导入结果，记录 2020-2022 一分一段和省控线导入、来源追溯、SHA256、补齐前后差异和剩余缺口。
+20. [`round4-user-guide-student-bulk-actions.md`](./round4-user-guide-student-bulk-actions.md)
+   第四轮面向老师的学生批量删除、批量调班和调班历史查看说明。
+21. [`round4-user-guide-data-completion.md`](./round4-user-guide-data-completion.md)
+   第四轮面向老师的高考数据库补齐、年份覆盖矩阵、剩余缺口和打印覆盖报告说明。
+22. [`gaokao-source-import-framework-2026-04-25.md`](./gaokao-source-import-framework-2026-04-25.md)
    窗口 A1 的山东高考官方来源登记、导入批次和本地文件入场框架。
-20. [`round3-shandong-pathway-rules.md`](./round3-shandong-pathway-rules.md)
+23. [`round3-shandong-pathway-rules.md`](./round3-shandong-pathway-rules.md)
    第三轮 D2 的山东升学路径规则字典、官方来源追溯和后续窗口注意事项。
-21. [`round3-student-pathway-profile.md`](./round3-student-pathway-profile.md)
+24. [`round3-student-pathway-profile.md`](./round3-student-pathway-profile.md)
    第三轮 D3 的学生升学画像、材料缺口和路径评估可读化说明。
-22. [`round3-gaokao-pathway-center.md`](./round3-gaokao-pathway-center.md)
+25. [`round3-gaokao-pathway-center.md`](./round3-gaokao-pathway-center.md)
    第三轮 D4 的山东升学方案中心页面、路径卡片和数据风险入口说明。
-23. [`round3-shandong-general-recommendation-hardening.md`](./round3-shandong-general-recommendation-hardening.md)
+26. [`round3-shandong-general-recommendation-hardening.md`](./round3-shandong-general-recommendation-hardening.md)
    第三轮 D5 的山东普通类推荐算法加固、共享分数换位次和 2026 数据提示说明。
-24. [`round3-vocational-spring-pathway-screening.md`](./round3-vocational-spring-pathway-screening.md)
+27. [`round3-vocational-spring-pathway-screening.md`](./round3-vocational-spring-pathway-screening.md)
    第三轮 D6 的高职单招、高职综评、春季高考本科/专科路径初筛、材料缺口和人工复核说明。
-25. [`round3-special-early-art-sports-pathways.md`](./round3-special-early-art-sports-pathways.md)
+28. [`round3-special-early-art-sports-pathways.md`](./round3-special-early-art-sports-pathways.md)
    第三轮 D7 的艺体、体育、提前批、特殊类型、体育单招和高水平运动队路径初筛、材料缺口和人工复核说明。
-26. [`round3-shandong-pathway-final-report.md`](./round3-shandong-pathway-final-report.md)
+29. [`round3-shandong-pathway-final-report.md`](./round3-shandong-pathway-final-report.md)
    第三轮 D8 的最终集成、验收、报告输出和交接说明。
-27. [`round3-shandong-pathway-user-guide.md`](./round3-shandong-pathway-user-guide.md)
+30. [`round3-shandong-pathway-user-guide.md`](./round3-shandong-pathway-user-guide.md)
    面向老师使用山东升学方案中心、路径卡片、材料缺口、打印和 Excel 报告的说明。
-28. [`report-export-print-audit-2026-04-24.md`](./report-export-print-audit-2026-04-24.md)
+31. [`report-export-print-audit-2026-04-24.md`](./report-export-print-audit-2026-04-24.md)
    窗口 6 的报表、打印、Excel 导出一致性审计与修复记录。
-29. [`frontend-navigation-audit-2026-04-24.md`](./frontend-navigation-audit-2026-04-24.md)
+32. [`frontend-navigation-audit-2026-04-24.md`](./frontend-navigation-audit-2026-04-24.md)
    窗口 7 的前端导航、空态、错误提示和非程序员可读性审计记录。
-30. [`dev/README.md`](./dev/README.md)
+33. [`dev/README.md`](./dev/README.md)
    当前开发主线、分工文档和 prompt 的索引。
 
 ## 当前仍在用的文档
@@ -103,6 +109,12 @@
   第四轮 E5 对数据库补齐缺口、可补项、不可补边界和 E6 导入顺序的审计计划。
 - [`round4-official-source-checklist.md`](./round4-official-source-checklist.md)
   第四轮 E5 对 2020-2026 山东高考官方来源、招生计划补充信息、政策参考和章程复核的检查清单。
+- [`round4-data-completion-result.md`](./round4-data-completion-result.md)
+  第四轮 E6 对 2020-2022 一分一段和省控线的实际导入结果、来源追溯、SHA256 和剩余缺口记录。
+- [`round4-user-guide-student-bulk-actions.md`](./round4-user-guide-student-bulk-actions.md)
+  第四轮学生批量删除、批量调班、调班历史和成长档案系统事件的老师使用说明。
+- [`round4-user-guide-data-completion.md`](./round4-user-guide-data-completion.md)
+  第四轮高考数据库补齐结果、年份覆盖矩阵、剩余缺口和打印覆盖报告的老师使用说明。
 - [`gaokao-source-import-framework-2026-04-25.md`](./gaokao-source-import-framework-2026-04-25.md)
   窗口 A1 对山东高考官方来源文档、导入运行批次和本地文件目录的框架说明。
 - [`round3-shandong-pathway-rules.md`](./round3-shandong-pathway-rules.md)
