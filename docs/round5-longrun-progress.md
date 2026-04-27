@@ -107,3 +107,28 @@
   - 本阶段没有把任何 `review_status` 改为 `confirmed_*`，因此 `backend:data-health` 中章程待人工复核数量仍保持 1748 条。
 - 下一步：对 2 条可访问记录人工打开并确认是否为招生官网 / 章程栏目；或在网络更稳定时扩大机器预审批量。仍不得批量标记为人工确认。
 - 当前 commit：待阶段 6 本地提交。
+
+## 2026-04-27 09:15
+
+- 当前阶段：阶段 6 扩大预审 + 阶段 7 验收收口。
+- 已完成：
+  - 继续运行 `scripts/round5_chapter_machine_preaudit.py --limit 450 --timeout 3 --workers 24 --json`，累计机器预审章程候选链接 500 条。
+  - 新增 `docs/round5-chapter-review-report.md`，汇总 500 条机器预审结果和可人工优先核对记录。
+  - 新增 `docs/round5-chapter-review-errors.md`，记录访问异常、404、444、502 和超时处理原则。
+  - 新增 `docs/round5-shandong-admission-data-final-report.md`，按开发文档阶段 7 汇总本轮数据变化、剩余缺口和验收结果。
+  - 更新 `docs/round5-data-coverage-matrix.md`、`docs/round5-manual-download-and-review-list.md`、`docs/README.md`。
+- 新增来源：0 个 `gaokao_source_document`；本阶段只写章程机器预审状态。
+- 成功导入：0 条业务数据；累计机器预审 500 条章程候选链接。
+- 机器预审累计结果：
+  - 可访问：18 条。
+  - 超时：463 条。
+  - 访问异常：13 条。
+  - HTTP 404：4 条。
+  - HTTP 444：1 条。
+  - HTTP 502：1 条。
+- 失败原因：
+  - 大量高校官网在当前网络下超时或 SSL 握手超时，不能视为官网不存在。
+  - 2023 / 2024 艺术、体育、春考“录取情况表”和单招 / 综评专门录取结果未在官网检索中明确命中，继续列入人工复核。
+  - 招生计划完整指南或官方系统导出未取得，补充信息不能替代完整计划。
+- 下一步：人工下载计划补充附件并复跑计划登记脚本；人工核对 18 条可访问章程链接；如继续自动化，可分批预审剩余 949 条候选链接。
+- 当前 commit：待阶段 7 本地提交。

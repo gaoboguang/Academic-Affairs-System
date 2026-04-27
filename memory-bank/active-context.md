@@ -2,15 +2,17 @@
 
 ## 当前状态
 
-- 2026-04-27 已进入第五轮长线数据专项，当前分支 `codex/r5-longrun-shandong-admission-data-completion`：
+- 2026-04-27 已完成第五轮长线数据专项阶段性收口，当前分支 `codex/r5-longrun-shandong-admission-data-completion`：
   - 已读 `/Users/gao/Downloads/Codex-App-第五轮长线数据专项开发文档-v7.md` 并接续另一个窗口成果，不推翻已有提交
   - 另一个窗口已完成第五轮阶段 0-3：基线审计、普通类 2023-2025 来源追溯、政策参考导入、2025 艺术 / 体育 / 春考专门录取结果导入；提交链为 `a635f92`、`8f898ea`、`512dcd1`
   - 本轮已补阶段 4 招生计划补充信息附件审计并提交 `fa5577c data: audit round 5 plan supplement sources`；官方附件直链已登记到 `docs/round5-plan-supplement-audit.md`，但本机网络下载山东省教育招生考试院 docx 多次 SSL / 超时失败，未把补充信息写成完整招生计划
-  - 本轮已完成阶段 6 第一批章程限制链机器预审：新增 `scripts/round5_chapter_machine_preaudit.py` 与 `docs/round5-chapter-machine-preaudit.md`，对 50 条候选链接写入机器连通性状态；结果为 2 条可访问、47 条超时、1 条异常
+  - 本轮已完成阶段 6 章程限制链机器预审：新增 `scripts/round5_chapter_machine_preaudit.py` 与 `docs/round5-chapter-machine-preaudit.md`，累计对 500 条候选链接写入机器连通性状态；结果为 18 条可访问、463 条超时、13 条访问异常、4 条 404、1 条 444、1 条 502
+  - 本轮已补齐阶段 7 交付文档：`docs/round5-chapter-review-report.md`、`docs/round5-chapter-review-errors.md`、`docs/round5-shandong-admission-data-final-report.md`
   - 章程机器预审只更新 `chapter_fallback_verification_status` 和备注，不修改 `review_status`，因此 `gaokao_college_chapter_rule` 待人工复核缺口仍为 1748 条
   - 当前 `backend:data-health -- --json` 仍为 `warning`，P0 缺口 3 条：单招 / 综评缺专门录取结果、2024 招生计划完整性不足、章程限制链待人工复核
-  - 最新关键备份：计划补充审计前 `data/backups/app_before_round5_plan_supplement_register_20260427_084559.db`；章程机器预审前 `data/backups/app_before_round5_chapter_machine_preaudit_20260427_085200.db`
-  - 下一步优先：人工下载 2023-2025 招生计划补充附件后复跑计划补充登记脚本；人工打开 2 条可访问章程候选链接确认是否为招生官网 / 章程栏目；继续寻找单招 / 综评专门录取结果来源
+  - 最新关键备份：计划补充审计前 `data/backups/app_before_round5_plan_supplement_register_20260427_084559.db`；章程机器预审前 `data/backups/app_before_round5_chapter_machine_preaudit_20260427_090600.db`；P0 验收包 `data/backups/p0_delivery_backup_20260427_090758.zip`
+  - 验证已通过：`backend:migrate`、`backend:data-health -- --json`、`backend:p0-check -- --json`、后端全量 `101 passed`、`npm run check`、`git diff --check`
+  - 下一步优先：人工下载 2023-2025 招生计划补充附件后复跑计划补充登记脚本；人工打开 18 条可访问章程候选链接确认是否为招生官网 / 章程栏目；继续寻找单招 / 综评专门录取结果来源
 
 - 2026-04-26 已按第四轮 v6 开发文档完成窗口 E8：最终集成、测试和交接：
   - 当前分支 `codex/r4-e8-final-integration`，从 E7 成果切出；本轮不执行 `git push`

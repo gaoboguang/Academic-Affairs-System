@@ -17,6 +17,13 @@
   - 本轮没有修改 Alembic 迁移、业务推荐逻辑或前端页面；`data/app.db` 只新增机器预审状态 / 备注，不关闭章程人工复核缺口
   - 验证：脚本 `py_compile` 通过；`git diff --check` 通过；SQLite `integrity_check` 为 `ok`；`backend:data-health -- --json` 通过但状态仍为 `warning`、P0 缺口仍为 3 条
 
+- 已完成第五轮阶段 6 扩大预审与阶段 7 收口：
+  - 章程候选链接累计机器预审从 50 条扩到 500 条；结果为可访问 18 条、超时 463 条、访问异常 13 条、404 4 条、444 1 条、502 1 条
+  - 新增 `docs/round5-chapter-review-report.md`、`docs/round5-chapter-review-errors.md`、`docs/round5-shandong-admission-data-final-report.md`
+  - 更新 `docs/round5-data-coverage-matrix.md`、`docs/round5-manual-download-and-review-list.md`、`docs/round5-longrun-progress.md`、`docs/README.md`
+  - `review_status` 未自动确认，章程待人工复核仍为 1748 条；另有 949 条带候选链接记录可后续继续机器预审
+  - 阶段 7 验证：`backend:migrate` 通过；`backend:data-health -- --json` 通过但状态 `warning`；`backend:p0-check -- --json` 为 `ok: true`，备份包 `data/backups/p0_delivery_backup_20260427_090758.zip`；后端全量 `101 passed`；`npm run check` 通过；`git diff --check` 通过
+
 ## 2026-04-26 新增
 
 - 已完成 v6 第四轮窗口 E8：最终集成、测试和交接：

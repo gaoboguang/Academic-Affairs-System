@@ -5,13 +5,15 @@
 - 已接续 `/Users/gao/Downloads/Codex-App-第五轮长线数据专项开发文档-v7.md`，当前分支 `codex/r5-longrun-shandong-admission-data-completion`；本轮不执行 `git push`。
 - 另一个窗口已完成并提交第五轮阶段 0-3：`a635f92 docs: add round 5 baseline report`、`8f898ea data: register round 5 shandong sources`、`512dcd1 data: import round 5 special admission results`。当前不要回滚这些提交。
 - 阶段 4 已提交 `fa5577c data: audit round 5 plan supplement sources`：新增 `scripts/round5_register_plan_supplement_documents.py` 与 `docs/round5-plan-supplement-audit.md`，登记 2023-2025 山东官方招生计划补充附件直链。由于本机访问山东省教育招生考试院 docx 附件持续 SSL / 超时失败，本阶段未写入招生计划业务数据，也未把补充信息当作完整计划。
-- 阶段 6 第一批章程限制链机器预审已完成：新增 `scripts/round5_chapter_machine_preaudit.py` 与 `docs/round5-chapter-machine-preaudit.md`，写库前备份 `data/backups/app_before_round5_chapter_machine_preaudit_20260427_085200.db`，处理 50 条候选链接。
-- 阶段 6 结果：`round5_machine_reachable=2`、`round5_machine_timeout=47`、`round5_machine_error=1`。脚本只更新 `chapter_fallback_verification_status` 和 `chapter_fallback_note`，不修改 `review_status`，所以章程待人工复核缺口仍保持 1748 条。
+- 阶段 6 章程限制链机器预审已扩大并收口：新增 `scripts/round5_chapter_machine_preaudit.py` 与 `docs/round5-chapter-machine-preaudit.md`，最新写库前备份 `data/backups/app_before_round5_chapter_machine_preaudit_20260427_090600.db`，累计处理 500 条候选链接。
+- 阶段 6 结果：`round5_machine_reachable=18`、`round5_machine_timeout=463`、`round5_machine_error=13`、`round5_machine_not_found=4`、`round5_machine_http_444=1`、`round5_machine_http_502=1`。脚本只更新 `chapter_fallback_verification_status` 和 `chapter_fallback_note`，不修改 `review_status`，所以章程待人工复核缺口仍保持 1748 条。
+- 阶段 7 最终报告已补齐：`docs/round5-chapter-review-report.md`、`docs/round5-chapter-review-errors.md`、`docs/round5-shandong-admission-data-final-report.md`，并更新 `docs/README.md`、`docs/round5-data-coverage-matrix.md`、`docs/round5-manual-download-and-review-list.md`、`docs/round5-longrun-progress.md`。
 - 当前数据健康：`npm run backend:data-health -- --json` 可运行但状态仍为 `warning`，P0 缺口 3 条：单招 / 综评缺专门录取结果、2024 招生计划数量偏少、章程限制链待人工复核。
-- 已执行验证：`./.venv/bin/python -m py_compile scripts/round5_chapter_machine_preaudit.py scripts/round5_register_plan_supplement_documents.py scripts/round5_register_shandong_admission_round_sources.py` 通过；`git diff --check` 通过；SQLite `integrity_check` 为 `ok`；`backend:data-health -- --json` 通过。
+- 已执行验证：`backend:migrate` 通过；`backend:data-health -- --json` 通过；`backend:p0-check -- --json` 为 `ok: true`，备份包 `data/backups/p0_delivery_backup_20260427_090758.zip`；`backend:test -- apps/backend/tests -q` 为 101 passed；`npm run check` 通过；`git diff --check` 通过。
 - 下一步建议：
   - 人工下载 `docs/round5-plan-supplement-audit.md` 里的山东官方 docx 附件，放入 `data/imports/gaokao/official/{year}/` 后复跑 `./.venv/bin/python scripts/round5_register_plan_supplement_documents.py --no-download --json`。
-  - 人工打开章程机器预审中 2 条 `round5_machine_reachable` 记录，确认是否为招生官网 / 章程栏目；未人工确认前不要改 `review_status`。
+  - 人工打开章程机器预审中 18 条 `round5_machine_reachable` 记录，确认是否为招生官网 / 章程栏目；未人工确认前不要改 `review_status`。
+  - 如继续自动化，可分批预审剩余 949 条仍有候选链接的待复核记录；超时、404、444、502 都不得自动确认。
   - 继续寻找单招 / 综评专门录取结果来源；找不到时继续保持“方向性初筛”边界，不要包装成录取把握。
 
 ## 当前主线状态（2026-04-26）
