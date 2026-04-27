@@ -6,6 +6,17 @@
 - 后端与前端基础功能已覆盖多个业务域，README 中已记录到 M0-M6 的实现范围。
 - 后端测试与前端构建在此前环境中已验证通过。
 
+## 2026-04-27 新增
+
+- 已接续第五轮长线数据专项，当前分支 `codex/r5-longrun-shandong-admission-data-completion`：
+  - 已确认另一个窗口已完成并提交第五轮阶段 0-3：基线报告、普通类 2023-2025 来源追溯与政策参考、2025 艺术 / 体育 / 春考专门录取结果导入
+  - 已提交 `fa5577c data: audit round 5 plan supplement sources`，新增招生计划补充附件审计脚本和报告；官方 docx 附件直链已登记，但本机下载失败，未写入招生计划业务数据
+  - 新增 `scripts/round5_chapter_machine_preaudit.py`，对章程候选链接做保守机器连通性预审；写库前备份 `data/backups/app_before_round5_chapter_machine_preaudit_20260427_085200.db`
+  - 新增 `docs/round5-chapter-machine-preaudit.md`，记录第一批 50 条候选链接检查结果：`round5_machine_reachable=2`、`round5_machine_timeout=47`、`round5_machine_error=1`
+  - 更新 `docs/round5-data-coverage-matrix.md`、`docs/round5-manual-download-and-review-list.md`、`docs/round5-longrun-progress.md`、`docs/README.md`，说明章程机器预审不能替代人工确认
+  - 本轮没有修改 Alembic 迁移、业务推荐逻辑或前端页面；`data/app.db` 只新增机器预审状态 / 备注，不关闭章程人工复核缺口
+  - 验证：脚本 `py_compile` 通过；`git diff --check` 通过；SQLite `integrity_check` 为 `ok`；`backend:data-health -- --json` 通过但状态仍为 `warning`、P0 缺口仍为 3 条
+
 ## 2026-04-26 新增
 
 - 已完成 v6 第四轮窗口 E8：最终集成、测试和交接：

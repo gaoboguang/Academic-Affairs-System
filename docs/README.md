@@ -54,29 +54,31 @@
    第五轮 2025 艺术、体育、春考专门录取情况导入结果，记录附件、行数、应用侧匹配和剩余缺口。
 25. [`round5-plan-supplement-audit.md`](./round5-plan-supplement-audit.md)
    第五轮招生计划补充信息附件审计，记录官方 docx 附件直链、本机下载失败原因和人工下载后复跑入口。
-26. [`gaokao-source-import-framework-2026-04-25.md`](./gaokao-source-import-framework-2026-04-25.md)
+26. [`round5-chapter-machine-preaudit.md`](./round5-chapter-machine-preaudit.md)
+   第五轮章程限制链机器预审报告，记录第一批候选链接连通性和不能自动改为人工确认的边界。
+27. [`gaokao-source-import-framework-2026-04-25.md`](./gaokao-source-import-framework-2026-04-25.md)
    窗口 A1 的山东高考官方来源登记、导入批次和本地文件入场框架。
-27. [`round3-shandong-pathway-rules.md`](./round3-shandong-pathway-rules.md)
+28. [`round3-shandong-pathway-rules.md`](./round3-shandong-pathway-rules.md)
    第三轮 D2 的山东升学路径规则字典、官方来源追溯和后续窗口注意事项。
-28. [`round3-student-pathway-profile.md`](./round3-student-pathway-profile.md)
+29. [`round3-student-pathway-profile.md`](./round3-student-pathway-profile.md)
    第三轮 D3 的学生升学画像、材料缺口和路径评估可读化说明。
-29. [`round3-gaokao-pathway-center.md`](./round3-gaokao-pathway-center.md)
+30. [`round3-gaokao-pathway-center.md`](./round3-gaokao-pathway-center.md)
    第三轮 D4 的山东升学方案中心页面、路径卡片和数据风险入口说明。
-30. [`round3-shandong-general-recommendation-hardening.md`](./round3-shandong-general-recommendation-hardening.md)
+31. [`round3-shandong-general-recommendation-hardening.md`](./round3-shandong-general-recommendation-hardening.md)
    第三轮 D5 的山东普通类推荐算法加固、共享分数换位次和 2026 数据提示说明。
-31. [`round3-vocational-spring-pathway-screening.md`](./round3-vocational-spring-pathway-screening.md)
+32. [`round3-vocational-spring-pathway-screening.md`](./round3-vocational-spring-pathway-screening.md)
    第三轮 D6 的高职单招、高职综评、春季高考本科/专科路径初筛、材料缺口和人工复核说明。
-32. [`round3-special-early-art-sports-pathways.md`](./round3-special-early-art-sports-pathways.md)
+33. [`round3-special-early-art-sports-pathways.md`](./round3-special-early-art-sports-pathways.md)
    第三轮 D7 的艺体、体育、提前批、特殊类型、体育单招和高水平运动队路径初筛、材料缺口和人工复核说明。
-33. [`round3-shandong-pathway-final-report.md`](./round3-shandong-pathway-final-report.md)
+34. [`round3-shandong-pathway-final-report.md`](./round3-shandong-pathway-final-report.md)
    第三轮 D8 的最终集成、验收、报告输出和交接说明。
-34. [`round3-shandong-pathway-user-guide.md`](./round3-shandong-pathway-user-guide.md)
+35. [`round3-shandong-pathway-user-guide.md`](./round3-shandong-pathway-user-guide.md)
    面向老师使用山东升学方案中心、路径卡片、材料缺口、打印和 Excel 报告的说明。
-35. [`report-export-print-audit-2026-04-24.md`](./report-export-print-audit-2026-04-24.md)
+36. [`report-export-print-audit-2026-04-24.md`](./report-export-print-audit-2026-04-24.md)
    窗口 6 的报表、打印、Excel 导出一致性审计与修复记录。
-36. [`frontend-navigation-audit-2026-04-24.md`](./frontend-navigation-audit-2026-04-24.md)
+37. [`frontend-navigation-audit-2026-04-24.md`](./frontend-navigation-audit-2026-04-24.md)
    窗口 7 的前端导航、空态、错误提示和非程序员可读性审计记录。
-37. [`dev/README.md`](./dev/README.md)
+38. [`dev/README.md`](./dev/README.md)
    当前开发主线、分工文档和 prompt 的索引。
 
 ## 当前仍在用的文档
@@ -131,6 +133,8 @@
   第五轮 2025 艺术、体育、春考专门录取情况导入结果和剩余缺口。
 - [`round5-plan-supplement-audit.md`](./round5-plan-supplement-audit.md)
   第五轮招生计划补充信息附件审计，记录官方 docx 附件直链、本机下载失败原因和人工下载后复跑入口。
+- [`round5-chapter-machine-preaudit.md`](./round5-chapter-machine-preaudit.md)
+  第五轮章程限制链机器预审报告，记录第一批候选链接连通性和不能自动改为人工确认的边界。
 - [`gaokao-source-import-framework-2026-04-25.md`](./gaokao-source-import-framework-2026-04-25.md)
   窗口 A1 对山东高考官方来源文档、导入运行批次和本地文件目录的框架说明。
 - [`round3-shandong-pathway-rules.md`](./round3-shandong-pathway-rules.md)

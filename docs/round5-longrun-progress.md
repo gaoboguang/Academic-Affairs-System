@@ -86,3 +86,24 @@
   - 已把 5 个附件直链写入人工下载清单；人工放入 `data/imports/gaokao/official/{year}/` 后可复跑 `./.venv/bin/python scripts/round5_register_plan_supplement_documents.py --no-download --json`。
 - 下一步：优先进入阶段 6 章程限制链机器预审，或继续寻找单招 / 综评专门录取结果来源；2024 招生计划缺口仍需完整指南或官方系统导出，不能用补充信息替代。
 - 当前 commit：待阶段 4 本地提交。
+
+## 2026-04-27 08:52
+
+- 当前阶段：阶段 6，章程限制链机器预审第一批。
+- 已完成：
+  - 新增 `scripts/round5_chapter_machine_preaudit.py`，对 `gaokao_college_chapter_rule` 中已有高校官网候选链接的待复核记录做机器连通性检查。
+  - 写库前备份主库：`data/backups/app_before_round5_chapter_machine_preaudit_20260427_085200.db`。
+  - 第一批处理 50 条 `pending_manual_review_with_official_candidate`，写入 `chapter_fallback_verification_status`，并把机器检查摘要追加到 `chapter_fallback_note`。
+  - 新增 `docs/round5-chapter-machine-preaudit.md`，记录每条候选链接、HTTP 状态、机器状态和后续人工处理边界。
+  - 更新 `docs/round5-data-coverage-matrix.md`、`docs/round5-manual-download-and-review-list.md`、`docs/README.md`。
+- 新增来源：0。
+- 成功导入：0 条业务数据；机器预审 50 条章程候选链接。
+- 机器预审结果：
+  - 可访问：2 条。
+  - 超时：47 条。
+  - 访问异常：1 条。
+- 失败原因：
+  - 大多数高校官网候选链接在当前网络下超时或 SSL 握手超时；这些结果只说明“本机机器检查未成功”，不能等同于官网不存在。
+  - 本阶段没有把任何 `review_status` 改为 `confirmed_*`，因此 `backend:data-health` 中章程待人工复核数量仍保持 1748 条。
+- 下一步：对 2 条可访问记录人工打开并确认是否为招生官网 / 章程栏目；或在网络更稳定时扩大机器预审批量。仍不得批量标记为人工确认。
+- 当前 commit：待阶段 6 本地提交。
