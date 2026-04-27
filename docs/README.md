@@ -62,29 +62,37 @@
    第五轮章程限制链机器预审错误清单，记录异常、HTTP 错误和超时处理原则。
 29. [`round5-shandong-admission-data-final-report.md`](./round5-shandong-admission-data-final-report.md)
    第五轮山东招生录取数据专项最终报告，记录本轮数据变化、剩余缺口、验收结果和合并建议。
-30. [`gaokao-source-import-framework-2026-04-25.md`](./gaokao-source-import-framework-2026-04-25.md)
+30. [`round6-shandong-db-completion-final-report.md`](./round6-shandong-db-completion-final-report.md)
+   第六轮山东招生数据库补齐阶段报告，记录新增自动化脚本、当前网络阻断、试运行结果和后续补齐入口。
+31. [`round6-data-coverage-matrix.md`](./round6-data-coverage-matrix.md)
+   第六轮山东招生数据库覆盖矩阵，记录当前 raw / 应用侧覆盖、投档脚本能力和剩余缺口。
+32. [`round6-special-filing-import-result.md`](./round6-special-filing-import-result.md)
+   第六轮特殊类型投档表处理报告，记录 15 个已登记投档来源的本地附件状态和复跑入口。
+33. [`round6-chapter-review-sample.md`](./round6-chapter-review-sample.md)
+   第六轮章程限制链辅助预审样本，列出可优先人工核对的机器可访问链接。
+34. [`gaokao-source-import-framework-2026-04-25.md`](./gaokao-source-import-framework-2026-04-25.md)
    窗口 A1 的山东高考官方来源登记、导入批次和本地文件入场框架。
-31. [`round3-shandong-pathway-rules.md`](./round3-shandong-pathway-rules.md)
+35. [`round3-shandong-pathway-rules.md`](./round3-shandong-pathway-rules.md)
    第三轮 D2 的山东升学路径规则字典、官方来源追溯和后续窗口注意事项。
-32. [`round3-student-pathway-profile.md`](./round3-student-pathway-profile.md)
+36. [`round3-student-pathway-profile.md`](./round3-student-pathway-profile.md)
    第三轮 D3 的学生升学画像、材料缺口和路径评估可读化说明。
-33. [`round3-gaokao-pathway-center.md`](./round3-gaokao-pathway-center.md)
+37. [`round3-gaokao-pathway-center.md`](./round3-gaokao-pathway-center.md)
    第三轮 D4 的山东升学方案中心页面、路径卡片和数据风险入口说明。
-34. [`round3-shandong-general-recommendation-hardening.md`](./round3-shandong-general-recommendation-hardening.md)
+38. [`round3-shandong-general-recommendation-hardening.md`](./round3-shandong-general-recommendation-hardening.md)
    第三轮 D5 的山东普通类推荐算法加固、共享分数换位次和 2026 数据提示说明。
-35. [`round3-vocational-spring-pathway-screening.md`](./round3-vocational-spring-pathway-screening.md)
+39. [`round3-vocational-spring-pathway-screening.md`](./round3-vocational-spring-pathway-screening.md)
    第三轮 D6 的高职单招、高职综评、春季高考本科/专科路径初筛、材料缺口和人工复核说明。
-36. [`round3-special-early-art-sports-pathways.md`](./round3-special-early-art-sports-pathways.md)
+40. [`round3-special-early-art-sports-pathways.md`](./round3-special-early-art-sports-pathways.md)
    第三轮 D7 的艺体、体育、提前批、特殊类型、体育单招和高水平运动队路径初筛、材料缺口和人工复核说明。
-37. [`round3-shandong-pathway-final-report.md`](./round3-shandong-pathway-final-report.md)
+41. [`round3-shandong-pathway-final-report.md`](./round3-shandong-pathway-final-report.md)
    第三轮 D8 的最终集成、验收、报告输出和交接说明。
-38. [`round3-shandong-pathway-user-guide.md`](./round3-shandong-pathway-user-guide.md)
+42. [`round3-shandong-pathway-user-guide.md`](./round3-shandong-pathway-user-guide.md)
    面向老师使用山东升学方案中心、路径卡片、材料缺口、打印和 Excel 报告的说明。
-39. [`report-export-print-audit-2026-04-24.md`](./report-export-print-audit-2026-04-24.md)
+43. [`report-export-print-audit-2026-04-24.md`](./report-export-print-audit-2026-04-24.md)
    窗口 6 的报表、打印、Excel 导出一致性审计与修复记录。
-40. [`frontend-navigation-audit-2026-04-24.md`](./frontend-navigation-audit-2026-04-24.md)
+44. [`frontend-navigation-audit-2026-04-24.md`](./frontend-navigation-audit-2026-04-24.md)
    窗口 7 的前端导航、空态、错误提示和非程序员可读性审计记录。
-41. [`dev/README.md`](./dev/README.md)
+45. [`dev/README.md`](./dev/README.md)
    当前开发主线、分工文档和 prompt 的索引。
 
 ## 当前仍在用的文档
@@ -147,6 +155,14 @@
   第五轮章程限制链机器预审错误清单，记录异常、HTTP 错误和超时处理原则。
 - [`round5-shandong-admission-data-final-report.md`](./round5-shandong-admission-data-final-report.md)
   第五轮山东招生录取数据专项最终报告，记录本轮数据变化、剩余缺口、验收结果和合并建议。
+- [`round6-shandong-db-completion-final-report.md`](./round6-shandong-db-completion-final-report.md)
+  第六轮山东招生数据库补齐阶段报告，记录新增自动化脚本、当前网络阻断、试运行结果和后续补齐入口。
+- [`round6-data-coverage-matrix.md`](./round6-data-coverage-matrix.md)
+  第六轮山东招生数据库覆盖矩阵，记录当前 raw / 应用侧覆盖、投档脚本能力和剩余缺口。
+- [`round6-special-filing-import-result.md`](./round6-special-filing-import-result.md)
+  第六轮特殊类型投档表处理报告，记录 15 个已登记投档来源的本地附件状态和复跑入口。
+- [`round6-chapter-review-sample.md`](./round6-chapter-review-sample.md)
+  第六轮章程限制链辅助预审样本，列出可优先人工核对的机器可访问链接。
 - [`gaokao-source-import-framework-2026-04-25.md`](./gaokao-source-import-framework-2026-04-25.md)
   窗口 A1 对山东高考官方来源文档、导入运行批次和本地文件目录的框架说明。
 - [`round3-shandong-pathway-rules.md`](./round3-shandong-pathway-rules.md)

@@ -2,6 +2,26 @@
 
 ## 当前主线状态（2026-04-27）
 
+- 已按第六轮数据库补齐任务文档切出 `codex/r6-local-shandong-db-completion`；本轮未执行 `git push`。
+- 第六轮当前新增：
+  - `scripts/round6_import_special_filing_results.py`
+  - `data/seed/round6_gaokao_source_documents.json`
+  - `docs/round6-special-filing-import-result.md`
+  - `docs/round6-data-coverage-matrix.md`
+  - `docs/round6-chapter-review-sample.md`
+  - `docs/round6-shandong-db-completion-final-report.md`
+  - `docs/README.md` 已加入第六轮文档入口
+- 第六轮脚本能力：读取已登记 15 个 2023-2025 艺术 / 体育 / 春季高考投档来源页面，自动抓取官方 xls/xlsx 附件，下载到 `data/imports/gaokao/official/{year}/`，解析专业类别、专业、院校、投档计划数、最低综合分或最低位次，只写 `gaokao_admission_result` raw 表和导入审计。
+- 关键边界：投档情况表只作为 raw 投档事实，不写 `admission_record`；只有官方“录取情况表 / 录取最低分”才可进入应用侧录取结果。
+- 本机当前访问 `sdzk.cn` / `sdzk.cn/Floadup` 仍超时；已执行 `./.venv/bin/python scripts/round6_import_special_filing_results.py --no-download --no-backup --json`，本地没有 15 个投档附件，因此未写入新 raw 行、未改主库。
+- 当前数据健康仍为 `warning`，P0 缺口 3 条不变：单招 / 综评缺专门录取结果、2024 招生计划数量偏少、章程限制链 1748 条待人工复核。
+- 第六轮已验证：脚本 `py_compile` 通过；round6 脚本 `--no-download --no-backup --json` 通过并生成报告；`data/seed/round6_gaokao_source_documents.json` JSON 校验通过；`npm run backend:data-health -- --json` 通过但 warning；`git diff --check` 通过。
+- 下一步优先：
+  - 网络恢复后运行 `./.venv/bin/python scripts/round6_import_special_filing_results.py --json`。
+  - 若网络仍失败，人工下载官方投档附件到 `data/imports/gaokao/official/{year}/`，再运行 `./.venv/bin/python scripts/round6_import_special_filing_results.py --no-download --json`。
+  - 继续寻找 2023/2024 艺术、体育、春考官方录取情况表；未确认前不得写入应用侧录取结果。
+  - 继续寻找完整《山东省普通高校招生填报志愿指南》或官方系统导出；补充信息不能关闭招生计划完整性缺口。
+
 - 已接续 `/Users/gao/Downloads/Codex-App-第五轮长线数据专项开发文档-v7.md`，当前分支 `codex/r5-longrun-shandong-admission-data-completion`；本轮不执行 `git push`。
 - 另一个窗口已完成并提交第五轮阶段 0-3：`a635f92 docs: add round 5 baseline report`、`8f898ea data: register round 5 shandong sources`、`512dcd1 data: import round 5 special admission results`。当前不要回滚这些提交。
 - 阶段 4 已提交 `fa5577c data: audit round 5 plan supplement sources`：新增 `scripts/round5_register_plan_supplement_documents.py` 与 `docs/round5-plan-supplement-audit.md`，登记 2023-2025 山东官方招生计划补充附件直链。由于本机访问山东省教育招生考试院 docx 附件持续 SSL / 超时失败，本阶段未写入招生计划业务数据，也未把补充信息当作完整计划。

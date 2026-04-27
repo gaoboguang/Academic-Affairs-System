@@ -2,6 +2,16 @@
 
 ## 当前状态
 
+- 2026-04-27 已按第六轮数据库补齐任务文档启动 `codex/r6-local-shandong-db-completion`：
+  - 已新增 `scripts/round6_import_special_filing_results.py`，用于读取 `gaokao_source_document` 中 2023-2025 艺术 / 体育 / 春季高考投档来源页面，抓取 xls/xlsx 附件，解析投档计划数、最低综合分或最低位次，并只写入 `gaokao_admission_result` raw 表和 `gaokao_import_run`
+  - 已新增 `data/seed/round6_gaokao_source_documents.json`，固化 15 个已登记官方投档来源页面，供后续复跑和交接使用
+  - 已生成 `docs/round6-special-filing-import-result.md`、`docs/round6-data-coverage-matrix.md`、`docs/round6-chapter-review-sample.md`、`docs/round6-shandong-db-completion-final-report.md`，并更新 `docs/README.md`
+  - 关键边界：投档情况表不是最终录取情况表，本轮脚本不写 `admission_record`，避免把投档最低分 / 综合分包装成最终录取把握
+  - 本机直连 `sdzk.cn` / `sdzk.cn/Floadup` 仍超时；已用 `--no-download --no-backup` 试运行脚本，当前本地没有 15 个投档来源附件，因此本轮未写入新 raw 行、未改主库数据
+  - 当前 `backend:data-health -- --json` 仍为 `warning`，P0 缺口仍为 3 条：单招 / 综评缺专门录取结果、2024 招生计划数量偏少、章程限制链 1748 条待人工复核
+  - 验证已通过：脚本 `py_compile`、round6 脚本 `--no-download --no-backup --json` 试运行、`data/seed/round6_gaokao_source_documents.json` JSON 校验、`backend:data-health -- --json`、`git diff --check`
+  - 下一步优先：网络恢复后运行 `./.venv/bin/python scripts/round6_import_special_filing_results.py --json`；若仍无法联网，则把官方投档附件放入 `data/imports/gaokao/official/{year}/` 后运行 `--no-download --json`
+
 - 2026-04-27 已完成第五轮长线数据专项阶段性收口，当前分支 `codex/r5-longrun-shandong-admission-data-completion`：
   - 已读 `/Users/gao/Downloads/Codex-App-第五轮长线数据专项开发文档-v7.md` 并接续另一个窗口成果，不推翻已有提交
   - 另一个窗口已完成第五轮阶段 0-3：基线审计、普通类 2023-2025 来源追溯、政策参考导入、2025 艺术 / 体育 / 春考专门录取结果导入；提交链为 `a635f92`、`8f898ea`、`512dcd1`

@@ -1,5 +1,11 @@
 # 决策日志
 
+## 2026-04-27：第六轮特殊类型投档表只进入 raw，不写应用侧录取结果
+
+- 决定：`scripts/round6_import_special_filing_results.py` 解析 2023-2025 艺术、体育、春季高考投档情况表时，只写入 `gaokao_admission_result` raw 表和 `gaokao_import_run`，不写 `admission_record`。
+- 原因：投档情况表反映投档计划数、最低综合分或最低位次，不等同于最终录取情况。应用侧 `admission_record` 是推荐主链路的录取结果参考，如果把投档表直接写入，会把“投档最低分”误包装成“录取把握”。
+- 约束：后续只有官方“录取情况表 / 录取最低分”且字段口径明确时，才可写入 `admission_record`；单招、综评缺专门录取结果时仍只能初筛，不得借投档表或计划表关闭录取结果缺口。
+
 ## 2026-04-26：批量调班单独建批次和明细，成长档案后续聚合系统事件
 
 - 决定：第四轮 E3 新增 `student_class_transfer_batch` 与 `student_class_transfer_item`，用于记录批量调班批次、逐学生结果、来源班级、目标班级、生效日期、原因、备注、操作人和前后快照；同时继续写 `StudentClassHistory` 作为学生详情学籍历史底座。

@@ -8,6 +8,16 @@
 
 ## 2026-04-27 新增
 
+- 已启动第六轮山东招生数据库补齐任务：
+  - 从第五轮长线分支切出 `codex/r6-local-shandong-db-completion`
+  - 新增 `scripts/round6_import_special_filing_results.py`，支持 2023-2025 艺术 / 体育 / 春季高考投档来源的附件抓取、解析和 raw 表导入
+  - 新增 `data/seed/round6_gaokao_source_documents.json`，固化 15 个已登记官方投档来源页面
+  - 新增 `docs/round6-special-filing-import-result.md`、`docs/round6-data-coverage-matrix.md`、`docs/round6-chapter-review-sample.md`、`docs/round6-shandong-db-completion-final-report.md`
+  - 更新 `docs/README.md`，加入第六轮文档入口
+  - 本轮明确“投档情况表只进 raw，不写 `admission_record`”的边界，避免把投档最低分当最终录取把握
+  - 本机访问 `sdzk.cn` / `sdzk.cn/Floadup` 仍超时；已用 `--no-download --no-backup` 试运行，因本地缺少 15 个投档附件，未写入新 raw 行、未改主库
+  - 验证：脚本 `py_compile` 通过；第六轮脚本试运行通过；seed JSON 校验通过；`backend:data-health -- --json` 通过但仍为 `warning`、P0 缺口仍为 3 条；`git diff --check` 通过
+
 - 已接续第五轮长线数据专项，当前分支 `codex/r5-longrun-shandong-admission-data-completion`：
   - 已确认另一个窗口已完成并提交第五轮阶段 0-3：基线报告、普通类 2023-2025 来源追溯与政策参考、2025 艺术 / 体育 / 春考专门录取结果导入
   - 已提交 `fa5577c data: audit round 5 plan supplement sources`，新增招生计划补充附件审计脚本和报告；官方 docx 附件直链已登记，但本机下载失败，未写入招生计划业务数据

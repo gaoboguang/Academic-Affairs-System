@@ -1,0 +1,102 @@
+{
+  "version": "round6-local-codex-20260427",
+  "province": "山东",
+  "scope": "2023-2025 art/sports/spring filing sources registered before Round 6",
+  "source_documents": [
+    {
+      "year": 2023,
+      "source_type": "art_filing_result",
+      "title": "山东省2023年艺术本科批统考第1次志愿投档情况表",
+      "url": "https://www.sdzk.cn/NewsInfo.aspx?NewsID=6278"
+    },
+    {
+      "year": 2023,
+      "source_type": "art_filing_result",
+      "title": "山东省2023年艺术类专科批第1次志愿投档情况表",
+      "url": "https://www.sdzk.cn/NewsInfo.aspx?NewsID=6315"
+    },
+    {
+      "year": 2023,
+      "source_type": "sports_filing_result",
+      "title": "山东省2023年体育类常规批第1次志愿投档情况表",
+      "url": "https://www.sdzk.cn/NewsInfo.aspx?NewsID=6276"
+    },
+    {
+      "year": 2023,
+      "source_type": "spring_exam_filing_result",
+      "title": "山东省2023年春季高考本科批第1次志愿投档情况表",
+      "url": "https://www.sdzk.cn/NewsInfo.aspx?NewsID=6277"
+    },
+    {
+      "year": 2023,
+      "source_type": "spring_exam_filing_result",
+      "title": "山东省2023年春季高考专科批第1次志愿投档情况表",
+      "url": "https://www.sdzk.cn/NewsInfo.aspx?NewsID=6312"
+    },
+    {
+      "year": 2024,
+      "source_type": "art_filing_result",
+      "title": "山东省2024年艺术类本科批第1次志愿投档情况表",
+      "url": "https://www.sdzk.cn/NewsInfo.aspx?NewsID=6652"
+    },
+    {
+      "year": 2024,
+      "source_type": "art_filing_result",
+      "title": "山东省2024年艺术类专科批第1次志愿投档情况表",
+      "url": "https://www.sdzk.cn/NewsInfo.aspx?NewsID=6672"
+    },
+    {
+      "year": 2024,
+      "source_type": "sports_filing_result",
+      "title": "山东省2024年体育类常规批第1次志愿投档情况表",
+      "url": "https://www.sdzk.cn/NewsInfo.aspx?NewsID=6651"
+    },
+    {
+      "year": 2024,
+      "source_type": "spring_exam_filing_result",
+      "title": "山东省2024年春季高考本科批第1次志愿投档情况表",
+      "url": "https://www.sdzk.cn/NewsInfo.aspx?NewsID=6650"
+    },
+    {
+      "year": 2024,
+      "source_type": "spring_exam_filing_result",
+      "title": "山东省2024年春季高考专科批第1次志愿投档情况表",
+      "url": "https://www.sdzk.cn/NewsInfo.aspx?NewsID=6669"
+    },
+    {
+      "year": 2025,
+      "source_type": "art_filing_result",
+      "title": "山东省2025年艺术类本科批第1次志愿投档情况表",
+      "url": "https://www.sdzk.cn/NewsInfo.aspx?NewsID=6986"
+    },
+    {
+      "year": 2025,
+      "source_type": "art_filing_result",
+      "title": "山东省2025年艺术类专科批第1次志愿投档情况表",
+      "url": "https://www.sdzk.cn/NewsInfo.aspx?NewsID=7009"
+    },
+    {
+      "year": 2025,
+      "source_type": "sports_filing_result",
+      "title": "山东省2025年体育类常规批第1次志愿投档情况表",
+      "url": "https://www.sdzk.cn/NewsInfo.aspx?NewsID=6985"
+    },
+    {
+      "year": 2025,
+      "source_type": "spring_exam_filing_result",
+      "title": "山东省2025年春季高考本科批第1次志愿投档情况表",
+      "url": "https://www.sdzk.cn/NewsInfo.aspx?NewsID=6984"
+    },
+    {
+      "year": 2025,
+      "source_type": "spring_exam_filing_result",
+      "title": "山东省2025年春季高考专科批第1次志愿投档情况表",
+      "url": "https://www.sdzk.cn/NewsInfo.aspx?NewsID=7007"
+    }
+  ],
+  "notes": [
+    "These sources are already registered in gaokao_source_document and are consumed by scripts/round6_import_special_filing_results.py.",
+    "They are official source pages, not full admission-plan guide files.",
+    "Filing tables must not be treated as final admission results in admission_record."
+  ]
+}
