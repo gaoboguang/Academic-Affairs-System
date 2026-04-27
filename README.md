@@ -241,14 +241,14 @@ npm run check:all
 ```
 
 - `npm run check`：后端全量 pytest + 前端 lint + 前端单测 + 前端构建
-- `npm run check:e2e`：执行 `tests/e2e/dashboard-smoke.spec.ts`
+- `npm run check:e2e`：执行 `tests/e2e` 下的分域 Playwright 跨端流程
 - `npm run check:all`：先跑 `check`，再跑 `check:e2e`
 
 测试目录约定：
 
 - 后端单元与接口工作流测试位于 `apps/backend/tests`
 - 前端单元测试位于 `apps/frontend/tests`
-- 根目录 `tests/e2e` 已落地 Playwright 跨端流程，默认启动临时演示数据后端和 Vite 前端
+- 根目录 `tests/e2e` 已落地 Playwright 跨端流程，默认启动临时演示数据后端和 Vite 前端；当前按业务域拆成 dashboard、students、exams-analytics、reports、recommendations、gaokao-volunteer、system-backup 7 个 spec
 
 ## 桌面打包
 
@@ -331,7 +331,7 @@ npm run desktop:dist:win:nsis
 - 推荐页提交前置校验与 payload 组装已下沉到 `apps/frontend/src/components/recommendations/recommendationSubmission.ts`
 - 后端推荐生成链已继续拆分到 `apps/backend/app/services/_recommendations_candidates.py`、`_recommendations_result_builder.py` 与 `_recommendations_history.py`
 - 根目录已补 `backend:migrate`、`backend:init-demo`、`backend:test` 与 `backend:dev` 统一入口，后端常用操作不再只依赖手工激活虚拟环境
-- `tests/e2e/dashboard-smoke.spec.ts` 已扩到 30 条跨端流程，补齐推荐历史空状态、多方案对比、失败回退、策略模板、历史回放、导出失败回退、高考志愿主线、Stage B 主链路、批量混合生源地链路、缺少年份规则解释、模式兼容回退与多条异常提示回归
+- `tests/e2e` 已拆成 7 个业务域 spec，保留 32 条跨端流程，补齐推荐历史空状态、多方案对比、失败回退、策略模板、历史回放、导出失败回退、高考志愿主线、Stage B 主链路、批量混合生源地链路、缺少年份规则解释、模式兼容回退与多条异常提示回归
 - “高考志愿”S1 数据底座已开始落地：新增招生计划库、省份志愿规则配置、页内管理面板与对应 Alembic 迁移
 - 后端已新增 `EnrollmentPlan`、`ProvinceVolunteerRule`、招生计划导入器、模板生成与 `/api/enrollment-plans`、`/api/province-volunteer-rules` 接口
 - 前端 `/recommendations` 已升级为“高考志愿”工作台形态，现可在同页维护院校库、专业库、招生计划库、录取库、省份规则与推荐中心

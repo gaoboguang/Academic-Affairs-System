@@ -12,6 +12,7 @@
           <span class="page-chip"><strong>部分成功</strong>{{ payload.summary.partial_batches }}</span>
           <span class="page-chip"><strong>失败</strong>{{ payload.summary.failed_batches }}</span>
           <span class="page-chip"><strong>错误报告</strong>{{ payload.summary.error_report_count }}</span>
+          <span class="page-chip"><strong>最近备份</strong>{{ latestBackupLabel }}</span>
         </div>
       </div>
       <div class="action-row">
@@ -36,13 +37,43 @@
       </template>
     </el-alert>
 
+    <section class="soft-card trial-run-panel">
+      <div class="section-head">
+        <div>
+          <h3>真实学校数据试跑流程</h3>
+          <p>按这个顺序跑一份真实或脱敏数据；每次大批量导入前先备份，导入后先看摘要和错误报告。</p>
+        </div>
+        <el-button type="primary" plain @click="router.push('/system-tools')">先创建备份</el-button>
+      </div>
+      <div class="trial-step-grid">
+        <article v-for="item in importCenterTrialRunSteps" :key="item.title" class="trial-step-card">
+          <strong>{{ item.title }}</strong>
+          <p>{{ item.detail }}</p>
+          <el-button link type="primary" @click="router.push(item.path)">{{ item.actionLabel }}</el-button>
+        </article>
+      </div>
+      <el-alert
+        class="rollback-alert"
+        type="warning"
+        show-icon
+        :closable="false"
+        title="本系统当前不支持无快照逐行回滚；导入前请先创建备份，少量错误优先回业务页或重新导入正确模板修正。"
+      />
+    </section>
+
     <section class="overview-grid">
       <article class="soft-card overview-panel">
-        <div class="overview-kicker">导入流程</div>
-        <h3>先下载模板，再回到业务页上传</h3>
+        <div class="overview-kicker">导入前预检</div>
+        <h3>先确认模板和匹配项，再上传文件</h3>
         <p>
-          这里不替代学生、考试、课表等业务页面的导入动作，而是把模板、批次结果、错误报告和撤销边界集中起来，方便非程序员回看最近发生了什么。
+          重点检查模板版本、必填列、重复行，以及年级、班级、学科、教师等名称能否在系统中匹配。
         </p>
+        <ul class="check-list">
+          <li>模板表头必须来自本页下载的最新模板。</li>
+          <li>学号、工号、考试名称、科目、班级等关键列不要留空。</li>
+          <li>同一学生同一科目、同一教师工号等重复行需先清理。</li>
+          <li>无法匹配的年级 / 班级 / 学科 / 教师，先到基础数据或对应业务页维护。</li>
+        </ul>
       </article>
       <article class="soft-card overview-card tone-blue">
         <span>模板入口</span>
@@ -174,7 +205,17 @@
           <el-descriptions-item label="详情">{{ selectedDetail.batch.detail_summary }}</el-descriptions-item>
         </el-descriptions>
 
-        <section v-if="selectedDetail.error_preview.length" class="detail-section">
+        <section v-if="selectedDetail.error_items.length" class="detail-section">
+          <h4>错误预览</h4>
+          <div class="error-item-list">
+            <article v-for="item in selectedDetail.error_items" :key="formatImportCenterErrorItem(item)" class="error-item-card">
+              <strong>{{ item.row_number ? `第 ${item.row_number} 行` : "未知行" }}</strong>
+              <p>{{ formatImportCenterErrorItem(item) }}</p>
+            </article>
+          </div>
+        </section>
+
+        <section v-else-if="selectedDetail.error_preview.length" class="detail-section">
           <h4>错误预览</h4>
           <ul>
             <li v-for="item in selectedDetail.error_preview" :key="item">{{ item }}</li>
@@ -235,7 +276,10 @@ import {
   buildImportCenterErrorReportUrl,
   buildImportCenterRowSummary,
   formatImportCenterDetails,
+  formatImportCenterErrorItem,
   formatImportCenterStatus,
+  formatLatestBackupLabel,
+  importCenterTrialRunSteps,
   importCenterStatusType,
   type ImportCenterBatch,
   type ImportCenterBatchDetail,
@@ -260,11 +304,13 @@ const payload = reactive<ImportCenterResponse>({
     partial_batches: 0,
     error_report_count: 0,
   },
+  latest_backup: null,
   templates: [],
   batches: [],
 });
 
 const reviewBatchCount = computed(() => payload.summary.failed_batches + payload.summary.partial_batches);
+const latestBackupLabel = computed(() => formatLatestBackupLabel(payload.latest_backup));
 
 async function loadBatches(): Promise<void> {
   try {
@@ -329,6 +375,42 @@ onMounted(loadBatches);
   gap: 16px;
 }
 
+.trial-run-panel {
+  padding: 20px;
+}
+
+.trial-step-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.trial-step-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 142px;
+  padding: 14px;
+  border: 1px solid rgba(123, 141, 158, 0.22);
+  border-radius: 8px;
+  background: rgba(248, 251, 253, 0.82);
+}
+
+.trial-step-card strong {
+  color: #1e3448;
+}
+
+.trial-step-card p {
+  margin: 0;
+  color: #61778b;
+  line-height: 1.6;
+}
+
+.rollback-alert {
+  margin-top: 14px;
+}
+
 .overview-panel,
 .overview-card,
 .panel-block {
@@ -368,6 +450,13 @@ onMounted(loadBatches);
   line-height: 1.6;
 }
 
+.check-list {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: #52687c;
+  line-height: 1.8;
+}
+
 .template-actions {
   display: grid;
   align-content: start;
@@ -403,6 +492,28 @@ onMounted(loadBatches);
   padding-left: 20px;
   color: #52687c;
   line-height: 1.8;
+}
+
+.error-item-list {
+  display: grid;
+  gap: 10px;
+}
+
+.error-item-card {
+  padding: 12px;
+  border: 1px solid rgba(218, 125, 94, 0.24);
+  border-radius: 8px;
+  background: rgba(255, 248, 244, 0.9);
+}
+
+.error-item-card strong {
+  color: #994b2f;
+}
+
+.error-item-card p {
+  margin: 6px 0 0;
+  color: #52687c;
+  line-height: 1.6;
 }
 
 .audit-list {

@@ -29,6 +29,13 @@
         当前文件：{{ selectedTimetableFileName }}
       </div>
       <ImportFeedbackPanel :result="importResult" />
+      <div v-if="reviewCards.length" class="review-grid">
+        <article v-for="item in reviewCards" :key="item.label" class="review-card" :class="item.tone">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+          <p>{{ item.help }}</p>
+        </article>
+      </div>
     </section>
 
     <section class="soft-card panel-block">
@@ -76,6 +83,11 @@
           <p>未匹配条目修正后会重新判断是否可参与课时统计。</p>
         </div>
         <div class="action-row">
+          <el-radio-group v-model="viewModeModel" size="small">
+            <el-radio-button label="raw">原始顺序</el-radio-button>
+            <el-radio-button label="teacher">按教师</el-radio-button>
+            <el-radio-button label="class">按班级</el-radio-button>
+          </el-radio-group>
           <el-switch v-model="unresolvedOnlyModel" />
           <span class="hint-text">仅看未匹配</span>
         </div>
@@ -86,7 +98,7 @@
         description="当前批次没有符合筛选条件的课表条目。可以关闭“仅看未匹配”，或重新选择批次。"
       />
       <div v-else class="table-shell">
-        <el-table :data="timetableEntries" stripe>
+        <el-table :data="displayedEntries" stripe>
           <el-table-column label="星期/节次" width="110">
             <template #default="{ row }">
               周{{ row.weekday }} / 第{{ row.period_no }}节
@@ -142,7 +154,7 @@ import ImportFeedbackPanel from "../common/ImportFeedbackPanel.vue";
 import type { OptionItem } from "../../stores/reference";
 import type { ImportFeedbackResult } from "../../utils/importFeedback";
 import { batchTagType, formatBatchStatus, formatCourseTypeLabel, formatWeekRule } from "./helpers";
-import type { TimetableBatchItem, TimetableEntryItem } from "./types";
+import type { StatusCard, TimetableBatchItem, TimetableEntryItem } from "./types";
 
 const props = defineProps<{
   fileInputKey: number;
@@ -154,7 +166,9 @@ const props = defineProps<{
   timetableBatches: TimetableBatchItem[];
   selectedBatchId: number | null;
   unresolvedOnly: boolean;
+  viewMode: "raw" | "teacher" | "class";
   timetableEntries: TimetableEntryItem[];
+  reviewCards: StatusCard[];
   courseTypeOptions: OptionItem[];
 }>();
 
@@ -164,6 +178,7 @@ const emit = defineEmits<{
   "import-timetable": [];
   "select-batch": [batchId: number];
   "update:unresolvedOnly": [value: boolean];
+  "update:viewMode": [value: "raw" | "teacher" | "class"];
   "open-entry-dialog": [row: TimetableEntryItem];
 }>();
 
@@ -176,4 +191,81 @@ const unresolvedOnlyModel = computed({
   get: () => props.unresolvedOnly,
   set: (value: boolean) => emit("update:unresolvedOnly", value),
 });
+
+const viewModeModel = computed({
+  get: () => props.viewMode,
+  set: (value: "raw" | "teacher" | "class") => emit("update:viewMode", value),
+});
+
+const displayedEntries = computed(() => {
+  const rows = [...props.timetableEntries];
+  if (props.viewMode === "teacher") {
+    return rows.sort((a, b) =>
+      `${a.teacher_name ?? a.raw_teacher_name ?? ""}-${a.weekday}-${a.period_no}`.localeCompare(
+        `${b.teacher_name ?? b.raw_teacher_name ?? ""}-${b.weekday}-${b.period_no}`,
+        "zh-Hans-CN",
+      ),
+    );
+  }
+  if (props.viewMode === "class") {
+    return rows.sort((a, b) =>
+      `${a.class_name ?? a.raw_class_name ?? ""}-${a.weekday}-${a.period_no}`.localeCompare(
+        `${b.class_name ?? b.raw_class_name ?? ""}-${b.weekday}-${b.period_no}`,
+        "zh-Hans-CN",
+      ),
+    );
+  }
+  return rows;
+});
 </script>
+
+<style scoped>
+.review-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.review-card {
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(123, 141, 158, 0.18);
+  background: rgba(248, 251, 253, 0.86);
+}
+
+.review-card span {
+  color: #6c8094;
+  font-size: 13px;
+}
+
+.review-card strong {
+  display: block;
+  margin-top: 8px;
+  color: #1f3245;
+  font-size: 24px;
+}
+
+.review-card p {
+  margin: 6px 0 0;
+  color: #61778b;
+  line-height: 1.5;
+  font-size: 13px;
+}
+
+.tone-green {
+  box-shadow: inset 0 4px 0 rgba(69, 141, 105, 0.78);
+}
+
+.tone-amber {
+  box-shadow: inset 0 4px 0 rgba(209, 141, 72, 0.84);
+}
+
+.tone-blue {
+  box-shadow: inset 0 4px 0 rgba(31, 108, 152, 0.78);
+}
+
+.tone-slate {
+  box-shadow: inset 0 4px 0 rgba(92, 111, 129, 0.74);
+}
+</style>

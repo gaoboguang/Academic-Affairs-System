@@ -2,6 +2,35 @@
 
 ## 当前状态
 
+- 2026-04-27 已完成 M4/M5/M6/M7/M8/M9/M10 窗口任务：
+  - M4：成绩导入增加质量摘要，覆盖缺考、非法分数、重复学生、未匹配学生、未匹配科目；考试、分析、报表等成绩链路补 `score_record=0` 空态、单考试边界和统计口径提示
+  - M5：课表导入增加复核摘要，覆盖未匹配教师/班级/学科/课程类型、冲突课时和空字段；课表工作量页新增教师/班级视图切换、计算前检查和计算后异常卡
+  - M6：报表中心升级为“输出中心”，按学生、考试成绩、教师、工作量、评教量化、成长档案、高考推荐、志愿草稿等业务域分组，卡片展示用途、必要参数、来源、格式和风险标签；缺成绩等错误参数会阻断输出
+  - M7：推荐生成页、志愿/推荐输出和 Excel 导出统一普通类、特殊类型、2024/2026 数据缺口和章程人工复核风险文案；推荐结果页增强录取年份、计划/批次、选科要求和章程限制状态证据链
+  - M8：系统设置页新增本地数据保险箱，后端新增 `/api/system/safety-status`、备份校验和恢复演练接口；页面显示主库路径/大小、data 目录大小、备份目录大小、最近恢复、SQLite 完整性和 Alembic 版本；恢复前二次确认
+  - M9：优先拆分 `GaokaoDataPage.vue`，将类型和格式化函数拆到 `apps/frontend/src/components/gaokao-data/gaokaoDataTypes.ts` 与 `gaokaoDataFormatters.ts`，页面从 2337 行缩短到约 1827 行，不改变 API 或 UI 结构
+  - M10：`tests/e2e/dashboard-smoke.spec.ts` 已拆成 7 个业务域 spec 与 `tests/e2e/helpers/localEduE2e.ts`，新增 `tests/e2e/README.md`；`scripts/quality-gate.cjs` 改为运行整个 `tests/e2e`；新增 `docs/desktop_packaging_validation_20260427.md`
+  - 本次复核已补 `docs/m7-chapter-review-workbench-design-note-20260427.md`：M7 章程复核当前按“只读审阅工作台 + 风险可见 + 字段受限设计说明”闭环；复核备注写入和独立导出清单需后续明确字段/端点后再做
+  - 本轮未新增数据库迁移，未写 `data/app.db`，未自动清理备份，不伪造 2026 高考数据
+  - 验证已通过：M4/M5 定向后端 `10 passed`、M4/M5 定向前端 `9 passed`、M6-M9 定向后端 `31 passed`、M6-M9 定向前端 `21 passed`、`npm run desktop:dist:mac`、桌面后端二进制临时数据目录冒烟、`npm run e2e -- tests/e2e/dashboard.spec.ts tests/e2e/reports.spec.ts`、`npm run check:all`（后端 `103 passed`、前端 lint、前端 `33 files / 172 tests passed`、前端构建、E2E `32 passed`）、`npm run backend:p0-check -- --json`（ok，备份包 `data/backups/p0_delivery_backup_20260427_153736.zip`）、`git diff --check`
+  - 桌面端剩余边界：macOS 目录构建成功但未配置正式图标、签名和公证；Windows `dir/nsis` 仍需在 Windows 或可交叉构建环境单独验证；桌面首次启动使用用户数据目录新库，正式交付前需补主库迁移/拷贝说明
+
+- 2026-04-27 已完成 M2/M3 窗口任务：
+  - M2 导入中心新增“真实学校数据试跑流程”，覆盖备份主库、核验基础数据、导入教师任教、创建考试科目、导入成绩、查看分析、导出报表 7 步；页面明确提示当前不支持无快照逐行回滚
+  - `GET /api/import-center/batches` 现在返回最近备份对象；导入批次详情新增 `error_items`，可从错误报告 Excel 解析行号、字段、原值、失败原因和建议修正方式
+  - M3 学生详情新增 360° 风险标签、下一步入口、成长摘要打印和最近考试成绩报告打印入口；教师详情新增 360° 风险标签、任教/工作量/评教/分析入口和最近考试教师分析打印入口
+  - 新增 `apps/frontend/src/utils/profile360.ts` 与 `apps/frontend/tests/profile360.test.ts`，集中维护学生/教师 360° 风险和入口文案
+  - 当前仍未新增数据库迁移、未写 `data/app.db`；真实成绩库仍需用户后续用脱敏或真实 Excel 试跑
+  - 已通过定向验证：导入中心后端 `10 passed`、导入中心/360 helper 前端 `8 passed`、`npm run frontend:build` 通过；待最终统一执行 `npm run check`
+
+- 2026-04-27 已完成 M1：首页工作台升级为“今日教务决策台”：
+  - `GET /api/dashboard/summary` 现在返回考试数量、成绩记录数量、最近备份对象和高考数据健康摘要，复用现有 `backup_record`、导入记录和 `data_health`，未新增迁移、未修改 `data/app.db`
+  - 首页首屏现在展示学生、教师、考试、成绩、最近导入、最近备份、数据健康、P0 缺口等可点击状态卡，并增加“下一步建议”
+  - 当前主库成绩记录为 0、教师只有 2 条时，首页会直接提示先导入成绩、维护教师与任教关系；高考数据 `warning` 时提示进入高考数据看板；无备份时提示创建备份
+  - 最近考试无成绩时不再给出容易误导的分析引导，而是提示先导入成绩
+  - 验证已通过：定向后端 `1 passed`、定向前端 `3 passed`、`npm run check` 通过（后端 `101 passed`、前端 lint、前端 `29 files / 160 tests passed`、前端构建）
+  - 下一步建议按开发文档进入 M2：真实学校数据试跑流程，优先改导入中心说明、预检 / 摘要 / 错误报告可读性；继续不做无快照一键回滚、不新增数据库表
+
 - 2026-04-27 已按第六轮数据库补齐任务文档启动 `codex/r6-local-shandong-db-completion`：
   - 已新增 `scripts/round6_import_special_filing_results.py`，用于读取 `gaokao_source_document` 中 2023-2025 艺术 / 体育 / 春季高考投档来源页面，抓取 xls/xlsx 附件，解析投档计划数、最低综合分或最低位次，并只写入 `gaokao_admission_result` raw 表和 `gaokao_import_run`
   - 已新增 `data/seed/round6_gaokao_source_documents.json`，固化 15 个已登记官方投档来源页面，供后续复跑和交接使用

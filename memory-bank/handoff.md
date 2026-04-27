@@ -2,6 +2,58 @@
 
 ## 当前主线状态（2026-04-27）
 
+- M10 窗口已按 `/Users/gao/Downloads/本地教务工具后续开发文档_Codex执行版_基于项目报告重规划.md` 完成：
+  - E2E 已从单一 `tests/e2e/dashboard-smoke.spec.ts` 拆成 7 个业务域文件：dashboard、students、exams-analytics、reports、recommendations、gaokao-volunteer、system-backup
+  - 公共前置和 fixture helper 已收在 `tests/e2e/helpers/localEduE2e.ts`；新增 `tests/e2e/README.md` 说明分域文件、fixture 和定向运行命令
+  - `scripts/quality-gate.cjs` 的 E2E 阶段已改为运行整个 `tests/e2e`，失败时先看 spec 文件名定位业务域
+  - 新增 `docs/desktop_packaging_validation_20260427.md`，并在 `docs/README.md` 接入；文档记录桌面端如何定位后端二进制、前端资源、用户数据目录下的 `data/app.db`、附件、备份、模板、导出和日志目录
+  - 桌面验证结果：`npm run desktop:dist:mac` 通过，生成 `dist/desktop/mac/本地教务工具.app`；打包后的后端二进制用临时数据目录启动成功并创建 `app.db`，`/api/dashboard/summary` 可响应
+  - 剩余交付边界：macOS 正式分发仍需图标、签名和公证；Windows `dir/nsis` 需在 Windows 或可交叉构建环境验证；桌面首次启动当前使用用户数据目录新库，正式交付前需补现有主库迁移/拷贝说明
+  - 验证通过：`npm run e2e -- --list`（7 文件 32 条）、`npm run e2e -- tests/e2e/dashboard.spec.ts tests/e2e/reports.spec.ts`（7 passed）、`npm run check:all`（后端 `103 passed`、前端 lint、前端 `33 files / 172 tests passed`、前端构建、E2E `32 passed`）、`git diff --check`
+  - 本轮未新增迁移，未写 `data/app.db`，未清理备份或打包产物
+
+- 本次已复核 M0-M10 开发文档完成度，并补齐两个验收闭环：
+  - 新增 `docs/m7-chapter-review-workbench-design-note-20260427.md`，说明 M7 章程复核工作台当前按只读审阅闭环；复核备注写入和独立导出清单因缺少明确字段/端点，后续需先设计再实现，不应污染现有证据链字段
+  - `docs/README.md` 已接入该说明
+  - `npm run backend:p0-check -- --json` 已通过，备份包 `data/backups/p0_delivery_backup_20260427_153736.zip`；数据健康仍为 warning，P0 缺口 3 条不变
+
+- M4/M5/M6/M7/M8/M9 窗口已按 `/Users/gao/Downloads/本地教务工具后续开发文档_Codex执行版_基于项目报告重规划.md` 完成：
+  - M4：成绩导入质量摘要已覆盖缺考、非法分数、重复、未匹配学生、未匹配科目；成绩相关页面和报表输出补 `score_record=0`、单考试边界、样本量/范围/统计口径提示
+  - M5：课表导入复核摘要已覆盖未匹配教师/班级/学科/课程类型、冲突课时、空字段；工作量页有教师/班级视图切换、计算前阻断和计算后异常提示
+  - M6：报表中心已升级为输出中心，报表按业务域分组，并展示用途、必要参数、来源、格式和风险标签；缺考试/成绩/必要参数会阻断误导性导出
+  - M7：高考推荐风险文案已统一到前端推荐页、推荐/志愿输出和 Excel 导出；普通类、特殊类型、2024 计划偏少、2026 官方数据待发布、章程人工复核边界持续可见
+  - M8：系统设置页新增本地数据保险箱；`/api/system/safety-status`、备份校验、恢复演练接口已可用；恢复前二次确认且显示覆盖路径；不自动清理备份
+  - M9：已先拆 `GaokaoDataPage.vue` 的类型与格式化函数到 `components/gaokao-data`，页面缩短约 500 行；其他大文件仍可在后续窗口继续拆
+  - 验证通过：`npm run check`（后端 `103 passed`、前端 lint、前端 `33 files / 172 tests passed`、前端构建）；另有 M4/M5、M6-M9 定向测试和 `git diff --check` 通过
+  - 未新增数据库迁移，未写 `data/app.db`，未伪造或抓取 2026 高考数据
+  - M10 已由本轮完成；后续若继续交付稳定主线，优先补桌面正式分发说明、Windows 打包验证，或继续拆前端/后端高风险大文件
+
+- M2/M3 窗口已按 `/Users/gao/Downloads/本地教务工具后续开发文档_Codex执行版_基于项目报告重规划.md` 完成：
+  - M2：导入中心新增真实学校数据试跑 7 步流程、导入前预检清单、最近备份显示、结构化错误预览和无快照回滚边界说明
+  - 后端 `ImportCenterResponse` 新增 `latest_backup`；`ImportCenterBatchDetailRead` 新增 `error_items`，可从错误报告 Excel 解析“行号 / 字段 / 原值 / 错误原因 / 建议修正”
+  - M3：学生详情新增 360° 总览、风险标签、下一步入口、成长摘要打印和最近考试成绩报告打印入口；教师详情新增 360° 总览、数据不足提示、任教/课表工作量/评教/分析/报表入口和教师分析打印入口
+  - 新增 `apps/frontend/src/utils/profile360.ts` 与 `apps/frontend/tests/profile360.test.ts`
+  - 本轮未新增数据库迁移，未修改 `data/app.db`；导入中心仍不实现伪回滚
+  - 已通过：`npm run backend:test -- apps/backend/tests/test_archive_and_system.py -q`（`10 passed`）、`npm run frontend:test -- tests/import-center.test.ts tests/profile360.test.ts`（`8 passed`）、`npm run frontend:build`
+  - 下一步进入 M4：考试成绩与分析中心强化，重点补 `score_record=0` 全链路空态、成绩导入质量摘要和样本量/统计口径说明
+
+- M1 窗口已按 `/Users/gao/Downloads/本地教务工具后续开发文档_Codex执行版_基于项目报告重规划.md` 完成首页工作台升级：
+  - 后端 `GET /api/dashboard/summary` 新增 `exam_total`、`score_record_total`、`latest_backup`、`data_health`，只复用现有统计、备份记录和高考数据健康检查，不新增数据库表、不写主库
+  - 前端 `DashboardPage.vue` 已升级为“今日教务决策台”，首屏展示学生、教师、考试、成绩、最近导入、最近备份、数据健康和 P0 缺口；所有状态卡点击进入已有页面
+  - 首页新增“下一步建议”，会在成绩记录为 0、教师样本偏少、高考数据 warning、缺少备份时提示具体处理入口；最近考试无成绩时明确提示先导入成绩，避免误读分析
+  - 新增 `apps/frontend/src/components/dashboard/dashboardDecisions.ts` 与 `apps/frontend/tests/dashboard-decisions.test.ts`
+  - 验证已通过：定向后端 `1 passed`、定向前端 `3 passed`、`npm run check` 通过（后端 `101 passed`、前端 lint、前端 `29 files / 160 tests passed`、前端构建）
+  - 下一步可进入 M2：真实学校数据试跑流程，优先从 `ImportCenterPage.vue` 和现有备份 / 导入批次 / 错误报告能力复用，不做无快照一键回滚
+
+- M0 窗口已按 `/Users/gao/Downloads/本地教务工具后续开发文档_Codex执行版_基于项目报告重规划.md` 完成仓库审计与基线锁定；新增 `docs/codex_m0_audit_20260427.md`，未修改业务代码、迁移或 `data/app.db`。
+- M0 确认当前 `main...origin/main`，工作区原本已有 `memory-bank/handoff.md`、`memory-bank/progress.md` 的全面检查记录改动；本轮只追加 M0 交接。当前主库 `data/app.db`：Alembic `20260426_0019`，SQLite `integrity_check=ok`，表数量 `92`，学生 `806`、教师 `2`、考试 `1`、成绩 `0`。
+- M0 验证：`npm run check` 通过；`npm run check:all` 通过，结果为后端 `101 passed`、前端 lint 通过、前端 `28 files / 157 tests passed`、前端构建通过、E2E `32 passed`（约 `7.2m`）。
+- 下一步进入 M1 时，先读 `docs/codex_m0_audit_20260427.md`；优先从 `DashboardPage.vue`、`dashboard.py`、`schemas/dashboard.py` 和现有 system/import-center/gaokao data-health 能力复用数据，避免新增数据库表。
+
+- 本轮已完成项目全面检查并在桌面生成中文汇报：`/Users/gao/Desktop/本地教务工具项目全面检查汇报_2026-04-27.md`。
+- 检查结论：当前 `main` 工作区检查前干净；`data/app.db` 完整性 `ok`，Alembic 版本 `20260426_0019`；`backend:data-health -- --json` 通过但仍为 `warning`，P0 缺口 3 条；`backend:p0-check -- --json` 通过并生成 `data/backups/p0_delivery_backup_20260427_113704.zip`；`npm run check:all` 通过，结果为后端 `101 passed`、前端 lint 通过、前端 `28 files / 157 tests passed`、前端构建通过、E2E `32 passed`。
+- 下一次接手若继续“体检 / 汇报”线，优先读桌面汇报和本文件；若继续开发，仍优先处理单招 / 综评专门录取结果、2024 招生计划完整性、章程限制链人工复核，以及真实学校成绩数据试跑。
+
 - 已按第六轮数据库补齐任务文档切出 `codex/r6-local-shandong-db-completion`；本轮未执行 `git push`。
 - 第六轮当前新增：
   - `scripts/round6_import_special_filing_results.py`

@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildReportExportPayload,
   formatReportExportParams,
+  getGroupedReportCatalog,
+  getReportCatalogItem,
   getMissingRequiredReportFields,
   getMissingRequiredReportFieldsMessage,
   getReportPrintPreviewPath,
@@ -17,6 +19,19 @@ describe("report type config", () => {
     expect(REPORT_TYPE_OPTIONS).toHaveLength(10);
     expect(getReportTypeLabel("student_analysis")).toBe("学生成绩分析单");
     expect(getReportTypeLabel("unknown_report")).toBe("unknown_report");
+  });
+
+  it("groups reports into teacher-readable output domains", () => {
+    const groups = getGroupedReportCatalog();
+    const labels = groups.map((item) => item.label);
+
+    expect(labels).toContain("考试成绩");
+    expect(labels).toContain("高考推荐");
+    expect(getReportCatalogItem("recommendation_summary")).toMatchObject({
+      domain: "gaokao",
+      requiredParams: ["学生", "推荐方案"],
+      formats: ["Excel", "打印预览"],
+    });
   });
 
   it("knows which fields each report type uses", () => {

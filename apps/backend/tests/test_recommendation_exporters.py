@@ -548,6 +548,12 @@ def test_recommendation_export_includes_stale_reference_year_summary(test_settin
 
     assert (
         "边界概览",
+        "统一风险口径",
+        "正式输出保留普通类、特殊类型、2024/2026 数据和章程复核边界",
+        "2026 正式招生计划、一分一段和省控线需等待官方发布，正式填报前必须替换为当年官方数据。",
+    ) in risk_rows
+    assert (
+        "边界概览",
         "参考年份偏旧",
         "1 条结果最近录取样本与目标年份相差 2 年及以上",
         "这类推荐更适合作为方向性参考；若近一年录取数据尚未补齐，分层、排序和汇报口径都可能继续变化。",
@@ -558,7 +564,8 @@ def test_recommendation_export_includes_stale_reference_year_summary(test_settin
         "1 条结果最近录取样本与目标年份相差 2 年及以上",
         "这类推荐更适合作为方向性参考；若近一年录取数据尚未补齐，分层、排序和汇报口径都可能继续变化。",
     ) in overview_rows
-    assert detail_sheet.cell(row=2, column=13).value == "样本不足 / 缺少位次，分数参考"
+    assert detail_sheet.cell(row=2, column=8).value == "2023"
+    assert detail_sheet.cell(row=2, column=17).value == "样本不足 / 缺少位次，分数参考"
 
 
 def test_recommendation_export_includes_history_comparison_rows(test_settings) -> None:

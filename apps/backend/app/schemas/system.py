@@ -28,6 +28,32 @@ class BackupRecordRead(ORMModel):
     download_url: str | None = None
 
 
+class BackupVerificationRead(BaseModel):
+    backup_id: int
+    backup_name: str
+    valid: bool
+    message: str
+    file_size: int = 0
+    will_overwrite_path: str
+    sqlite_integrity: str | None = None
+    manifest: dict | None = None
+
+
+class SystemSafetyStatusRead(BaseModel):
+    main_db_path: str
+    main_db_size: int = 0
+    data_dir_path: str
+    data_dir_size: int = 0
+    backup_dir_path: str
+    backup_dir_size: int = 0
+    backup_count: int = 0
+    latest_backup: BackupRecordRead | None = None
+    latest_restore_at: datetime | None = None
+    sqlite_integrity: str
+    alembic_version: str | None = None
+    warnings: list[str] = Field(default_factory=list)
+
+
 class AuditLogRead(ORMModel):
     id: int
     module: str
@@ -87,6 +113,14 @@ class ImportCenterSummaryRead(BaseModel):
     error_report_count: int = 0
 
 
+class ImportCenterErrorItemRead(BaseModel):
+    row_number: int | None = None
+    field_name: str | None = None
+    raw_value: Any | None = None
+    message: str
+    suggestion: str | None = None
+
+
 class ImportCenterBatchRead(BaseModel):
     id: str
     numeric_id: int
@@ -117,6 +151,7 @@ class ImportCenterBatchDetailRead(BaseModel):
     result_json: dict | None = None
     audit_logs: list[AuditLogRead] = Field(default_factory=list)
     error_preview: list[str] = Field(default_factory=list)
+    error_items: list[ImportCenterErrorItemRead] = Field(default_factory=list)
     notice_preview: list[str] = Field(default_factory=list)
     rollback_steps: list[str] = Field(default_factory=list)
 
@@ -124,6 +159,7 @@ class ImportCenterBatchDetailRead(BaseModel):
 class ImportCenterResponse(BaseModel):
     generated_at: datetime
     summary: ImportCenterSummaryRead
+    latest_backup: BackupRecordRead | None = None
     templates: list[ImportCenterTemplateRead] = Field(default_factory=list)
     batches: list[ImportCenterBatchRead] = Field(default_factory=list)
 

@@ -12,6 +12,7 @@
           <span class="page-chip"><strong>模板</strong>{{ templates.length }}</span>
           <span class="page-chip"><strong>高风险问题</strong>{{ repairErrorCount }}</span>
           <span class="page-chip"><strong>最近备份</strong>{{ latestBackupName }}</span>
+          <span class="page-chip"><strong>主库状态</strong>{{ safetyStatus?.sqlite_integrity ?? "待检查" }}</span>
         </div>
       </div>
       <div class="action-row">
@@ -57,6 +58,32 @@
         <span>备份数量</span>
         <strong>{{ backups.length }}</strong>
       </article>
+    </section>
+
+    <section class="soft-card panel-block safety-panel">
+      <div class="section-head">
+        <div>
+          <h3>本地数据保险箱</h3>
+          <p>查看主库路径、目录大小、最近备份/恢复、SQLite 完整性和迁移版本。</p>
+        </div>
+        <el-button @click="loadSafetyStatus">重新检查</el-button>
+      </div>
+      <div class="safety-grid">
+        <article v-for="item in safetyCards" :key="item.label" class="safety-card">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+          <p>{{ item.help }}</p>
+        </article>
+      </div>
+      <el-alert
+        v-for="warning in safetyStatus?.warnings ?? []"
+        :key="warning"
+        class="system-alert"
+        type="warning"
+        show-icon
+        :closable="false"
+        :title="warning"
+      />
     </section>
 
     <el-tabs>
@@ -189,6 +216,11 @@
                   {{ formatBytes(row.file_size) }}
                 </template>
               </el-table-column>
+              <el-table-column label="校验" min-width="220">
+                <template #default="{ row }">
+                  <span>{{ backupVerificationText(row.id) }}</span>
+                </template>
+              </el-table-column>
               <el-table-column label="创建时间" prop="created_at" min-width="170" />
               <el-table-column label="状态" width="100">
                 <template #default="{ row }">
@@ -197,9 +229,15 @@
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="180" fixed="right">
+              <el-table-column label="操作" width="280" fixed="right">
                 <template #default="{ row }">
                   <el-button link type="primary" @click="openFile(row.download_url)">下载</el-button>
+                  <el-button link type="primary" :loading="verifyingBackupId === row.id" @click="verifyBackup(row.id)">
+                    校验
+                  </el-button>
+                  <el-button link type="warning" :loading="dryRunningBackupId === row.id" @click="dryRunRestore(row.id)">
+                    演练
+                  </el-button>
                   <el-button link type="danger" :loading="restoringBackupId === row.id" @click="restoreBackup(row.id)">
                     恢复
                   </el-button>
@@ -252,10 +290,36 @@ import { apiRequest, openFile } from "../api/client";
 interface BackupRecord {
   id: number;
   backup_name: string;
+  file_path?: string;
   file_size: number;
   created_at: string;
   status: string;
   download_url: string;
+}
+
+interface BackupVerification {
+  backup_id: number;
+  backup_name: string;
+  valid: boolean;
+  message: string;
+  file_size: number;
+  will_overwrite_path: string;
+  sqlite_integrity?: string | null;
+}
+
+interface SystemSafetyStatus {
+  main_db_path: string;
+  main_db_size: number;
+  data_dir_path: string;
+  data_dir_size: number;
+  backup_dir_path: string;
+  backup_dir_size: number;
+  backup_count: number;
+  latest_backup?: BackupRecord | null;
+  latest_restore_at?: string | null;
+  sqlite_integrity: string;
+  alembic_version?: string | null;
+  warnings: string[];
 }
 
 interface AuditLog {
@@ -320,8 +384,12 @@ const templates = ref<TemplateItem[]>([]);
 const repairScan = ref<RepairScan | null>(null);
 const backups = ref<BackupRecord[]>([]);
 const auditLogs = ref<AuditLog[]>([]);
+const safetyStatus = ref<SystemSafetyStatus | null>(null);
+const backupVerifications = ref<Record<number, BackupVerification>>({});
 const creatingBackup = ref(false);
 const restoringBackupId = ref<number | null>(null);
+const verifyingBackupId = ref<number | null>(null);
+const dryRunningBackupId = ref<number | null>(null);
 const repairingAction = ref<string | null>(null);
 const autoBackupBeforeRestore = ref(true);
 
@@ -350,6 +418,39 @@ const overviewCards = computed(() => [
     value: auditLogs.value.length,
     help: "最近 100 条系统级动作都会记录在这里。",
     tone: "tone-slate",
+  },
+  {
+    label: "SQLite",
+    value: safetyStatus.value?.sqlite_integrity ?? "待检查",
+    help: "主库完整性检查结果，正常应为 ok。",
+    tone: safetyStatus.value?.sqlite_integrity === "ok" ? "tone-blue" : "tone-amber",
+  },
+]);
+const safetyCards = computed(() => [
+  {
+    label: "主库路径",
+    value: safetyStatus.value?.main_db_path ?? "待检查",
+    help: `大小：${formatBytes(safetyStatus.value?.main_db_size ?? 0)}`,
+  },
+  {
+    label: "data 目录",
+    value: formatBytes(safetyStatus.value?.data_dir_size ?? 0),
+    help: safetyStatus.value?.data_dir_path ?? "待检查",
+  },
+  {
+    label: "备份目录",
+    value: formatBytes(safetyStatus.value?.backup_dir_size ?? 0),
+    help: `${safetyStatus.value?.backup_count ?? 0} 个备份包`,
+  },
+  {
+    label: "最近恢复",
+    value: safetyStatus.value?.latest_restore_at ?? "暂无",
+    help: "恢复操作会记录在审计日志中。",
+  },
+  {
+    label: "迁移版本",
+    value: safetyStatus.value?.alembic_version ?? "未读取",
+    help: "当前主库记录的 Alembic 版本。",
   },
 ]);
 
@@ -443,8 +544,12 @@ async function loadAuditLogs(): Promise<void> {
   auditLogs.value = await apiRequest<AuditLog[]>("/api/system/audit-logs?limit=100");
 }
 
+async function loadSafetyStatus(): Promise<void> {
+  safetyStatus.value = await apiRequest<SystemSafetyStatus>("/api/system/safety-status");
+}
+
 async function reloadMeta(): Promise<void> {
-  await Promise.all([loadTemplates(), loadRepairScan(), loadBackups(), loadAuditLogs()]);
+  await Promise.all([loadTemplates(), loadRepairScan(), loadBackups(), loadAuditLogs(), loadSafetyStatus()]);
 }
 
 async function saveGroup(group: ConfigGroup): Promise<void> {
@@ -494,7 +599,7 @@ async function createBackup(): Promise<void> {
   try {
     creatingBackup.value = true;
     const result = await apiRequest<{ message: string }>("/api/system/backup", { method: "POST" });
-    await Promise.all([loadBackups(), loadAuditLogs()]);
+    await Promise.all([loadBackups(), loadAuditLogs(), loadSafetyStatus()]);
     ElMessage.success(result.message);
   } catch (error) {
     ElMessage.error((error as Error).message);
@@ -503,12 +608,67 @@ async function createBackup(): Promise<void> {
   }
 }
 
+function backupVerificationText(backupId: number): string {
+  const verification = backupVerifications.value[backupId];
+  if (!verification) return "未校验";
+  return verification.valid ? `通过，SQLite ${verification.sqlite_integrity ?? "ok"}` : verification.message;
+}
+
+async function verifyBackup(backupId: number): Promise<void> {
+  try {
+    verifyingBackupId.value = backupId;
+    const result = await apiRequest<BackupVerification>(`/api/system/backups/${backupId}/verify`);
+    backupVerifications.value = { ...backupVerifications.value, [backupId]: result };
+    if (result.valid) {
+      ElMessage.success(result.message);
+    } else {
+      ElMessage.warning(result.message);
+    }
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  } finally {
+    verifyingBackupId.value = null;
+  }
+}
+
+async function dryRunRestore(backupId: number): Promise<void> {
+  try {
+    dryRunningBackupId.value = backupId;
+    const result = await apiRequest<BackupVerification>(`/api/system/backups/${backupId}/restore-dry-run`, {
+      method: "POST",
+    });
+    backupVerifications.value = { ...backupVerifications.value, [backupId]: result };
+    if (result.valid) {
+      ElMessage.success(result.message);
+    } else {
+      ElMessage.warning(result.message);
+    }
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  } finally {
+    dryRunningBackupId.value = null;
+  }
+}
+
 async function restoreBackup(backupId: number): Promise<void> {
   try {
+    const backup = backups.value.find((item) => item.id === backupId);
+    const verifyResult = backupVerifications.value[backupId]
+      ?? await apiRequest<BackupVerification>(`/api/system/backups/${backupId}/verify`);
+    backupVerifications.value = { ...backupVerifications.value, [backupId]: verifyResult };
+    if (!verifyResult.valid) {
+      ElMessage.warning(verifyResult.message);
+      return;
+    }
     await ElMessageBox.confirm(
-      "恢复会覆盖当前数据库和附件。建议确保其他页面已停止操作。是否继续？",
+      `恢复会覆盖当前主库：${verifyResult.will_overwrite_path}。备份包：${backup?.backup_name ?? verifyResult.backup_name}。建议确保其他页面已停止操作。是否继续？`,
       "恢复备份",
       { type: "warning" },
+    );
+    await ElMessageBox.confirm(
+      "这是恢复前的第二次确认。点击确认后会替换当前数据库和附件目录。",
+      "确认覆盖当前数据",
+      { type: "error" },
     );
     restoringBackupId.value = backupId;
     const result = await apiRequest<{ message: string }>("/api/system/restore", {
@@ -518,7 +678,7 @@ async function restoreBackup(backupId: number): Promise<void> {
         auto_backup_current: autoBackupBeforeRestore.value,
       }),
     });
-    await Promise.all([loadBackups(), loadAuditLogs()]);
+    await Promise.all([loadBackups(), loadAuditLogs(), loadSafetyStatus()]);
     ElMessage.success(result.message);
   } catch (error) {
     if (error === "cancel" || error === "close") return;
@@ -540,7 +700,7 @@ onMounted(async () => {
 <style scoped>
 .overview-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) repeat(3, minmax(0, 0.75fr));
+  grid-template-columns: minmax(0, 1.25fr) repeat(4, minmax(0, 0.75fr));
   gap: 16px;
 }
 
@@ -634,6 +794,49 @@ onMounted(async () => {
   margin-top: 10px;
   color: #1f3245;
   font-size: 28px;
+}
+
+.safety-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.safety-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.safety-card {
+  display: grid;
+  gap: 8px;
+  min-height: 128px;
+  padding: 14px;
+  border: 1px solid #dfe9f2;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.safety-card span {
+  color: #6d8092;
+  font-size: 13px;
+}
+
+.safety-card strong {
+  color: #1f3245;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.safety-card p {
+  margin: 0;
+  color: #60748a;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.system-alert {
+  margin-top: 2px;
 }
 
 .section-head {

@@ -7,6 +7,12 @@ import { useReferenceStore } from "../../stores/reference";
 import { formatUserActionError } from "../../utils/userFeedback";
 import type { ImportFeedbackResult } from "../../utils/importFeedback";
 import { dimensionOptions, formatSemesterLabel, ruleVersionStatusOptions } from "./helpers";
+import {
+  buildTimetableReviewCards,
+  buildTimetableReviewSummary,
+  buildWorkloadPrecheckMessages,
+  buildWorkloadResultReviewCards,
+} from "./workloadReview";
 import type {
   CreateRuleForm,
   EntryFormState,
@@ -41,6 +47,7 @@ export function useTimetableWorkloadPage() {
   const selectedRuleVersionId = ref<number | null>(null);
   const selectedBatchId = ref<number | null>(null);
   const unresolvedOnly = ref(false);
+  const timetableViewMode = ref<"raw" | "teacher" | "class">("raw");
 
   const selectedTimetableFile = ref<File | null>(null);
   const timetableImportResult = ref<(ImportFeedbackResult & { batch_id: number; unresolved_rows: number }) | null>(null);
@@ -101,6 +108,18 @@ export function useTimetableWorkloadPage() {
   const currentRuleLabel = computed(() =>
     ruleVersions.value.find((item) => item.id === selectedRuleVersionId.value)?.name ?? "未选择规则",
   );
+  const timetableReviewSummary = computed(() => buildTimetableReviewSummary(timetableEntries.value));
+  const timetableReviewCards = computed(() => buildTimetableReviewCards(timetableReviewSummary.value));
+  const workloadPrecheckMessages = computed(() =>
+    buildWorkloadPrecheckMessages({
+      selectedSemesterId: selectedSemesterId.value,
+      selectedRuleVersionId: selectedRuleVersionId.value,
+      currentBatch: currentBatch.value,
+      ruleItemCount: ruleItems.value.length,
+      reviewSummary: timetableReviewSummary.value,
+    }),
+  );
+  const workloadResultReviewCards = computed(() => buildWorkloadResultReviewCards(results.value));
   const overviewCards = computed<StatusCard[]>(() => [
     {
       label: "课表批次",
@@ -475,6 +494,13 @@ export function useTimetableWorkloadPage() {
       return;
     }
     try {
+      const blockingMessages = workloadPrecheckMessages.value.filter((item) =>
+        item.includes("请选择") || item.includes("没有规则项"),
+      );
+      if (blockingMessages.length) {
+        ElMessage.warning(blockingMessages.join("；"));
+        return;
+      }
       if (currentBatch.value?.unresolved_count) {
         await ElMessageBox.confirm(
           "当前批次仍有未匹配条目，未修正条目不会参与课时统计。是否继续计算？",
@@ -577,6 +603,7 @@ export function useTimetableWorkloadPage() {
     selectedRuleVersionId,
     selectedBatchId,
     unresolvedOnly,
+    timetableViewMode,
     selectedTimetableFile,
     timetableImportResult,
     fileInputKey,
@@ -600,6 +627,10 @@ export function useTimetableWorkloadPage() {
     totalWorkload,
     currentSemesterLabel,
     currentRuleLabel,
+    timetableReviewSummary,
+    timetableReviewCards,
+    workloadPrecheckMessages,
+    workloadResultReviewCards,
     overviewCards,
     processCards,
     refreshAll,

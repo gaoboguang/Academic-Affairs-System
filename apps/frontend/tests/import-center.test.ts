@@ -4,7 +4,10 @@ import {
   buildImportCenterErrorReportUrl,
   buildImportCenterRowSummary,
   formatImportCenterDetails,
+  formatImportCenterErrorItem,
+  formatLatestBackupLabel,
   importCenterStatusType,
+  importCenterTrialRunSteps,
   type ImportCenterBatch,
 } from "../src/utils/importCenter";
 
@@ -35,7 +38,7 @@ const baseBatch: ImportCenterBatch = {
 
 describe("import center helpers", () => {
   it("builds readable row summaries", () => {
-    expect(buildImportCenterRowSummary(baseBatch)).toBe("共 12 行，成功 10 行，失败 2 行，跳过 0 行");
+    expect(buildImportCenterRowSummary(baseBatch)).toBe("共 12 行，成功 10 行，失败 2 行，跳过 0 行，更新 10 行");
   });
 
   it("uses unified status tag types", () => {
@@ -53,5 +56,36 @@ describe("import center helpers", () => {
   it("formats compact audit details", () => {
     expect(formatImportCenterDetails({ batch_id: 1, failed_rows: 2 })).toBe("batch_id=1 / failed_rows=2");
     expect(formatImportCenterDetails(null)).toBe("-");
+  });
+
+  it("formats latest backup and structured error items for non-technical review", () => {
+    expect(formatLatestBackupLabel(null)).toBe("暂无备份记录");
+    expect(formatLatestBackupLabel({
+      id: 1,
+      backup_name: "trial.zip",
+      file_path: "data/backups/trial.zip",
+      file_size: 128,
+      created_at: "2026-04-27T09:00:00",
+      status: "success",
+    })).toContain("trial.zip");
+    expect(formatImportCenterErrorItem({
+      row_number: 3,
+      field_name: "学号",
+      raw_value: "2026999",
+      message: "学生不存在",
+      suggestion: "请先维护学生，或核对学号。",
+    })).toBe("第 3 行 / 学号 / 原值：2026999：学生不存在 / 建议：请先维护学生，或核对学号。");
+  });
+
+  it("keeps the trial run guide in the expected school-data order", () => {
+    expect(importCenterTrialRunSteps.map((item) => item.title)).toEqual([
+      "1. 备份当前主库",
+      "2. 导入/核验基础数据",
+      "3. 导入教师与任教关系",
+      "4. 创建考试与科目",
+      "5. 导入成绩",
+      "6. 查看分析",
+      "7. 导出报表",
+    ]);
   });
 });

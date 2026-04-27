@@ -53,6 +53,16 @@
           />
         </el-select>
       </div>
+      <div v-if="precheckMessages.length" class="precheck-list">
+        <el-alert
+          v-for="item in precheckMessages"
+          :key="item"
+          type="warning"
+          show-icon
+          :closable="false"
+          :title="item"
+        />
+      </div>
       <div class="action-row toolbar-row">
         <el-button type="primary" :loading="calculating" @click="emit('calculate')">
           计算工作量
@@ -98,6 +108,7 @@ const props = defineProps<{
   currentBatch: TimetableBatchItem | null;
   overviewCards: StatusCard[];
   processCards: StatusCard[];
+  precheckMessages: string[];
   resultCount: number;
   totalWorkload: string;
   calculating: boolean;
@@ -262,6 +273,12 @@ const batchModel = computed<number | undefined>({
 }
 
 .toolbar-row {
+  margin-top: 14px;
+}
+
+.precheck-list {
+  display: grid;
+  gap: 10px;
   margin-top: 14px;
 }
 

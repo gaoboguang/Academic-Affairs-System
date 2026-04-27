@@ -143,6 +143,10 @@ def test_dashboard_profiles_and_system_settings(client) -> None:
     assert dashboard_response.status_code == 200
     dashboard_payload = dashboard_response.json()
     assert dashboard_payload["recent_exam"]["exam_id"] == exam_id
+    assert dashboard_payload["exam_total"] >= 1
+    assert dashboard_payload["score_record_total"] >= 6
+    assert "data_health" in dashboard_payload
+    assert dashboard_payload["data_health"]["p0_gap_count"] >= 0
     issue_codes = {item["code"] for item in dashboard_payload["data_quality_issues"]}
     assert "student_open_history_missing" in issue_codes
 

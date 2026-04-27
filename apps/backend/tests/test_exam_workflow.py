@@ -372,6 +372,7 @@ def test_exam_score_import_reports_duplicate_rows(client) -> None:
     assert payload["success_rows"] == 1
     assert payload["failed_rows"] == 1
     assert payload["error_preview"] == ["第 3 行：同一学生同一科目在导入文件中重复出现"]
+    assert payload["notice_preview"][0] == "成绩导入质量摘要：缺考 0 行，非法分数 0 行，重复成绩 1 行，未匹配学生 0 行，未匹配科目 0 行。"
     assert payload["error_report_path"]
 
 
@@ -430,3 +431,67 @@ def test_exam_score_import_reports_identity_conflicts(client) -> None:
     assert payload["success_rows"] == 0
     assert payload["failed_rows"] == 1
     assert payload["error_preview"] == ["第 2 行：学号与姓名不匹配: 2026001"]
+    assert "身份或班级不一致 1 行" in payload["notice_preview"][1]
+
+
+def test_exam_score_import_quality_summary_covers_real_shape_errors(client) -> None:
+    exam_name = "成绩质量摘要测试"
+    exam_response = client.post(
+        "/api/exams",
+        json={
+            "name": exam_name,
+            "exam_type": "月考",
+            "exam_date": "2026-04-14",
+            "semester_id": 2,
+            "grade_scope_json": [1],
+            "is_trend_enabled": True,
+            "status": "draft",
+            "note": "",
+            "is_active": True,
+        },
+    )
+    assert exam_response.status_code == 200
+    exam_id = exam_response.json()["id"]
+    subject_response = client.post(
+        f"/api/exams/{exam_id}/subjects",
+        json=[
+            {
+                "subject_id": 1,
+                "full_score": 150,
+                "is_in_total": True,
+                "excellent_line": 110,
+                "pass_line": 90,
+                "sort_order": 1,
+                "is_active": True,
+            }
+        ],
+    )
+    assert subject_response.status_code == 200
+
+    import_response = client.post(
+        f"/api/exams/{exam_id}/scores/import",
+        data={"strategy": "overwrite", "rebuild": "false"},
+        files={
+            "file": (
+                "quality_scores.xlsx",
+                build_score_workbook_with_rows(
+                    exam_name,
+                    [
+                        ["2026001", "张三", "1班", "语文", "", "缺考", ""],
+                        ["2026002", "李四", "1班", "语文", "180", "", ""],
+                        ["2099999", "不存在学生", "1班", "语文", "100", "", ""],
+                        ["2026001", "张三", "1班", "物理", "100", "", ""],
+                    ],
+                ),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert import_response.status_code == 200
+    payload = import_response.json()
+    assert payload["success_rows"] == 1
+    assert payload["failed_rows"] == 3
+    assert payload["notice_preview"][0] == "成绩导入质量摘要：缺考 1 行，非法分数 1 行，重复成绩 0 行，未匹配学生 1 行，未匹配科目 1 行。"
+    assert "未匹配学生" in " ".join(payload["notice_preview"])
+    assert "未匹配科目" in " ".join(payload["notice_preview"])

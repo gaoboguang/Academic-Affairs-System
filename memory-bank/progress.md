@@ -8,6 +8,64 @@
 
 ## 2026-04-27 新增
 
+- 已完成 M10：E2E 拆分与桌面端交付验证：
+  - `tests/e2e/dashboard-smoke.spec.ts` 已拆成 7 个业务域文件：`dashboard.spec.ts`、`students.spec.ts`、`exams-analytics.spec.ts`、`reports.spec.ts`、`recommendations.spec.ts`、`gaokao-volunteer.spec.ts`、`system-backup.spec.ts`
+  - 新增 `tests/e2e/helpers/localEduE2e.ts` 统一跨域前置、fixture 导入、推荐/志愿 helper；新增 `tests/e2e/README.md` 说明分域文件、fixtures 和定向命令
+  - `scripts/quality-gate.cjs` 的 E2E 门禁改为运行整个 `tests/e2e`，失败时可按文件名定位业务域
+  - 新增 `docs/desktop_packaging_validation_20260427.md`，记录桌面端前端资源、后端二进制、数据目录、`app.db/uploads/backups/templates/exports/logs` 定位和打包状态
+  - `npm run desktop:dist:mac` 通过，产物为 `dist/desktop/mac/本地教务工具.app`；打包后的后端二进制可用临时数据目录启动并创建 `app.db`，`/api/dashboard/summary` 可响应
+  - 当前桌面待办：正式图标、macOS 签名/公证、Windows `dir/nsis` 环境验证，以及“空库初始化 / 迁移现有主库”的用户说明
+  - 验证：`npm run e2e -- --list` 列出 7 文件 32 条；`npm run e2e -- tests/e2e/dashboard.spec.ts tests/e2e/reports.spec.ts` 为 `7 passed`；`npm run check:all` 通过（后端 `103 passed`、前端 lint、前端 `33 files / 172 tests passed`、前端构建、E2E `32 passed`）；`git diff --check` 通过
+
+- 已完成 M0-M10 开发文档复核与遗漏补齐：
+  - 新增 `docs/m7-chapter-review-workbench-design-note-20260427.md`，明确 M7 章程人工复核工作台当前已完成只读审阅、优先级、状态筛选、官方候选链接和证据链；复核备注写入、独立导出清单需在字段和端点设计明确后实施
+  - `docs/README.md` 已接入 M7 补充设计说明，并顺手修正当前文档导航编号
+  - `npm run backend:p0-check -- --json` 通过，备份包为 `data/backups/p0_delivery_backup_20260427_153736.zip`；主库、备份结构、恢复完整性、恢复后健康检查和恢复后启动均 ok
+  - 数据健康仍为 `warning`，P0 缺口 3 条不变：单招 / 综评缺专门录取结果、2024 招生计划数量偏少、章程限制链 1748 条待人工复核
+
+- 已完成 M4-M9：成绩分析强化、课表工作量产品化、输出中心、高考风险治理、系统数据保险箱和高考数据页拆分：
+  - M4/M5：后端导入器补成绩与课表质量摘要；前端新增 `scoreReadiness.ts`、`workloadReview.ts` 及对应测试，考试/分析/报表/课表工作量页面补空态、检查和复核卡
+  - M6：`ReportsPage.vue` 升级为输出中心，`reportTypeConfig.ts` 增加业务域目录、用途、必要参数、数据来源、导出格式和风险标签；缺成绩等条件会阻断误导性输出
+  - M7：`recommendationCopy.ts` 和推荐导出器统一风险文案；推荐结果 UI 与 Excel 增加录取结果年份、计划年份、批次、选科要求和章程限制状态
+  - M8：`SystemToolsPage.vue` 新增本地数据保险箱；后端新增系统安全状态、备份校验、恢复演练接口；恢复前有二次确认并显示将覆盖的主库路径
+  - M9：新增 `apps/frontend/src/components/gaokao-data/gaokaoDataTypes.ts`、`gaokaoDataFormatters.ts` 和 `apps/frontend/tests/gaokao-data-formatters.test.ts`，将高考数据页类型/格式化逻辑拆出，`GaokaoDataPage.vue` 明显缩短
+  - 本轮未新增 Alembic migration，未写 `data/app.db`，未自动删除备份或伪造高考数据
+  - 验证：M4/M5 定向后端 `10 passed`、M4/M5 定向前端 `9 passed`、M6-M9 定向后端 `31 passed`、M6-M9 定向前端 `21 passed`、`npm run frontend:build`、`git diff --check`、`npm run check` 通过（后端 `103 passed`、前端 lint、前端 `33 files / 172 tests passed`、前端构建）
+
+- 已完成 M2/M3：真实学校数据试跑流程与学生/教师 360° 总览：
+  - `apps/backend/app/schemas/system.py`、`apps/backend/app/services/system.py` 已为导入中心响应补最近备份和结构化错误预览；导入详情能从错误报告 Excel 中解析行号、字段、原值、错误原因和建议修正
+  - `apps/frontend/src/pages/ImportCenterPage.vue` 已新增真实试跑 7 步流程、导入前预检清单、最近备份提示和“不支持无快照逐行回滚”说明
+  - `apps/frontend/src/pages/StudentDetailPage.vue` 已新增 360° 总览、风险标签、下一步入口、成长摘要打印和最近考试成绩报告打印入口
+  - `apps/frontend/src/pages/TeacherDetailPage.vue` 已新增 360° 总览、数据不足提示、任教/课表工作量/评教/分析/报表入口和最近考试教师分析打印入口
+  - 新增 `apps/frontend/src/utils/profile360.ts`、`apps/frontend/tests/profile360.test.ts`，并更新 `apps/frontend/src/utils/importCenter.ts`、`apps/frontend/tests/import-center.test.ts`、`apps/backend/tests/test_archive_and_system.py`
+  - 验证：`npm run backend:test -- apps/backend/tests/test_archive_and_system.py -q` 为 `10 passed`；`npm run frontend:test -- tests/import-center.test.ts tests/profile360.test.ts` 为 `8 passed`；`npm run frontend:build` 通过
+  - 本轮未新增 Alembic migration，未修改主库或 `data/` 内容；下一步按开发文档进入 M4 考试成绩与分析中心强化
+
+- 已完成 M1：首页工作台升级为“今日教务决策台”：
+  - 后端 `GET /api/dashboard/summary` 已补考试数量、成绩记录数量、最近备份对象和高考数据健康摘要，复用现有 `backup_record`、导入记录和 `data_health` 工具，不新增迁移、不写 `data/app.db`
+  - `apps/frontend/src/pages/DashboardPage.vue` 已把首页改成可点击状态卡、下一步建议、快捷入口、最近考试空成绩提示和基础数据修复提醒
+  - 新增 `apps/frontend/src/components/dashboard/dashboardDecisions.ts`，集中生成“成绩记录为 0 / 教师偏少 / 数据健康 warning / 无备份”等下一步建议
+  - 新增 `apps/frontend/tests/dashboard-decisions.test.ts`，覆盖 M1 首页建议逻辑和备份 / 数据健康卡片文案
+  - 验证：定向后端 `npm run backend:test -- apps/backend/tests/test_dashboard_profile_and_settings.py -q` 为 `1 passed`；定向前端 `npm run frontend:test -- tests/dashboard-decisions.test.ts` 为 `3 passed`；`npm run check` 通过，结果为后端 `101 passed`、前端 lint 通过、前端 `29 files / 160 tests passed`、前端构建通过
+  - 本轮未新增 Alembic migration，未修改主库或 `data/` 内容
+
+- 已完成 M0：仓库审计与基线锁定：
+  - 新增 `docs/codex_m0_audit_20260427.md`
+  - 已读取 AGENTS、规格文档、docs 索引、memory-bank、桌面全面检查汇报、后续开发文档和 package/依赖文件
+  - 已列出当前真实页面、后端 API 分组、模型、服务、导入器、导出器、测试文件、已有功能和未确认/未完成能力
+  - 当前主库基线：Alembic `20260426_0019`、SQLite `integrity_check=ok`、表数量 `92`、学生 `806`、教师 `2`、考试 `1`、成绩 `0`
+  - `npm run check` 通过：后端 `101 passed`、前端 lint 通过、前端 `28 files / 157 tests passed`、前端构建通过
+  - `npm run check:all` 通过：后端 `101 passed`、前端 lint 通过、前端 `28 files / 157 tests passed`、前端构建通过、E2E `32 passed`
+  - 本轮未修改业务代码、迁移或 `data/app.db`
+
+- 已完成一次项目全面检查并生成桌面汇报：
+  - 汇报文件：`/Users/gao/Desktop/本地教务工具项目全面检查汇报_2026-04-27.md`
+  - 当前分支 `main`，检查前工作区干净，`main...origin/main`
+  - 主库 `data/app.db` 可读，SQLite `integrity_check=ok`，表数量 `92`，Alembic 版本 `20260426_0019`
+  - `backend:data-health -- --json` 通过但状态仍为 `warning`，P0 缺口 3 条：单招 / 综评缺专门录取结果、2024 招生计划数量偏少、章程限制链 1748 条待人工复核
+  - `backend:p0-check -- --json` 通过，`ok: true`，新备份包 `data/backups/p0_delivery_backup_20260427_113704.zip`
+  - `npm run check:all` 通过：后端 `101 passed`、前端 lint 通过、前端 `28 files / 157 tests passed`、前端构建通过、E2E `32 passed`
+
 - 已启动第六轮山东招生数据库补齐任务：
   - 从第五轮长线分支切出 `codex/r6-local-shandong-db-completion`
   - 新增 `scripts/round6_import_special_filing_results.py`，支持 2023-2025 艺术 / 体育 / 春季高考投档来源的附件抓取、解析和 raw 表导入

@@ -1,5 +1,17 @@
 # 决策日志
 
+## 2026-04-27：M7 章程复核先按只读工作台和设计说明闭环
+
+- 决定：M7 章程限制链人工复核工作台当前不新增临时写库能力，按 `/gaokao-data` 只读审阅队列、单校证据链、风险提示和 `docs/m7-chapter-review-workbench-design-note-20260427.md` 设计说明闭环。
+- 原因：现有表可稳定读取 `review_status`、`retrieval_status`、`chapter_url`、`chapter_fallback_url`、`source_title`、`source_url`、`updated_at` 等字段，但没有明确的人工复核备注写入字段、操作者字段和更新接口。强行复用无关字段会污染章程证据链。
+- 约束：后续如要做在线备注 / 状态回写，必须先明确 `gaokao_college_chapter_rule` 字段和 Alembic 迁移；如只做导出清单，可先基于 `/api/gaokao/review-summary` 增加只读导出端点，不需要改主库结构。
+
+## 2026-04-27：E2E 按业务域拆分，质量门禁运行整个目录
+
+- 决定：删除单一 `tests/e2e/dashboard-smoke.spec.ts`，改为 dashboard、students、exams-analytics、reports、recommendations、gaokao-volunteer、system-backup 7 个业务域 spec，并将公共前置收进 `tests/e2e/helpers/localEduE2e.ts`。
+- 原因：原文件过重，失败时只能看到一个大文件，定位成本高；按业务域拆分后，Playwright 失败文件名即可指向具体业务链路，同时保留 `npm run check:all` 的完整覆盖。
+- 约束：`scripts/quality-gate.cjs` 的 E2E 阶段运行整个 `tests/e2e` 目录，不降低检查范围；新增跨域前置时优先放 helper，避免在多个 spec 复制隐式状态。
+
 ## 2026-04-27：第六轮特殊类型投档表只进入 raw，不写应用侧录取结果
 
 - 决定：`scripts/round6_import_special_filing_results.py` 解析 2023-2025 艺术、体育、春季高考投档情况表时，只写入 `gaokao_admission_result` raw 表和 `gaokao_import_run`，不写 `admission_record`。

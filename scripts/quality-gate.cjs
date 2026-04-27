@@ -41,10 +41,10 @@ const steps = {
   e2e: {
     label: "跨端 E2E 回归",
     command: npmCommand,
-    args: ["run", "e2e", "--", "tests/e2e/dashboard-smoke.spec.ts"],
-    purpose: "验证浏览器里学生、考试、报表、推荐、高考志愿和异常提示等主流程。",
+    args: ["run", "e2e", "--", "tests/e2e"],
+    purpose: "按业务域验证浏览器里工作台、学生、考试分析、报表、推荐、高考志愿和系统备份等主流程。",
     failureHint:
-      "先看 Playwright 给出的失败截图、trace 或第一个失败步骤。若提示浏览器缺失，执行 `npm run e2e:install`；若是页面等待超时，先确认后端临时服务、前端页面和测试前置数据是否正常。",
+      "先看失败文件名定位业务域，再看 Playwright 给出的失败截图、trace 或第一个失败步骤。若提示浏览器缺失，执行 `npm run e2e:install`；若是页面等待超时，先确认后端临时服务、前端页面和测试前置数据是否正常。",
   },
 };
 
@@ -56,7 +56,7 @@ const gates = {
   },
   e2e: {
     label: "跨端质量门禁",
-    description: "运行 Playwright dashboard-smoke 跨端流程。",
+    description: "运行 Playwright 分域跨端流程。",
     stepKeys: ["e2e"],
   },
   all: {

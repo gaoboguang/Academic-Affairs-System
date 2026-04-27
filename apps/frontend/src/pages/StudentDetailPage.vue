@@ -22,6 +22,8 @@
         <el-button @click="router.push('/students')">返回列表</el-button>
         <el-button @click="router.push(`/growth-archive?student_id=${studentId}`)">成长档案</el-button>
         <el-button @click="router.push(`/gaokao-pathways?student_id=${studentId}`)">升学方案</el-button>
+        <el-button @click="openStudentGrowthReport">打印成长摘要</el-button>
+        <el-button :disabled="!latestExamId" @click="openStudentAnalysisReport">打印成绩报告</el-button>
         <el-button type="primary" @click="router.push('/recommendations')">升学推荐</el-button>
       </div>
     </header>
@@ -81,6 +83,32 @@
           <span>考试次数</span>
           <strong>{{ profile.performance_summary.exam_count }}</strong>
         </article>
+      </section>
+
+      <section class="soft-card panorama-card">
+        <div class="section-head compact">
+          <div>
+            <h3>360° 总览与下一步</h3>
+            <p>这里集中显示当前学生能不能分析、缺什么、下一步去哪里补。</p>
+          </div>
+        </div>
+        <div class="risk-tag-list">
+          <el-tag
+            v-for="item in studentRiskTags"
+            :key="item.label"
+            :type="item.type"
+            effect="light"
+          >
+            {{ item.label }}：{{ item.detail }}
+          </el-tag>
+          <el-tag v-if="!studentRiskTags.length" type="success" effect="light">当前关键数据可用于基础分析</el-tag>
+        </div>
+        <div class="action-card-grid">
+          <article v-for="item in student360Actions" :key="item.label" class="action-card" @click="router.push(item.path)">
+            <strong>{{ item.label }}</strong>
+            <p>{{ item.detail }}</p>
+          </article>
+        </div>
       </section>
 
       <el-tabs class="profile-tabs">
@@ -341,6 +369,14 @@ import {
   formatClassTransferRoute,
   type ClassTransferHistoryItem,
 } from "../components/students/studentClassTransfer";
+import {
+  buildStudent360Actions,
+  buildStudent360RiskTags,
+} from "../utils/profile360";
+import {
+  growthSummaryPrintPreviewPath,
+  studentAnalysisPrintPreviewPath,
+} from "../utils/print";
 
 interface GuardianItem {
   id: number;
@@ -418,6 +454,7 @@ interface StudentProfile {
   student: StudentDetail;
   class_histories: ClassHistoryItem[];
   performance_summary: {
+    latest_exam_id?: number | null;
     latest_total_score?: number | null;
     latest_grade_rank?: number | null;
     latest_exam_name?: string | null;
@@ -451,6 +488,8 @@ const currentClassLabel = computed(() => {
 const latestExamName = computed(
   () => profile.value?.performance_summary.latest_exam_name ?? "暂无考试画像",
 );
+
+const latestExamId = computed(() => profile.value?.performance_summary.latest_exam_id ?? null);
 
 const primaryGuardian = computed(
   () => profile.value?.student.guardians.find((item) => item.is_primary) ?? profile.value?.student.guardians[0] ?? null,
@@ -502,6 +541,20 @@ const studentHeroCards = computed(() => {
   ];
 });
 
+const studentRiskTags = computed(() => {
+  if (!profile.value) return [];
+  return buildStudent360RiskTags({
+    examCount: profile.value.performance_summary.exam_count,
+    growthRecordCount: profile.value.recent_growth_records.length,
+    recommendationCount: profile.value.recommendation_history.length,
+    attachmentCount: profile.value.attachments.length,
+    classTransferCount: classTransferHistory.value.length,
+    studentType: profile.value.student.student_type,
+  });
+});
+
+const student360Actions = computed(() => buildStudent360Actions(studentId.value));
+
 function resetAttachmentDraft(): void {
   attachmentDraft.title = "";
   attachmentDraft.attachment_type = "";
@@ -522,6 +575,15 @@ function formatStudentType(value?: string | null): string {
     repeat: "复读生",
   };
   return mapping[value] ?? value;
+}
+
+function openStudentGrowthReport(): void {
+  openFile(growthSummaryPrintPreviewPath(studentId.value));
+}
+
+function openStudentAnalysisReport(): void {
+  if (!latestExamId.value) return;
+  openFile(studentAnalysisPrintPreviewPath(studentId.value, latestExamId.value));
 }
 
 async function loadProfile(): Promise<void> {
@@ -612,6 +674,49 @@ onMounted(loadDetail);
   display: grid;
   gap: 10px;
   margin-bottom: 14px;
+}
+
+.panorama-card {
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+}
+
+.risk-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.risk-tag-list :deep(.el-tag) {
+  height: auto;
+  min-height: 30px;
+  padding: 6px 10px;
+  white-space: normal;
+}
+
+.action-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.action-card {
+  padding: 14px;
+  border: 1px solid rgba(123, 141, 158, 0.2);
+  border-radius: 8px;
+  background: rgba(248, 251, 253, 0.82);
+  cursor: pointer;
+}
+
+.action-card strong {
+  color: #1e3448;
+}
+
+.action-card p {
+  margin: 6px 0 0;
+  color: #61778b;
+  line-height: 1.55;
 }
 
 .system-event-card {

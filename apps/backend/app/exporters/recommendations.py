@@ -47,6 +47,14 @@ SHANDONG_2026_DATA_NOTICE = (
     "正式填报前需导入 2026 官方计划，并以山东省教育招生考试院最终发布的招生计划和高校章程为准。"
 )
 
+RECOMMENDATION_GLOBAL_RISK_NOTICES = [
+    "普通类推荐主要基于已导入的历史录取、招生计划和位次口径，可作为当前主链路参考。",
+    "单招、综评、艺术、体育、春考等特殊类型如缺专门录取结果，只能做资格或方向初筛，不能视作完整录取把握。",
+    "2024 招生计划数量偏少时，需要核验官方完整性后再定稿。",
+    "2026 正式招生计划、一分一段和省控线需等待官方发布，正式填报前必须替换为当年官方数据。",
+    "招生章程限制链仍需人工复核，尤其是选科、体检、单科、语种、校区和培养模式要求。",
+]
+
 
 def export_recommendation_summary(settings: Settings, meta: dict[str, object], rows: list[dict[str, object]]) -> str:
     workbook = Workbook()
@@ -95,6 +103,10 @@ def export_recommendation_summary(settings: Settings, meta: dict[str, object], r
             "学生位次",
             "比值",
             "依据",
+            "录取结果年份",
+            "计划年份",
+            "批次",
+            "选科要求",
             "职业匹配",
             "对应目标方向",
             "路径提示",
@@ -103,6 +115,7 @@ def export_recommendation_summary(settings: Settings, meta: dict[str, object], r
             "风险提示",
             "章程链接",
             "章程状态",
+            "章程限制状态",
             "校区备注",
             "章程备注",
         ]
@@ -117,6 +130,10 @@ def export_recommendation_summary(settings: Settings, meta: dict[str, object], r
                 row.get("student_rank"),
                 row.get("ratio"),
                 row.get("score_basis"),
+                _format_years(row.get("reference_years_json") or _read_snapshot_value(row, "reference_years")),
+                _read_snapshot_value(row, "plan_year") or _read_snapshot_value(row, "target_year"),
+                _read_snapshot_value(row, "batch") or _read_snapshot_value(row, "matched_rule_batch"),
+                _read_snapshot_value(row, "subject_requirement") or _read_snapshot_value(row, "required_subjects"),
                 row.get("career_match_strength"),
                 " / ".join(row.get("matched_direction_names_json") or []),
                 _build_path_hint(row),
@@ -125,6 +142,7 @@ def export_recommendation_summary(settings: Settings, meta: dict[str, object], r
                 _format_risk_flags(row.get("risk_flags_json")),
                 _read_snapshot_value(row, "chapter_url"),
                 _read_snapshot_value(row, "chapter_review_status"),
+                _build_chapter_restriction_export_copy(row),
                 _read_snapshot_value(row, "chapter_campus_note"),
                 _read_snapshot_value(row, "chapter_other_risk_note"),
             ]
@@ -724,6 +742,20 @@ def _read_snapshot_value(row: dict[str, object], key: str) -> object:
     return None
 
 
+def _build_chapter_restriction_export_copy(row: dict[str, object]) -> str:
+    labels = [
+        ("语种", _read_snapshot_value(row, "chapter_language_requirement")),
+        ("单科", _read_snapshot_value(row, "chapter_single_subject_requirement")),
+        ("性别", _read_snapshot_value(row, "chapter_gender_requirement")),
+        ("身高", _read_snapshot_value(row, "chapter_height_requirement")),
+        ("视力", _read_snapshot_value(row, "chapter_vision_requirement")),
+        ("色觉", _read_snapshot_value(row, "chapter_color_vision_requirement")),
+        ("体检", _read_snapshot_value(row, "chapter_physical_exam_requirement")),
+    ]
+    parts = [f"{label}：{value}" for label, value in labels if value]
+    return "；".join(parts) or "-"
+
+
 def _build_candidate_rule_copy(row: dict[str, object]) -> str | None:
     if not _has_matched_rule(row):
         return None
@@ -1307,7 +1339,14 @@ def _format_subject_requirement_mode(mode: object) -> str:
 
 
 def _build_recommendation_risk_rows(meta: dict[str, object], rows: list[dict[str, object]]) -> list[dict[str, str]]:
-    results: list[dict[str, str]] = []
+    results: list[dict[str, str]] = [
+        {
+            "title": "统一风险口径",
+            "summary": "正式输出保留普通类、特殊类型、2024/2026 数据和章程复核边界",
+            "detail": notice,
+        }
+        for notice in RECOMMENDATION_GLOBAL_RISK_NOTICES
+    ]
 
     simulation_note = str(meta.get("simulation_note") or "").strip()
     if simulation_note and simulation_note != "默认推荐链路":
@@ -1619,6 +1658,7 @@ def _build_recommendation_risk_group_label(title: object) -> str:
     }:
         return "历史对照摘要"
     if title in {
+        "统一风险口径",
         "模拟结果",
         "样本不足",
         "缺少位次口径",

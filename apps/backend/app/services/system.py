@@ -10,6 +10,7 @@ from uuid import uuid4
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from fastapi import HTTPException, Request
+from openpyxl import load_workbook
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session
 
@@ -42,17 +43,20 @@ from app.schemas.system import (
     BackupCreateResponse,
     BackupRecordRead,
     BackupRestorePayload,
+    BackupVerificationRead,
     DataRepairExecutePayload,
     DataRepairExecuteResponse,
     DataRepairScanRead,
     ImportCenterBatchDetailRead,
     ImportCenterBatchRead,
+    ImportCenterErrorItemRead,
     ImportCenterResponse,
     ImportCenterSummaryRead,
     ImportCenterTemplateRead,
     SystemConfigGroupRead,
     SystemConfigItemRead,
     SystemConfigItemUpdatePayload,
+    SystemSafetyStatusRead,
     SystemTemplateRead,
 )
 from app.services.data_quality import build_data_repair_scan, execute_repair_action
@@ -164,6 +168,68 @@ def list_backups(session: Session) -> list[BackupRecordRead]:
     return [_serialize_backup(item) for item in repo_list_backups(session)]
 
 
+def get_system_safety_status(session: Session, settings) -> SystemSafetyStatusRead:
+    backups = repo_list_backups(session)
+    latest_backup = _serialize_backup(backups[0]) if backups else None
+    latest_restore = session.scalar(
+        select(AuditLog)
+        .where(AuditLog.module == "system", AuditLog.action == "restore")
+        .order_by(desc(AuditLog.created_at), desc(AuditLog.id))
+        .limit(1)
+    )
+    sqlite_integrity = _check_sqlite_integrity(settings.db_path)
+    warnings: list[str] = []
+    data_dir_size = _safe_directory_size(settings.data_dir)
+    backup_dir_size = _safe_directory_size(settings.backups_dir)
+    if latest_backup is None:
+        warnings.append("当前还没有备份记录，导入真实数据或恢复前建议先创建备份。")
+    if sqlite_integrity != "ok":
+        warnings.append(f"SQLite 完整性检查结果为 {sqlite_integrity}，建议先停止写入并备份现场。")
+    if data_dir_size >= 5 * 1024 * 1024 * 1024:
+        warnings.append("data 目录已超过 5GB，建议检查附件、导出和备份占用。")
+    if len(backups) >= 20:
+        warnings.append("备份包数量较多，建议人工确认哪些需要长期保留；系统不会自动删除。")
+
+    return SystemSafetyStatusRead(
+        main_db_path=str(settings.db_path),
+        main_db_size=_safe_file_size(settings.db_path),
+        data_dir_path=str(settings.data_dir),
+        data_dir_size=data_dir_size,
+        backup_dir_path=str(settings.backups_dir),
+        backup_dir_size=backup_dir_size,
+        backup_count=len(backups),
+        latest_backup=latest_backup,
+        latest_restore_at=latest_restore.created_at if latest_restore else None,
+        sqlite_integrity=sqlite_integrity,
+        alembic_version=_read_alembic_version(settings.db_path),
+        warnings=warnings,
+    )
+
+
+def verify_backup(
+    session: Session,
+    settings,
+    backup_id: int,
+    *,
+    restore_dry_run: bool = False,
+) -> BackupVerificationRead:
+    record = get_backup_record(session, backup_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="备份记录不存在")
+    backup_path = resolve_allowed_file_path(
+        record.file_path,
+        allowed_roots=[settings.backups_dir],
+        project_root=settings.project_root,
+        not_found_detail="备份文件不存在",
+    )
+    return _verify_backup_file(
+        record,
+        backup_path,
+        settings.db_path,
+        restore_dry_run=restore_dry_run,
+    )
+
+
 def list_audit_logs(session: Session, limit: int = 100) -> list[AuditLogRead]:
     return [AuditLogRead.model_validate(item) for item in repo_list_audit_logs(session, limit=limit)]
 
@@ -273,6 +339,7 @@ def list_import_center_batches(
     return ImportCenterResponse(
         generated_at=datetime.now(),
         summary=_build_import_center_summary(batches),
+        latest_backup=_get_latest_backup(session),
         templates=_build_import_center_templates(),
         batches=batches,
     )
@@ -294,9 +361,101 @@ def get_import_center_batch_detail(
         result_json=result_json,
         audit_logs=_list_import_batch_audit_logs(session, batch),
         error_preview=_string_list(result_json.get("error_preview") if result_json else None),
+        error_items=_build_import_error_items(settings, batch, result_json),
         notice_preview=_string_list(result_json.get("notice_preview") if result_json else None),
         rollback_steps=_build_rollback_steps(batch),
     )
+
+
+def _get_latest_backup(session: Session) -> BackupRecordRead | None:
+    item = session.scalar(select(BackupRecord).order_by(desc(BackupRecord.created_at), desc(BackupRecord.id)).limit(1))
+    return _serialize_backup(item) if item else None
+
+
+def _build_import_error_items(
+    settings,
+    batch: ImportCenterBatchRead,
+    result_json: dict | None,
+) -> list[ImportCenterErrorItemRead]:
+    explicit_items = result_json.get("error_items") if result_json else None
+    if isinstance(explicit_items, list):
+        rows: list[ImportCenterErrorItemRead] = []
+        for item in explicit_items[:10]:
+            if not isinstance(item, dict):
+                continue
+            message = str(item.get("message") or item.get("error") or "").strip()
+            if not message:
+                continue
+            rows.append(
+                ImportCenterErrorItemRead(
+                    row_number=_optional_int(item.get("row_number") or item.get("row")),
+                    field_name=_optional_str(item.get("field_name") or item.get("field") or item.get("column_name")),
+                    raw_value=item.get("raw_value"),
+                    message=message,
+                    suggestion=_optional_str(item.get("suggestion")),
+                )
+            )
+        if rows:
+            return rows
+
+    if batch.error_report_path:
+        rows = _read_error_items_from_report(settings, batch.error_report_path)
+        if rows:
+            return rows
+
+    return [
+        ImportCenterErrorItemRead(row_number=_extract_error_row_number(item), message=item)
+        for item in _string_list(result_json.get("error_preview") if result_json else None)[:10]
+    ]
+
+
+def _read_error_items_from_report(settings, error_report_path: str) -> list[ImportCenterErrorItemRead]:
+    try:
+        path = resolve_allowed_file_path(
+            error_report_path,
+            allowed_roots=[settings.logs_dir],
+            project_root=settings.project_root,
+        )
+        workbook = load_workbook(path, read_only=True, data_only=True)
+        sheet = workbook["错误报告"] if "错误报告" in workbook.sheetnames else workbook.active
+        header_row = next(sheet.iter_rows(min_row=1, max_row=1, values_only=True), None)
+        headers = [str(value).strip() if value is not None else "" for value in (header_row or [])]
+        index = {header: offset for offset, header in enumerate(headers)}
+        rows: list[ImportCenterErrorItemRead] = []
+        for values in sheet.iter_rows(min_row=2, values_only=True):
+            if not any(value not in (None, "") for value in values):
+                continue
+            message = _cell_value(values, index, "错误原因")
+            if not message:
+                continue
+            rows.append(
+                ImportCenterErrorItemRead(
+                    row_number=_optional_int(_cell_value(values, index, "行号")),
+                    field_name=_optional_str(_cell_value(values, index, "字段名") or _cell_value(values, index, "列名")),
+                    raw_value=_cell_value(values, index, "原始值"),
+                    message=str(message),
+                    suggestion=_optional_str(_cell_value(values, index, "建议修复")),
+                )
+            )
+            if len(rows) >= 10:
+                break
+        return rows
+    except Exception:
+        return []
+
+
+def _cell_value(values: tuple, index: dict[str, int], header: str):
+    offset = index.get(header)
+    if offset is None or offset >= len(values):
+        return None
+    return values[offset]
+
+
+def _extract_error_row_number(value: str) -> int | None:
+    if not value.startswith("第 ") or " 行" not in value:
+        return None
+    raw = value.removeprefix("第 ").split(" 行", 1)[0]
+    return _optional_int(raw)
 
 
 def _build_import_center_templates() -> list[ImportCenterTemplateRead]:
@@ -879,6 +1038,105 @@ def _snapshot_sqlite_db(source_path: Path, target_path: Path) -> None:
     finally:
         target.close()
         source.close()
+
+
+def _verify_backup_file(
+    record: BackupRecord,
+    backup_path: Path,
+    overwrite_path: Path,
+    *,
+    restore_dry_run: bool,
+) -> BackupVerificationRead:
+    try:
+        with TemporaryDirectory() as tmp_dir:
+            tmp_root = Path(tmp_dir)
+            with ZipFile(backup_path, "r") as archive:
+                names = set(archive.namelist())
+                if "manifest.json" not in names or "db/app.db" not in names:
+                    return BackupVerificationRead(
+                        backup_id=record.id,
+                        backup_name=record.backup_name,
+                        valid=False,
+                        message="备份包结构无效，缺少 manifest.json 或 db/app.db。",
+                        file_size=_safe_file_size(backup_path),
+                        will_overwrite_path=str(overwrite_path),
+                    )
+                archive.extract("manifest.json", tmp_root)
+                archive.extract("db/app.db", tmp_root)
+            manifest_path = tmp_root / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            restored_db = tmp_root / "db" / "app.db"
+            integrity = _check_sqlite_integrity(restored_db)
+            valid = integrity == "ok"
+            message = "恢复演练通过，备份包可读取，临时库完整性为 ok。" if restore_dry_run else "备份包校验通过。"
+            if not valid:
+                message = f"备份包可读取，但临时库完整性检查结果为 {integrity}。"
+            return BackupVerificationRead(
+                backup_id=record.id,
+                backup_name=record.backup_name,
+                valid=valid,
+                message=message,
+                file_size=_safe_file_size(backup_path),
+                will_overwrite_path=str(overwrite_path),
+                sqlite_integrity=integrity,
+                manifest=manifest if isinstance(manifest, dict) else None,
+            )
+    except (OSError, json.JSONDecodeError, sqlite3.Error, KeyError) as exc:
+        return BackupVerificationRead(
+            backup_id=record.id,
+            backup_name=record.backup_name,
+            valid=False,
+            message=f"备份包校验失败：{exc}",
+            file_size=_safe_file_size(backup_path),
+            will_overwrite_path=str(overwrite_path),
+        )
+
+
+def _check_sqlite_integrity(db_path: Path) -> str:
+    if not db_path.exists():
+        return "missing"
+    try:
+        with sqlite3.connect(str(db_path)) as connection:
+            row = connection.execute("PRAGMA integrity_check").fetchone()
+            return str(row[0]) if row and row[0] is not None else "unknown"
+    except sqlite3.Error as exc:
+        return f"error: {exc}"
+
+
+def _read_alembic_version(db_path: Path) -> str | None:
+    if not db_path.exists():
+        return None
+    try:
+        with sqlite3.connect(str(db_path)) as connection:
+            exists = connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='alembic_version'"
+            ).fetchone()
+            if not exists:
+                return None
+            row = connection.execute("SELECT version_num FROM alembic_version LIMIT 1").fetchone()
+            return str(row[0]) if row and row[0] is not None else None
+    except sqlite3.Error:
+        return None
+
+
+def _safe_file_size(path: Path) -> int:
+    try:
+        return path.stat().st_size if path.exists() else 0
+    except OSError:
+        return 0
+
+
+def _safe_directory_size(path: Path) -> int:
+    if not path.exists():
+        return 0
+    total = 0
+    try:
+        for item in path.rglob("*"):
+            if item.is_file():
+                total += _safe_file_size(item)
+    except OSError:
+        return total
+    return total
 
 
 def _add_directory_to_zip(archive: ZipFile, directory: Path, prefix: str) -> None:

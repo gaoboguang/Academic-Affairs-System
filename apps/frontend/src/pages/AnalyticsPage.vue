@@ -20,6 +20,17 @@
       </div>
     </header>
 
+    <section v-if="scoreReadinessMessages.length" class="score-readiness-stack">
+      <el-alert
+        v-for="item in scoreReadinessMessages"
+        :key="item"
+        type="warning"
+        show-icon
+        :closable="false"
+        :title="item"
+      />
+    </section>
+
     <section class="analysis-hero-grid">
       <article class="soft-card overview-panel">
         <div class="overview-kicker">分析上下文</div>
@@ -37,7 +48,7 @@
       <div class="section-head compact">
         <div>
           <h3>选择考试</h3>
-          <p>所有分析结果都围绕同一场考试展开，切换考试后建议重新查看各个分析维度。</p>
+          <p>所有分析结果都围绕同一场考试展开，统计口径为已导入成绩快照；筛选条件变更后建议重新查看各个分析维度。</p>
         </div>
       </div>
       <div class="filter-grid">
@@ -72,6 +83,7 @@
             </el-select>
             <el-button type="primary" @click="loadStudentAnalytics">查询</el-button>
           </div>
+          <el-empty v-if="!studentAnalytics && !scoreRecordTotal" description="当前成绩记录为 0。请先到考试成绩中心导入成绩，再查看学生分析。" />
           <div v-if="studentAnalytics" class="metric-grid analytics-grid">
             <div class="soft-card stat-card">
               <div class="metric-label">总分</div>
@@ -120,6 +132,7 @@
             </el-select>
             <el-button type="primary" @click="loadClassAnalytics">查询</el-button>
           </div>
+          <el-empty v-if="!classAnalytics && !scoreRecordTotal" description="当前成绩记录为 0。请先导入成绩，再查看班级均分、分科质量和横向比较。" />
           <div v-if="classAnalytics" class="metric-grid analytics-grid">
             <div class="soft-card stat-card">
               <div class="metric-label">总分均分</div>
@@ -168,6 +181,7 @@
             </el-select>
             <el-button type="primary" @click="loadGradeAnalytics">查询</el-button>
           </div>
+          <el-empty v-if="!gradeAnalytics && !scoreRecordTotal" description="当前成绩记录为 0。请先导入成绩，再查看年级分数段、名次段和班级横向对比。" />
           <div v-if="gradeAnalytics" class="metric-grid analytics-grid">
             <div class="soft-card stat-card">
               <div class="metric-label">年级均分</div>
@@ -261,6 +275,7 @@
             </el-select>
             <el-button type="primary" @click="loadTeacherAnalytics">查询</el-button>
           </div>
+          <el-empty v-if="!teacherAnalytics && !scoreRecordTotal" description="当前成绩记录为 0。请先导入成绩并维护任教关系，再查看教师分析。" />
           <div v-if="teacherAnalytics" class="metric-grid analytics-grid">
             <div class="soft-card stat-card">
               <div class="metric-label">教师均分</div>
@@ -339,6 +354,7 @@ import type {
   TeacherPanoramaResponse,
 } from "../components/analytics/types";
 import { useReferenceStore } from "../stores/reference";
+import { buildScoreReadinessMessages } from "../utils/scoreReadiness";
 
 interface ExamOption {
   id: number;
@@ -375,6 +391,7 @@ const selectedTeacherPanoramaAcademicYearIds = ref<number[]>([]);
 const loadingGradePanorama = ref(false);
 const loadingClassPanorama = ref(false);
 const loadingTeacherPanorama = ref(false);
+const scoreRecordTotal = ref(0);
 
 const studentAnalytics = ref<any>(null);
 const classAnalytics = ref<any>(null);
@@ -385,6 +402,13 @@ const classPanorama = ref<ClassPanoramaResponse | null>(null);
 const teacherPanorama = ref<TeacherPanoramaResponse | null>(null);
 const selectedExamName = computed(
   () => examOptions.value.find((item) => item.id === selectedExamId.value)?.name ?? "未选择考试",
+);
+const scoreReadinessMessages = computed(() =>
+  buildScoreReadinessMessages({
+    examCount: examOptions.value.length,
+    scoreRecordTotal: scoreRecordTotal.value,
+    selectedExamName: selectedExamId.value ? selectedExamName.value : null,
+  }),
 );
 const analyticsOverviewCards = computed(() => [
   {
@@ -414,6 +438,12 @@ async function loadOptions(): Promise<void> {
     apiRequest<{ items: StudentOption[] }>("/api/students?page=1&page_size=200"),
     apiRequest<{ items: TeacherOption[] }>("/api/teachers?page=1&page_size=200"),
   ]);
+  try {
+    const dashboardPayload = await apiRequest<{ score_record_total?: number }>("/api/dashboard/summary");
+    scoreRecordTotal.value = dashboardPayload.score_record_total ?? 0;
+  } catch {
+    scoreRecordTotal.value = 0;
+  }
   examOptions.value = examPayload.items;
   studentOptions.value = studentPayload.items;
   teacherOptions.value = teacherPayload.items;
@@ -574,6 +604,11 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) repeat(3, minmax(0, 0.7fr));
   gap: 16px;
+}
+
+.score-readiness-stack {
+  display: grid;
+  gap: 10px;
 }
 
 .overview-panel,

@@ -32,67 +32,71 @@
    后续 Codex 窗口按改动类型选择验证命令的收尾清单。
 14. [`final-acceptance-report-2026-04-24.md`](./final-acceptance-report-2026-04-24.md)
    窗口 9 的最终整合、质量门禁、P0 验收和是否建议试用结论。
-15. [`import-system-audit-2026-04-24.md`](./import-system-audit-2026-04-24.md)
+15. [`desktop_packaging_validation_20260427.md`](./desktop_packaging_validation_20260427.md)
+   M10 桌面端交付验证记录，说明前端资源、后端二进制、数据目录定位、macOS 目录构建结果和后续签名 / Windows 打包待办。
+16. [`m7-chapter-review-workbench-design-note-20260427.md`](./m7-chapter-review-workbench-design-note-20260427.md)
+   M7 章程限制链人工复核工作台补充说明，记录已完成的只读审阅能力、未直接写入复核备注 / 导出清单的字段原因和后续实现建议。
+17. [`import-system-audit-2026-04-24.md`](./import-system-audit-2026-04-24.md)
    窗口 2 的导入体系审计与统一治理记录，覆盖导入入口、错误报告、批次摘要、导入中心和回滚边界。
-16. [`round4-baseline-audit.md`](./round4-baseline-audit.md)
+18. [`round4-baseline-audit.md`](./round4-baseline-audit.md)
    第四轮 E0 的学生批量操作、批量调班和数据库补齐基线审计。
-17. [`round4-data-completion-plan.md`](./round4-data-completion-plan.md)
+19. [`round4-data-completion-plan.md`](./round4-data-completion-plan.md)
    第四轮 E5 的数据库补齐审计、可补项计划和 E6 导入任务清单。
-18. [`round4-official-source-checklist.md`](./round4-official-source-checklist.md)
+20. [`round4-official-source-checklist.md`](./round4-official-source-checklist.md)
    第四轮 E5 的山东官方来源核对清单，区分可导入、需人工下载、需复核和未发布数据。
-19. [`round4-data-completion-result.md`](./round4-data-completion-result.md)
+21. [`round4-data-completion-result.md`](./round4-data-completion-result.md)
    第四轮 E6 的数据库补齐导入结果，记录 2020-2022 一分一段和省控线导入、来源追溯、SHA256、补齐前后差异和剩余缺口。
-20. [`round4-user-guide-student-bulk-actions.md`](./round4-user-guide-student-bulk-actions.md)
+22. [`round4-user-guide-student-bulk-actions.md`](./round4-user-guide-student-bulk-actions.md)
    第四轮面向老师的学生批量删除、批量调班和调班历史查看说明。
-21. [`round4-user-guide-data-completion.md`](./round4-user-guide-data-completion.md)
+23. [`round4-user-guide-data-completion.md`](./round4-user-guide-data-completion.md)
    第四轮面向老师的高考数据库补齐、年份覆盖矩阵、剩余缺口和打印覆盖报告说明。
-22. [`round4-final-acceptance-report.md`](./round4-final-acceptance-report.md)
+24. [`round4-final-acceptance-report.md`](./round4-final-acceptance-report.md)
    第四轮 E8 的最终集成验收报告，记录 E0-E7 整合、完整测试、剩余数据缺口和是否可合并 main。
-23. [`round5-source-discovery-report.md`](./round5-source-discovery-report.md)
+25. [`round5-source-discovery-report.md`](./round5-source-discovery-report.md)
    第五轮官方来源发现报告，记录 2023-2025 普通类多轮投档、艺体春考、政策和计划补充信息来源。
-24. [`round5-special-admission-import-result.md`](./round5-special-admission-import-result.md)
+26. [`round5-special-admission-import-result.md`](./round5-special-admission-import-result.md)
    第五轮 2025 艺术、体育、春考专门录取情况导入结果，记录附件、行数、应用侧匹配和剩余缺口。
-25. [`round5-plan-supplement-audit.md`](./round5-plan-supplement-audit.md)
+27. [`round5-plan-supplement-audit.md`](./round5-plan-supplement-audit.md)
    第五轮招生计划补充信息附件审计，记录官方 docx 附件直链、本机下载失败原因和人工下载后复跑入口。
-26. [`round5-chapter-machine-preaudit.md`](./round5-chapter-machine-preaudit.md)
+28. [`round5-chapter-machine-preaudit.md`](./round5-chapter-machine-preaudit.md)
    第五轮章程限制链机器预审明细，记录候选链接连通性和不能自动改为人工确认的边界。
-27. [`round5-chapter-review-report.md`](./round5-chapter-review-report.md)
+29. [`round5-chapter-review-report.md`](./round5-chapter-review-report.md)
    第五轮章程限制链机器预审汇总报告，记录 500 条候选链接预审结果、可人工优先核对记录和剩余人工复核缺口。
-28. [`round5-chapter-review-errors.md`](./round5-chapter-review-errors.md)
+30. [`round5-chapter-review-errors.md`](./round5-chapter-review-errors.md)
    第五轮章程限制链机器预审错误清单，记录异常、HTTP 错误和超时处理原则。
-29. [`round5-shandong-admission-data-final-report.md`](./round5-shandong-admission-data-final-report.md)
+31. [`round5-shandong-admission-data-final-report.md`](./round5-shandong-admission-data-final-report.md)
    第五轮山东招生录取数据专项最终报告，记录本轮数据变化、剩余缺口、验收结果和合并建议。
-30. [`round6-shandong-db-completion-final-report.md`](./round6-shandong-db-completion-final-report.md)
+32. [`round6-shandong-db-completion-final-report.md`](./round6-shandong-db-completion-final-report.md)
    第六轮山东招生数据库补齐阶段报告，记录新增自动化脚本、当前网络阻断、试运行结果和后续补齐入口。
-31. [`round6-data-coverage-matrix.md`](./round6-data-coverage-matrix.md)
+33. [`round6-data-coverage-matrix.md`](./round6-data-coverage-matrix.md)
    第六轮山东招生数据库覆盖矩阵，记录当前 raw / 应用侧覆盖、投档脚本能力和剩余缺口。
-32. [`round6-special-filing-import-result.md`](./round6-special-filing-import-result.md)
+34. [`round6-special-filing-import-result.md`](./round6-special-filing-import-result.md)
    第六轮特殊类型投档表处理报告，记录 15 个已登记投档来源的本地附件状态和复跑入口。
-33. [`round6-chapter-review-sample.md`](./round6-chapter-review-sample.md)
+35. [`round6-chapter-review-sample.md`](./round6-chapter-review-sample.md)
    第六轮章程限制链辅助预审样本，列出可优先人工核对的机器可访问链接。
-34. [`gaokao-source-import-framework-2026-04-25.md`](./gaokao-source-import-framework-2026-04-25.md)
+36. [`gaokao-source-import-framework-2026-04-25.md`](./gaokao-source-import-framework-2026-04-25.md)
    窗口 A1 的山东高考官方来源登记、导入批次和本地文件入场框架。
-35. [`round3-shandong-pathway-rules.md`](./round3-shandong-pathway-rules.md)
+37. [`round3-shandong-pathway-rules.md`](./round3-shandong-pathway-rules.md)
    第三轮 D2 的山东升学路径规则字典、官方来源追溯和后续窗口注意事项。
-36. [`round3-student-pathway-profile.md`](./round3-student-pathway-profile.md)
+38. [`round3-student-pathway-profile.md`](./round3-student-pathway-profile.md)
    第三轮 D3 的学生升学画像、材料缺口和路径评估可读化说明。
-37. [`round3-gaokao-pathway-center.md`](./round3-gaokao-pathway-center.md)
+39. [`round3-gaokao-pathway-center.md`](./round3-gaokao-pathway-center.md)
    第三轮 D4 的山东升学方案中心页面、路径卡片和数据风险入口说明。
-38. [`round3-shandong-general-recommendation-hardening.md`](./round3-shandong-general-recommendation-hardening.md)
+40. [`round3-shandong-general-recommendation-hardening.md`](./round3-shandong-general-recommendation-hardening.md)
    第三轮 D5 的山东普通类推荐算法加固、共享分数换位次和 2026 数据提示说明。
-39. [`round3-vocational-spring-pathway-screening.md`](./round3-vocational-spring-pathway-screening.md)
+41. [`round3-vocational-spring-pathway-screening.md`](./round3-vocational-spring-pathway-screening.md)
    第三轮 D6 的高职单招、高职综评、春季高考本科/专科路径初筛、材料缺口和人工复核说明。
-40. [`round3-special-early-art-sports-pathways.md`](./round3-special-early-art-sports-pathways.md)
+42. [`round3-special-early-art-sports-pathways.md`](./round3-special-early-art-sports-pathways.md)
    第三轮 D7 的艺体、体育、提前批、特殊类型、体育单招和高水平运动队路径初筛、材料缺口和人工复核说明。
-41. [`round3-shandong-pathway-final-report.md`](./round3-shandong-pathway-final-report.md)
+43. [`round3-shandong-pathway-final-report.md`](./round3-shandong-pathway-final-report.md)
    第三轮 D8 的最终集成、验收、报告输出和交接说明。
-42. [`round3-shandong-pathway-user-guide.md`](./round3-shandong-pathway-user-guide.md)
+44. [`round3-shandong-pathway-user-guide.md`](./round3-shandong-pathway-user-guide.md)
    面向老师使用山东升学方案中心、路径卡片、材料缺口、打印和 Excel 报告的说明。
-43. [`report-export-print-audit-2026-04-24.md`](./report-export-print-audit-2026-04-24.md)
+45. [`report-export-print-audit-2026-04-24.md`](./report-export-print-audit-2026-04-24.md)
    窗口 6 的报表、打印、Excel 导出一致性审计与修复记录。
-44. [`frontend-navigation-audit-2026-04-24.md`](./frontend-navigation-audit-2026-04-24.md)
+46. [`frontend-navigation-audit-2026-04-24.md`](./frontend-navigation-audit-2026-04-24.md)
    窗口 7 的前端导航、空态、错误提示和非程序员可读性审计记录。
-45. [`dev/README.md`](./dev/README.md)
+47. [`dev/README.md`](./dev/README.md)
    当前开发主线、分工文档和 prompt 的索引。
 
 ## 当前仍在用的文档
@@ -125,6 +129,8 @@
   后续 Codex 每个窗口的验收命令选择规则。
 - [`final-acceptance-report-2026-04-24.md`](./final-acceptance-report-2026-04-24.md)
   窗口 9 的最终整合结果，包含完整验证、P0 备份恢复验收、Mac 启动方式和当前试用建议。
+- [`desktop_packaging_validation_20260427.md`](./desktop_packaging_validation_20260427.md)
+  M10 桌面端交付验证记录，包含打包链路、资源定位、数据目录、macOS 构建结果和后续待办。
 - [`import-system-audit-2026-04-24.md`](./import-system-audit-2026-04-24.md)
   窗口 2 对学生、教师、成绩、课表、录取数据、招生计划等导入入口与 `/import-center` 的统一治理记录。
 - [`round4-baseline-audit.md`](./round4-baseline-audit.md)

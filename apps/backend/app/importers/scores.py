@@ -80,10 +80,20 @@ class ScoreImporter:
         updated_rows = 0
         row_errors: list[RowError] = []
         seen_keys: set[tuple[int, int]] = set()
+        quality_counts = {
+            "absent": 0,
+            "invalid_score": 0,
+            "duplicate": 0,
+            "unmatched_student": 0,
+            "unmatched_subject": 0,
+            "identity_conflict": 0,
+        }
 
         for row_number, row_values in rows:
             try:
                 payload = self._parse_row(row_values)
+                if payload.score_status == "absent":
+                    quality_counts["absent"] += 1
                 dedupe_key = (payload.student_id, payload.subject_id)
                 if dedupe_key in seen_keys:
                     raise ValueError("同一学生同一科目在导入文件中重复出现")
@@ -116,6 +126,7 @@ class ScoreImporter:
                 success_rows += 1
             except Exception as exc:
                 failed_rows += 1
+                _record_score_quality_issue(quality_counts, str(exc))
                 row_errors.append(build_row_error(row_number=row_number, values=row_values, message=str(exc)))
 
         error_report_path = save_error_report(
@@ -138,6 +149,7 @@ class ScoreImporter:
             updated_rows=updated_rows,
             error_report_path=error_report_path,
             error_preview=build_error_preview(row_errors),
+            notice_preview=_build_score_quality_notice(quality_counts),
             message=f"成绩导入完成，成功 {success_rows} 条，失败 {failed_rows} 条。",
         )
 
@@ -212,3 +224,37 @@ class ScoreImporter:
         record.raw_text = payload.raw_text
         record.import_batch_id = batch_id
         record.note = payload.note
+
+
+def _record_score_quality_issue(counts: dict[str, int], message: str) -> None:
+    if "同一学生同一科目" in message:
+        counts["duplicate"] += 1
+    if "学号不存在" in message:
+        counts["unmatched_student"] += 1
+    if "学号与姓名不匹配" in message or "学生当前班级不匹配" in message:
+        counts["identity_conflict"] += 1
+    if "考试未配置科目" in message:
+        counts["unmatched_subject"] += 1
+    if "分数格式错误" in message or "分数不能为负数" in message or "分数超过满分" in message:
+        counts["invalid_score"] += 1
+
+
+def _build_score_quality_notice(counts: dict[str, int]) -> list[str]:
+    summary = (
+        "成绩导入质量摘要："
+        f"缺考 {counts['absent']} 行，"
+        f"非法分数 {counts['invalid_score']} 行，"
+        f"重复成绩 {counts['duplicate']} 行，"
+        f"未匹配学生 {counts['unmatched_student']} 行，"
+        f"未匹配科目 {counts['unmatched_subject']} 行。"
+    )
+    notices = [summary]
+    if counts["identity_conflict"]:
+        notices.append(f"身份或班级不一致 {counts['identity_conflict']} 行，请优先核对学号、姓名和当前班级。")
+    if counts["unmatched_student"]:
+        notices.append("存在未匹配学生，请先在学生中心维护学生主档，或修正 Excel 中的学号。")
+    if counts["unmatched_subject"]:
+        notices.append("存在未匹配科目，请先在考试科目配置中勾选对应科目。")
+    if counts["invalid_score"]:
+        notices.append("存在非法分数，请核对分数是否为数字、非负数且不超过该科满分。")
+    return notices

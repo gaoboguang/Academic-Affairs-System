@@ -25,12 +25,33 @@ class DashboardRecentExamSummary(BaseModel):
     excellent_rate: float | None = None
 
 
+class DashboardBackupSummary(BaseModel):
+    backup_name: str
+    created_at: datetime | None = None
+    status: str | None = None
+    file_size: int | None = None
+
+
+class DashboardDataHealthSummary(BaseModel):
+    status: str
+    label: str
+    summary: str
+    p0_gap_count: int = 0
+    warning_count: int = 0
+    blocking_count: int = 0
+    gaps: list[str] = Field(default_factory=list)
+
+
 class DashboardSummary(BaseModel):
     student_total: int
     teacher_total: int
+    exam_total: int
+    score_record_total: int
     grade_total: int
     class_total: int
     recent_imports: list[DashboardImportJob]
     latest_backup_time: str | None = None
+    latest_backup: DashboardBackupSummary | None = None
     recent_exam: DashboardRecentExamSummary | None = None
+    data_health: DashboardDataHealthSummary | None = None
     data_quality_issues: list[DataQualityIssueRead] = Field(default_factory=list)

@@ -7,18 +7,23 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.analytics.scores import calculate_rate, safe_mean
 from app.core.config import Settings
-from app.models import Exam, Grade, SchoolClass, Student, Teacher
+from app.models import BackupRecord, Exam, Grade, SchoolClass, ScoreRecord, Student, Teacher
 from app.repositories.exams import get_subject_snapshots_for_exam, get_total_snapshots_for_exam
-from app.repositories.system import list_recent_import_jobs
-from app.schemas.dashboard import DashboardImportJob, DashboardRecentExamSummary, DashboardSummary
+from app.repositories.system import list_backups, list_recent_import_jobs
+from app.schemas.dashboard import (
+    DashboardBackupSummary,
+    DashboardDataHealthSummary,
+    DashboardImportJob,
+    DashboardRecentExamSummary,
+    DashboardSummary,
+)
 from app.services.data_quality import build_data_quality_issues
+from app.utils.data_health import build_data_health_report
 
 
 def get_dashboard_summary(session: Session, settings: Settings) -> DashboardSummary:
-    latest_backup = None
-    backups = sorted(settings.backups_dir.glob("*.zip"))
-    if backups:
-        latest_backup = backups[-1].name
+    latest_backup = _get_latest_backup(session, settings)
+    latest_backup_time = latest_backup.created_at.isoformat() if latest_backup and latest_backup.created_at else None
 
     recent_imports = [
         DashboardImportJob(
@@ -33,16 +38,67 @@ def get_dashboard_summary(session: Session, settings: Settings) -> DashboardSumm
     ]
     recent_exam = _build_recent_exam_summary(session)
     data_quality_issues = build_data_quality_issues(session, limit=4)
+    data_health = _build_data_health_summary(settings)
 
     return DashboardSummary(
         student_total=session.scalar(select(func.count()).select_from(Student)) or 0,
         teacher_total=session.scalar(select(func.count()).select_from(Teacher)) or 0,
+        exam_total=session.scalar(select(func.count()).select_from(Exam)) or 0,
+        score_record_total=session.scalar(select(func.count()).select_from(ScoreRecord)) or 0,
         grade_total=session.scalar(select(func.count()).select_from(Grade)) or 0,
         class_total=session.scalar(select(func.count()).select_from(SchoolClass)) or 0,
         recent_imports=recent_imports,
-        latest_backup_time=latest_backup,
+        latest_backup_time=latest_backup_time,
+        latest_backup=latest_backup,
         recent_exam=recent_exam,
+        data_health=data_health,
         data_quality_issues=data_quality_issues,
+    )
+
+
+def _get_latest_backup(session: Session, settings: Settings) -> DashboardBackupSummary | None:
+    backup_records = list_backups(session)
+    if backup_records:
+        record = backup_records[0]
+        return _serialize_backup_record(record)
+
+    backup_files = sorted(settings.backups_dir.glob("*.zip"), key=lambda item: item.stat().st_mtime, reverse=True)
+    if not backup_files:
+        return None
+
+    latest_file = backup_files[0]
+    return DashboardBackupSummary(
+        backup_name=latest_file.name,
+        created_at=None,
+        status="success",
+        file_size=latest_file.stat().st_size,
+    )
+
+
+def _serialize_backup_record(record: BackupRecord) -> DashboardBackupSummary:
+    return DashboardBackupSummary(
+        backup_name=record.backup_name,
+        created_at=record.created_at,
+        status=record.status,
+        file_size=record.file_size,
+    )
+
+
+def _build_data_health_summary(settings: Settings) -> DashboardDataHealthSummary:
+    report = build_data_health_report(settings.db_path)
+    delivery = report.get("delivery_assessment") or {}
+    gaps = list(report.get("gaps") or [])
+    warning_items = list(delivery.get("warning_items") or [])
+    blocking_items = list(delivery.get("blocking_items") or [])
+
+    return DashboardDataHealthSummary(
+        status=str(delivery.get("status") or ("warning" if gaps else "pass")),
+        label=str(delivery.get("label") or ("有数据警告" if gaps else "P0 可通过")),
+        summary=str(delivery.get("summary") or report.get("summary") or ""),
+        p0_gap_count=len(gaps),
+        warning_count=len(warning_items),
+        blocking_count=len(blocking_items),
+        gaps=gaps[:4],
     )
 
 

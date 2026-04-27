@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildRecommendationBoundaryNotes,
   buildRecommendationFallbackPriorityCopy,
+  buildRecommendationGlobalRiskNoticeText,
   buildRecommendationReferenceCopy,
   buildRecommendationStaleReferenceNote,
   formatRecommendationRiskFlags,
@@ -103,5 +104,14 @@ describe("recommendation copy", () => {
 
   it("formats risk flags as teacher-readable copy", () => {
     expect(formatRecommendationRiskFlags(["sample_insufficient", "simulation_mode"])).toBe("样本不足 / 模拟测算");
+  });
+
+  it("keeps global recommendation risk notices explicit", () => {
+    const text = buildRecommendationGlobalRiskNoticeText();
+
+    expect(text).toContain("普通类推荐主要基于已导入的历史录取");
+    expect(text).toContain("特殊类型如缺专门录取结果");
+    expect(text).toContain("2026 正式招生计划、一分一段和省控线需等待官方发布");
+    expect(text).toContain("招生章程限制链仍需人工复核");
   });
 });

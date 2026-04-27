@@ -13,6 +13,16 @@
       </div>
     </header>
 
+    <el-alert
+      v-for="item in scoreReadinessMessages"
+      :key="item"
+      class="page-alert"
+      type="warning"
+      show-icon
+      :closable="false"
+      :title="item"
+    />
+
     <section class="soft-card panel-block">
       <div class="filter-grid">
         <el-input v-model="filters.name" placeholder="按考试名称筛选" />
@@ -235,6 +245,13 @@
         </el-upload>
         <el-button @click="reloadBatches">刷新批次</el-button>
       </div>
+      <el-alert
+        class="import-tip"
+        type="info"
+        show-icon
+        :closable="false"
+        title="成绩导入会检查缺考、非法分数、重复学生、未匹配学生和未匹配科目；导入后请先看质量摘要，再查看分析。"
+      />
       <ImportFeedbackPanel :result="importResult" />
       <el-table :data="scoreBatches" stripe style="margin-top: 16px">
         <el-table-column label="批次 ID" prop="id" width="90" />
@@ -271,6 +288,7 @@ import {
 } from "../components/exams/examSubjectConfig";
 import { useReferenceStore } from "../stores/reference";
 import { formatImportStatus, importStatusTagType, type ImportFeedbackResult } from "../utils/importFeedback";
+import { buildScoreReadinessMessages } from "../utils/scoreReadiness";
 
 interface ExamItem {
   id: number;
@@ -325,6 +343,7 @@ const savingExam = ref(false);
 const savingSubjects = ref(false);
 const importStrategy = ref("overwrite");
 const importResult = ref<(ImportFeedbackResult & { batch_id: number }) | null>(null);
+const scoreRecordTotal = ref(0);
 
 const filters = reactive({
   name: "",
@@ -368,6 +387,12 @@ const importDialogTitle = computed(() => {
   const current = exams.items.find((item) => item.id === importExamId.value);
   return current ? `导入成绩 - ${current.name}` : "导入成绩";
 });
+const scoreReadinessMessages = computed(() =>
+  buildScoreReadinessMessages({
+    examCount: exams.items.length,
+    scoreRecordTotal: scoreRecordTotal.value,
+  }),
+);
 
 function formatExamStatus(status: string): string {
   const mapping: Record<string, string> = {
@@ -414,6 +439,15 @@ async function loadExams(): Promise<void> {
     Object.assign(exams, await apiRequest<ExamListResponse>(`/api/exams?${query.toString()}`));
   } catch (error) {
     ElMessage.error((error as Error).message);
+  }
+}
+
+async function loadScoreReadiness(): Promise<void> {
+  try {
+    const payload = await apiRequest<{ score_record_total?: number }>("/api/dashboard/summary");
+    scoreRecordTotal.value = payload.score_record_total ?? 0;
+  } catch {
+    scoreRecordTotal.value = 0;
   }
 }
 
@@ -578,6 +612,7 @@ async function handleImport(uploadFileItem: UploadFile): Promise<void> {
       message: importResult.value.message,
     });
     await reloadBatches();
+    await loadScoreReadiness();
   } catch (error) {
     ElMessage.error((error as Error).message);
   }
@@ -621,11 +656,19 @@ function handleImportDialogClosed(): void {
 
 onMounted(async () => {
   await referenceStore.loadCore();
-  await loadExams();
+  await Promise.all([loadExams(), loadScoreReadiness()]);
 });
 </script>
 
 <style scoped>
+.page-alert {
+  margin-top: -4px;
+}
+
+.import-tip {
+  margin-top: 12px;
+}
+
 .panel-block {
   padding: 18px;
 }

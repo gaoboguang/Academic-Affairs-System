@@ -2,10 +2,10 @@
   <div class="page-shell">
     <header class="page-header">
       <div>
-        <div class="page-eyebrow">导出中心 / 报表工作流</div>
-        <h2 class="page-title">报表中心</h2>
+        <div class="page-eyebrow">输出中心 / 报表工作流</div>
+        <h2 class="page-title">输出中心</h2>
         <p class="page-subtitle">
-          基于现有考试分析、工作量结果和成长档案生成 Excel 报表，并保留导出记录与参数。
+          按业务域选择交付物，生成前先看用途、必要参数、数据来源、导出格式和风险标签。
         </p>
         <div class="page-chip-row">
           <span class="page-chip"><strong>报表类型</strong>{{ reportTypeOptions.length }}</span>
@@ -159,6 +159,15 @@
         :closable="false"
         :title="`当前报表还缺少：${missingRequiredFields.join('、')}`"
       />
+      <el-alert
+        v-for="item in scoreReportGuardMessages"
+        :key="item"
+        class="report-alert"
+        type="warning"
+        show-icon
+        :closable="false"
+        :title="item"
+      />
       <ReportInsightPanel
         v-if="showReportInsightSection"
         :description="reportInsightDescription"
@@ -169,6 +178,47 @@
         :groups="reportInsightGroups"
         @retry="reloadReportInsights"
       />
+    </section>
+
+    <section class="soft-card panel-block">
+      <div class="section-head compact">
+        <div>
+          <h3>输出目录</h3>
+          <p>按业务域查看每种报表适合什么场景，生成前先确认参数、来源和风险。</p>
+        </div>
+      </div>
+      <div class="report-domain-stack">
+        <article v-for="group in groupedReportCatalog" :key="group.key" class="report-domain">
+          <div class="report-domain-head">
+            <div>
+              <strong>{{ group.label }}</strong>
+              <p>{{ group.description }}</p>
+            </div>
+            <el-tag effect="light">{{ group.items.length }} 项</el-tag>
+          </div>
+          <div class="report-card-grid">
+            <button
+              v-for="item in group.items"
+              :key="item.value"
+              class="report-catalog-card"
+              :class="{ selected: item.value === form.report_type }"
+              type="button"
+              @click="form.report_type = item.value"
+            >
+              <span>{{ item.label }}</span>
+              <strong>{{ item.purpose }}</strong>
+              <small>必要参数：{{ item.requiredParams.length ? item.requiredParams.join("、") : "无" }}</small>
+              <small>数据来源：{{ item.dataSources.join("、") }}</small>
+              <small>格式：{{ item.formats.join("、") }}</small>
+              <div class="risk-tag-row">
+                <el-tag v-for="risk in item.riskTags" :key="risk" size="small" type="warning" effect="light">
+                  {{ risk }}
+                </el-tag>
+              </div>
+            </button>
+          </div>
+        </article>
+      </div>
     </section>
 
     <section class="soft-card panel-block">
@@ -236,6 +286,7 @@ import {
 import {
   buildReportExportPayload,
   formatReportExportParams,
+  getGroupedReportCatalog,
   getMissingRequiredReportFields,
   getMissingRequiredReportFieldsMessage,
   getReportPrintPreviewPath,
@@ -249,6 +300,7 @@ import {
   useReferenceStore,
 } from "../stores/reference";
 import { formatUserActionError } from "../utils/userFeedback";
+import { buildScoreReportGuardMessages } from "../utils/scoreReadiness";
 
 interface ExamOption {
   id: number;
@@ -331,7 +383,9 @@ const exporting = ref(false);
 const optionsLoading = ref(false);
 const recordsLoading = ref(false);
 const pageLoadError = ref("");
+const scoreRecordTotal = ref(0);
 const reportTypeOptions = REPORT_TYPE_OPTIONS;
+const groupedReportCatalog = getGroupedReportCatalog();
 
 const form = reactive({
   report_type: "student_analysis",
@@ -365,6 +419,12 @@ const supportsPrintPreview = computed(() => Boolean(printPreviewPath.value));
 const currentReportTypeLabel = computed(() => getReportTypeLabel(form.report_type));
 const missingRequiredFields = computed(() => getMissingRequiredReportFields(form));
 const missingRequiredFieldsMessage = computed(() => getMissingRequiredReportFieldsMessage(form));
+const scoreReportGuardMessages = computed(() =>
+  buildScoreReportGuardMessages(form.report_type, {
+    examCount: examOptions.value.length,
+    scoreRecordTotal: scoreRecordTotal.value,
+  }),
+);
 const overviewCards = computed(() => [
   {
     label: "考试依赖",
@@ -455,6 +515,12 @@ async function loadOptions(): Promise<void> {
     ]);
     recommendationOptions.value = await apiRequest<RecommendationOption[]>("/api/recommendations/history");
     evaluationBatchOptions.value = await apiRequest<EvaluationBatchOption[]>("/api/evaluation/batches");
+    try {
+      const dashboardPayload = await apiRequest<{ score_record_total?: number }>("/api/dashboard/summary");
+      scoreRecordTotal.value = dashboardPayload.score_record_total ?? 0;
+    } catch {
+      scoreRecordTotal.value = 0;
+    }
     volunteerDraftOptions.value = draftPayload;
     examOptions.value = examPayload.items;
     studentOptions.value = studentPayload.items;
@@ -515,6 +581,10 @@ async function exportReport(): Promise<void> {
   try {
     if (missingRequiredFields.value.length) {
       ElMessage.warning(missingRequiredFieldsMessage.value);
+      return;
+    }
+    if (scoreReportGuardMessages.value.length) {
+      ElMessage.warning(scoreReportGuardMessages.value[0]);
       return;
     }
     exporting.value = true;
@@ -680,6 +750,84 @@ onMounted(async () => {
 
 .report-alert {
   margin-top: 14px;
+}
+
+.report-domain-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.report-domain {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #e2ebf3;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.report-domain-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.report-domain-head strong {
+  color: #1f3448;
+  font-size: 16px;
+}
+
+.report-domain-head p {
+  margin: 4px 0 0;
+  color: #60748a;
+  line-height: 1.55;
+}
+
+.report-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.report-catalog-card {
+  display: grid;
+  gap: 8px;
+  min-height: 184px;
+  padding: 14px;
+  border: 1px solid #dce7f1;
+  border-radius: 8px;
+  background: #fff;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.report-catalog-card.selected {
+  border-color: #1f6c98;
+  box-shadow: inset 0 4px 0 rgba(31, 108, 152, 0.78);
+}
+
+.report-catalog-card span {
+  color: #1f6c98;
+  font-weight: 740;
+}
+
+.report-catalog-card strong {
+  color: #27394a;
+  line-height: 1.5;
+}
+
+.report-catalog-card small {
+  color: #667b8f;
+  line-height: 1.5;
+}
+
+.risk-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
 }
 
 .section-head {

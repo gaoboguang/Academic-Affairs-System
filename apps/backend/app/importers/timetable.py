@@ -103,12 +103,23 @@ class TimetableImporter:
         failed_rows = 0
         unresolved_rows = 0
         row_errors: list[RowError] = []
+        quality_counts = {
+            "unmatched_teacher": 0,
+            "unmatched_class": 0,
+            "unmatched_subject": 0,
+            "unmatched_course_type": 0,
+            "empty_field": 0,
+            "conflict_slot": 0,
+        }
+        teacher_slots: dict[tuple[int, int, int], int] = {}
+        class_slots: dict[tuple[int, int, int], int] = {}
 
         for row_number, values in rows:
             try:
                 parsed = self._parse_row(values)
                 if parsed.mapping_status != "matched":
                     unresolved_rows += 1
+                _record_timetable_quality(quality_counts, teacher_slots, class_slots, parsed)
                 self.session.add(
                     TimetableEntry(
                         batch_id=batch.id,
@@ -155,6 +166,7 @@ class TimetableImporter:
                 created_rows=success_rows,
                 error_report_path=error_report_path,
                 error_preview=build_error_preview(row_errors),
+                notice_preview=_build_timetable_quality_notice(quality_counts),
                 message=f"课表导入完成，成功 {success_rows} 条，失败 {failed_rows} 条。",
             ),
             unresolved_rows,
@@ -227,3 +239,45 @@ class TimetableImporter:
         if not weeks or any(week is None or week < 1 for week in weeks):
             raise ValueError(f"周次规则无法识别: {raw_value}")
         return ParsedWeekRule(rule="custom", weeks=[int(week) for week in weeks if week is not None])
+
+
+def _record_timetable_quality(
+    counts: dict[str, int],
+    teacher_slots: dict[tuple[int, int, int], int],
+    class_slots: dict[tuple[int, int, int], int],
+    parsed: TimetableParsedRow,
+) -> None:
+    if parsed.raw_teacher_name and parsed.teacher_id is None:
+        counts["unmatched_teacher"] += 1
+    if parsed.raw_class_name and parsed.class_id is None:
+        counts["unmatched_class"] += 1
+    if parsed.raw_subject_name and parsed.subject_id is None:
+        counts["unmatched_subject"] += 1
+    if parsed.raw_course_type and parsed.course_type is None:
+        counts["unmatched_course_type"] += 1
+    if not parsed.raw_teacher_name or not parsed.raw_class_name or not parsed.raw_subject_name or not parsed.raw_course_type:
+        counts["empty_field"] += 1
+    if parsed.teacher_id is not None:
+        key = (parsed.teacher_id, parsed.weekday, parsed.period_no)
+        teacher_slots[key] = teacher_slots.get(key, 0) + 1
+        if teacher_slots[key] == 2:
+            counts["conflict_slot"] += 1
+    if parsed.class_id is not None:
+        key = (parsed.class_id, parsed.weekday, parsed.period_no)
+        class_slots[key] = class_slots.get(key, 0) + 1
+        if class_slots[key] == 2:
+            counts["conflict_slot"] += 1
+
+
+def _build_timetable_quality_notice(counts: dict[str, int]) -> list[str]:
+    return [
+        (
+            "课表导入复核摘要："
+            f"未匹配教师 {counts['unmatched_teacher']} 行，"
+            f"未匹配班级 {counts['unmatched_class']} 行，"
+            f"未匹配学科 {counts['unmatched_subject']} 行，"
+            f"未匹配课程类型 {counts['unmatched_course_type']} 行，"
+            f"冲突课时 {counts['conflict_slot']} 个，"
+            f"空字段行 {counts['empty_field']} 行。"
+        )
+    ]

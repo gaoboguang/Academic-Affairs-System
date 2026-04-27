@@ -103,6 +103,22 @@
                 <dt>参考口径</dt>
                 <dd>{{ formatReferenceCopy(item) }}</dd>
               </div>
+              <div>
+                <dt>录取年份</dt>
+                <dd>{{ formatReferenceYears(item.snapshot_json) }}</dd>
+              </div>
+              <div>
+                <dt>计划/批次</dt>
+                <dd>{{ formatEvidencePlanScope(item) }}</dd>
+              </div>
+              <div>
+                <dt>选科要求</dt>
+                <dd>{{ formatEvidenceSubjectRequirement(item) }}</dd>
+              </div>
+              <div>
+                <dt>章程状态</dt>
+                <dd>{{ formatEvidenceChapterStatus(item) }}</dd>
+              </div>
             </dl>
             <div v-if="hasCareerMatch(item)" class="career-match-card">
               <div class="career-match-head">
@@ -539,6 +555,51 @@ function formatRecommendationReason(item: RecommendationResult): string {
 
 function formatReferenceCopy(item: RecommendationResult): string {
   return buildRecommendationReferenceCopy(item) ?? "-";
+}
+
+function formatEvidencePlanScope(item: RecommendationResult): string {
+  const snapshot = item.snapshot_json ?? {};
+  const year = readSnapshotText(snapshot, ["plan_year", "year", "target_year"]);
+  const batch = readSnapshotText(snapshot, ["batch", "matched_rule_batch"]);
+  return [year, batch].filter(Boolean).join(" / ") || "-";
+}
+
+function formatEvidenceSubjectRequirement(item: RecommendationResult): string {
+  return readSnapshotText(item.snapshot_json, [
+    "subject_requirement",
+    "subject_requirement_text",
+    "required_subjects",
+  ]) || "-";
+}
+
+function formatEvidenceChapterStatus(item: RecommendationResult): string {
+  const snapshot = item.snapshot_json ?? {};
+  const status = readSnapshotText(snapshot, ["chapter_review_status", "chapter_retrieval_status"]);
+  const restrictions = [
+    "chapter_language_requirement",
+    "chapter_single_subject_requirement",
+    "chapter_gender_requirement",
+    "chapter_height_requirement",
+    "chapter_vision_requirement",
+    "chapter_color_vision_requirement",
+    "chapter_physical_exam_requirement",
+  ]
+    .map((key) => readSnapshotText(snapshot, [key]))
+    .filter(Boolean);
+  return [status, ...restrictions].filter(Boolean).join("；") || "-";
+}
+
+function readSnapshotText(snapshot: Record<string, unknown> | null | undefined, keys: string[]): string {
+  for (const key of keys) {
+    const value = snapshot?.[key];
+    if (Array.isArray(value)) {
+      const text = value.filter(Boolean).join(" / ");
+      if (text) return text;
+    }
+    if (typeof value === "number") return String(value);
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
 }
 
 function formatBoundaryNotes(item: RecommendationResult): string[] {

@@ -27,6 +27,17 @@
       </div>
     </header>
 
+    <section class="risk-notice-strip">
+      <el-alert
+        v-for="notice in recommendationGlobalRiskNotices"
+        :key="notice"
+        type="warning"
+        show-icon
+        :closable="false"
+        :title="notice"
+      />
+    </section>
+
     <section class="hero-grid">
       <div class="soft-card summary-panel">
         <div class="summary-copy">
@@ -475,7 +486,10 @@ import RecommendationSubjectRequirementDictsPanel from "../components/recommenda
 import RecommendationVolunteerRuleDialog from "../components/recommendations/RecommendationVolunteerRuleDialog.vue";
 import RecommendationVolunteerRulesPanel from "../components/recommendations/RecommendationVolunteerRulesPanel.vue";
 import RecommendationVolunteerWorkbenchPanel from "../components/recommendations/RecommendationVolunteerWorkbenchPanel.vue";
+import { RECOMMENDATION_GLOBAL_RISK_NOTICES } from "../components/recommendations/recommendationCopy";
 import { useRecommendationsPage } from "../components/recommendations/useRecommendationsPage";
+
+const recommendationGlobalRiskNotices = RECOMMENDATION_GLOBAL_RISK_NOTICES;
 
 const {
   activeTab,
@@ -846,6 +860,11 @@ const {
 
 .tone-teal {
   box-shadow: inset 0 4px 0 rgba(44, 142, 132, 0.78);
+}
+
+.risk-notice-strip {
+  display: grid;
+  gap: 8px;
 }
 
 .section-head.compact {

@@ -1048,308 +1048,48 @@ import {
   type DataCompletionCard,
 } from "../components/gaokao-data/dataCompletionReport";
 import {
+  comparisonFieldTagType,
+  coverageToneTagType,
+  deliveryTagType,
+  formatCoverage,
+  formatDistribution,
+  formatFallbackLabels,
+  formatGroupChapterCell,
+  formatGroupCompareCell,
+  formatGroupMemberLabel,
+  formatGroupSourceUrlCell,
+  formatGroupType,
+  formatMonitorStatus,
+  formatReviewFilter,
+  formatReviewFocus,
+  formatReviewSort,
+  formatSourceMode,
+  formatStatus,
+  formatTableNotes,
+  formatYearList,
+  reviewPriorityTagType,
+  riskLevelTagType,
+  statusTagType,
+} from "../components/gaokao-data/gaokaoDataFormatters";
+import type {
+  GaokaoCollegeEvidence,
+  GaokaoCollegeOption,
+  GaokaoDataHealth,
+  GaokaoDataOverview,
+  GaokaoImportBatch,
+  GaokaoReviewSummary,
+  GaokaoShandongMonitor,
+} from "../components/gaokao-data/gaokaoDataTypes";
+import {
   formatGaokaoCollegeEvidenceOptionLabel,
   resolveGaokaoEvidenceCollegeId,
-  type GaokaoCollegeEvidenceOption,
 } from "../utils/gaokaoEvidence";
 import {
   buildGaokaoOverviewGapCards,
   type GaokaoOverviewGapCard,
-  type GaokaoOverviewTableStat as GaokaoTableStat,
 } from "../utils/gaokaoOverview";
 import { gaokaoDataCoveragePrintPreviewPath } from "../utils/print";
 import { formatUserActionError } from "../utils/userFeedback";
-
-interface GaokaoDataOverview {
-  source_mode: string;
-  data_version?: string | null;
-  generated_at?: string | null;
-  school_total: number;
-  recruit_site_covered: number;
-  recruit_site_coverage_rate?: number | null;
-  chapter_url_covered: number;
-  chapter_url_coverage_rate?: number | null;
-  fallback_url_covered: number;
-  duplicate_group_total?: number | null;
-  same_name_cross_site_group_total?: number | null;
-  recent_batch_label?: string | null;
-  last_updated_at?: string | null;
-  notes: string[];
-  core_tables: GaokaoTableStat[];
-}
-
-interface GaokaoImportBatch {
-  id: string;
-  batch_name: string;
-  source_type: string;
-  source_filename?: string | null;
-  status: string;
-  finished_at?: string | null;
-}
-
-interface GaokaoDataHealthTable {
-  key: string;
-  label: string;
-  count: number;
-  status: string;
-  explanation?: string | null;
-  notes: string[];
-}
-
-interface GaokaoDataHealthType {
-  key: string;
-  label?: string | null;
-  count: number;
-}
-
-interface GaokaoDataHealthYearBreakdown {
-  year: number;
-  total: number;
-  student_types: GaokaoDataHealthType[];
-  batches: GaokaoDataHealthType[];
-  status: string;
-}
-
-interface GaokaoDataHealthCoverage {
-  key: string;
-  label: string;
-  status: string;
-  total: number;
-  years: number[];
-  missing_years: number[];
-  readiness: string;
-  readiness_label?: string | null;
-  risk_level: string;
-  explanation?: string | null;
-  notes: string[];
-  student_types: GaokaoDataHealthType[];
-  batch_distribution: GaokaoDataHealthType[];
-  year_breakdown: GaokaoDataHealthYearBreakdown[];
-}
-
-interface GaokaoDataAuditItem {
-  key: string;
-  label: string;
-  status: string;
-  created: number;
-  updated: number;
-  duplicates: number;
-  conflicts: number;
-  pending_review: number;
-  notes: string[];
-}
-
-interface GaokaoDataFieldExplanation {
-  field: string;
-  label: string;
-  explanation: string;
-}
-
-interface GaokaoDataDeliveryAssessment {
-  status: string;
-  label: string;
-  summary: string;
-  pass_items: string[];
-  warning_items: string[];
-  blocking_items: string[];
-}
-
-interface GaokaoDataSpecialTypeRisk {
-  key: string;
-  label: string;
-  readiness: string;
-  readiness_label: string;
-  risk_level: string;
-  plan_count: number;
-  raw_plan_count: number;
-  admission_count: number;
-  raw_admission_count: number;
-  score_line_count: number;
-  volunteer_rule_count: number;
-  special_rule_count: number;
-  fallback_modes: string[];
-  fallback_labels: string[];
-  explanation: string;
-  notes: string[];
-}
-
-interface GaokaoDataPublicationSource {
-  id: number;
-  title: string;
-  url?: string | null;
-  official_org?: string | null;
-  published_at?: string | null;
-  local_file_path?: string | null;
-  file_sha256?: string | null;
-  status?: string | null;
-  note?: string | null;
-}
-
-interface GaokaoDataPublicationStatus {
-  key: string;
-  label: string;
-  category: string;
-  target_year: number;
-  status: string;
-  status_label: string;
-  record_count: number;
-  source_documents: GaokaoDataPublicationSource[];
-  action_label: string;
-  explanation: string;
-  notes: string[];
-  blocks_recommendation: boolean;
-}
-
-interface GaokaoDataHealth {
-  db_path: string;
-  exists: boolean;
-  generated_at: string;
-  schema_version?: string | null;
-  province: string;
-  expected_years: number[];
-  field_explanations: GaokaoDataFieldExplanation[];
-  delivery_assessment?: GaokaoDataDeliveryAssessment | null;
-  tables: GaokaoDataHealthTable[];
-  coverage: GaokaoDataHealthCoverage[];
-  publication_status: GaokaoDataPublicationStatus[];
-  special_type_risks: GaokaoDataSpecialTypeRisk[];
-  audit_summary: GaokaoDataAuditItem[];
-  gaps: string[];
-  summary: string;
-}
-
-interface GaokaoReviewBucket {
-  code: string;
-  title: string;
-  count?: number | null;
-  description: string;
-}
-
-interface GaokaoReviewQuickFilter {
-  code: string;
-  title: string;
-  count: number;
-  description: string;
-}
-
-interface GaokaoReviewGroupComparisonField {
-  key: string;
-  title: string;
-  status: string;
-  distinct_total: number;
-  missing_total: number;
-  sample_values: string[];
-  summary: string;
-}
-
-interface GaokaoReviewGroup {
-  key: string;
-  title: string;
-  group_type?: string | null;
-  item_count: number;
-  comparison_fields?: GaokaoReviewGroupComparisonField[];
-  priority_code?: string | null;
-  priority_label?: string | null;
-  priority_score?: number;
-  priority_reasons?: string[];
-  suggested_action?: string | null;
-  high_priority_member_total: number;
-  unresolved_total: number;
-  missing_chapter_total: number;
-  missing_recruit_site_total: number;
-  member_items?: GaokaoReviewGroupMember[];
-}
-
-interface GaokaoReviewGroupMember {
-  college_id?: number | null;
-  college_name?: string | null;
-  college_code?: string | null;
-  review_status?: string | null;
-  province?: string | null;
-  official_site?: string | null;
-  recruit_site?: string | null;
-  chapter_url?: string | null;
-  fallback_url?: string | null;
-  effective_chapter_url?: string | null;
-  source_title?: string | null;
-  source_url?: string | null;
-  updated_at?: string | null;
-  priority_code?: string | null;
-  priority_label?: string | null;
-  priority_score?: number;
-  priority_reasons?: string[];
-}
-
-interface GaokaoReviewItem {
-  college_id?: number | null;
-  college_name?: string | null;
-  college_code?: string | null;
-  duplicate_group_key?: string | null;
-  same_name_group_key?: string | null;
-  review_status?: string | null;
-  retrieval_status?: string | null;
-  recruit_site?: string | null;
-  chapter_url?: string | null;
-  fallback_url?: string | null;
-  priority_code?: string | null;
-  priority_label?: string | null;
-  priority_score?: number;
-  priority_reasons?: string[];
-}
-
-interface GaokaoCollegeOption extends GaokaoCollegeEvidenceOption {
-  source_mode: string;
-}
-
-interface GaokaoReviewSummary {
-  source_available: boolean;
-  source_mode: string;
-  active_filter: string;
-  active_focus: string;
-  active_sort: string;
-  active_keyword?: string | null;
-  matched_total?: number | null;
-  queue_total: number;
-  duplicate_group_total?: number | null;
-  same_name_cross_site_group_total?: number | null;
-  counts: GaokaoReviewBucket[];
-  quick_filters: GaokaoReviewQuickFilter[];
-  items: GaokaoReviewItem[];
-  priority_groups: GaokaoReviewGroup[];
-  duplicate_groups: GaokaoReviewGroup[];
-  same_name_groups: GaokaoReviewGroup[];
-  highlights: string[];
-  notes: string[];
-}
-
-interface GaokaoCollegeEvidence {
-  source_available: boolean;
-  source_mode: string;
-  college_id: number;
-  college_name?: string | null;
-  college_code?: string | null;
-  province?: string | null;
-  official_site?: string | null;
-  recruit_site?: string | null;
-  chapter_url?: string | null;
-  fallback_url?: string | null;
-  source_url?: string | null;
-  source_title?: string | null;
-  review_status?: string | null;
-  retrieval_status?: string | null;
-  message?: string | null;
-  notes: string[];
-}
-
-interface GaokaoShandongMonitor {
-  province: string;
-  data_version?: string | null;
-  ready_section_total: number;
-  gap_section_total: number;
-  priority_notes: string[];
-  sections: GaokaoTableStat[];
-  notes: string[];
-}
 
 const activeTab = ref("overview");
 const reviewFilter = ref("all");
@@ -1609,190 +1349,6 @@ async function openEvidenceForCollege(
   });
   evidenceCollegeOptions.value = [];
   await loadEvidence();
-}
-
-function formatSourceMode(value?: string | null): string {
-  const mapping: Record<string, string> = {
-    doc_baseline: "同步板冻结基线",
-    db_rc1_live: "本地高考只读库",
-    app_model_fallback: "应用侧主档补充",
-    mixed_read_only: "混合只读视图",
-  };
-  return (value ? mapping[value] : null) ?? "待确认";
-}
-
-function formatCoverage(total: number, rate?: number | null): string {
-  if (rate === null || rate === undefined) {
-    return String(total);
-  }
-  return `${total} / ${rate}%`;
-}
-
-function formatStatus(value?: string | null): string {
-  const mapping: Record<string, string> = {
-    success: "成功",
-    processing: "处理中",
-    frozen: "冻结",
-    failed: "失败",
-  };
-  return (value ? mapping[value] : null) ?? value ?? "未知";
-}
-
-function formatMonitorStatus(value?: string | null): string {
-  const mapping: Record<string, string> = {
-    ok: "正常",
-    gap: "需关注",
-    missing: "缺失",
-    ready: "已接入",
-    imported: "已导入",
-    published: "已公开",
-    pending_official_release: "待官方发布",
-    not_applicable: "当前不适用",
-    manual_review_required: "需人工核验",
-    partial: "部分可用",
-    waiting: "待同步",
-    empty: "暂无数据",
-    no_year_column: "缺年份列",
-  };
-  return (value ? mapping[value] : null) ?? "待确认";
-}
-
-function statusTagType(value?: string | null): "success" | "info" | "warning" | "danger" | undefined {
-  if (["ok", "ready", "success", "imported"].includes(value ?? "")) return "success";
-  if (["gap", "partial", "processing", "no_year_column", "published", "manual_review_required"].includes(value ?? "")) return "warning";
-  if (["waiting", "frozen", "empty", "pending_official_release", "not_applicable"].includes(value ?? "")) return "info";
-  if (["failed", "missing"].includes(value ?? "")) return "danger";
-  return undefined;
-}
-
-function deliveryTagType(value?: string | null): "success" | "info" | "warning" | "danger" | undefined {
-  if (value === "pass") return "success";
-  if (value === "warning") return "warning";
-  if (value === "blocked") return "danger";
-  return "info";
-}
-
-function riskLevelTagType(value?: string | null): "success" | "info" | "warning" | "danger" | undefined {
-  if (value === "normal") return "success";
-  if (value === "warning") return "warning";
-  if (value === "blocking") return "danger";
-  return "info";
-}
-
-function coverageToneTagType(value: "success" | "warning" | "danger" | "info"): "success" | "info" | "warning" | "danger" {
-  return value;
-}
-
-function formatYearList(years?: number[]): string {
-  return years?.length ? years.join("、") : "无";
-}
-
-function formatDistribution(items?: GaokaoDataHealthType[], emptyText = "无"): string {
-  return items?.length ? items.map((item) => `${item.label || item.key}：${item.count}`).join("；") : emptyText;
-}
-
-function formatFallbackLabels(items?: string[]): string {
-  return items?.length ? items.join("；") : "无初筛兜底";
-}
-
-function formatTableNotes(row: GaokaoDataHealthTable): string {
-  const parts = [...(row.notes || [])];
-  if (row.explanation) {
-    parts.unshift(row.explanation);
-  }
-  return parts.length ? parts.join("；") : "-";
-}
-
-function formatReviewFilter(value?: string | null): string {
-  const mapping: Record<string, string> = {
-    all: "全部",
-    pending_manual_review: "待人工复核",
-    pending_manual_review_with_official_candidate: "待人工复核（已有官方候选）",
-    unresolved: "仍未解决",
-  };
-  return (value ? mapping[value] : null) ?? "全部";
-}
-
-function formatReviewFocus(value?: string | null): string {
-  const mapping: Record<string, string> = {
-    all: "全部队列",
-    high_priority: "高优先",
-    missing_chapter: "缺章程",
-    missing_recruit_site: "缺招生网",
-    duplicate_or_same_name: "重复 / 同名组",
-    unresolved: "仍未解决",
-  };
-  return (value ? mapping[value] : null) ?? "全部队列";
-}
-
-function formatReviewSort(value?: string | null): string {
-  const mapping: Record<string, string> = {
-    priority_desc: "优先级优先",
-    updated_desc: "最近更新时间",
-  };
-  return (value ? mapping[value] : null) ?? "优先级优先";
-}
-
-function reviewPriorityTagType(value?: string | null): "success" | "warning" | "danger" | undefined {
-  if (value === "high") return "danger";
-  if (value === "medium") return "warning";
-  if (value === "low") return "success";
-  return undefined;
-}
-
-function comparisonFieldTagType(value?: string | null): "success" | "info" | "warning" | "danger" | undefined {
-  if (value === "mixed") return "warning";
-  if (value === "partial") return "info";
-  if (value === "empty") return "danger";
-  if (value === "same") return "success";
-  return undefined;
-}
-
-function formatGroupMemberLabel(item: GaokaoReviewGroupMember): string {
-  return formatGaokaoCollegeEvidenceOptionLabel({
-    college_id: item.college_id ?? 0,
-    college_name: item.college_name,
-    college_code: item.college_code,
-    province: item.province,
-    review_status: item.review_status,
-  });
-}
-
-function formatGroupType(value?: string | null): string {
-  if (value === "duplicate") return "重复组";
-  if (value === "same_name") return "同名跨站组";
-  return "待确认分组";
-}
-
-function formatGroupCompareCell(value?: string | null): string {
-  if (!value) return "待补齐";
-  try {
-    const parsed = new URL(value);
-    return parsed.host || value;
-  } catch {
-    return value;
-  }
-}
-
-function formatGroupSourceUrlCell(value?: string | null): string {
-  if (!value) return "待补齐";
-  try {
-    const parsed = new URL(value);
-    const pathname = parsed.pathname === "/" ? "" : parsed.pathname.replace(/\/$/, "");
-    return `${parsed.host}${pathname}`;
-  } catch {
-    return value;
-  }
-}
-
-function formatGroupChapterCell(member: GaokaoReviewGroupMember): string {
-  const chapterValue = member.chapter_url || member.fallback_url || member.effective_chapter_url;
-  if (!chapterValue) return "待补齐";
-  const label = formatGroupCompareCell(chapterValue);
-  if (!member.chapter_url && member.fallback_url) {
-    return `${label}（备用）`;
-  }
-  return label;
 }
 
 onMounted(async () => {

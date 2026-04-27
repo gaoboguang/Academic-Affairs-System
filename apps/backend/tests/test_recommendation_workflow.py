@@ -1853,24 +1853,34 @@ def test_admission_import_and_recommendation_generation(client, app) -> None:
     assert "考公" in str(recommendation_summary_sheet.cell(row=9, column=2).value)
     assert recommendation_risk_sheet.cell(row=1, column=1).value == "分组"
     assert recommendation_risk_sheet.cell(row=1, column=2).value == "类型"
-    assert recommendation_risk_sheet.cell(row=2, column=1).value == "边界概览"
-    assert recommendation_risk_sheet.cell(row=2, column=2).value == "模拟结果"
-    assert "预估分数 + 预估位次" in str(recommendation_risk_sheet.cell(row=2, column=3).value)
-    assert "2026届一模" in str(recommendation_risk_sheet.cell(row=2, column=4).value)
-    assert recommendation_detail_sheet.cell(row=1, column=8).value == "职业匹配"
-    assert recommendation_detail_sheet.cell(row=1, column=9).value == "对应目标方向"
-    assert recommendation_detail_sheet.cell(row=1, column=10).value == "路径提示"
-    assert recommendation_detail_sheet.cell(row=1, column=11).value == "职业说明"
-    assert recommendation_detail_sheet.cell(row=1, column=14).value == "章程链接"
-    assert recommendation_detail_sheet.cell(row=1, column=15).value == "章程状态"
-    assert recommendation_detail_sheet.cell(row=1, column=16).value == "校区备注"
-    assert recommendation_detail_sheet.cell(row=1, column=17).value == "章程备注"
-    assert recommendation_detail_sheet.cell(row=2, column=9).value == "软件平台工程"
-    assert "资格证" in str(recommendation_detail_sheet.cell(row=2, column=10).value)
-    assert recommendation_detail_sheet.cell(row=2, column=14).value == "https://chapter.example/lingnan"
-    assert recommendation_detail_sheet.cell(row=2, column=15).value == "confirmed_manual_review"
-    assert recommendation_detail_sheet.cell(row=2, column=16).value == "广州校区"
-    assert recommendation_detail_sheet.cell(row=2, column=17).value == "部分专业需关注校区安排。"
+    recommendation_risk_rows = [
+        (
+            recommendation_risk_sheet.cell(row=index, column=1).value,
+            recommendation_risk_sheet.cell(row=index, column=2).value,
+            recommendation_risk_sheet.cell(row=index, column=3).value,
+            recommendation_risk_sheet.cell(row=index, column=4).value,
+        )
+        for index in range(2, recommendation_risk_sheet.max_row + 1)
+    ]
+    assert any(row[1] == "统一风险口径" and "2026 正式招生计划" in str(row[3]) for row in recommendation_risk_rows)
+    assert any(row[1] == "模拟结果" and "预估分数 + 预估位次" in str(row[2]) and "2026届一模" in str(row[3]) for row in recommendation_risk_rows)
+    assert recommendation_detail_sheet.cell(row=1, column=8).value == "录取结果年份"
+    assert recommendation_detail_sheet.cell(row=1, column=9).value == "计划年份"
+    assert recommendation_detail_sheet.cell(row=1, column=10).value == "批次"
+    assert recommendation_detail_sheet.cell(row=1, column=11).value == "选科要求"
+    assert recommendation_detail_sheet.cell(row=1, column=12).value == "职业匹配"
+    assert recommendation_detail_sheet.cell(row=1, column=18).value == "章程链接"
+    assert recommendation_detail_sheet.cell(row=1, column=19).value == "章程状态"
+    assert recommendation_detail_sheet.cell(row=1, column=20).value == "章程限制状态"
+    assert recommendation_detail_sheet.cell(row=1, column=21).value == "校区备注"
+    assert recommendation_detail_sheet.cell(row=1, column=22).value == "章程备注"
+    assert recommendation_detail_sheet.cell(row=2, column=13).value == "软件平台工程"
+    assert "资格证" in str(recommendation_detail_sheet.cell(row=2, column=14).value)
+    assert recommendation_detail_sheet.cell(row=2, column=18).value == "https://chapter.example/lingnan"
+    assert recommendation_detail_sheet.cell(row=2, column=19).value == "confirmed_manual_review"
+    assert "语种" in str(recommendation_detail_sheet.cell(row=2, column=20).value)
+    assert recommendation_detail_sheet.cell(row=2, column=21).value == "广州校区"
+    assert recommendation_detail_sheet.cell(row=2, column=22).value == "部分专业需关注校区安排。"
 
     initial_history_response = client.get("/api/recommendations/history?student_id=1")
     assert initial_history_response.status_code == 200

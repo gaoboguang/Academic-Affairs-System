@@ -9,6 +9,14 @@ export interface RecommendationInsightContext {
   score_confidence?: string | null;
 }
 
+export const RECOMMENDATION_GLOBAL_RISK_NOTICES = [
+  "普通类推荐主要基于已导入的历史录取、招生计划和位次口径，可作为当前主链路参考。",
+  "单招、综评、艺术、体育、春考等特殊类型如缺专门录取结果，只能做资格或方向初筛，不能视作完整录取把握。",
+  "2024 招生计划数量偏少时，需要核验官方完整性后再定稿。",
+  "2026 正式招生计划、一分一段和省控线需等待官方发布，正式填报前必须替换为当年官方数据。",
+  "招生章程限制链仍需人工复核，尤其是选科、体检、单科、语种、校区和培养模式要求。",
+] as const;
+
 export const RECOMMENDATION_PATH_MISMATCH_FLAGS = [
   "postgraduate_path_mismatch",
   "certificate_path_mismatch",
@@ -46,6 +54,10 @@ export function getRecommendationRiskFlagText(flag: string): string {
 export function formatRecommendationRiskFlags(flags?: string[] | null): string {
   if (!flags?.length) return "-";
   return flags.map((flag) => getRecommendationRiskFlagText(flag)).join(" / ");
+}
+
+export function buildRecommendationGlobalRiskNoticeText(): string {
+  return RECOMMENDATION_GLOBAL_RISK_NOTICES.join(" ");
 }
 
 export function countRecommendationPathMismatches(results: RecommendationResult[]): number {

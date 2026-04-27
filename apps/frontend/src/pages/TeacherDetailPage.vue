@@ -20,6 +20,7 @@
       <div class="action-row">
         <el-button @click="router.push('/teachers')">返回列表</el-button>
         <el-button @click="router.push('/analytics')">分析中心</el-button>
+        <el-button :disabled="!latestTrend?.exam_id" @click="openTeacherAnalysisReport">打印教师分析</el-button>
         <el-button type="primary" @click="router.push('/reports')">报表中心</el-button>
       </div>
     </header>
@@ -79,6 +80,32 @@
           <span>在用任教关系</span>
           <strong>{{ activeAssignmentCount }}</strong>
         </article>
+      </section>
+
+      <section class="soft-card panorama-card">
+        <div class="section-head compact">
+          <div>
+            <h3>360° 总览与下一步</h3>
+            <p>集中查看任教、工作量、评教和成绩关联是否足够支撑分析。</p>
+          </div>
+        </div>
+        <div class="risk-tag-list">
+          <el-tag
+            v-for="item in teacherRiskTags"
+            :key="item.label"
+            :type="item.type"
+            effect="light"
+          >
+            {{ item.label }}：{{ item.detail }}
+          </el-tag>
+          <el-tag v-if="!teacherRiskTags.length" type="success" effect="light">当前关键数据可用于基础分析</el-tag>
+        </div>
+        <div class="action-card-grid">
+          <article v-for="item in teacher360Actions" :key="item.label" class="action-card" @click="router.push(item.path)">
+            <strong>{{ item.label }}</strong>
+            <p>{{ item.detail }}</p>
+          </article>
+        </div>
       </section>
 
       <el-tabs class="profile-tabs">
@@ -222,10 +249,16 @@ import { computed, onMounted, ref } from "vue";
 import ElMessage from "element-plus/es/components/message/index";
 import { useRoute, useRouter } from "vue-router";
 
-import { apiRequest } from "../api/client";
+import { apiRequest, openFile } from "../api/client";
 import { useReferenceStore } from "../stores/reference";
+import {
+  buildTeacher360Actions,
+  buildTeacher360RiskTags,
+} from "../utils/profile360";
+import { teacherAnalysisPrintPreviewPath } from "../utils/print";
 
 interface TeacherTrendItem {
+  exam_id?: number | null;
   exam_name?: string | null;
   exam_date?: string | null;
   semester_name?: string | null;
@@ -341,6 +374,18 @@ const teacherHeroCards = computed(() => {
   ];
 });
 
+const teacherRiskTags = computed(() => {
+  if (!profile.value) return [];
+  return buildTeacher360RiskTags({
+    activeAssignmentCount: activeAssignmentCount.value,
+    examTrendCount: profile.value.recent_exam_trends.length,
+    peerComparisonCount: profile.value.peer_comparisons.length,
+    hasSubject: Boolean(profile.value.teacher.subject_name),
+  });
+});
+
+const teacher360Actions = computed(() => buildTeacher360Actions());
+
 function resolveDictName(dictCode: string, code?: string | null): string {
   if (!code) return "-";
   return (
@@ -358,6 +403,11 @@ function resolvePosition(code?: string | null): string {
 
 function resolveStatus(code?: string | null): string {
   return resolveDictName("teacher_status", code);
+}
+
+function openTeacherAnalysisReport(): void {
+  if (!latestTrend.value?.exam_id) return;
+  openFile(teacherAnalysisPrintPreviewPath(Number(route.params.teacherId), latestTrend.value.exam_id));
 }
 
 function addHistoryRow(): void {
@@ -540,6 +590,49 @@ onMounted(async () => {
 
 .profile-tabs :deep(.el-tabs__item) {
   min-width: 92px;
+}
+
+.panorama-card {
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+}
+
+.risk-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.risk-tag-list :deep(.el-tag) {
+  height: auto;
+  min-height: 30px;
+  padding: 6px 10px;
+  white-space: normal;
+}
+
+.action-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.action-card {
+  padding: 14px;
+  border: 1px solid rgba(123, 141, 158, 0.2);
+  border-radius: 8px;
+  background: rgba(248, 251, 253, 0.82);
+  cursor: pointer;
+}
+
+.action-card strong {
+  color: #1e3448;
+}
+
+.action-card p {
+  margin: 6px 0 0;
+  color: #61778b;
+  line-height: 1.55;
 }
 
 .detail-grid {

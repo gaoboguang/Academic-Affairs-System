@@ -34,6 +34,7 @@
       :current-batch="currentBatch"
       :overview-cards="overviewCards"
       :process-cards="processCards"
+      :precheck-messages="workloadPrecheckMessages"
       :result-count="results.length"
       :total-workload="totalWorkload"
       :calculating="calculating"
@@ -46,6 +47,7 @@
         <WorkloadTimetablePanel
           v-model:importRemark="importRemark"
           v-model:unresolvedOnly="unresolvedOnly"
+          v-model:viewMode="timetableViewMode"
           :file-input-key="fileInputKey"
           :selected-timetable-file-name="selectedTimetableFile?.name ?? ''"
           :import-result="timetableImportResult"
@@ -54,6 +56,7 @@
           :timetable-batches="timetableBatches"
           :selected-batch-id="selectedBatchId"
           :timetable-entries="timetableEntries"
+          :review-cards="timetableReviewCards"
           :course-type-options="courseTypeOptions"
           @file-change="handleTimetableFileChange"
           @import-timetable="importTimetable"
@@ -86,6 +89,7 @@
           :results="results"
           :active-result="activeResult"
           :course-type-options="courseTypeOptions"
+          :result-review-cards="workloadResultReviewCards"
           @export-results="exportResults"
           @open-result-drawer="openResultDrawer"
         />
@@ -138,6 +142,7 @@ const {
   selectedRuleVersionId,
   selectedBatchId,
   unresolvedOnly,
+  timetableViewMode,
   selectedTimetableFile,
   timetableImportResult,
   fileInputKey,
@@ -163,6 +168,9 @@ const {
   currentRuleLabel,
   overviewCards,
   processCards,
+  timetableReviewCards,
+  workloadPrecheckMessages,
+  workloadResultReviewCards,
   refreshAll,
   handleTimetableFileChange,
   importTimetable,

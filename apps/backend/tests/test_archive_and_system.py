@@ -4,7 +4,7 @@ from datetime import date, datetime
 from io import BytesIO
 from pathlib import Path
 
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 from sqlalchemy import select
 
 from app.models import AuditLog, BackupRecord, Exam, ImportJob, ReportExportRecord, ScoreImportBatch, Semester, StoredFile
@@ -119,6 +119,31 @@ def test_backup_restore_roundtrip(client) -> None:
     assert all(item["student_no"] != "2099001" for item in restored_payload["items"])
 
 
+def test_system_safety_status_and_backup_dry_run(client) -> None:
+    backup_response = client.post("/api/system/backup")
+    assert backup_response.status_code == 200
+    backup_id = backup_response.json()["backup_id"]
+
+    status_response = client.get("/api/system/safety-status")
+    assert status_response.status_code == 200
+    status_payload = status_response.json()
+    assert status_payload["sqlite_integrity"] == "ok"
+    assert status_payload["main_db_path"].endswith(".db")
+    assert status_payload["latest_backup"]["id"] == backup_id
+    assert status_payload["backup_count"] >= 1
+
+    verify_response = client.get(f"/api/system/backups/{backup_id}/verify")
+    assert verify_response.status_code == 200
+    verify_payload = verify_response.json()
+    assert verify_payload["valid"] is True
+    assert verify_payload["sqlite_integrity"] == "ok"
+    assert verify_payload["will_overwrite_path"].endswith(".db")
+
+    dry_run_response = client.post(f"/api/system/backups/{backup_id}/restore-dry-run")
+    assert dry_run_response.status_code == 200
+    assert dry_run_response.json()["message"].startswith("恢复演练通过")
+
+
 def test_upload_category_rejects_path_traversal(client) -> None:
     response = client.post(
         "/api/files/upload",
@@ -140,7 +165,24 @@ def test_runtime_file_download_rejects_invalid_paths(client) -> None:
 
 
 def test_import_center_lists_batches_and_details(client, app) -> None:
+    error_report_path = app.state.settings.logs_dir / "score_import_errors.xlsx"
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "错误报告"
+    sheet.append(["行号", "列名", "字段名", "原始值", "错误原因", "建议修复"])
+    sheet.append([3, "学号", "学号", "2026999", "学生不存在", "请先维护学生，或核对学号。"])
+    workbook.save(error_report_path)
+    error_report_relative_path = str(error_report_path)
+
     with app.state.db.session_scope() as session:
+        session.add(
+            BackupRecord(
+                backup_name="trial_run_backup.zip",
+                file_path="data/backups/trial_run_backup.zip",
+                file_size=128,
+                status="success",
+            )
+        )
         semester = session.scalar(select(Semester))
         assert semester is not None
         exam = Exam(
@@ -158,10 +200,10 @@ def test_import_center_lists_batches_and_details(client, app) -> None:
             import_time=datetime(2026, 4, 24, 9, 30),
             total_rows=2,
             success_rows=1,
-            failed_rows=1,
-            status="partially_failed",
-            error_report_path="data/logs/score_import_errors.xlsx",
-        )
+                failed_rows=1,
+                status="partially_failed",
+                error_report_path=error_report_relative_path,
+            )
         session.add(score_batch)
         session.flush()
         job = ImportJob(
@@ -174,12 +216,12 @@ def test_import_center_lists_batches_and_details(client, app) -> None:
                 "batch_id": score_batch.id,
                 "status": "partially_failed",
                 "total_rows": 2,
-                "success_rows": 1,
-                "failed_rows": 1,
-                "skipped_rows": 0,
-                "error_report_path": "data/logs/score_import_errors.xlsx",
-                "error_preview": ["第 3 行：学生不存在"],
-            },
+                    "success_rows": 1,
+                    "failed_rows": 1,
+                    "skipped_rows": 0,
+                    "error_report_path": error_report_relative_path,
+                    "error_preview": ["第 3 行：学生不存在"],
+                },
         )
         session.add(job)
         session.flush()
@@ -199,6 +241,7 @@ def test_import_center_lists_batches_and_details(client, app) -> None:
     payload = response.json()
     assert payload["summary"]["total_batches"] >= 1
     assert payload["summary"]["partial_batches"] >= 1
+    assert payload["latest_backup"]["backup_name"] == "trial_run_backup.zip"
     score_rows = [item for item in payload["batches"] if item["job_type"] == "scores"]
     assert len([item for item in score_rows if item["source_filename"] == "scores.xlsx"]) == 1
     assert score_rows[0]["status"] == "partially_failed"
@@ -210,6 +253,10 @@ def test_import_center_lists_batches_and_details(client, app) -> None:
     detail = detail_response.json()
     assert detail["batch"]["job_type_label"] == "成绩导入"
     assert detail["error_preview"] == ["第 3 行：学生不存在"]
+    assert detail["error_items"][0]["row_number"] == 3
+    assert detail["error_items"][0]["field_name"] == "学号"
+    assert detail["error_items"][0]["raw_value"] == "2026999"
+    assert "核对学号" in detail["error_items"][0]["suggestion"]
     assert detail["rollback_steps"]
 
 

@@ -14,6 +14,7 @@ from app.schemas.system import (
     BackupCreateResponse,
     BackupRecordRead,
     BackupRestorePayload,
+    BackupVerificationRead,
     DataRepairExecutePayload,
     DataRepairExecuteResponse,
     DataRepairScanRead,
@@ -21,6 +22,7 @@ from app.schemas.system import (
     ImportCenterResponse,
     SystemConfigGroupRead,
     SystemConfigItemUpdatePayload,
+    SystemSafetyStatusRead,
     SystemTemplateRead,
 )
 from app.services import system as service
@@ -63,6 +65,14 @@ def list_backups(
     return service.list_backups(session)
 
 
+@router.get("/system/safety-status", response_model=SystemSafetyStatusRead)
+def get_system_safety_status(
+    session: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+) -> SystemSafetyStatusRead:
+    return service.get_system_safety_status(session, settings)
+
+
 @router.post("/system/backup", response_model=BackupCreateResponse)
 def create_backup(request: Request) -> BackupCreateResponse:
     return service.create_backup(request)
@@ -84,6 +94,24 @@ def download_backup(
 ) -> FileResponse:
     path = service.get_backup_path(session, settings, backup_id)
     return FileResponse(path, filename=Path(path).name)
+
+
+@router.get("/system/backups/{backup_id}/verify", response_model=BackupVerificationRead)
+def verify_backup(
+    backup_id: int,
+    session: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+) -> BackupVerificationRead:
+    return service.verify_backup(session, settings, backup_id)
+
+
+@router.post("/system/backups/{backup_id}/restore-dry-run", response_model=BackupVerificationRead)
+def dry_run_restore_backup(
+    backup_id: int,
+    session: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+) -> BackupVerificationRead:
+    return service.verify_backup(session, settings, backup_id, restore_dry_run=True)
 
 
 @router.get("/system/audit-logs", response_model=list[AuditLogRead])

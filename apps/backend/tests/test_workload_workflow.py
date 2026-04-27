@@ -39,6 +39,7 @@ def test_timetable_import_and_manual_fix(client) -> None:
     payload = response.json()
     assert payload["success_rows"] == 2
     assert payload["unresolved_rows"] == 1
+    assert payload["notice_preview"][0] == "课表导入复核摘要：未匹配教师 1 行，未匹配班级 0 行，未匹配学科 0 行，未匹配课程类型 0 行，冲突课时 0 个，空字段行 0 行。"
 
     batches_response = client.get("/api/timetable/batches?semester_id=2")
     assert batches_response.status_code == 200

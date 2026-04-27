@@ -11,7 +11,14 @@
       v-if="!results.length"
       description="当前还没有工作量结果。请先确认学期、规则版本和课表批次，再点击“计算工作量”。"
     />
-    <div v-else class="table-shell">
+    <div v-else class="result-review-grid">
+      <article v-for="item in resultReviewCards" :key="item.label" class="result-review-card" :class="item.tone">
+        <span>{{ item.label }}</span>
+        <strong>{{ item.value }}</strong>
+        <p>{{ item.help }}</p>
+      </article>
+    </div>
+    <div v-if="results.length" class="table-shell">
       <el-table :data="results" stripe>
         <el-table-column label="教师" prop="teacher_name" min-width="120" />
         <el-table-column label="周课时" prop="weekly_hours" width="90" />
@@ -112,13 +119,14 @@ import { computed } from "vue";
 
 import type { OptionItem } from "../../stores/reference";
 import { formatBreakdown, formatCourseTypeLabel, formatMonthlyHours } from "./helpers";
-import type { WorkloadResultItem } from "./types";
+import type { StatusCard, WorkloadResultItem } from "./types";
 
 const props = defineProps<{
   results: WorkloadResultItem[];
   activeResult: WorkloadResultItem | null;
   drawerVisible: boolean;
   courseTypeOptions: OptionItem[];
+  resultReviewCards: StatusCard[];
 }>();
 
 const emit = defineEmits<{
@@ -136,6 +144,55 @@ const drawerVisibleModel = computed({
 <style scoped>
 .drawer-grid {
   margin-bottom: 18px;
+}
+
+.result-review-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.result-review-card {
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(123, 141, 158, 0.18);
+  background: rgba(248, 251, 253, 0.86);
+}
+
+.result-review-card span {
+  color: #6c8094;
+  font-size: 13px;
+}
+
+.result-review-card strong {
+  display: block;
+  margin-top: 8px;
+  color: #1f3245;
+  font-size: 24px;
+}
+
+.result-review-card p {
+  margin: 6px 0 0;
+  color: #61778b;
+  line-height: 1.5;
+  font-size: 13px;
+}
+
+.tone-green {
+  box-shadow: inset 0 4px 0 rgba(69, 141, 105, 0.78);
+}
+
+.tone-amber {
+  box-shadow: inset 0 4px 0 rgba(209, 141, 72, 0.84);
+}
+
+.tone-blue {
+  box-shadow: inset 0 4px 0 rgba(31, 108, 152, 0.78);
+}
+
+.tone-slate {
+  box-shadow: inset 0 4px 0 rgba(92, 111, 129, 0.74);
 }
 
 .stat-card {
