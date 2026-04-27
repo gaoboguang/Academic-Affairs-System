@@ -69,3 +69,20 @@
   - 本阶段只找到并导入 2025 本科 / 常规批相关录取情况；2023/2024 同类录取情况、艺术专科、春考专科仍需继续复核。
 - 下一步：继续寻找 2023/2024 艺术、体育、春考录取情况来源；或进入招生计划完整性核验和章程机器预审。
 - 当前 commit：待阶段 3 本地提交。
+
+## 2026-04-27 08:47
+
+- 当前阶段：阶段 4，招生计划补充信息附件审计。
+- 已完成：
+  - 确认另一个窗口已经完成并提交阶段 1/2、政策参考结构化和阶段 3 2025 艺术 / 体育 / 春考专门录取结果导入；当前 HEAD 为 `data: import round 5 special admission results`。
+  - 保留并微调 `scripts/round5_register_shandong_admission_round_sources.py` 的幂等复跑导入，复跑时不会再新增重复 `gaokao_import_run`。
+  - 新增 `scripts/round5_register_plan_supplement_documents.py`，用于下载、登记和审计 2023-2025 山东省教育招生考试院招生计划补充信息 docx 附件。
+  - 新增 `docs/round5-plan-supplement-audit.md`，记录 5 个官方补充信息页面、附件直链、下载失败原因和人工下载后复跑命令。
+  - 更新 `docs/round5-data-coverage-matrix.md`、`docs/round5-manual-download-and-review-list.md`、`docs/README.md`，明确补充信息不能替代完整《填报志愿指南》，也不能关闭 2024 招生计划数量偏少缺口。
+- 新增来源：0 个 `gaokao_source_document`；本阶段只复用阶段 1 已登记的计划补充信息来源。
+- 成功导入：0 条业务计划记录。
+- 失败原因：
+  - 本机访问 5 个 `sdzk.cn/Floadup` 官方 docx 附件直链时均出现 SSL 握手超时；`curl --http1.1` 复核同样超时。
+  - 已把 5 个附件直链写入人工下载清单；人工放入 `data/imports/gaokao/official/{year}/` 后可复跑 `./.venv/bin/python scripts/round5_register_plan_supplement_documents.py --no-download --json`。
+- 下一步：优先进入阶段 6 章程限制链机器预审，或继续寻找单招 / 综评专门录取结果来源；2024 招生计划缺口仍需完整指南或官方系统导出，不能用补充信息替代。
+- 当前 commit：待阶段 4 本地提交。
