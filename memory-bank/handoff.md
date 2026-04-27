@@ -2,6 +2,12 @@
 
 ## 当前主线状态（2026-04-27）
 
+- 本次已修复普通本地启动的前端打不开问题：
+  - `scripts/start-local-services.cjs` 新增过期 pid 记录自清理；若服务启动后健康检查未通过，会输出对应日志尾部，方便直接定位前端/后端失败原因
+  - `scripts/stop-local-services.cjs` 新增端口释放等待和 pid 文件清理，避免 `data/logs/local-services/*.pid.json` 长期保留旧记录
+  - `README.md` 与 `scripts/README.md` 已更新说明
+  - 当前服务已重新启动，`http://127.0.0.1:5173` 返回 200，`http://127.0.0.1:8000/api/system/health` 返回 ok
+
 - M10 窗口已按 `/Users/gao/Downloads/本地教务工具后续开发文档_Codex执行版_基于项目报告重规划.md` 完成：
   - E2E 已从单一 `tests/e2e/dashboard-smoke.spec.ts` 拆成 7 个业务域文件：dashboard、students、exams-analytics、reports、recommendations、gaokao-volunteer、system-backup
   - 公共前置和 fixture helper 已收在 `tests/e2e/helpers/localEduE2e.ts`；新增 `tests/e2e/README.md` 说明分域文件、fixture 和定向运行命令

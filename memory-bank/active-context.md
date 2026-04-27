@@ -15,6 +15,12 @@
   - 验证已通过：M4/M5 定向后端 `10 passed`、M4/M5 定向前端 `9 passed`、M6-M9 定向后端 `31 passed`、M6-M9 定向前端 `21 passed`、`npm run desktop:dist:mac`、桌面后端二进制临时数据目录冒烟、`npm run e2e -- tests/e2e/dashboard.spec.ts tests/e2e/reports.spec.ts`、`npm run check:all`（后端 `103 passed`、前端 lint、前端 `33 files / 172 tests passed`、前端构建、E2E `32 passed`）、`npm run backend:p0-check -- --json`（ok，备份包 `data/backups/p0_delivery_backup_20260427_153736.zip`）、`git diff --check`
   - 桌面端剩余边界：macOS 目录构建成功但未配置正式图标、签名和公证；Windows `dir/nsis` 仍需在 Windows 或可交叉构建环境单独验证；桌面首次启动使用用户数据目录新库，正式交付前需补主库迁移/拷贝说明
 
+- 2026-04-27 已修复本地前端服务“打不开 / 旧记录卡住”问题：
+  - 根因表现：`data/logs/local-services/frontend.pid.json` 曾保留 4 月 24 日旧 pid，但当前 5173 无健康响应，容易让用户误以为前端还在或停止/重启状态不清
+  - `scripts/start-local-services.cjs` 现在会读取 pid 记录并在健康检查失败且进程不存在时自动清理；启动失败时会直接输出最近日志尾部
+  - `scripts/stop-local-services.cjs` 现在会等待 5173 / 8000 端口释放，成功后清理 pid 文件；旧 pid 不存在时会自动移除记录
+  - 已验证停止后 pid 文件清理、端口不可访问；重新 `npm run start:local -- --no-open` 后前端返回 `HTTP 200`、后端 `/api/system/health` 返回 `{"status":"ok"}`
+
 - 2026-04-27 已完成 M2/M3 窗口任务：
   - M2 导入中心新增“真实学校数据试跑流程”，覆盖备份主库、核验基础数据、导入教师任教、创建考试科目、导入成绩、查看分析、导出报表 7 步；页面明确提示当前不支持无快照逐行回滚
   - `GET /api/import-center/batches` 现在返回最近备份对象；导入批次详情新增 `error_items`，可从错误报告 Excel 解析行号、字段、原值、失败原因和建议修正方式

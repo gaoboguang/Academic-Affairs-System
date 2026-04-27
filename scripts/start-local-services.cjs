@@ -92,11 +92,66 @@ function checkPortAvailability(host, port) {
   });
 }
 
+function logPathFor(service) {
+  return path.join(logDir, `${service.name}.log`);
+}
+
+function pidPathFor(service) {
+  return path.join(logDir, `${service.name}.pid.json`);
+}
+
+function readPidInfo(service) {
+  const pidPath = pidPathFor(service);
+  if (!fs.existsSync(pidPath)) return null;
+  try {
+    const data = JSON.parse(fs.readFileSync(pidPath, "utf8"));
+    const pid = Number(data.pid);
+    if (!Number.isInteger(pid) || pid <= 0) return null;
+    return { ...data, pid, pidPath };
+  } catch {
+    return null;
+  }
+}
+
+function isProcessRunning(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error && error.code === "EPERM";
+  }
+}
+
+function removePidFile(service) {
+  try {
+    fs.rmSync(pidPathFor(service), { force: true });
+  } catch {
+    // 清理失败不阻断启动，后续健康检查仍会给出真实状态。
+  }
+}
+
+function getLogTail(service, maxLines = 30) {
+  const logPath = logPathFor(service);
+  if (!fs.existsSync(logPath)) return "暂无日志。";
+  const content = fs.readFileSync(logPath, "utf8").trimEnd();
+  if (!content) return "日志为空。";
+  return content.split(/\r?\n/).slice(-maxLines).join("\n");
+}
+
+function cleanupStalePidFile(service, pidInfo, health) {
+  if (!pidInfo) return;
+  if (health.ok || isProcessRunning(pidInfo.pid)) return;
+  removePidFile(service);
+  console.log(`[${service.label}] 已清理过期启动记录，旧 pid=${pidInfo.pid}`);
+}
+
 async function inspectService(service) {
+  const pidInfo = readPidInfo(service);
   const health = await checkHttpHealth(defaultHost, service.port, service.healthPath);
   if (health.ok) {
-    return { ...service, running: true, ok: true, health };
+    return { ...service, running: true, ok: true, health, pidInfo };
   }
+  cleanupStalePidFile(service, pidInfo, health);
 
   const portState = await checkPortAvailability(defaultHost, service.port);
   return {
@@ -105,15 +160,8 @@ async function inspectService(service) {
     ok: portState.ok,
     health,
     portState,
+    pidInfo,
   };
-}
-
-function logPathFor(service) {
-  return path.join(logDir, `${service.name}.log`);
-}
-
-function pidPathFor(service) {
-  return path.join(logDir, `${service.name}.pid.json`);
 }
 
 function startDetachedService(service) {
@@ -222,6 +270,9 @@ async function main() {
     const ok = await waitForService(service);
     if (!ok) {
       console.error(`[${service.label}] 启动后健康检查未通过，请查看日志：${logPathFor(service)}`);
+      console.error("");
+      console.error(`[${service.label}] 最近日志：`);
+      console.error(getLogTail(service));
       process.exit(1);
     }
   }

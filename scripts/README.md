@@ -43,9 +43,9 @@
 - [`../start-local-edu.command`](../start-local-edu.command)
   macOS 双击启动器；会先检查本机 `5173 / 8000` 是否已是可用服务，未启动时再执行 `npm run start:local`，启动后服务留在后台。
 - [`start-local-services.cjs`](./start-local-services.cjs)
-  本地后台启动器，负责复用或后台启动前后端服务，并把日志写入 `data/logs/local-services/`。
+  本地后台启动器，负责复用或后台启动前后端服务，并把日志写入 `data/logs/local-services/`；如果旧 pid 记录已经失效，会先清理再启动。
 - [`stop-local-services.cjs`](./stop-local-services.cjs)
-  根据 `data/logs/local-services/*.pid.json` 停止后台启动器创建的服务。
+  根据 `data/logs/local-services/*.pid.json` 停止后台启动器创建的服务，并在端口释放后清理启动记录。
 - [`backend-cli.cjs`](./backend-cli.cjs)
   后端统一命令入口，负责迁移、初始化、测试、开发启动。
 - [`check_data_health.py`](./check_data_health.py)

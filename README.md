@@ -110,6 +110,7 @@ npm run start:local
 ```
 
 该命令会后台启动或复用前后端服务，启动成功后可以关闭终端。日志位于 `data/logs/local-services/`。
+如果上一次异常退出留下了旧启动记录，启动器会自动清理失效记录后重新拉起服务。
 
 开发调试时可以使用：
 
@@ -139,6 +140,8 @@ npm run dev
 ```bash
 npm run stop:local
 ```
+
+停止命令会等待前后端端口释放，并清理 `data/logs/local-services/*.pid.json` 启动记录；再次启动时不会被旧记录卡住。
 
 ### macOS / Linux
 
