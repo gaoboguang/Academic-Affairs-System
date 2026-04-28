@@ -14,11 +14,22 @@ from app.repositories.recommendations import (
     get_major,
     get_major_by_name,
     list_admission_records as repo_list_admission_records,
+    list_admission_records_page as repo_list_admission_records_page,
     list_colleges as repo_list_colleges,
     list_majors as repo_list_majors,
+    list_majors_page as repo_list_majors_page,
 )
 from app.repositories.system import create_import_job, write_audit_log
-from app.schemas.recommendation import AdmissionImportResponse, AdmissionRecordRead, CollegePayload, CollegeRead, MajorPayload, MajorRead
+from app.schemas.recommendation import (
+    AdmissionImportResponse,
+    AdmissionRecordPageRead,
+    AdmissionRecordRead,
+    CollegePayload,
+    CollegeRead,
+    MajorPageRead,
+    MajorPayload,
+    MajorRead,
+)
 
 from ._recommendations_shared import _serialize_admission_record, _serialize_college, _serialize_major
 
@@ -85,6 +96,29 @@ def list_majors(session: Session, *, keyword: str | None = None, is_art_related:
     return [_serialize_major(item) for item in repo_list_majors(session, keyword=keyword, is_art_related=is_art_related)]
 
 
+def list_majors_page(
+    session: Session,
+    *,
+    keyword: str | None = None,
+    is_art_related: bool | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> MajorPageRead:
+    items, total = repo_list_majors_page(
+        session,
+        keyword=keyword,
+        is_art_related=is_art_related,
+        page=page,
+        page_size=page_size,
+    )
+    return MajorPageRead(
+        items=[_serialize_major(item) for item in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
 def create_major(session: Session, payload: MajorPayload) -> MajorRead:
     existing = get_major_by_name(session, payload.name)
     if existing:
@@ -130,6 +164,33 @@ def list_admission_records(
             student_type=student_type,
         )
     ]
+
+
+def list_admission_records_page(
+    session: Session,
+    *,
+    year: int | None = None,
+    province: str | None = None,
+    college_id: int | None = None,
+    student_type: str | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> AdmissionRecordPageRead:
+    items, total = repo_list_admission_records_page(
+        session,
+        year=year,
+        province=province,
+        college_id=college_id,
+        student_type=student_type,
+        page=page,
+        page_size=page_size,
+    )
+    return AdmissionRecordPageRead(
+        items=[_serialize_admission_record(item) for item in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 def import_admissions(

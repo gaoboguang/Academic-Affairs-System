@@ -5,8 +5,10 @@ from ._recommendations_catalog import (
     create_major,
     import_admissions,
     list_admission_records,
+    list_admission_records_page,
     list_colleges,
     list_majors,
+    list_majors_page,
     update_college,
     update_major,
 )
@@ -38,6 +40,7 @@ from ._recommendations_history import (
 from ._recommendations_plans import (
     import_enrollment_plans,
     list_enrollment_plans,
+    list_enrollment_plans_page,
 )
 from ._recommendations_rules import (
     bootstrap_province_score_transform_rules,
@@ -101,12 +104,15 @@ __all__ = [
     "import_admissions",
     "import_enrollment_plans",
     "list_admission_records",
+    "list_admission_records_page",
     "list_colleges",
     "list_employment_directions",
     "list_enrollment_plans",
+    "list_enrollment_plans_page",
     "list_gaokao_score_projections",
     "list_major_employment_mappings",
     "list_majors",
+    "list_majors_page",
     "list_province_score_transform_rules",
     "list_special_type_rules",
     "preview_volunteer_workbench",

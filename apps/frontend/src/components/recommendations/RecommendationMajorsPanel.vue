@@ -57,12 +57,24 @@
         </template>
       </el-table-column>
     </el-table>
+    <el-pagination
+      v-if="pagination.total"
+      class="table-pagination"
+      background
+      layout="total, sizes, prev, pager, next"
+      :current-page="pagination.page"
+      :page-size="pagination.page_size"
+      :page-sizes="[50, 100, 200]"
+      :total="pagination.total"
+      @current-change="emit('page-change', $event)"
+      @size-change="emit('page-size-change', $event)"
+    />
     <el-empty v-if="!majors.length" description="暂无专业数据" />
   </section>
 </template>
 
 <script setup lang="ts">
-import type { MajorItem } from "./types";
+import type { MajorItem, PaginationState } from "./types";
 
 interface MajorFiltersState {
   keyword: string;
@@ -72,11 +84,14 @@ interface MajorFiltersState {
 defineProps<{
   majors: MajorItem[];
   filters: MajorFiltersState;
+  pagination: PaginationState;
 }>();
 
 const emit = defineEmits<{
   load: [];
   reset: [];
+  "page-change": [value: number];
+  "page-size-change": [value: number];
   create: [];
   edit: [value: MajorItem];
 }>();
@@ -89,6 +104,11 @@ const emit = defineEmits<{
 
 .toolbar-row {
   margin-bottom: 16px;
+}
+
+.table-pagination {
+  margin-top: 16px;
+  justify-content: flex-end;
 }
 
 .name-stack {

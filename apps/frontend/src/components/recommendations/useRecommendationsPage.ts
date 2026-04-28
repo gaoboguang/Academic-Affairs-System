@@ -38,6 +38,7 @@ export function useRecommendationsPage() {
   const shandongWorkbench = useShandongRecommendationWorkbench({
     recommendationForm: workflow.recommendationForm,
   });
+  const loadedTabs = new Set<string>();
 
   const summaryCards = computed(() => {
     const workflowCards = workflow.summaryCards.value;
@@ -56,20 +57,12 @@ export function useRecommendationsPage() {
 
   onMounted(async () => {
     try {
-      await workflow.loadStudentAndExamOptions();
       await Promise.all([
-        catalog.loadCollegeDirectory(),
-        catalog.loadMajorDirectory(),
-        career.loadEmploymentDirections(),
-        career.loadMajorEmploymentMappings(),
+        workflow.loadStudentAndExamOptions(),
         workflow.loadRecommendationSettings(),
-        catalog.loadColleges(),
-        catalog.loadMajors(),
-        catalog.loadAdmissions(),
-        planning.loadEnrollmentPlans(),
-        planning.loadProvinceVolunteerRules(),
         workflow.loadHistory(),
       ]);
+      loadedTabs.add("recommendations");
       volunteerWorkspace.syncFromRecommendationForm();
       if (workflow.historyItems.value.length) {
         await workflow.viewScheme(workflow.historyItems.value[0]);
@@ -80,21 +73,81 @@ export function useRecommendationsPage() {
     }
   });
 
+  async function loadTabData(tab: string): Promise<void> {
+    if (loadedTabs.has(tab)) return;
+    loadedTabs.add(tab);
+    try {
+      if (tab === "colleges") {
+        await catalog.loadColleges();
+        return;
+      }
+      if (tab === "majors") {
+        await catalog.loadMajors({ resetPage: true });
+        return;
+      }
+      if (tab === "employment-directions") {
+        await career.loadEmploymentDirections();
+        return;
+      }
+      if (tab === "major-employment-maps") {
+        await Promise.all([
+          catalog.loadMajorDirectory(),
+          career.loadEmploymentDirections(),
+          career.loadMajorEmploymentMappings(),
+        ]);
+        return;
+      }
+      if (tab === "enrollment-plans") {
+        await Promise.all([
+          catalog.loadCollegeDirectory(),
+          planning.loadEnrollmentPlans({ resetPage: true }),
+        ]);
+        return;
+      }
+      if (tab === "admissions") {
+        await Promise.all([
+          catalog.loadCollegeDirectory(),
+          catalog.loadAdmissions({ resetPage: true }),
+        ]);
+        return;
+      }
+      if (tab === "volunteer-rules") {
+        await planning.loadProvinceVolunteerRules();
+        return;
+      }
+      if (tab === "special-type-rules") {
+        await planning.loadSpecialTypeRules();
+        return;
+      }
+      if (tab === "score-transform-rules") {
+        await planning.loadProvinceScoreTransformRules();
+        return;
+      }
+      if (tab === "subject-requirements") {
+        await planning.loadSubjectRequirementDicts();
+        return;
+      }
+      if (tab === "shandong-workbench") {
+        await shandongWorkbench.loadShandongDataHealth();
+        return;
+      }
+      if (tab === "volunteer-workbench") {
+        await Promise.all([
+          catalog.loadCollegeDirectory(),
+          career.loadEmploymentDirections(),
+          planning.loadEnrollmentPlans({ resetPage: true }),
+        ]);
+      }
+    } catch (error) {
+      loadedTabs.delete(tab);
+      ElMessage.error(formatUserActionError("加载高考志愿页签", error, "请稍后重试，或先缩小筛选条件后再查询。"));
+    }
+  }
+
   watch(
     () => workflow.activeTab.value,
     (tab) => {
-      if (tab === "special-type-rules" && !planning.specialTypeRules.value.length) {
-        void planning.loadSpecialTypeRules();
-      }
-      if (tab === "score-transform-rules" && !planning.provinceScoreTransformRules.value.length) {
-        void planning.loadProvinceScoreTransformRules();
-      }
-      if (tab === "subject-requirements" && !planning.subjectRequirementDicts.value.length) {
-        void planning.loadSubjectRequirementDicts();
-      }
-      if (tab === "shandong-workbench" && !shandongWorkbench.shandongDataHealth.value) {
-        void shandongWorkbench.loadShandongDataHealth();
-      }
+      void loadTabData(tab);
     },
   );
 

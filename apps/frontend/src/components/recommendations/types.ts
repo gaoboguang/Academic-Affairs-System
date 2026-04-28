@@ -232,6 +232,19 @@ export interface EnrollmentPlanItem {
   is_active: boolean;
 }
 
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface PaginationState {
+  page: number;
+  page_size: number;
+  total: number;
+}
+
 export interface ExamOption {
   id: number;
   name: string;
@@ -850,6 +863,8 @@ export interface VolunteerWorkbenchPreviewResponse {
   applicable_rule_count: number;
   applicable_rules: ProvinceVolunteerRule[];
   candidate_count: number;
+  returned_candidate_count?: number;
+  is_candidate_truncated?: boolean;
   candidates: VolunteerWorkbenchCandidate[];
 }
 

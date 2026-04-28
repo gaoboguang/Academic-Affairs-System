@@ -51,6 +51,18 @@
       <el-table-column label="选科要求" prop="subject_requirement" min-width="120" />
       <el-table-column label="数据来源" prop="source_note" min-width="180" />
     </el-table>
+    <el-pagination
+      v-if="pagination.total"
+      class="table-pagination"
+      background
+      layout="total, sizes, prev, pager, next"
+      :current-page="pagination.page"
+      :page-size="pagination.page_size"
+      :page-sizes="[50, 100, 200]"
+      :total="pagination.total"
+      @current-change="emit('page-change', $event)"
+      @size-change="emit('page-size-change', $event)"
+    />
     <el-empty v-if="!admissions.length" description="暂无录取数据" />
   </section>
 </template>
@@ -59,7 +71,7 @@
 import type { UploadFile } from "element-plus";
 
 import ImportFeedbackPanel from "../common/ImportFeedbackPanel.vue";
-import type { AdmissionImportResponse, AdmissionRecord, CollegeItem } from "./types";
+import type { AdmissionImportResponse, AdmissionRecord, CollegeItem, PaginationState } from "./types";
 
 interface AdmissionFiltersState {
   year?: number;
@@ -76,11 +88,14 @@ defineProps<{
   collegeOptions: CollegeItem[];
   studentTypeOptions: Array<{ value: string; label: string }>;
   admissionImportResult: AdmissionImportResponse | null;
+  pagination: PaginationState;
 }>();
 
 const emit = defineEmits<{
   load: [];
   reset: [];
+  "page-change": [value: number];
+  "page-size-change": [value: number];
   "download-template": [];
   import: [value: UploadFile];
 }>();
@@ -111,6 +126,11 @@ function formatStudentType(value?: string | null): string {
 
 .toolbar-row {
   margin-bottom: 16px;
+}
+
+.table-pagination {
+  margin-top: 16px;
+  justify-content: flex-end;
 }
 
 .result-alert {

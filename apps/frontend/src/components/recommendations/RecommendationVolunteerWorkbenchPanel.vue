@@ -293,12 +293,22 @@
       <template #default>
         当前总分 {{ preview.total_score }}，考试位次 {{ preview.snapshot_rank ?? "暂无" }}，生效位次
         {{ preview.effective_rank ?? "暂无" }}，当前按“{{ preview.score_input_label }}”计算。已匹配
-        {{ preview.candidate_count }} 条候选计划，{{ preview.applicable_rule_count }} 条省份规则。
+        {{ preview.candidate_count }} 条候选计划，当前展示 {{ preview.returned_candidate_count ?? preview.candidates.length }} 条，
+        {{ preview.applicable_rule_count }} 条省份规则。
         <div v-if="preview.input_notes.length" class="preview-note-list">
           <div v-for="item in preview.input_notes" :key="item">{{ item }}</div>
         </div>
       </template>
     </el-alert>
+
+    <el-alert
+      v-if="preview?.is_candidate_truncated"
+      class="result-alert"
+      type="warning"
+      show-icon
+      :closable="false"
+      title="候选池结果较多，页面已只展示前 300 条；请增加批次、地区、院校层级或专业关键词筛选。"
+    />
 
     <section v-if="preview?.rule_alerts.length" class="rule-alert-grid">
       <article
@@ -421,7 +431,9 @@
             <p>候选池会优先使用专业线，缺少专业线时回退到院校基线，并给出风险提示。</p>
           </div>
           <div class="candidate-stats" v-if="preview">
-            <span class="page-chip"><strong>候选</strong>{{ preview.candidate_count }}</span>
+            <span class="page-chip">
+              <strong>候选</strong>{{ preview.returned_candidate_count ?? preview.candidates.length }} / {{ preview.candidate_count }}
+            </span>
             <span class="page-chip"><strong>规则</strong>{{ preview.applicable_rule_count }}</span>
           </div>
         </div>

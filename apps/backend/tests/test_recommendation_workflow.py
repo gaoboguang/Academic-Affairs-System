@@ -142,6 +142,82 @@ def build_enrollment_plan_workbook() -> bytes:
     return buffer.getvalue()
 
 
+def build_large_enrollment_plan_workbook(row_count: int = 305) -> bytes:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "数据"
+    sheet.append(
+        [
+            "年份",
+            "省份",
+            "批次",
+            "科类/模式",
+            "院校",
+            "院校代码",
+            "专业组编号",
+            "专业",
+            "专业代码",
+            "计划人数",
+            "选科要求",
+            "学费",
+            "学制",
+            "培养地点",
+            "学生类别",
+            "数据来源",
+            "导入批次",
+        ]
+    )
+    for index in range(row_count):
+        sheet.append(
+            [
+                2026,
+                "广东",
+                "本科批",
+                "物理类",
+                "分页性能大学",
+                "P001",
+                f"P{index:03d}",
+                f"分页测试专业{index:03d}",
+                f"PX{index:03d}",
+                1,
+                "物理+化学",
+                "5000 元/年",
+                "4年",
+                "广州校区",
+                "普通生",
+                "分页压力测试",
+                "2026-广东-分页性能",
+            ]
+        )
+    buffer = BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()
+
+
+def build_large_admission_workbook(row_count: int = 305) -> bytes:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "数据"
+    sheet.append(["年份", "省份", "批次", "院校", "专业", "最低分", "最低位次", "学生类别", "数据来源说明"])
+    for index in range(row_count):
+        sheet.append(
+            [
+                2025,
+                "广东",
+                "本科批",
+                "分页性能大学",
+                f"分页测试专业{index:03d}",
+                560,
+                32000 + index,
+                "普通生",
+                "分页压力测试",
+            ]
+        )
+    buffer = BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()
+
+
 def create_exam_with_scores(client) -> int:
     exam_response = client.post(
         "/api/exams",
@@ -1048,6 +1124,73 @@ def test_special_type_rule_dictionary_bootstrap_and_list(client) -> None:
     info_rule = next(item for item in payload if item["category_code"] == "spring_it")
     assert "计算机" in info_rule["match_keywords_json"]
     assert any("技能考试类别" in note for note in info_rule["review_notes_json"])
+
+
+def test_recommendation_large_tables_support_paginated_queries(client) -> None:
+    for major_name in ["分页测试专业A", "分页测试专业B", "分页测试专业C"]:
+        response = client.post(
+            "/api/majors",
+            json={
+                "name": major_name,
+                "major_code": None,
+                "category": "测试门类",
+                "direction": None,
+                "career_path": None,
+                "is_art_related": False,
+                "note": None,
+                "is_active": True,
+            },
+        )
+        assert response.status_code == 200
+
+    major_page = client.get("/api/majors/page?keyword=分页测试专业&page=2&page_size=2")
+    assert major_page.status_code == 200
+    major_payload = major_page.json()
+    assert major_payload["total"] == 3
+    assert major_payload["page"] == 2
+    assert major_payload["page_size"] == 2
+    assert len(major_payload["items"]) == 1
+
+    import_response = client.post(
+        "/api/admissions/import",
+        files={
+            "file": (
+                "admissions.xlsx",
+                build_admission_workbook(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert import_response.status_code == 200
+
+    admissions_page = client.get("/api/admissions/page?province=广东&page=1&page_size=2")
+    assert admissions_page.status_code == 200
+    admissions_payload = admissions_page.json()
+    assert admissions_payload["total"] == 4
+    assert len(admissions_payload["items"]) == 2
+    assert {item["province"] for item in admissions_payload["items"]} == {"广东"}
+
+    plan_import_response = client.post(
+        "/api/enrollment-plans/import",
+        files={
+            "file": (
+                "enrollment-plans.xlsx",
+                build_enrollment_plan_workbook(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert plan_import_response.status_code == 200
+
+    plans_page = client.get("/api/enrollment-plans/page?province=广东&year=2026&page=1&page_size=2")
+    assert plans_page.status_code == 200
+    plans_payload = plans_page.json()
+    assert plans_payload["total"] == 3
+    assert len(plans_payload["items"]) == 2
+    assert {item["province"] for item in plans_payload["items"]} == {"广东"}
+
+    too_large_page_size = client.get("/api/enrollment-plans/page?page_size=500")
+    assert too_large_page_size.status_code == 422
 
 
 def test_admission_import_and_recommendation_generation(client, app) -> None:
@@ -2187,6 +2330,59 @@ def test_volunteer_workbench_preview_supports_exam_mode_compatibility(client) ->
         "当前未配置“3+1+2”精确规则，先按兼容模式" in item and "物理类" in item
         for item in preview_payload["input_notes"]
     )
+
+
+def test_volunteer_workbench_preview_truncates_large_candidate_pool(client) -> None:
+    exam_id = create_exam_with_scores(client)
+
+    plan_import_response = client.post(
+        "/api/enrollment-plans/import",
+        files={
+            "file": (
+                "large-enrollment-plans.xlsx",
+                build_large_enrollment_plan_workbook(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert plan_import_response.status_code == 200
+    assert plan_import_response.json()["success_rows"] == 305
+
+    admission_import_response = client.post(
+        "/api/admissions/import",
+        files={
+            "file": (
+                "large-admissions.xlsx",
+                build_large_admission_workbook(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert admission_import_response.status_code == 200
+    assert admission_import_response.json()["success_rows"] == 305
+
+    preview_response = client.post(
+        "/api/recommendations/volunteer-workbench/preview",
+        json={
+            "student_id": 1,
+            "exam_id": exam_id,
+            "province": "广东",
+            "target_year": 2026,
+            "batch": "本科批",
+            "exam_mode": "物理类",
+            "candidate_type": "general",
+            "score_input_mode": "actual_rank",
+            "student_rank_override": 31000,
+            "subject_combination": "物理+化学",
+        },
+    )
+    assert preview_response.status_code == 200
+    preview_payload = preview_response.json()
+    assert preview_payload["candidate_count"] == 305
+    assert preview_payload["returned_candidate_count"] == 300
+    assert preview_payload["is_candidate_truncated"] is True
+    assert len(preview_payload["candidates"]) == 300
+    assert any(item["code"] == "candidate_result_truncated" for item in preview_payload["rule_alerts"])
 
 
 def test_volunteer_workbench_preview_explains_missing_rule_year(client) -> None:

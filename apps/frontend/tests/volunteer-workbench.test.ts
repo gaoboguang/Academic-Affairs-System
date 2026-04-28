@@ -187,6 +187,8 @@ function buildPreview(overrides: Partial<VolunteerWorkbenchPreviewResponse> = {}
     applicable_rule_count: 1,
     applicable_rules: [buildRule()],
     candidate_count: 2,
+    returned_candidate_count: 2,
+    is_candidate_truncated: false,
     candidates: [buildCandidate(1), buildCandidate(2)],
     ...overrides,
   };

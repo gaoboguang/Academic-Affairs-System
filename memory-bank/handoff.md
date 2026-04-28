@@ -2,6 +2,14 @@
 
 ## 当前主线状态（2026-04-28）
 
+- 本轮已修复高考志愿 `/recommendations` 大表全量加载导致的崩溃/卡死：
+  - 首屏加载范围已收缩为轻量数据；录取库、招生计划库、专业库等大表必须通过对应页签懒加载，不应再放回 `onMounted` 首屏 `Promise.all`
+  - 新分页接口：`GET /api/majors/page`、`GET /api/admissions/page`、`GET /api/enrollment-plans/page`；默认 `page=1&page_size=50`，最大 `page_size=200`
+  - 前端三类维护表格已接分页控件；筛选/重置应走分页接口并重置到第一页
+  - 志愿工作台预览只返回前 300 条候选，`candidate_count` 是真实总数，`returned_candidate_count` 是实际返回数，`is_candidate_truncated=true` 时页面显示“结果已截断，请增加筛选条件”
+  - 新迁移 `20260428_0022_recommendation_large_table_indexes.py` 已给推荐大表补查询索引；本机真实 `data/app.db` 已执行迁移到 `20260428_0022`
+  - 已通过：`npm run backend:test`（`109 passed`）、`npm run frontend:lint`、`npm run frontend:test`（`36 files / 182 tests passed`）、`npm run frontend:build`、`npm run e2e -- tests/e2e/recommendations.spec.ts`（`9 passed`）、`npm run e2e -- tests/e2e/gaokao-volunteer.spec.ts`（`11 passed`）
+
 - 本轮已完成用户提供的山东高考志愿资料补库：
   - 新增脚本 `scripts/import_user_gaokao_local_folder.py` 和报告 `docs/user-gaokao-local-import-20260428.md`
   - 真实主库 `data/app.db` 已导入用户本地资料，导入版本 `user_gaokao_local_20260428`，来源统一标记 `user_provided / pending_local_review`

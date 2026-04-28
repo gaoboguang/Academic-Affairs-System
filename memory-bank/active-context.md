@@ -2,6 +2,13 @@
 
 ## 当前状态
 
+- 2026-04-28 已修复高考志愿 `/recommendations` 首屏因大表全量加载导致的卡死/崩溃：
+  - 首屏不再加载录取库、招生计划库、专业库等大表，只加载学生/考试选项、推荐设置、历史摘要和山东数据健康摘要；重数据改为切换到对应页签后懒加载
+  - 新增分页接口 `/api/majors/page`、`/api/admissions/page`、`/api/enrollment-plans/page`，默认每页 50 条，最大 200 条；推荐页专业库、录取库、招生计划库已改用分页表格
+  - 志愿工作台候选池默认只返回前 300 条，`candidate_count` 保留真实总数，并通过 `is_candidate_truncated` 和页面提示说明结果已截断
+  - 新增迁移 `20260428_0022_recommendation_large_table_indexes.py`，给 `admission_record` 与 `enrollment_plan` 常用筛选字段补只读查询索引；真实 `data/app.db` 已执行 `backend:migrate` 升级到该版本
+  - 已验证：后端定向 `15 passed`、后端全量 `109 passed`、前端 lint 通过、前端全量 `36 files / 182 tests passed`、前端构建通过、真实主库分页读取约 3.8 秒返回三类各 50 条、`recommendations.spec.ts` 9 条通过、`gaokao-volunteer.spec.ts` 11 条通过
+
 - 2026-04-28 已按用户提供的 `/Users/gao/Desktop/高考志愿` 本地资料补齐山东高考志愿数据库：
   - 新增脚本 `scripts/import_user_gaokao_local_folder.py`，支持 `--source-dir`、`--years`、`--dry-run`、`--json`、`--no-backup`，默认只处理山东、优先 2023/2024/2025，并把用户资料标记为 `user_provided / pending_local_review`
   - 写库前已备份真实主库到 `data/backups/app_before_user_gaokao_local_import_20260428_141651.db`，导入报告为 `docs/user-gaokao-local-import-20260428.md`

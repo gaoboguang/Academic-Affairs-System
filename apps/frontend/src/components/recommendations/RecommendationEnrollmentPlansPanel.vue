@@ -68,6 +68,18 @@
       <el-table-column label="导入批次" prop="import_batch_name" min-width="140" />
       <el-table-column label="数据来源" prop="source_note" min-width="180" />
     </el-table>
+    <el-pagination
+      v-if="pagination.total"
+      class="table-pagination"
+      background
+      layout="total, sizes, prev, pager, next"
+      :current-page="pagination.page"
+      :page-size="pagination.page_size"
+      :page-sizes="[50, 100, 200]"
+      :total="pagination.total"
+      @current-change="emit('page-change', $event)"
+      @size-change="emit('page-size-change', $event)"
+    />
     <el-empty v-if="!enrollmentPlans.length" description="暂无招生计划数据" />
   </section>
 </template>
@@ -76,7 +88,7 @@
 import type { UploadFile } from "element-plus";
 
 import ImportFeedbackPanel from "../common/ImportFeedbackPanel.vue";
-import type { CollegeItem, EnrollmentPlanItem, EnrollmentPlanImportResponse } from "./types";
+import type { CollegeItem, EnrollmentPlanItem, EnrollmentPlanImportResponse, PaginationState } from "./types";
 
 interface EnrollmentPlanFiltersState {
   year?: number;
@@ -96,11 +108,14 @@ defineProps<{
   collegeOptions: CollegeItem[];
   studentTypeOptions: Array<{ value: string; label: string }>;
   enrollmentPlanImportResult: EnrollmentPlanImportResponse | null;
+  pagination: PaginationState;
 }>();
 
 const emit = defineEmits<{
   load: [];
   reset: [];
+  "page-change": [value: number];
+  "page-size-change": [value: number];
   "download-template": [];
   import: [value: UploadFile];
 }>();
@@ -139,6 +154,11 @@ function formatStudentType(value?: string | null): string {
 
 .toolbar-row {
   margin-bottom: 16px;
+}
+
+.table-pagination {
+  margin-top: 16px;
+  justify-content: flex-end;
 }
 
 .result-alert {

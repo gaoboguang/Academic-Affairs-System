@@ -121,8 +121,11 @@
         <RecommendationMajorsPanel
           :majors="majors"
           :filters="majorFilters"
-          @load="loadMajors"
+          :pagination="majorPagination"
+          @load="loadMajors({ resetPage: true })"
           @reset="resetMajorFilters"
+          @page-change="handleMajorPageChange"
+          @page-size-change="handleMajorPageSizeChange"
           @create="openCreateMajor"
           @edit="openEditMajor"
         />
@@ -164,10 +167,13 @@
           :college-options="collegeDirectory"
           :student-type-options="recommendationStudentTypeOptions"
           :enrollment-plan-import-result="enrollmentPlanImportResult"
+          :pagination="enrollmentPlanPagination"
           @download-template="downloadEnrollmentPlanTemplate"
           @import="handleEnrollmentPlanImport"
-          @load="loadEnrollmentPlans"
+          @load="loadEnrollmentPlans({ resetPage: true })"
           @reset="resetEnrollmentPlanFilters"
+          @page-change="handleEnrollmentPlanPageChange"
+          @page-size-change="handleEnrollmentPlanPageSizeChange"
         />
       </el-tab-pane>
 
@@ -180,10 +186,13 @@
           :college-options="collegeDirectory"
           :student-type-options="recommendationStudentTypeOptions"
           :admission-import-result="admissionImportResult"
+          :pagination="admissionPagination"
           @download-template="downloadAdmissionTemplate"
           @import="handleAdmissionImport"
-          @load="loadAdmissions"
+          @load="loadAdmissions({ resetPage: true })"
           @reset="resetAdmissionFilters"
+          @page-change="handleAdmissionPageChange"
+          @page-size-change="handleAdmissionPageSizeChange"
         />
       </el-tab-pane>
 
@@ -496,6 +505,7 @@ const {
   addVolunteerCandidate,
   admissionFilters,
   admissionImportResult,
+  admissionPagination,
   admissionYearOptions,
   admissions,
   applyStrategyPresetWithConfirm,
@@ -533,6 +543,7 @@ const {
   employmentMappingStrengthOptions,
   enrollmentPlanFilters,
   enrollmentPlanImportResult,
+  enrollmentPlanPagination,
   enrollmentPlans,
   exportShandongRecommendationReport,
   exportVolunteerDraft,
@@ -551,7 +562,11 @@ const {
   generating,
   generationMode,
   handleAdmissionImport,
+  handleAdmissionPageChange,
+  handleAdmissionPageSizeChange,
   handleEnrollmentPlanImport,
+  handleEnrollmentPlanPageChange,
+  handleEnrollmentPlanPageSizeChange,
   handleCollegeDialogClosed,
   handleEmploymentDirectionDialogClosed,
   handleCompareSchemeChange,
@@ -559,6 +574,8 @@ const {
   handleMajorEmploymentMappingDialogClosed,
   handleVolunteerRuleDialogClosed,
   handleMultiCompareChange,
+  handleMajorPageChange,
+  handleMajorPageSizeChange,
   historyLoadError,
   historyFilters,
   historyItems,
@@ -590,6 +607,7 @@ const {
   majorDirectory,
   majorFilters,
   majorForm,
+  majorPagination,
   majorEmploymentMappingDialogTitle,
   majorEmploymentMappingDialogVisible,
   majorEmploymentMappingFilters,

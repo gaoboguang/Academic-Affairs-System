@@ -47,6 +47,7 @@ from ._recommendations_shared import _load_recommendation_settings_state, _seria
 from ._recommendations_special_type_rules import resolve_special_type_context
 
 GENERIC_CHAPTER_PENDING_NOTE = "待通过阳光高考章程查询逐校补链，当前仅完成山东 2025 工作集名单。"
+VOLUNTEER_WORKBENCH_CANDIDATE_RETURN_LIMIT = 300
 
 
 @dataclass
@@ -294,6 +295,9 @@ def preview_volunteer_workbench(
         for rule in applicable_rules
     }
     candidates.sort(key=lambda item: _candidate_sort_key(item, rule_order_by_batch))
+    candidate_count = len(candidates)
+    returned_candidates = candidates[:VOLUNTEER_WORKBENCH_CANDIDATE_RETURN_LIMIT]
+    is_candidate_truncated = candidate_count > len(returned_candidates)
     serialized_rules: list[ProvinceVolunteerRuleRead] = [
         _serialize_province_volunteer_rule(item) for item in applicable_rules
     ]
@@ -305,6 +309,20 @@ def preview_volunteer_workbench(
                 code="fallback_general_reference_data",
                 level="info",
                 title="已回退到普通类录取参考",
+                detail=detail,
+            )
+        )
+    if is_candidate_truncated:
+        detail = (
+            f"当前条件命中 {candidate_count} 条候选计划，页面仅展示前 "
+            f"{VOLUNTEER_WORKBENCH_CANDIDATE_RETURN_LIMIT} 条；建议增加批次、地区、院校层级或专业关键词筛选。"
+        )
+        rule_notes.append(detail)
+        rule_alerts.append(
+            VolunteerWorkbenchRuleAlertRead(
+                code="candidate_result_truncated",
+                level="warning",
+                title="候选池结果已截断",
                 detail=detail,
             )
         )
@@ -328,8 +346,10 @@ def preview_volunteer_workbench(
         rule_alerts=rule_alerts,
         applicable_rule_count=len(serialized_rules),
         applicable_rules=serialized_rules,
-        candidate_count=len(candidates),
-        candidates=candidates,
+        candidate_count=candidate_count,
+        returned_candidate_count=len(returned_candidates),
+        is_candidate_truncated=is_candidate_truncated,
+        candidates=returned_candidates,
     )
 
 

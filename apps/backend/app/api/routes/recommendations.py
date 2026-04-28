@@ -7,6 +7,7 @@ from app.api.deps import get_db_session, get_settings
 from app.core.config import Settings
 from app.schemas.recommendation import (
     AdmissionImportResponse,
+    AdmissionRecordPageRead,
     AdmissionRecordRead,
     CollegePayload,
     CollegeRead,
@@ -14,7 +15,9 @@ from app.schemas.recommendation import (
     EmploymentDirectionRead,
     EmploymentDirectionBootstrapResponse,
     EnrollmentPlanImportResponse,
+    EnrollmentPlanPageRead,
     EnrollmentPlanRead,
+    MajorPageRead,
     MajorPayload,
     MajorRead,
     MajorEmploymentMappingPayload,
@@ -90,6 +93,23 @@ def list_majors(
     session: Session = Depends(get_db_session),
 ) -> list[MajorRead]:
     return service.list_majors(session, keyword=keyword, is_art_related=is_art_related)
+
+
+@router.get("/majors/page", response_model=MajorPageRead)
+def list_majors_page(
+    keyword: str | None = Query(default=None),
+    is_art_related: bool | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    session: Session = Depends(get_db_session),
+) -> MajorPageRead:
+    return service.list_majors_page(
+        session,
+        keyword=keyword,
+        is_art_related=is_art_related,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.post("/majors", response_model=MajorRead)
@@ -200,6 +220,27 @@ def list_admission_records(
     )
 
 
+@router.get("/admissions/page", response_model=AdmissionRecordPageRead)
+def list_admission_records_page(
+    year: int | None = Query(default=None),
+    province: str | None = Query(default=None),
+    college_id: int | None = Query(default=None),
+    student_type: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    session: Session = Depends(get_db_session),
+) -> AdmissionRecordPageRead:
+    return service.list_admission_records_page(
+        session,
+        year=year,
+        province=province,
+        college_id=college_id,
+        student_type=student_type,
+        page=page,
+        page_size=page_size,
+    )
+
+
 @router.post("/admissions/import", response_model=AdmissionImportResponse)
 async def import_admission_records(
     file: UploadFile = File(...),
@@ -228,6 +269,31 @@ def list_enrollment_plans(
         college_id=college_id,
         student_type=student_type,
         keyword=keyword,
+    )
+
+
+@router.get("/enrollment-plans/page", response_model=EnrollmentPlanPageRead)
+def list_enrollment_plans_page(
+    year: int | None = Query(default=None),
+    province: str | None = Query(default=None),
+    batch: str | None = Query(default=None),
+    college_id: int | None = Query(default=None),
+    student_type: str | None = Query(default=None),
+    keyword: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    session: Session = Depends(get_db_session),
+) -> EnrollmentPlanPageRead:
+    return service.list_enrollment_plans_page(
+        session,
+        year=year,
+        province=province,
+        batch=batch,
+        college_id=college_id,
+        student_type=student_type,
+        keyword=keyword,
+        page=page,
+        page_size=page_size,
     )
 
 

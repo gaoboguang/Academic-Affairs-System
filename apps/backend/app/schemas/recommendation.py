@@ -61,6 +61,13 @@ class MajorRead(ORMModel):
     is_active: bool
 
 
+class MajorPageRead(BaseModel):
+    items: list[MajorRead]
+    total: int
+    page: int
+    page_size: int
+
+
 class EmploymentDirectionPayload(BaseModel):
     name: str
     category: str | None = None
@@ -158,6 +165,13 @@ class AdmissionRecordRead(ORMModel):
     is_active: bool
 
 
+class AdmissionRecordPageRead(BaseModel):
+    items: list[AdmissionRecordRead]
+    total: int
+    page: int
+    page_size: int
+
+
 class AdmissionImportResponse(ImportResult):
     created_college_count: int = 0
     created_major_count: int = 0
@@ -185,6 +199,13 @@ class EnrollmentPlanRead(ORMModel):
     source_note: str | None = None
     import_batch_name: str | None = None
     is_active: bool
+
+
+class EnrollmentPlanPageRead(BaseModel):
+    items: list[EnrollmentPlanRead]
+    total: int
+    page: int
+    page_size: int
 
 
 class EnrollmentPlanImportResponse(ImportResult):
@@ -601,6 +622,8 @@ class VolunteerWorkbenchPreviewResponse(BaseModel):
     applicable_rule_count: int
     applicable_rules: list[ProvinceVolunteerRuleRead] = Field(default_factory=list)
     candidate_count: int
+    returned_candidate_count: int = 0
+    is_candidate_truncated: bool = False
     candidates: list[VolunteerWorkbenchCandidateRead] = Field(default_factory=list)
 
 

@@ -22,6 +22,8 @@ import type {
   EnrollmentPlanFiltersState,
   EnrollmentPlanImportResponse,
   EnrollmentPlanItem,
+  PaginatedResponse,
+  PaginationState,
   ProvinceVolunteerRuleBootstrapResponse,
   ProvinceVolunteerRule,
   ProvinceVolunteerRuleFiltersState,
@@ -55,6 +57,17 @@ function createYearOptions(values: number[]): number[] {
   return Array.from(years).sort((left, right) => right - left);
 }
 
+const commonBatchOptions = [
+  "本科批",
+  "专科批",
+  "常规批",
+  "普通类常规批",
+  "艺术本科批",
+  "体育常规批",
+  "春季高考本科批",
+  "春季高考专科批",
+];
+
 export function useGaokaoPlanningManager(options: GaokaoPlanningManagerOptions) {
   const enrollmentPlans = ref<EnrollmentPlanItem[]>([]);
   const provinceVolunteerRules = ref<ProvinceVolunteerRule[]>([]);
@@ -62,6 +75,7 @@ export function useGaokaoPlanningManager(options: GaokaoPlanningManagerOptions) 
   const subjectRequirementDicts = ref<SubjectRequirementDict[]>([]);
   const specialTypeRules = ref<SpecialTypeRule[]>([]);
   const enrollmentPlanImportResult = ref<EnrollmentPlanImportResponse | null>(null);
+  const enrollmentPlanPagination = reactive<PaginationState>({ page: 1, page_size: 50, total: 0 });
 
   const volunteerRuleDialogVisible = ref(false);
   const editingVolunteerRuleId = ref<number | null>(null);
@@ -127,6 +141,7 @@ export function useGaokaoPlanningManager(options: GaokaoPlanningManagerOptions) 
 
   const batchOptions = computed(() =>
     uniqueStrings([
+      ...commonBatchOptions,
       ...enrollmentPlans.value.map((item) => item.batch),
       ...provinceVolunteerRules.value.map((item) => item.batch),
     ]),
@@ -173,8 +188,9 @@ export function useGaokaoPlanningManager(options: GaokaoPlanningManagerOptions) 
     openFile(`/api/system/files?path=${encodeURIComponent("data/templates/enrollment_plans_import_template.xlsx")}`);
   }
 
-  async function loadEnrollmentPlans(): Promise<void> {
+  async function loadEnrollmentPlans(options: { resetPage?: boolean } = {}): Promise<void> {
     try {
+      if (options.resetPage) enrollmentPlanPagination.page = 1;
       const query = new URLSearchParams();
       if (enrollmentPlanFilters.year) query.set("year", String(enrollmentPlanFilters.year));
       if (enrollmentPlanFilters.province) query.set("province", enrollmentPlanFilters.province);
@@ -182,7 +198,15 @@ export function useGaokaoPlanningManager(options: GaokaoPlanningManagerOptions) 
       if (enrollmentPlanFilters.college_id) query.set("college_id", String(enrollmentPlanFilters.college_id));
       if (enrollmentPlanFilters.student_type) query.set("student_type", enrollmentPlanFilters.student_type);
       if (enrollmentPlanFilters.keyword) query.set("keyword", enrollmentPlanFilters.keyword);
-      enrollmentPlans.value = await apiRequest<EnrollmentPlanItem[]>(`/api/enrollment-plans?${query.toString()}`);
+      query.set("page", String(enrollmentPlanPagination.page));
+      query.set("page_size", String(enrollmentPlanPagination.page_size));
+      const response = await apiRequest<PaginatedResponse<EnrollmentPlanItem>>(
+        `/api/enrollment-plans/page?${query.toString()}`,
+      );
+      enrollmentPlans.value = response.items;
+      enrollmentPlanPagination.total = response.total;
+      enrollmentPlanPagination.page = response.page;
+      enrollmentPlanPagination.page_size = response.page_size;
     } catch (error) {
       reportError(error);
     }
@@ -397,6 +421,17 @@ export function useGaokaoPlanningManager(options: GaokaoPlanningManagerOptions) 
     enrollmentPlanFilters.college_id = undefined;
     enrollmentPlanFilters.student_type = "";
     enrollmentPlanFilters.keyword = "";
+    void loadEnrollmentPlans({ resetPage: true });
+  }
+
+  function handleEnrollmentPlanPageChange(page: number): void {
+    enrollmentPlanPagination.page = page;
+    void loadEnrollmentPlans();
+  }
+
+  function handleEnrollmentPlanPageSizeChange(pageSize: number): void {
+    enrollmentPlanPagination.page_size = pageSize;
+    enrollmentPlanPagination.page = 1;
     void loadEnrollmentPlans();
   }
 
@@ -532,7 +567,7 @@ export function useGaokaoPlanningManager(options: GaokaoPlanningManagerOptions) 
         "/api/enrollment-plans/import",
         uploadFileItem.raw,
       );
-      const tasks: Promise<void>[] = [loadEnrollmentPlans()];
+      const tasks: Promise<void>[] = [loadEnrollmentPlans({ resetPage: true })];
       if (options.reloadCollegeDirectory) tasks.push(options.reloadCollegeDirectory());
       if (options.reloadMajorDirectory) tasks.push(options.reloadMajorDirectory());
       await Promise.all(tasks);
@@ -558,10 +593,13 @@ export function useGaokaoPlanningManager(options: GaokaoPlanningManagerOptions) 
     downloadEnrollmentPlanTemplate,
     enrollmentPlanFilters,
     enrollmentPlanImportResult,
+    enrollmentPlanPagination,
     enrollmentPlans,
     examModeOptions,
     gaokaoCandidateTypeOptions,
     handleEnrollmentPlanImport,
+    handleEnrollmentPlanPageChange,
+    handleEnrollmentPlanPageSizeChange,
     handleVolunteerRuleDialogClosed,
     loadEnrollmentPlans,
     loadProvinceVolunteerRules,
