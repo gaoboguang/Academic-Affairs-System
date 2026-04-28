@@ -2,6 +2,14 @@
 
 ## 当前状态
 
+- 2026-04-28 已完成“本地升学规划任务中心”第一轮：
+  - 新增 `student_planning_goal`、`student_planning_task`、`student_planning_note` 三张本地表与 Alembic 迁移 `20260428_0021_student_planning_schema.py`
+  - 新增 `/api/planning/students/{student_id}`、目标/任务 CRUD、`/api/planning/tasks/bulk-create-from-pathway`、规划复盘记录和 `/api/reports/planning-followup/export`
+  - 学生详情新增“升学规划”页签；山东升学方案中心新增“生成规划任务”；输出中心新增 `planning_followup` 学生升学规划跟进表；首页下一步建议接入规划任务逾期、志愿草稿复核缺口和材料截止日期缺口
+  - 新增文档 `docs/student_planning_center_20260428.md`，边界仍是本地教师自用，不新增账号、云同步、通知、学生端或家长端，不输出录取承诺
+  - 已通过：临时空 SQLite `alembic upgrade head`、新增后端定向 `2 passed`、后端全量 `107 passed`、新增/相关前端 `3 files / 16 tests passed`、`frontend:lint`、`frontend:build`、新增 E2E `planning.spec.ts` `1 passed`
+  - 最终验收：`npm run check:all` 通过，后端 `107 passed`、前端 lint 通过、前端 `35 files / 180 tests passed`、前端构建通过、E2E `34 passed`；`npm run desktop:dist:mac` 通过；打包后端二进制用临时空数据目录启动成功，自动创建 `app.db`，`/api/system/health` 与 `/api/dashboard/summary` 可响应
+
 - 2026-04-28 已完成 M11-M15：考勤行为数据域、班主任驾驶舱、学生 360/输出中心联动、桌面空库开局说明和成熟平台感收尾：
   - M11：新增 `attendance_record`、`behavior_record` 模型与 Alembic 迁移 `20260427_0020_attendance_behavior_schema.py`；新增考勤/行为导入模板、导入服务、查询接口和审计摘要，考勤重复按学生+日期+范围+节次覆盖，行为同文件重复给 warning
   - M12：分析中心新增“班主任驾驶舱”页签；后端新增 `/api/analytics/adviser-dashboard` 与 `/api/analytics/student-risk/{student_id}`，按本地确定性规则输出 `urgent/follow_up/watch/normal`，考勤/行为缺失显示“未导入”而不是 0 风险

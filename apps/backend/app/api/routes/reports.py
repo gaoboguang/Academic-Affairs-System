@@ -10,6 +10,7 @@ from app.api.deps import get_db_session, get_settings
 from app.core.config import Settings
 from app.schemas.report import (
     GaokaoPathwayReportExportPayload,
+    PlanningFollowupReportExportPayload,
     ReportExportPayload,
     ReportExportRecordRead,
     ShandongRecommendationReportExportPayload,
@@ -45,6 +46,15 @@ def export_gaokao_pathway_report(
     settings: Settings = Depends(get_settings),
 ) -> ReportExportRecordRead:
     return service.export_gaokao_pathway_report_record(session, settings, payload)
+
+
+@router.post("/planning-followup/export", response_model=ReportExportRecordRead)
+def export_planning_followup_report(
+    payload: PlanningFollowupReportExportPayload,
+    session: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+) -> ReportExportRecordRead:
+    return service.export_planning_followup_report_record(session, settings, payload)
 
 
 @router.get("/exports", response_model=list[ReportExportRecordRead])

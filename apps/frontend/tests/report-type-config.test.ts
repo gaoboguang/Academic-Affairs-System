@@ -16,7 +16,7 @@ import {
 
 describe("report type config", () => {
   it("exposes stable report type options and labels", () => {
-    expect(REPORT_TYPE_OPTIONS).toHaveLength(12);
+    expect(REPORT_TYPE_OPTIONS).toHaveLength(13);
     expect(getReportTypeLabel("student_analysis")).toBe("学生成绩分析单");
     expect(getReportTypeLabel("unknown_report")).toBe("unknown_report");
   });
@@ -68,6 +68,7 @@ describe("report type config", () => {
     expect(getReportRuleOptionScope("teacher_workload")).toBe("workload");
     expect(getReportRuleOptionScope("adviser_quant_summary")).toBe("adviser");
     expect(getReportRuleOptionScope("student_followup_package")).toBeNull();
+    expect(getReportRuleOptionScope("planning_followup")).toBeNull();
     expect(getReportRuleOptionScope("student_analysis")).toBeNull();
 
     expect(
@@ -99,6 +100,13 @@ describe("report type config", () => {
         start_date: "2026-04-01",
       }),
     ).toBe("/print/student-followup-package/8?examId=12&startDate=2026-04-01");
+    expect(
+      getReportPrintPreviewPath({
+        report_type: "planning_followup",
+        student_id: 8,
+        exam_id: 12,
+      }),
+    ).toBe("/print/planning-followup/8?examId=12");
   });
 
   it("builds export payloads from filled form values", () => {

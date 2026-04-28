@@ -62,6 +62,13 @@ export function studentFollowupPackagePrintPreviewPath(
   return `/print/student-followup-package/${studentId}${suffix}`;
 }
 
+export function planningFollowupPrintPreviewPath(studentId: number, examId?: number): string {
+  const params = new URLSearchParams();
+  if (examId) params.set("examId", String(examId));
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return `/print/planning-followup/${studentId}${suffix}`;
+}
+
 export function volunteerDraftPrintPreviewPath(draftId: number): string {
   return `/print/volunteer-drafts/${draftId}`;
 }

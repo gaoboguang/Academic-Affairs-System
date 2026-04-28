@@ -8,6 +8,7 @@
 - `students.spec.ts`：学生列表、学生详情和附件入口。
 - `exams-analytics.spec.ts`：考试、成绩导入、分析中心和成绩异常提示。
 - `adviser-dashboard.spec.ts`：考勤行为导入、班主任驾驶舱、学生详情和班主任周报闭环。
+- `planning.spec.ts`：学生升学规划目标、路径生成任务、任务完成和规划跟进表闭环。
 - `reports.spec.ts`：报表参数、打印预览、导出记录和报表异常提示。
 - `recommendations.spec.ts`：推荐生成、历史、模板、对比、失败回退和批量推荐。
 - `gaokao-volunteer.spec.ts`：学生志愿工作台、招生计划、省份规则、草稿、就业方向和山东普通类入口。

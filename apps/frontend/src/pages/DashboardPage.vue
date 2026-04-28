@@ -236,6 +236,14 @@ interface DashboardSummary {
   recent_exam?: RecentExam | null;
   data_health?: DashboardDataHealthSummary | null;
   data_quality_issues: DataQualityIssue[];
+  planning_summary?: {
+    open_task_count: number;
+    overdue_task_count: number;
+    due_soon_task_count: number;
+    students_without_goal_count: number;
+    volunteer_draft_without_review_count: number;
+    material_gap_without_due_count: number;
+  } | null;
 }
 
 const router = useRouter();
@@ -294,6 +302,7 @@ const summary = reactive<DashboardSummary>({
   recent_exam: null,
   data_health: null,
   data_quality_issues: [],
+  planning_summary: null,
 });
 
 const latestImport = computed(() => summary.recent_imports[0] ?? null);

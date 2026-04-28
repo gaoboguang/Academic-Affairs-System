@@ -56,6 +56,14 @@ describe("dashboard decision helpers", () => {
         blocking_count: 0,
         gaps: [],
       },
+      planning_summary: {
+        open_task_count: 0,
+        overdue_task_count: 0,
+        due_soon_task_count: 0,
+        students_without_goal_count: 0,
+        volunteer_draft_without_review_count: 0,
+        material_gap_without_due_count: 0,
+      },
     });
 
     expect(steps).toHaveLength(1);
@@ -71,6 +79,43 @@ describe("dashboard decision helpers", () => {
         gaps: [],
       }),
     ).toBe("P0 可通过");
+  });
+
+  it("surfaces planning reminders before the ready state", () => {
+    const steps = buildDashboardNextSteps({
+      student_total: 12,
+      teacher_total: 12,
+      exam_total: 2,
+      score_record_total: 120,
+      latest_backup: {
+        backup_name: "local_edu_backup.zip",
+        created_at: "2026-04-27T12:30:00",
+        status: "success",
+        file_size: 1024,
+      },
+      data_health: {
+        status: "pass",
+        label: "P0 可通过",
+        summary: "",
+        p0_gap_count: 0,
+        warning_count: 0,
+        blocking_count: 0,
+        gaps: [],
+      },
+      planning_summary: {
+        open_task_count: 3,
+        overdue_task_count: 2,
+        due_soon_task_count: 1,
+        students_without_goal_count: 4,
+        volunteer_draft_without_review_count: 0,
+        material_gap_without_due_count: 0,
+      },
+    });
+
+    expect(steps[0]).toMatchObject({
+      code: "planning_overdue_tasks",
+      path: "/students",
+    });
   });
 
   it("formats backup labels without hiding missing backups", () => {

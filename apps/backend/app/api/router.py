@@ -9,6 +9,7 @@ from app.api.routes import (
     exams,
     gaokao,
     health,
+    planning,
     recommendations,
     reports,
     student_events,
@@ -29,6 +30,7 @@ api_router.include_router(analytics.router)
 api_router.include_router(evaluation.router)
 api_router.include_router(gaokao.router)
 api_router.include_router(recommendations.router)
+api_router.include_router(planning.router)
 api_router.include_router(reports.router)
 api_router.include_router(workload.router)
 api_router.include_router(student_events.attendance_router)

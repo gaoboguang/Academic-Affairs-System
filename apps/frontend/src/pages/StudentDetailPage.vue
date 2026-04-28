@@ -127,8 +127,8 @@
         </div>
       </section>
 
-      <el-tabs class="profile-tabs">
-        <el-tab-pane label="基础信息">
+      <el-tabs v-model="activeProfileTab" class="profile-tabs">
+        <el-tab-pane label="基础信息" name="basic">
           <section class="soft-card detail-card">
             <div class="detail-grid">
               <div class="detail-item">
@@ -181,7 +181,7 @@
           </section>
         </el-tab-pane>
 
-        <el-tab-pane label="学籍历史">
+        <el-tab-pane label="学籍历史" name="status">
           <section class="soft-card detail-card">
             <div class="section-head compact">
               <div>
@@ -223,7 +223,7 @@
           </section>
         </el-tab-pane>
 
-        <el-tab-pane label="成绩摘要">
+        <el-tab-pane label="成绩摘要" name="scores">
           <section class="soft-card detail-card">
             <div class="section-head compact">
               <div>
@@ -276,7 +276,7 @@
           </section>
         </el-tab-pane>
 
-        <el-tab-pane label="成长档案">
+        <el-tab-pane label="成长档案" name="growth">
           <section class="soft-card detail-card">
             <div v-if="classTransferHistory.length" class="system-event-list">
               <article v-for="item in classTransferHistory" :key="item.item_id" class="system-event-card">
@@ -304,7 +304,7 @@
           </section>
         </el-tab-pane>
 
-        <el-tab-pane label="推荐记录">
+        <el-tab-pane label="推荐记录" name="recommendations">
           <section class="soft-card detail-card">
             <div class="table-shell">
               <el-table :data="profile.recommendation_history" stripe>
@@ -321,13 +321,19 @@
           </section>
         </el-tab-pane>
 
-        <el-tab-pane label="升学画像">
+        <el-tab-pane label="升学画像" name="pathway-profile">
           <section class="soft-card detail-card">
             <StudentPathwayProfilePanel :student-id="studentId" />
           </section>
         </el-tab-pane>
 
-        <el-tab-pane label="附件">
+        <el-tab-pane label="升学规划" name="planning">
+          <section class="soft-card detail-card">
+            <StudentPlanningPanel :student-id="studentId" :latest-exam-id="latestExamId" />
+          </section>
+        </el-tab-pane>
+
+        <el-tab-pane label="附件" name="attachments">
           <section class="soft-card detail-card">
             <div class="section-head">
               <div>
@@ -386,6 +392,7 @@ import {
   type BehaviorRiskSummary,
 } from "../components/analytics/adviserDashboard";
 import StudentPathwayProfilePanel from "../components/students/StudentPathwayProfilePanel.vue";
+import StudentPlanningPanel from "../components/students/StudentPlanningPanel.vue";
 import {
   formatClassTransferEventSummary,
   formatClassTransferRoute,
@@ -509,6 +516,7 @@ const profile = ref<StudentProfile | null>(null);
 const classTransferHistory = ref<ClassTransferHistoryItem[]>([]);
 const studentRisk = ref<StudentRiskSummary | null>(null);
 const studentId = computed(() => Number(route.params.studentId));
+const activeProfileTab = ref(String(route.query.tab || "basic"));
 const uploadingAttachment = ref(false);
 const exportingFollowupPackage = ref(false);
 const attachmentDraft = reactive({

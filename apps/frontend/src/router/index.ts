@@ -33,6 +33,7 @@ const EvaluationSummaryPrintPage = () => import("../pages/EvaluationSummaryPrint
 const AdviserQuantPrintPage = () => import("../pages/AdviserQuantPrintPage.vue");
 const AdviserWeeklySummaryPrintPage = () => import("../pages/AdviserWeeklySummaryPrintPage.vue");
 const StudentFollowupPackagePrintPage = () => import("../pages/StudentFollowupPackagePrintPage.vue");
+const PlanningFollowupPrintPage = () => import("../pages/PlanningFollowupPrintPage.vue");
 const VolunteerDraftPrintPage = () => import("../pages/VolunteerDraftPrintPage.vue");
 
 const router = createRouter({
@@ -102,6 +103,11 @@ const router = createRouter({
       path: "/print/student-followup-package/:studentId",
       name: "student-followup-package-print",
       component: StudentFollowupPackagePrintPage,
+    },
+    {
+      path: "/print/planning-followup/:studentId",
+      name: "planning-followup-print",
+      component: PlanningFollowupPrintPage,
     },
     {
       path: "/print/growth-summary/:studentId",

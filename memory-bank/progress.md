@@ -8,6 +8,17 @@
 
 ## 2026-04-28 新增
 
+- 已完成本地升学规划任务中心第一轮：
+  - 新增规划数据域：`student_planning_goal`、`student_planning_task`、`student_planning_note`，迁移为 `20260428_0021_student_planning_schema.py`
+  - 新增规划接口：学生规划聚合读取、目标创建/更新、任务创建/更新、路径批量生成任务、复盘记录创建和规划跟进表导出
+  - 学生详情新增“升学规划”页签，可建目标、手工新增任务、从升学方案生成任务、完成任务、添加复盘和导出跟进表
+  - 山东升学方案中心新增“生成规划任务”，把路径材料缺口、章程/报名人工复核项和志愿草稿复核转成本地任务
+  - 输出中心新增 `planning_followup` 学生升学规划跟进表，支持 Excel 和打印预览；首页下一步建议接入规划提醒
+  - 新增 `docs/student_planning_center_20260428.md`、`apps/backend/tests/test_student_planning.py`、`apps/frontend/tests/student-planning.test.ts`、`tests/e2e/planning.spec.ts`
+  - 当前已验证：临时空 SQLite `alembic upgrade head` 通过；后端定向 `2 passed`；后端全量 `107 passed`；前端定向 `3 files / 16 tests passed`；`frontend:lint` 通过；`frontend:build` 通过；E2E `planning.spec.ts` `1 passed`
+  - 最终门禁：`npm run check:all` 通过，后端 `107 passed`、前端 lint 通过、前端 `35 files / 180 tests passed`、前端构建通过、E2E `34 passed`
+  - 桌面验证：`npm run desktop:dist:mac` 通过；打包后端二进制可用临时空数据目录启动，自动创建 `app.db`，`/api/system/health` 与 `/api/dashboard/summary` 可响应
+
 - 已完成 M11：考勤行为本地数据域：
   - 新增 `attendance_record` 与 `behavior_record` 模型、迁移、schema、导入器、服务和路由
   - 新增接口 `POST /api/attendance/import`、`GET /api/attendance/records`、`POST /api/behavior/import`、`GET /api/behavior/records`，并提供考勤/行为模板下载

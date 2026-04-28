@@ -18,6 +18,7 @@ from app.schemas.dashboard import (
     DashboardSummary,
 )
 from app.services.data_quality import build_data_quality_issues
+from app.services.planning import build_dashboard_planning_summary
 from app.utils.data_health import build_data_health_report
 
 
@@ -39,6 +40,7 @@ def get_dashboard_summary(session: Session, settings: Settings) -> DashboardSumm
     recent_exam = _build_recent_exam_summary(session)
     data_quality_issues = build_data_quality_issues(session, limit=4)
     data_health = _build_data_health_summary(session, settings)
+    planning_summary = build_dashboard_planning_summary(session)
 
     return DashboardSummary(
         student_total=session.scalar(select(func.count()).select_from(Student)) or 0,
@@ -53,6 +55,7 @@ def get_dashboard_summary(session: Session, settings: Settings) -> DashboardSumm
         recent_exam=recent_exam,
         data_health=data_health,
         data_quality_issues=data_quality_issues,
+        planning_summary=planning_summary,
     )
 
 

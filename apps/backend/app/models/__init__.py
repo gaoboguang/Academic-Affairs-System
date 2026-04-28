@@ -14,6 +14,7 @@ from app.models.base import Base
 from app.models.base_data import AcademicYear, DictItem, DictType, Grade, SchoolClass, Semester, Subject
 from app.models.exam import Exam, ExamSubject, ScoreImportBatch, ScoreRecord, ScoreSubjectSnapshot, ScoreTotalSnapshot
 from app.models.gaokao_import import GaokaoImportRun, GaokaoSourceDocument
+from app.models.planning import StudentPlanningGoal, StudentPlanningNote, StudentPlanningTask
 from app.models.recommendation import (
     AdmissionRecord,
     College,
@@ -121,6 +122,9 @@ __all__ = [
     "StudentGuardian",
     "StudentPathwayEvaluation",
     "StudentPathwayProfile",
+    "StudentPlanningGoal",
+    "StudentPlanningNote",
+    "StudentPlanningTask",
     "StoredFile",
     "Subject",
     "Teacher",

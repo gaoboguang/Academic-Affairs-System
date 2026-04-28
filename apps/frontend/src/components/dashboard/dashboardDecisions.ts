@@ -22,6 +22,14 @@ export interface DashboardDecisionSummary {
   score_record_total: number;
   latest_backup?: DashboardBackupSummary | null;
   data_health?: DashboardDataHealthSummary | null;
+  planning_summary?: {
+    open_task_count: number;
+    overdue_task_count: number;
+    due_soon_task_count: number;
+    students_without_goal_count: number;
+    volunteer_draft_without_review_count: number;
+    material_gap_without_due_count: number;
+  } | null;
 }
 
 export interface DashboardNextStep {
@@ -81,6 +89,35 @@ export function buildDashboardNextSteps(summary: DashboardDecisionSummary): Dash
       actionLabel: "查看高考数据",
       path: "/gaokao-data",
       severity: summary.data_health.status === "blocked" ? "danger" : "warning",
+    });
+  }
+
+  if (summary.planning_summary?.overdue_task_count) {
+    steps.push({
+      code: "planning_overdue_tasks",
+      title: "升学规划任务已逾期",
+      detail: `当前有 ${summary.planning_summary.overdue_task_count} 项规划任务超过截止日期，建议先处理材料、章程复核和阶段复盘。`,
+      actionLabel: "查看学生规划",
+      path: "/students",
+      severity: "warning",
+    });
+  } else if (summary.planning_summary?.volunteer_draft_without_review_count) {
+    steps.push({
+      code: "planning_volunteer_review_gap",
+      title: "志愿草稿缺少复核任务",
+      detail: `当前有 ${summary.planning_summary.volunteer_draft_without_review_count} 份志愿草稿还没有生成章程复核任务。`,
+      actionLabel: "进入升学方案",
+      path: "/gaokao-pathways",
+      severity: "info",
+    });
+  } else if (summary.planning_summary?.material_gap_without_due_count) {
+    steps.push({
+      code: "planning_material_due_gap",
+      title: "材料缺口没有截止日期",
+      detail: `当前有 ${summary.planning_summary.material_gap_without_due_count} 项材料任务缺少截止日期，容易丢失跟进节奏。`,
+      actionLabel: "查看学生规划",
+      path: "/students",
+      severity: "info",
     });
   }
 

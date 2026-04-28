@@ -18,6 +18,7 @@ from app.exporters.reports import (
     export_class_analysis_report,
     export_evaluation_summary_report,
     export_grade_summary_report,
+    export_planning_followup_report,
     export_student_analysis_report,
     export_student_followup_package,
     export_teacher_analysis_report,
@@ -31,6 +32,7 @@ from app.repositories.system import get_report_export, list_report_exports as re
 from app.schemas.recommendation import RecommendationHistoryItem
 from app.schemas.report import (
     GaokaoPathwayReportExportPayload,
+    PlanningFollowupReportExportPayload,
     ReportExportPayload,
     ReportExportRecordRead,
     ShandongRecommendationReportExportPayload,
@@ -38,6 +40,7 @@ from app.schemas.report import (
 from app.services import analytics as analytics_service
 from app.services import archive as archive_service
 from app.services import evaluation as evaluation_service
+from app.services import planning as planning_service
 from app.services import recommendations as recommendation_service
 from app.services import student_events as student_event_service
 from app.services import workload as workload_service
@@ -56,6 +59,7 @@ REPORT_TYPE_NAME_MAP = {
     "adviser_quant_summary": "班主任量化报表",
     "adviser_weekly_summary": "班主任周报",
     "student_followup_package": "学生跟进包",
+    "planning_followup": "学生升学规划跟进表",
     "shandong_recommendation_summary": "山东普通类冲稳保推荐报告",
     "gaokao_pathway_report": "山东升学路径规划报告",
 }
@@ -148,6 +152,39 @@ def export_gaokao_pathway_report_record(
         target_type="report",
         target_id=str(record.id),
         detail_json={"report_type": "gaokao_pathway_report", "file_path": file_path},
+    )
+    return _serialize_export_record(record)
+
+
+def export_planning_followup_report_record(
+    session: Session,
+    settings,
+    payload: PlanningFollowupReportExportPayload,
+) -> ReportExportRecordRead:
+    data = planning_service.build_planning_followup_export_payload(session, payload.student_id, exam_id=payload.exam_id)
+    file_path = export_planning_followup_report(settings, data)
+    student = data.get("student") if isinstance(data.get("student"), dict) else {}
+    record = ReportExportRecord(
+        report_type="planning_followup",
+        report_name=payload.report_name or REPORT_TYPE_NAME_MAP["planning_followup"],
+        params_json={
+            "report_type": "planning_followup",
+            "student_id": payload.student_id,
+            "student_name": student.get("name"),
+            "exam_id": payload.exam_id,
+        },
+        file_path=file_path,
+        status="success",
+    )
+    session.add(record)
+    session.flush()
+    write_audit_log(
+        session,
+        module="reports",
+        action="export",
+        target_type="report",
+        target_id=str(record.id),
+        detail_json={"report_type": "planning_followup", "file_path": file_path},
     )
     return _serialize_export_record(record)
 
@@ -450,6 +487,16 @@ def _export_report_file(session: Session, settings, payload: ReportExportPayload
         data = summary.model_dump(mode="json")
         data["generated_at"] = datetime.now().isoformat(sep=" ", timespec="seconds")
         return export_student_followup_package(settings, data)
+
+    if payload.report_type == "planning_followup":
+        if not payload.student_id:
+            raise HTTPException(status_code=400, detail="学生升学规划跟进表需要学生参数")
+        data = planning_service.build_planning_followup_export_payload(
+            session,
+            payload.student_id,
+            exam_id=payload.exam_id,
+        )
+        return export_planning_followup_report(settings, data)
 
     raise HTTPException(status_code=400, detail="不支持的报表类型")
 

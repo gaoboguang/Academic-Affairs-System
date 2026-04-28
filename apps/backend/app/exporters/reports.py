@@ -398,6 +398,105 @@ def export_student_followup_package(settings: Settings, payload: dict[str, objec
     return _save_workbook(settings, workbook, "student_followup_package")
 
 
+def export_planning_followup_report(settings: Settings, payload: dict[str, object]) -> str:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "升学规划跟进表"
+    student = payload.get("student") if isinstance(payload.get("student"), dict) else {}
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    risk = payload.get("risk") if isinstance(payload.get("risk"), dict) else {}
+    profile = payload.get("pathway_profile") if isinstance(payload.get("pathway_profile"), dict) else {}
+
+    sheet.append(["学生升学规划跟进表"])
+    sheet.append(["学生", student.get("name")])
+    sheet.append(["学号", student.get("student_no")])
+    sheet.append(["年级", student.get("grade_name")])
+    sheet.append(["班级", student.get("class_name")])
+    sheet.append(["生成时间", payload.get("generated_at") or "-"])
+    sheet.append([])
+    sheet.append(["规划状态", "值"])
+    sheet.append(["进行中任务", summary.get("open_task_count", 0)])
+    sheet.append(["已完成任务", summary.get("completed_task_count", 0)])
+    sheet.append(["逾期任务", summary.get("overdue_task_count", 0)])
+    sheet.append(["材料任务", summary.get("material_gap_task_count", 0)])
+    sheet.append(["风险等级", risk.get("risk_label") or "-"])
+    sheet.append(["风险原因", _join_values(risk.get("reasons"))])
+    sheet.append([])
+    sheet.append(["升学画像", "值"])
+    sheet.append(["生源地", profile.get("province") or "-"])
+    sheet.append(["考生类型", profile.get("candidate_type") or "-"])
+    sheet.append(["考试类型", profile.get("exam_type") or "-"])
+    sheet.append(["选科组合", profile.get("subject_combination") or "-"])
+
+    goals_sheet = workbook.create_sheet("目标路径")
+    goals_sheet.append(["目标年份", "路径", "目标院校", "目标专业", "目标分数", "目标位次", "状态", "优先级", "备选路径", "备注"])
+    for row in payload.get("goals") or []:
+        if not isinstance(row, dict):
+            continue
+        goals_sheet.append([
+            row.get("target_year"),
+            row.get("pathway_name"),
+            row.get("target_college"),
+            row.get("target_major"),
+            row.get("target_score"),
+            row.get("target_rank"),
+            row.get("status_label"),
+            row.get("priority_label"),
+            row.get("backup_pathways"),
+            row.get("note"),
+        ])
+
+    tasks_sheet = workbook.create_sheet("任务清单")
+    tasks_sheet.append(["任务", "类型", "状态", "优先级", "截止日期", "是否逾期", "来源", "说明"])
+    for row in payload.get("tasks") or []:
+        if not isinstance(row, dict):
+            continue
+        tasks_sheet.append([
+            row.get("title"),
+            row.get("task_type_label"),
+            row.get("status_label"),
+            row.get("priority_label"),
+            row.get("due_date"),
+            "是" if row.get("is_overdue") else "否",
+            row.get("source_type"),
+            row.get("description"),
+        ])
+
+    evaluations_sheet = workbook.create_sheet("路径初筛")
+    evaluations_sheet.append(["路径", "状态", "置信程度", "缺失材料", "下一步"])
+    for row in payload.get("pathway_evaluations") or []:
+        if not isinstance(row, dict):
+            continue
+        gaps = row.get("missing_materials_json") if isinstance(row.get("missing_materials_json"), list) else []
+        evaluations_sheet.append([
+            row.get("pathway_name"),
+            row.get("status_label"),
+            row.get("confidence_level"),
+            "；".join(str(item.get("material_label") or item.get("material_key")) for item in gaps if isinstance(item, dict)) or "-",
+            _join_values(row.get("next_actions_json")),
+        ])
+
+    notes_sheet = workbook.create_sheet("复盘记录")
+    notes_sheet.append(["时间", "类型", "内容"])
+    for row in payload.get("notes") or []:
+        if not isinstance(row, dict):
+            continue
+        notes_sheet.append([row.get("created_at"), row.get("note_type_label"), row.get("content")])
+
+    suggested_sheet = workbook.create_sheet("建议补充")
+    suggested_sheet.append(["建议任务", "类型", "优先级", "说明"])
+    for row in payload.get("suggested_tasks") or []:
+        if not isinstance(row, dict):
+            continue
+        suggested_sheet.append([
+            row.get("title"),
+            row.get("task_type_label"),
+            row.get("priority_label"),
+            row.get("description"),
+        ])
+    return _save_workbook(settings, workbook, "planning_followup")
+
+
 def _format_teacher_assignment(row: dict[str, object]) -> str:
     segments = [str(item).strip() for item in [row.get("class_name"), row.get("subject_name")] if str(item or "").strip()]
     return " / ".join(segments) or "未命名任教拆分"

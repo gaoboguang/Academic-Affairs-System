@@ -18,6 +18,9 @@
       <div class="action-row">
         <el-button :loading="loading" @click="reloadAll">刷新方案中心</el-button>
         <el-button @click="router.push('/gaokao-data')">查看高考数据</el-button>
+        <el-button :disabled="!selectedStudentId" :loading="generatingPlanningTasks" @click="generatePlanningTasks">
+          生成规划任务
+        </el-button>
         <el-button :disabled="!cards.length" @click="openPathwayReportPrintPreview">打印报告</el-button>
         <el-button :disabled="!cards.length" :loading="exportingReport" @click="exportPathwayReport">导出 Excel</el-button>
         <el-button type="primary" :disabled="!selectedStudentId" @click="openRecommendationWorkbench">
@@ -325,6 +328,7 @@ const errorMessage = ref<string | null>(null);
 const detailDrawerVisible = ref(false);
 const selectedCard = ref<PathwayCenterCard | null>(null);
 const exportingReport = ref(false);
+const generatingPlanningTasks = ref(false);
 
 const selectedStudent = computed(() => studentOptions.value.find((item) => item.id === selectedStudentId.value) ?? null);
 const cards = computed(() => buildPathwayCenterCards(evaluations.value, pathways.value));
@@ -452,6 +456,31 @@ async function exportPathwayReport(): Promise<void> {
     ElMessage.error(formatUserActionError("导出山东升学路径规划报告", error, "先确认路径评估结果仍在页面中，再重新点击导出。"));
   } finally {
     exportingReport.value = false;
+  }
+}
+
+async function generatePlanningTasks(): Promise<void> {
+  if (!selectedStudentId.value) {
+    ElMessage.warning("请先选择学生后再生成规划任务。");
+    return;
+  }
+  try {
+    generatingPlanningTasks.value = true;
+    const result = await apiRequest<{ created_count: number; skipped_count: number }>("/api/planning/tasks/bulk-create-from-pathway", {
+      method: "POST",
+      body: JSON.stringify({
+        student_id: selectedStudentId.value,
+        target_year: targetYear.value,
+        include_material_gaps: true,
+        include_review_tasks: true,
+      }),
+    });
+    ElMessage.success(`已生成 ${result.created_count} 项规划任务，跳过 ${result.skipped_count} 项已有任务`);
+    router.push(`/students/${selectedStudentId.value}?tab=planning`);
+  } catch (error) {
+    ElMessage.error(formatUserActionError("生成升学规划任务", error, "请先确认学生画像和路径评估已加载，再重新生成。"));
+  } finally {
+    generatingPlanningTasks.value = false;
   }
 }
 

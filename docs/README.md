@@ -36,6 +36,8 @@
    M10 桌面端交付验证记录，说明前端资源、后端二进制、数据目录定位、macOS 目录构建结果和后续签名 / Windows 打包待办。
 16. [`desktop_empty_db_initialization_20260427.md`](./desktop_empty_db_initialization_20260427.md)
    桌面版空库开局说明，覆盖初始化顺序、考勤/行为模板、备份恢复和 Windows 验证待办。
+17. [`student_planning_center_20260428.md`](./student_planning_center_20260428.md)
+   本地升学规划任务中心说明，覆盖规划目标、任务、复盘、输出跟进表和使用边界。
 16. [`m7-chapter-review-workbench-design-note-20260427.md`](./m7-chapter-review-workbench-design-note-20260427.md)
    M7 章程限制链人工复核工作台补充说明，记录已完成的只读审阅能力、未直接写入复核备注 / 导出清单的字段原因和后续实现建议。
 17. [`import-system-audit-2026-04-24.md`](./import-system-audit-2026-04-24.md)

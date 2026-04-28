@@ -34,6 +34,12 @@ class GaokaoPathwayReportExportPayload(BaseModel):
     report: dict
 
 
+class PlanningFollowupReportExportPayload(BaseModel):
+    report_name: str | None = None
+    student_id: int
+    exam_id: int | None = None
+
+
 class ReportExportRecordRead(ORMModel):
     id: int
     report_type: str

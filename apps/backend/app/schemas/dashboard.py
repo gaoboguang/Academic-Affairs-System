@@ -5,6 +5,7 @@ from datetime import date, datetime
 from pydantic import BaseModel, Field
 
 from app.schemas.system import DataQualityIssueRead
+from app.schemas.planning import DashboardPlanningSummary
 
 
 class DashboardImportJob(BaseModel):
@@ -55,3 +56,4 @@ class DashboardSummary(BaseModel):
     recent_exam: DashboardRecentExamSummary | None = None
     data_health: DashboardDataHealthSummary | None = None
     data_quality_issues: list[DataQualityIssueRead] = Field(default_factory=list)
+    planning_summary: DashboardPlanningSummary | None = None

@@ -5,6 +5,7 @@ import {
   evaluationSummaryPrintPreviewPath,
   gradeSummaryPrintPreviewPath,
   growthSummaryPrintPreviewPath,
+  planningFollowupPrintPreviewPath,
   recommendationPrintPreviewPath,
   studentAnalysisPrintPreviewPath,
   studentFollowupPackagePrintPreviewPath,
@@ -142,6 +143,7 @@ export const REPORT_TYPE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "adviser_quant_summary", label: "班主任量化报表" },
   { value: "adviser_weekly_summary", label: "班主任周报" },
   { value: "student_followup_package", label: "学生跟进包" },
+  { value: "planning_followup", label: "学生升学规划跟进表" },
 ];
 
 const REPORT_TYPE_CONFIGS: Record<string, ReportTypeConfig> = {
@@ -294,6 +296,19 @@ const REPORT_TYPE_CONFIGS: Record<string, ReportTypeConfig> = {
     optionalFields: ["exam_id", "start_date", "end_date"],
     buildPrintPreviewPath: (form) =>
       form.student_id ? studentFollowupPackagePrintPreviewPath(form.student_id, form.exam_id, form.start_date, form.end_date) : null,
+  },
+  planning_followup: {
+    value: "planning_followup",
+    label: "学生升学规划跟进表",
+    domain: "gaokao",
+    purpose: "用于输出学生目标路径、材料缺口、规划任务、近期风险和下一步建议。",
+    dataSources: ["升学规划", "升学画像", "路径初筛", "考勤行为风险"],
+    formats: ["Excel", "打印预览"],
+    riskTags: ["需选择学生", "缺少规划时会标明", "不输出录取承诺"],
+    requiredFields: ["student_id"],
+    optionalFields: ["exam_id"],
+    buildPrintPreviewPath: (form) =>
+      form.student_id ? planningFollowupPrintPreviewPath(form.student_id, form.exam_id) : null,
   },
 };
 

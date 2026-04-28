@@ -2,6 +2,14 @@
 
 ## 当前主线状态（2026-04-28）
 
+- 本轮已完成“本地升学规划任务中心”第一轮：
+  - 新增迁移 `20260428_0021_student_planning_schema.py`，新增 `student_planning_goal`、`student_planning_task`、`student_planning_note`
+  - 后端新增规划聚合、目标/任务、路径生成任务、复盘记录和规划跟进表导出接口；通用报表类型新增 `planning_followup`
+  - 前端新增学生详情“升学规划”页签、山东升学方案中心“生成规划任务”、输出中心“学生升学规划跟进表”和首页规划提醒
+  - 新增说明文档 `docs/student_planning_center_20260428.md`
+  - 已通过：临时空库迁移、后端新增定向、后端全量 `107 passed`、前端定向、`frontend:lint`、`frontend:build`、新增 E2E `planning.spec.ts`
+  - 最终验收：`npm run check:all` 通过，后端 `107 passed`、前端 lint 通过、前端 `35 files / 180 tests passed`、前端构建通过、E2E `34 passed`；`npm run desktop:dist:mac` 通过；打包后端二进制用临时空数据目录启动成功，自动创建 `app.db`，健康检查和首页摘要可响应；本轮未写真实 `data/app.db`
+
 - 本轮已完成用户给定的 M11-M15 成熟化计划，定位仍是个人本地使用工具：本地单机、SQLite、中文界面、无公网依赖、无账号/权限/云同步/家长端/学生端。
 - 新增考勤行为数据域：
   - Alembic 迁移：`apps/backend/alembic/versions/20260427_0020_attendance_behavior_schema.py`
