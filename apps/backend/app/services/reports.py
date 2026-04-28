@@ -13,11 +13,13 @@ from app.exporters.recommendations import (
     export_volunteer_draft_summary,
 )
 from app.exporters.reports import (
+    export_adviser_weekly_summary_report,
     export_adviser_quant_summary_report,
     export_class_analysis_report,
     export_evaluation_summary_report,
     export_grade_summary_report,
     export_student_analysis_report,
+    export_student_followup_package,
     export_teacher_analysis_report,
 )
 from app.exporters.workload import export_workload_results
@@ -37,6 +39,7 @@ from app.services import analytics as analytics_service
 from app.services import archive as archive_service
 from app.services import evaluation as evaluation_service
 from app.services import recommendations as recommendation_service
+from app.services import student_events as student_event_service
 from app.services import workload as workload_service
 
 
@@ -51,6 +54,8 @@ REPORT_TYPE_NAME_MAP = {
     "volunteer_draft_summary": "学生志愿草稿",
     "evaluation_summary": "评教汇总报表",
     "adviser_quant_summary": "班主任量化报表",
+    "adviser_weekly_summary": "班主任周报",
+    "student_followup_package": "学生跟进包",
     "shandong_recommendation_summary": "山东普通类冲稳保推荐报告",
     "gaokao_pathway_report": "山东升学路径规划报告",
 }
@@ -156,7 +161,7 @@ def export_report(session: Session, settings, payload: ReportExportPayload) -> R
     record = ReportExportRecord(
         report_type=payload.report_type,
         report_name=report_name,
-        params_json=payload.model_dump(exclude_none=True),
+        params_json=payload.model_dump(mode="json", exclude_none=True),
         file_path=file_path,
         status="success",
     )
@@ -418,6 +423,33 @@ def _export_report_file(session: Session, settings, payload: ReportExportPayload
             [item.model_dump(mode="json") for item in summary_rows],
             [item.model_dump(mode="json") for item in detail_rows],
         )
+
+    if payload.report_type == "adviser_weekly_summary":
+        dashboard = student_event_service.get_adviser_dashboard(
+            session,
+            grade_id=payload.grade_id,
+            class_id=payload.class_id,
+            exam_id=payload.exam_id,
+            start_date=payload.start_date,
+            end_date=payload.end_date,
+        )
+        data = dashboard.model_dump(mode="json")
+        data["generated_at"] = datetime.now().isoformat(sep=" ", timespec="seconds")
+        return export_adviser_weekly_summary_report(settings, data)
+
+    if payload.report_type == "student_followup_package":
+        if not payload.student_id:
+            raise HTTPException(status_code=400, detail="学生跟进包需要学生参数")
+        summary = student_event_service.get_student_risk(
+            session,
+            payload.student_id,
+            exam_id=payload.exam_id,
+            start_date=payload.start_date,
+            end_date=payload.end_date,
+        )
+        data = summary.model_dump(mode="json")
+        data["generated_at"] = datetime.now().isoformat(sep=" ", timespec="seconds")
+        return export_student_followup_package(settings, data)
 
     raise HTTPException(status_code=400, detail="不支持的报表类型")
 

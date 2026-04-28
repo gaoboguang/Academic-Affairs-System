@@ -98,11 +98,13 @@ export interface ImportCenterTrialRunStep {
 export const importCenterTrialRunSteps: ImportCenterTrialRunStep[] = [
   { title: "1. 备份当前主库", detail: "先保存当前数据状态，后续导入不支持无快照一键回滚。", actionLabel: "去备份", path: "/system-tools" },
   { title: "2. 导入/核验基础数据", detail: "确认学年学期、年级班级、学科课程等基础字典可匹配。", actionLabel: "基础数据", path: "/base-data" },
-  { title: "3. 导入教师与任教关系", detail: "先维护教师工号、任教学科和班级关系，再导入成绩或课表。", actionLabel: "教师中心", path: "/teachers" },
-  { title: "4. 创建考试与科目", detail: "考试名称、科目、满分和统计口径确认后，再上传成绩表。", actionLabel: "考试成绩", path: "/exams" },
-  { title: "5. 导入成绩", detail: "用模板导入，重点查看重复学生、未匹配学生、未匹配科目。", actionLabel: "成绩导入", path: "/exams" },
-  { title: "6. 查看分析", detail: "依次看学生、班级、年级、教师分析，样本不足时先补数据。", actionLabel: "分析中心", path: "/analytics" },
-  { title: "7. 导出报表", detail: "确认分析口径后再导出学生、班级、教师或成长档案报告。", actionLabel: "报表中心", path: "/reports" },
+  { title: "3. 导入学生与教师", detail: "先维护学生学号、教师工号和班级归属，保证后续导入能匹配。", actionLabel: "学生中心", path: "/students" },
+  { title: "4. 维护任教关系", detail: "确认教师、学期、年级、班级和学科关系，再导入成绩或课表。", actionLabel: "教师中心", path: "/teachers" },
+  { title: "5. 创建考试并导入成绩", detail: "考试名称、科目、满分和统计口径确认后，再上传成绩表。", actionLabel: "考试成绩", path: "/exams" },
+  { title: "6. 导入考勤", detail: "用考勤模板补齐迟到、请假、旷课等日常出勤记录。", actionLabel: "考勤模板", path: "/import-center" },
+  { title: "7. 导入行为", detail: "用行为模板补齐表扬、违纪、谈话、心理关注和安全事件。", actionLabel: "行为模板", path: "/import-center" },
+  { title: "8. 查看驾驶舱", detail: "进入班主任驾驶舱查看风险分层和本周行动清单。", actionLabel: "分析中心", path: "/analytics" },
+  { title: "9. 导出报表", detail: "确认分析口径后再导出班主任周报、学生跟进包或成绩报告。", actionLabel: "报表中心", path: "/reports" },
 ];
 
 export function formatImportCenterStatus(status: string): string {

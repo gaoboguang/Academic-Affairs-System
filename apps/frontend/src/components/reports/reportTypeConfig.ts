@@ -1,11 +1,13 @@
 import {
   adviserQuantPrintPreviewPath,
+  adviserWeeklySummaryPrintPreviewPath,
   classAnalysisPrintPreviewPath,
   evaluationSummaryPrintPreviewPath,
   gradeSummaryPrintPreviewPath,
   growthSummaryPrintPreviewPath,
   recommendationPrintPreviewPath,
   studentAnalysisPrintPreviewPath,
+  studentFollowupPackagePrintPreviewPath,
   teacherAnalysisPrintPreviewPath,
   volunteerDraftPrintPreviewPath,
   workloadPrintPreviewPath,
@@ -21,7 +23,9 @@ export type ReportFormField =
   | "grade_id"
   | "teacher_id"
   | "semester_id"
-  | "rule_version_id";
+  | "rule_version_id"
+  | "start_date"
+  | "end_date";
 
 export interface ReportPageFormState {
   report_type: string;
@@ -35,6 +39,8 @@ export interface ReportPageFormState {
   teacher_id?: number;
   semester_id?: number;
   rule_version_id?: number;
+  start_date?: string;
+  end_date?: string;
 }
 
 interface ReportTypeConfig {
@@ -57,6 +63,7 @@ export type ReportDomain =
   | "teachers"
   | "workload"
   | "evaluation"
+  | "adviser"
   | "growth"
   | "gaokao"
   | "volunteer"
@@ -83,6 +90,7 @@ export const REPORT_DOMAIN_GROUPS: ReportDomainGroup[] = [
   { key: "students", label: "学生", description: "面向单个学生的画像、成绩和成长输出。" },
   { key: "scores", label: "考试成绩", description: "面向考试、班级、年级和学科统计的输出。" },
   { key: "teachers", label: "教师", description: "面向任课教师教学分析的输出。" },
+  { key: "adviser", label: "班主任", description: "面向班主任每日跟进、周报和学生跟进包的输出。" },
   { key: "workload", label: "工作量", description: "面向课表、规则版本和教师课时核算的输出。" },
   { key: "evaluation", label: "评教量化", description: "面向评教批次和班主任量化结果的输出。" },
   { key: "growth", label: "成长档案", description: "面向学生成长记录留档和沟通的输出。" },
@@ -102,6 +110,8 @@ const REPORT_FIELD_LABELS: Record<ReportFormField, string> = {
   teacher_id: "教师",
   semester_id: "学期",
   rule_version_id: "规则版本",
+  start_date: "开始日期",
+  end_date: "结束日期",
 };
 
 const REPORT_TYPE_LABEL_FALLBACKS: Record<string, string> = {
@@ -115,6 +125,8 @@ const REPORT_PARAM_LABELS: Record<string, string> = {
   target_year: "目标年份",
   source_mode: "输入来源",
   predicted_rank: "预估位次",
+  start_date: "开始日期",
+  end_date: "结束日期",
 };
 
 export const REPORT_TYPE_OPTIONS: Array<{ value: string; label: string }> = [
@@ -128,6 +140,8 @@ export const REPORT_TYPE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "volunteer_draft_summary", label: "学生志愿草稿" },
   { value: "evaluation_summary", label: "评教汇总报表" },
   { value: "adviser_quant_summary", label: "班主任量化报表" },
+  { value: "adviser_weekly_summary", label: "班主任周报" },
+  { value: "student_followup_package", label: "学生跟进包" },
 ];
 
 const REPORT_TYPE_CONFIGS: Record<string, ReportTypeConfig> = {
@@ -255,6 +269,32 @@ const REPORT_TYPE_CONFIGS: Record<string, ReportTypeConfig> = {
     buildPrintPreviewPath: (form) =>
       form.semester_id ? adviserQuantPrintPreviewPath(form.semester_id, form.rule_version_id) : null,
   },
+  adviser_weekly_summary: {
+    value: "adviser_weekly_summary",
+    label: "班主任周报",
+    domain: "adviser",
+    purpose: "用于给班主任或年级组输出一周内班级成绩、考勤、行为和重点学生。",
+    dataSources: ["班级名单", "考试成绩", "考勤记录", "行为记录", "成长档案"],
+    formats: ["Excel", "打印预览"],
+    riskTags: ["需选择班级", "缺考勤/行为时标明未导入", "保留生成时间"],
+    requiredFields: ["class_id"],
+    optionalFields: ["exam_id", "start_date", "end_date"],
+    buildPrintPreviewPath: (form) =>
+      form.class_id ? adviserWeeklySummaryPrintPreviewPath(form.class_id, form.exam_id, form.start_date, form.end_date) : null,
+  },
+  student_followup_package: {
+    value: "student_followup_package",
+    label: "学生跟进包",
+    domain: "adviser",
+    purpose: "用于汇总单个学生的成绩趋势、考勤行为、成长记录和建议行动。",
+    dataSources: ["学生档案", "考试成绩", "考勤记录", "行为记录", "成长档案", "升学画像"],
+    formats: ["Excel", "打印预览"],
+    riskTags: ["需选择学生", "缺失数据必须标明", "不替代人工判断"],
+    requiredFields: ["student_id"],
+    optionalFields: ["exam_id", "start_date", "end_date"],
+    buildPrintPreviewPath: (form) =>
+      form.student_id ? studentFollowupPackagePrintPreviewPath(form.student_id, form.exam_id, form.start_date, form.end_date) : null,
+  },
 };
 
 export function getReportCatalogItem(reportType: string): ReportTypeCatalogItem | null {
@@ -338,6 +378,8 @@ export function buildReportExportPayload(form: ReportPageFormState): Record<stri
     "scheme_id",
     "draft_id",
     "batch_id",
+    "start_date",
+    "end_date",
   ];
 
   for (const field of fields) {

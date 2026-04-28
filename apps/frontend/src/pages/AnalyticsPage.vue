@@ -64,6 +64,111 @@
     </section>
 
     <el-tabs>
+      <el-tab-pane label="班主任驾驶舱">
+        <section class="soft-card panel-block">
+          <div class="section-head compact">
+            <div>
+              <h3>班主任驾驶舱</h3>
+              <p>按年级或班级汇总成绩、考勤和行为风险，形成每日可执行的学生跟进清单。</p>
+            </div>
+          </div>
+          <div class="filter-grid adviser-filter-grid">
+            <el-select v-model="adviserGradeId" clearable filterable placeholder="年级">
+              <el-option
+                v-for="grade in referenceStore.grades"
+                :key="grade.id"
+                :label="grade.name"
+                :value="grade.id"
+              />
+            </el-select>
+            <el-select v-model="adviserClassId" clearable filterable placeholder="班级">
+              <el-option
+                v-for="schoolClass in referenceStore.classes"
+                :key="schoolClass.id"
+                :label="schoolClass.name"
+                :value="schoolClass.id"
+              />
+            </el-select>
+            <el-date-picker
+              v-model="adviserDateRange"
+              type="daterange"
+              value-format="YYYY-MM-DD"
+              range-separator="至"
+              start-placeholder="开始日期"
+              end-placeholder="结束日期"
+            />
+            <el-button type="primary" :loading="loadingAdviserDashboard" @click="loadAdviserDashboard">加载驾驶舱</el-button>
+          </div>
+          <div v-if="adviserDashboardTips.length" class="dashboard-tip-stack">
+            <el-alert
+              v-for="item in adviserDashboardTips"
+              :key="item"
+              type="warning"
+              show-icon
+              :closable="false"
+              :title="item"
+            />
+          </div>
+          <div v-if="adviserDashboard" class="metric-grid adviser-overview-grid">
+            <article v-for="item in adviserOverviewCards" :key="item.label" class="soft-card stat-card" :class="item.tone">
+              <div class="metric-label">{{ item.label }}</div>
+              <div class="metric-value">{{ item.value }}</div>
+              <p>{{ item.help }}</p>
+            </article>
+          </div>
+          <div v-if="adviserDashboard" class="adviser-summary-grid">
+            <article class="soft-card inner-panel">
+              <h4>考勤概况</h4>
+              <p>{{ formatAttendanceSummary(adviserDashboard.attendance_summary) }}</p>
+            </article>
+            <article class="soft-card inner-panel">
+              <h4>行为概况</h4>
+              <p>{{ formatBehaviorSummary(adviserDashboard.behavior_summary) }}</p>
+            </article>
+            <article class="soft-card inner-panel">
+              <h4>本周行动清单</h4>
+              <div class="action-chip-list">
+                <button
+                  v-for="item in adviserDashboard.action_items"
+                  :key="item.action_type"
+                  type="button"
+                  class="action-chip"
+                  @click="openAdviserAction(item.target_route)"
+                >
+                  <span>{{ item.title }}</span>
+                  <strong>{{ item.count }}</strong>
+                </button>
+              </div>
+            </article>
+          </div>
+          <div v-if="adviserDashboard" class="table-shell table-gap">
+            <el-table :data="adviserDashboard.risk_students" stripe>
+              <el-table-column label="学生" min-width="150">
+                <template #default="{ row }">
+                  <el-button link type="primary" @click="openRiskStudent(row)">
+                    {{ row.student_name }}
+                  </el-button>
+                </template>
+              </el-table-column>
+              <el-table-column label="班级" prop="class_name" min-width="100" />
+              <el-table-column label="风险等级" width="120">
+                <template #default="{ row }">
+                  <el-tag :type="adviserRiskTagType(row.risk_level)" effect="light">
+                    {{ row.risk_label }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="主要原因" prop="primary_reason" min-width="220" />
+              <el-table-column label="建议动作" prop="suggested_action" min-width="180" />
+            </el-table>
+            <el-empty
+              v-if="!adviserDashboard.risk_students.length"
+              description="当前范围暂无需要跟进的学生。"
+            />
+          </div>
+        </section>
+      </el-tab-pane>
+
       <el-tab-pane label="学生分析">
         <section class="soft-card panel-block">
           <div class="section-head compact">
@@ -342,9 +447,18 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import ElMessage from "element-plus/es/components/message/index";
 
 import { apiRequest } from "../api/client";
+import {
+  adviserRiskTagType,
+  buildAdviserDashboardEmptyTips,
+  formatAttendanceSummary,
+  formatBehaviorSummary,
+  type AdviserDashboardResponse,
+  type AdviserRiskStudentItem,
+} from "../components/analytics/adviserDashboard";
 import ClassPanoramaPanel from "../components/analytics/ClassPanoramaPanel.vue";
 import GradePanoramaPanel from "../components/analytics/GradePanoramaPanel.vue";
 import TeacherPanoramaPanel from "../components/analytics/TeacherPanoramaPanel.vue";
@@ -373,6 +487,7 @@ interface TeacherOption {
 }
 
 const referenceStore = useReferenceStore();
+const router = useRouter();
 const examOptions = ref<ExamOption[]>([]);
 const studentOptions = ref<StudentOption[]>([]);
 const teacherOptions = ref<TeacherOption[]>([]);
@@ -392,6 +507,11 @@ const loadingGradePanorama = ref(false);
 const loadingClassPanorama = ref(false);
 const loadingTeacherPanorama = ref(false);
 const scoreRecordTotal = ref(0);
+const adviserGradeId = ref<number | null>(null);
+const adviserClassId = ref<number | null>(null);
+const adviserDateRange = ref<[string, string] | null>(null);
+const adviserDashboard = ref<AdviserDashboardResponse | null>(null);
+const loadingAdviserDashboard = ref(false);
 
 const studentAnalytics = ref<any>(null);
 const classAnalytics = ref<any>(null);
@@ -430,6 +550,37 @@ const analyticsOverviewCards = computed(() => [
     tone: "tone-slate",
   },
 ]);
+const adviserDashboardTips = computed(() => buildAdviserDashboardEmptyTips(adviserDashboard.value));
+
+const adviserOverviewCards = computed(() => {
+  const overview = adviserDashboard.value?.overview;
+  return [
+    {
+      label: "学生数",
+      value: overview?.student_count ?? 0,
+      help: "当前年级或班级范围内的在读学生样本。",
+      tone: "tone-blue",
+    },
+    {
+      label: "成绩样本",
+      value: overview?.score_sample_count ?? 0,
+      help: "用于本次风险判断的成绩快照样本。",
+      tone: "tone-slate",
+    },
+    {
+      label: "需跟进",
+      value: overview?.follow_up_count ?? 0,
+      help: "紧急跟进和需要跟进的学生合计。",
+      tone: "tone-amber",
+    },
+    {
+      label: "行为风险",
+      value: overview?.behavior_risk_count ?? 0,
+      help: "高关注行为或安全心理类记录触发的风险。",
+      tone: "tone-slate",
+    },
+  ];
+});
 
 async function loadOptions(): Promise<void> {
   await referenceStore.loadCore();
@@ -455,6 +606,9 @@ async function loadOptions(): Promise<void> {
   }
   if (!selectedPanoramaTeacherId.value && teacherOptions.value.length) {
     selectedPanoramaTeacherId.value = teacherOptions.value[0].id;
+  }
+  if (!adviserGradeId.value && referenceStore.grades.length) {
+    adviserGradeId.value = referenceStore.grades[0].id;
   }
 }
 
@@ -492,6 +646,33 @@ async function loadGradeAnalytics(): Promise<void> {
   } catch (error) {
     ElMessage.error((error as Error).message);
   }
+}
+
+async function loadAdviserDashboard(): Promise<void> {
+  try {
+    loadingAdviserDashboard.value = true;
+    const query = new URLSearchParams();
+    if (adviserGradeId.value) query.set("grade_id", String(adviserGradeId.value));
+    if (adviserClassId.value) query.set("class_id", String(adviserClassId.value));
+    if (selectedExamId.value) query.set("exam_id", String(selectedExamId.value));
+    if (adviserDateRange.value?.[0]) query.set("start_date", adviserDateRange.value[0]);
+    if (adviserDateRange.value?.[1]) query.set("end_date", adviserDateRange.value[1]);
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    adviserDashboard.value = await apiRequest<AdviserDashboardResponse>(`/api/analytics/adviser-dashboard${suffix}`);
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  } finally {
+    loadingAdviserDashboard.value = false;
+  }
+}
+
+function openRiskStudent(row: AdviserRiskStudentItem): void {
+  router.push(`/students/${row.student_id}`);
+}
+
+function openAdviserAction(path?: string | null): void {
+  if (!path) return;
+  router.push(path);
 }
 
 async function loadGradePanorama(): Promise<void> {
@@ -583,12 +764,14 @@ function resetAnalyticsState(): void {
   gradePanorama.value = null;
   classPanorama.value = null;
   teacherPanorama.value = null;
+  adviserDashboard.value = null;
 }
 
 onMounted(async () => {
   try {
     await loadOptions();
     await Promise.all([
+      adviserGradeId.value || adviserClassId.value ? loadAdviserDashboard() : Promise.resolve(),
       selectedPanoramaGradeId.value ? loadGradePanorama() : Promise.resolve(),
       selectedPanoramaClassId.value ? loadClassPanorama() : Promise.resolve(),
       selectedPanoramaTeacherId.value ? loadTeacherPanorama() : Promise.resolve(),
@@ -687,6 +870,72 @@ onMounted(async () => {
   margin-top: 16px;
 }
 
+.adviser-filter-grid {
+  grid-template-columns: minmax(150px, 0.8fr) minmax(150px, 0.8fr) minmax(280px, 1.4fr) minmax(120px, 0.6fr);
+  align-items: center;
+}
+
+.adviser-filter-grid :deep(.el-date-editor--daterange) {
+  width: 100%;
+  max-width: 100%;
+}
+
+.adviser-filter-grid .el-button {
+  width: 100%;
+}
+
+.dashboard-tip-stack {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.adviser-overview-grid {
+  margin-top: 16px;
+}
+
+.adviser-overview-grid .stat-card p {
+  margin: 8px 0 0;
+  color: #6a7f92;
+  line-height: 1.5;
+}
+
+.adviser-summary-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 0.8fr) minmax(0, 1.4fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.adviser-summary-grid p {
+  margin: 0;
+  color: #60748a;
+  line-height: 1.6;
+}
+
+.action-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.action-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid #d7e4ef;
+  border-radius: 8px;
+  background: #fff;
+  color: #26394c;
+  cursor: pointer;
+}
+
+.action-chip strong {
+  color: #1f6c98;
+}
+
 .stat-card {
   padding: 18px 20px;
 }
@@ -741,6 +990,8 @@ onMounted(async () => {
 }
 
 @media (max-width: 960px) {
+  .adviser-filter-grid,
+  .adviser-summary-grid,
   .distribution-grid,
   .split-grid {
     grid-template-columns: 1fr;

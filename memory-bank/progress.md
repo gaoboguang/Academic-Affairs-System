@@ -6,6 +6,33 @@
 - 后端与前端基础功能已覆盖多个业务域，README 中已记录到 M0-M6 的实现范围。
 - 后端测试与前端构建在此前环境中已验证通过。
 
+## 2026-04-28 新增
+
+- 已完成 M11：考勤行为本地数据域：
+  - 新增 `attendance_record` 与 `behavior_record` 模型、迁移、schema、导入器、服务和路由
+  - 新增接口 `POST /api/attendance/import`、`GET /api/attendance/records`、`POST /api/behavior/import`、`GET /api/behavior/records`，并提供考勤/行为模板下载
+  - 考勤状态限定为正常、迟到、早退、病假、事假、旷课、其他；行为类型限定为表扬、违纪、谈话、心理关注、安全事件、奖惩、其他
+  - 考勤重复记录按同一学生、日期、范围、节次覆盖；行为同文件同学生、日期、类型、标题重复项作为 warning
+
+- 已完成 M12/M13：班主任驾驶舱、学生 360 和输出中心联动：
+  - 分析中心新增“班主任驾驶舱”页签，展示学生数、成绩样本、缺勤风险、行为风险、需跟进人数、风险学生列表和本周行动清单
+  - 新增 `/api/analytics/adviser-dashboard` 与 `/api/analytics/student-risk/{student_id}`，风险等级按本地确定性规则输出，缺考勤/行为数据时显示“未导入”
+  - 学生详情 360° 新增近 30/90 天考勤摘要、行为摘要、风险等级、风险原因和“生成学生跟进包”
+  - 输出中心新增班主任周报和学生跟进包，支持 Excel 导出和本地打印页
+
+- 已完成 M14/M15：桌面空库开局与本地成熟平台收尾：
+  - 新增 `docs/desktop_empty_db_initialization_20260427.md`，说明空库初始化步骤、模板导入顺序、备份恢复说明和 Windows 验证待办
+  - 首页“下一步建议”、导入中心初始化清单、系统数据健康已接入成绩、考勤、行为、任教关系、备份缺口
+  - 本轮保持本地单用户、SQLite、中文界面，不新增账号、权限、云同步、家长端或学生端，不写真实 `data/app.db`
+
+- 验证结果：
+  - `npm run backend:test -- apps/backend/tests/test_student_events_adviser_dashboard.py -q`：`2 passed`
+  - `npm run frontend:test -- adviser-dashboard report-type-config profile360 import-center`：`4 files / 17 tests passed`
+  - 临时空 SQLite 执行 `alembic upgrade head` 通过；`git diff --check` 通过
+  - 新增 `tests/e2e/adviser-dashboard.spec.ts`，覆盖导入考勤/行为、查看班主任驾驶舱、打开学生详情和导出班主任周报；全量 `npm run check:e2e` 为 `33 passed`
+  - 最终 `npm run check:all` 已重新跑完整门禁：后端 `105 passed`、前端 lint 通过、前端 `34 files / 174 tests passed`、前端构建通过、E2E `33 passed`
+  - 最终 `npm run desktop:dist:mac` 通过；打包后端二进制用临时空数据目录启动成功，自动建库并响应健康检查和首页摘要
+
 ## 2026-04-27 新增
 
 - 已完成 M10：E2E 拆分与桌面端交付验证：

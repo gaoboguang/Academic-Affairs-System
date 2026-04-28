@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
@@ -20,6 +20,8 @@ class ReportExportPayload(BaseModel):
     rule_version_id: int | None = None
     scheme_id: int | None = None
     draft_id: int | None = None
+    start_date: date | None = None
+    end_date: date | None = None
 
 
 class ShandongRecommendationReportExportPayload(BaseModel):

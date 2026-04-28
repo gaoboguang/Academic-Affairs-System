@@ -34,6 +34,34 @@ export function adviserQuantPrintPreviewPath(semesterId: number, ruleVersionId?:
   return `/print/adviser-quant/${semesterId}${ruleVersionId ? `?ruleVersionId=${ruleVersionId}` : ""}`;
 }
 
+export function adviserWeeklySummaryPrintPreviewPath(
+  classId: number,
+  examId?: number,
+  startDate?: string,
+  endDate?: string,
+): string {
+  const params = new URLSearchParams();
+  if (examId) params.set("examId", String(examId));
+  if (startDate) params.set("startDate", startDate);
+  if (endDate) params.set("endDate", endDate);
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return `/print/adviser-weekly-summary/${classId}${suffix}`;
+}
+
+export function studentFollowupPackagePrintPreviewPath(
+  studentId: number,
+  examId?: number,
+  startDate?: string,
+  endDate?: string,
+): string {
+  const params = new URLSearchParams();
+  if (examId) params.set("examId", String(examId));
+  if (startDate) params.set("startDate", startDate);
+  if (endDate) params.set("endDate", endDate);
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return `/print/student-followup-package/${studentId}${suffix}`;
+}
+
 export function volunteerDraftPrintPreviewPath(draftId: number): string {
   return `/print/volunteer-drafts/${draftId}`;
 }

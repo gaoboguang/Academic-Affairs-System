@@ -1,5 +1,34 @@
 # 交接说明
 
+## 当前主线状态（2026-04-28）
+
+- 本轮已完成用户给定的 M11-M15 成熟化计划，定位仍是个人本地使用工具：本地单机、SQLite、中文界面、无公网依赖、无账号/权限/云同步/家长端/学生端。
+- 新增考勤行为数据域：
+  - Alembic 迁移：`apps/backend/alembic/versions/20260427_0020_attendance_behavior_schema.py`
+  - 模型与服务：`attendance_record`、`behavior_record`；导入复用现有 `import_job`、错误报告和模板机制
+  - 接口：`POST /api/attendance/import`、`GET /api/attendance/records`、`POST /api/behavior/import`、`GET /api/behavior/records`，另有考勤/行为模板下载
+- 新增班主任驾驶舱与学生风险摘要：
+  - 分析中心新增“班主任驾驶舱”页签
+  - 后端新增 `/api/analytics/adviser-dashboard` 与 `/api/analytics/student-risk/{student_id}`
+  - 风险等级为 `urgent/follow_up/watch/normal`；没有考勤/行为数据时显示“未导入”，不要当作 0 风险
+- 新增输出闭环：
+  - 学生详情 360° 展示近 30/90 天考勤、行为、风险等级和风险原因
+  - 输出中心新增 `adviser_weekly_summary` 班主任周报和 `student_followup_package` 学生跟进包，支持 Excel 与打印页
+- 桌面空库与成熟平台收尾：
+  - 新增 `docs/desktop_empty_db_initialization_20260427.md`
+  - 首页下一步建议、导入中心初始化清单、系统数据健康已接入成绩、考勤、行为、任教关系和备份缺口
+  - 本轮未写真实 `data/app.db`；真实使用前仍建议用户先备份再迁移
+- 验证状态：
+  - 后端定向 `2 passed`；前端定向 `4 files / 17 tests passed`
+  - 临时空 SQLite `alembic upgrade head` 通过；`git diff --check` 通过
+  - 新增 `tests/e2e/adviser-dashboard.spec.ts`，覆盖导入考勤/行为、班主任驾驶舱、学生详情和班主任周报；补充后 `npm run check:e2e` 全量 `33 passed`
+  - 最终 `npm run check:all` 已重新跑完整门禁：后端 `105 passed`、前端 lint 通过、前端 `34 files / 174 tests passed`、前端构建通过、E2E `33 passed`
+  - 最终 `npm run desktop:dist:mac` 通过；打包后端二进制用临时空数据目录启动成功并自动创建 `app.db`，健康检查和首页摘要可响应
+- 后续优先：
+  - 真实学校成绩、考勤、行为 Excel 试跑，并让用户确认导入模板字段是否贴合本校表格
+  - 让班主任驾驶舱接入更多真实学校口径，例如请假类别、处分等级和周报字段顺序
+  - macOS 正式图标、签名、公证；Windows `dir/nsis` 在 Windows 或可交叉构建环境验证
+
 ## 当前主线状态（2026-04-27）
 
 - 本次已修复普通本地启动的前端打不开问题：

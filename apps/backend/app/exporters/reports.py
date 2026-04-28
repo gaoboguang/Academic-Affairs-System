@@ -44,6 +44,12 @@ def _format_percent(value: object) -> str:
     return "-"
 
 
+def _join_values(values: object) -> str:
+    if not isinstance(values, list):
+        return "-"
+    return "；".join(str(item) for item in values if item) or "-"
+
+
 def _trend_tone(delta: object) -> str:
     if not isinstance(delta, (int, float)):
         return "info"
@@ -263,6 +269,133 @@ def _build_grade_analysis_insight_rows(
             }
         )
     return rows
+
+
+def export_adviser_weekly_summary_report(settings: Settings, payload: dict[str, object]) -> str:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "班主任周报"
+    overview = payload.get("overview") if isinstance(payload.get("overview"), dict) else {}
+    score_summary = payload.get("score_summary") if isinstance(payload.get("score_summary"), dict) else {}
+    attendance_summary = payload.get("attendance_summary") if isinstance(payload.get("attendance_summary"), dict) else {}
+    behavior_summary = payload.get("behavior_summary") if isinstance(payload.get("behavior_summary"), dict) else {}
+
+    sheet.append(["班主任周报"])
+    sheet.append(["年级", payload.get("grade_name") or "全部"])
+    sheet.append(["班级", payload.get("class_name") or "全部"])
+    sheet.append(["考试", payload.get("exam_name") or "未选择"])
+    sheet.append(["数据范围", f"{payload.get('start_date')} 至 {payload.get('end_date')}"])
+    sheet.append(["生成时间", payload.get("generated_at") or "-"])
+    sheet.append([])
+    sheet.append(["概览项", "数值"])
+    sheet.append(["学生数", overview.get("student_count", 0)])
+    sheet.append(["成绩样本", overview.get("score_sample_count", 0)])
+    sheet.append(["缺勤风险", overview.get("absence_risk_count", 0)])
+    sheet.append(["行为风险", overview.get("behavior_risk_count", 0)])
+    sheet.append(["需跟进人数", overview.get("follow_up_count", 0)])
+    sheet.append([])
+    sheet.append(["成绩概况", "说明"])
+    sheet.append(["样本数", score_summary.get("sample_count", 0)])
+    sheet.append(["平均总分", _format_number(score_summary.get("average_total_score"))])
+    sheet.append(["低位人数", score_summary.get("low_score_count", 0)])
+    sheet.append(["下滑人数", score_summary.get("decline_count", 0)])
+    sheet.append([])
+    sheet.append(["考勤概况", "说明"])
+    sheet.append(["导入状态", "已导入" if attendance_summary.get("imported") else "未导入"])
+    sheet.append(["总记录", attendance_summary.get("total_records", 0)])
+    sheet.append(["迟到", attendance_summary.get("late_count", 0)])
+    sheet.append(["旷课", attendance_summary.get("truancy_count", 0)])
+    sheet.append([])
+    sheet.append(["行为概况", "说明"])
+    sheet.append(["导入状态", "已导入" if behavior_summary.get("imported") else "未导入"])
+    sheet.append(["总记录", behavior_summary.get("total_records", 0)])
+    sheet.append(["高关注行为", behavior_summary.get("severe_count", 0)])
+
+    risk_sheet = workbook.create_sheet("重点学生")
+    risk_sheet.append(["姓名", "班级", "风险等级", "主要原因", "建议动作"])
+    for row in payload.get("risk_students") or []:
+        if not isinstance(row, dict):
+            continue
+        risk_sheet.append([
+            row.get("student_name"),
+            row.get("class_name"),
+            row.get("risk_label"),
+            row.get("primary_reason"),
+            row.get("suggested_action"),
+        ])
+
+    action_sheet = workbook.create_sheet("行动清单")
+    action_sheet.append(["类型", "任务", "数量", "学生 ID"])
+    for row in payload.get("action_items") or []:
+        if not isinstance(row, dict):
+            continue
+        action_sheet.append([
+            row.get("action_type"),
+            row.get("title"),
+            row.get("count"),
+            _join_values(row.get("student_ids")),
+        ])
+
+    flag_sheet = workbook.create_sheet("缺失数据")
+    flag_sheet.append(["提示"])
+    data_flags = payload.get("data_flags") if isinstance(payload.get("data_flags"), list) else []
+    if data_flags:
+        for item in data_flags:
+            flag_sheet.append([item])
+    else:
+        flag_sheet.append(["当前范围未发现明显缺失提示"])
+    return _save_workbook(settings, workbook, "adviser_weekly_summary")
+
+
+def export_student_followup_package(settings: Settings, payload: dict[str, object]) -> str:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "学生跟进包"
+    score_summary = payload.get("score_summary") if isinstance(payload.get("score_summary"), dict) else {}
+    attendance_summary = payload.get("attendance_summary") if isinstance(payload.get("attendance_summary"), dict) else {}
+    behavior_summary = payload.get("behavior_summary") if isinstance(payload.get("behavior_summary"), dict) else {}
+    growth_summary = payload.get("growth_summary") if isinstance(payload.get("growth_summary"), dict) else {}
+
+    sheet.append(["学生跟进包"])
+    sheet.append(["学生", payload.get("student_name")])
+    sheet.append(["学号", payload.get("student_no")])
+    sheet.append(["年级", payload.get("grade_name")])
+    sheet.append(["班级", payload.get("class_name")])
+    sheet.append(["风险等级", payload.get("risk_label")])
+    sheet.append(["生成时间", payload.get("generated_at") or "-"])
+    sheet.append([])
+    sheet.append(["主要原因", _join_values(payload.get("reasons"))])
+    sheet.append(["建议行动", _join_values(payload.get("suggested_actions"))])
+    sheet.append(["缺失数据", _join_values(payload.get("data_flags"))])
+    sheet.append([])
+    sheet.append(["成绩趋势", "值"])
+    sheet.append(["考试", score_summary.get("exam_name") or "-"])
+    sheet.append(["总分", _format_number(score_summary.get("total_score"))])
+    sheet.append(["上次总分", _format_number(score_summary.get("previous_total_score"))])
+    sheet.append(["总分变化", _format_number(score_summary.get("total_score_delta"))])
+    sheet.append(["班级排名", _format_number(score_summary.get("class_rank"))])
+    sheet.append(["年级排名", _format_number(score_summary.get("grade_rank"))])
+    sheet.append([])
+    sheet.append(["考勤摘要", "值"])
+    sheet.append(["导入状态", "已导入" if attendance_summary.get("imported") else "未导入"])
+    sheet.append(["总记录", attendance_summary.get("total_records", 0)])
+    sheet.append(["迟到", attendance_summary.get("late_count", 0)])
+    sheet.append(["早退", attendance_summary.get("early_leave_count", 0)])
+    sheet.append(["病假", attendance_summary.get("sick_leave_count", 0)])
+    sheet.append(["事假", attendance_summary.get("personal_leave_count", 0)])
+    sheet.append(["旷课", attendance_summary.get("truancy_count", 0)])
+    sheet.append([])
+    sheet.append(["行为摘要", "值"])
+    sheet.append(["导入状态", "已导入" if behavior_summary.get("imported") else "未导入"])
+    sheet.append(["总记录", behavior_summary.get("total_records", 0)])
+    sheet.append(["表扬", behavior_summary.get("positive_count", 0)])
+    sheet.append(["违纪/奖惩", behavior_summary.get("discipline_count", 0)])
+    sheet.append(["高关注行为", behavior_summary.get("severe_count", 0)])
+    sheet.append([])
+    sheet.append(["成长档案", "值"])
+    sheet.append(["记录数", growth_summary.get("record_count", 0)])
+    sheet.append(["最近记录日期", growth_summary.get("latest_record_date") or "-"])
+    return _save_workbook(settings, workbook, "student_followup_package")
 
 
 def _format_teacher_assignment(row: dict[str, object]) -> str:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
@@ -13,9 +15,47 @@ from app.schemas.exam import (
     TeacherAnalyticsResponse,
     TeacherPanoramaResponse,
 )
+from app.schemas.student_event import AdviserDashboardResponse, StudentRiskResponse
 from app.services import analytics as service
+from app.services import student_events as student_event_service
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
+
+
+@router.get("/adviser-dashboard", response_model=AdviserDashboardResponse)
+def get_adviser_dashboard(
+    grade_id: int | None = None,
+    class_id: int | None = None,
+    exam_id: int | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    session: Session = Depends(get_db_session),
+) -> AdviserDashboardResponse:
+    return student_event_service.get_adviser_dashboard(
+        session,
+        grade_id=grade_id,
+        class_id=class_id,
+        exam_id=exam_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+
+@router.get("/student-risk/{student_id}", response_model=StudentRiskResponse)
+def get_student_risk(
+    student_id: int,
+    exam_id: int | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    session: Session = Depends(get_db_session),
+) -> StudentRiskResponse:
+    return student_event_service.get_student_risk(
+        session,
+        student_id,
+        exam_id=exam_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
 
 @router.get("/students/{student_id}", response_model=StudentAnalyticsResponse)

@@ -139,6 +139,18 @@
             :value="rule.id"
           />
         </el-select>
+        <el-date-picker
+          v-if="usesStartDate"
+          v-model="form.start_date"
+          value-format="YYYY-MM-DD"
+          placeholder="开始日期，可选"
+        />
+        <el-date-picker
+          v-if="usesEndDate"
+          v-model="form.end_date"
+          value-format="YYYY-MM-DD"
+          placeholder="结束日期，可选"
+        />
       </div>
       <div class="action-row toolbar-row">
         <el-button type="primary" :loading="exporting" @click="exportReport">生成报表</el-button>
@@ -266,6 +278,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import ElMessage from "element-plus/es/components/message/index";
 
 import { apiRequest, openFile } from "../api/client";
@@ -366,6 +379,7 @@ interface ExportRecord {
 }
 
 const referenceStore = useReferenceStore();
+const route = useRoute();
 const examOptions = ref<ExamOption[]>([]);
 const studentOptions = ref<StudentOption[]>([]);
 const teacherOptions = ref<TeacherOption[]>([]);
@@ -399,6 +413,8 @@ const form = reactive({
   teacher_id: undefined as number | undefined,
   semester_id: undefined as number | undefined,
   rule_version_id: undefined as number | undefined,
+  start_date: undefined as string | undefined,
+  end_date: undefined as string | undefined,
 });
 
 const requiresExam = computed(() => reportTypeUsesField(form.report_type, "exam_id"));
@@ -408,6 +424,8 @@ const requiresGrade = computed(() => reportTypeUsesField(form.report_type, "grad
 const requiresTeacher = computed(() => reportTypeUsesField(form.report_type, "teacher_id"));
 const requiresSemester = computed(() => reportTypeUsesField(form.report_type, "semester_id"));
 const optionalRuleVersion = computed(() => reportTypeUsesField(form.report_type, "rule_version_id"));
+const usesStartDate = computed(() => reportTypeUsesField(form.report_type, "start_date"));
+const usesEndDate = computed(() => reportTypeUsesField(form.report_type, "end_date"));
 const requiresScheme = computed(() => reportTypeUsesField(form.report_type, "scheme_id"));
 const requiresDraft = computed(() => reportTypeUsesField(form.report_type, "draft_id"));
 const requiresBatch = computed(() => reportTypeUsesField(form.report_type, "batch_id"));
@@ -636,6 +654,8 @@ watch(
       form.semester_id,
       form.rule_version_id,
       form.batch_id,
+      form.start_date,
+      form.end_date,
       currentRecommendationInsightContext.value.compareScheme?.scheme_id,
     ] as const,
   async () => {
@@ -653,12 +673,26 @@ watch(
 
 onMounted(async () => {
   try {
+    applyRoutePrefill();
     await loadOptions();
     await loadExportRecords();
   } catch (error) {
     ElMessage.error(formatUserActionError("加载报表中心", error, "确认本地服务已启动后，分别点击“刷新选项”和“刷新记录”。"));
   }
 });
+
+function applyRoutePrefill(): void {
+  const reportType = typeof route.query.report_type === "string" ? route.query.report_type : "";
+  if (reportType) form.report_type = reportType;
+  for (const field of ["exam_id", "student_id", "scheme_id", "draft_id", "batch_id", "class_id", "grade_id", "teacher_id", "semester_id", "rule_version_id"] as const) {
+    const value = route.query[field];
+    if (typeof value === "string" && value) {
+      form[field] = Number(value);
+    }
+  }
+  if (typeof route.query.start_date === "string") form.start_date = route.query.start_date;
+  if (typeof route.query.end_date === "string") form.end_date = route.query.end_date;
+}
 </script>
 
 <style scoped>

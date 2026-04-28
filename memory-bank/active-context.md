@@ -2,6 +2,17 @@
 
 ## 当前状态
 
+- 2026-04-28 已完成 M11-M15：考勤行为数据域、班主任驾驶舱、学生 360/输出中心联动、桌面空库开局说明和成熟平台感收尾：
+  - M11：新增 `attendance_record`、`behavior_record` 模型与 Alembic 迁移 `20260427_0020_attendance_behavior_schema.py`；新增考勤/行为导入模板、导入服务、查询接口和审计摘要，考勤重复按学生+日期+范围+节次覆盖，行为同文件重复给 warning
+  - M12：分析中心新增“班主任驾驶舱”页签；后端新增 `/api/analytics/adviser-dashboard` 与 `/api/analytics/student-risk/{student_id}`，按本地确定性规则输出 `urgent/follow_up/watch/normal`，考勤/行为缺失显示“未导入”而不是 0 风险
+  - M13：学生详情 360° 增加近 30/90 天考勤、行为和风险摘要，并接入“生成学生跟进包”；输出中心新增 `adviser_weekly_summary` 与 `student_followup_package` 的 Excel 和打印页
+  - M14：新增 `docs/desktop_empty_db_initialization_20260427.md`，说明桌面版空库初始化顺序、模板导入、备份恢复和 Windows 打包待办；本轮不写真实 `data/app.db`
+  - M15：首页下一步建议、导入中心初始化清单和系统数据健康已接入成绩、考勤、行为、任教关系、备份等本地教务数据缺口
+  - 验证：新增后端定向 `2 passed`；新增/相关前端定向 `4 files / 17 tests passed`；临时空 SQLite `alembic upgrade head` 通过；`git diff --check` 通过
+  - 质量门禁：已重新执行完整 `npm run check:all`，后端 `105 passed`、前端 lint 通过、前端 `34 files / 174 tests passed`、前端构建通过、E2E `33 passed`
+  - 桌面验证：已在最终样式修复后重新执行 `npm run desktop:dist:mac` 并通过；打包后的后端二进制用临时空数据目录启动成功，自动创建 `app.db`，`/api/system/health` 与 `/api/dashboard/summary` 可响应
+  - 剩余边界：macOS 正式图标、签名、公证未做；Windows `dir/nsis` 仍需在 Windows 或可交叉构建环境验证；真实使用前用户仍应先备份主库再迁移
+
 - 2026-04-27 已完成 M4/M5/M6/M7/M8/M9/M10 窗口任务：
   - M4：成绩导入增加质量摘要，覆盖缺考、非法分数、重复学生、未匹配学生、未匹配科目；考试、分析、报表等成绩链路补 `score_record=0` 空态、单考试边界和统计口径提示
   - M5：课表导入增加复核摘要，覆盖未匹配教师/班级/学科/课程类型、冲突课时和空字段；课表工作量页新增教师/班级视图切换、计算前检查和计算后异常卡

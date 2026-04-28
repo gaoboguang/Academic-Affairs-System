@@ -58,6 +58,18 @@ export function buildDashboardNextSteps(summary: DashboardDecisionSummary): Dash
     });
   }
 
+  const academicGaps = summary.data_health?.gaps.filter((item) => item.includes("教务")) ?? [];
+  if (academicGaps.length > 0) {
+    steps.push({
+      code: "adviser_data_gap",
+      title: "班主任驾驶舱数据不完整",
+      detail: academicGaps.slice(0, 2).join("；"),
+      actionLabel: "补齐导入数据",
+      path: "/import-center",
+      severity: "warning",
+    });
+  }
+
   if (summary.data_health && (summary.data_health.status !== "pass" || summary.data_health.p0_gap_count > 0)) {
     steps.push({
       code: "gaokao_data_warning",

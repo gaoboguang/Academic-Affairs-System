@@ -46,6 +46,7 @@ from app.models.student import (
     StudentClassTransferItem,
     StudentGuardian,
 )
+from app.models.student_event import AttendanceRecord, BehaviorRecord
 from app.models.system import AuditLog, BackupRecord, ConfigItem, ImportJob, ReportExportRecord, StoredFile
 from app.models.teacher import (
     ClassAdviserAssignment,
@@ -71,7 +72,9 @@ __all__ = [
     "AdviserQuantRuleVersion",
     "AuditLog",
     "AdmissionRecord",
+    "AttendanceRecord",
     "BackupRecord",
+    "BehaviorRecord",
     "Base",
     "College",
     "CollegeAlias",

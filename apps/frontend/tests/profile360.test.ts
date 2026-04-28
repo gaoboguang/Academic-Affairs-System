@@ -16,8 +16,13 @@ describe("profile360 helpers", () => {
       attachmentCount: 0,
       classTransferCount: 1,
       studentType: "art",
+      attendanceImported: false,
+      behaviorImported: false,
+      riskLevel: "follow_up",
     });
     expect(tags.map((item) => item.label)).toContain("成绩数据缺失");
+    expect(tags.map((item) => item.label)).toContain("需要跟进");
+    expect(tags.map((item) => item.label)).toContain("考勤未导入");
     expect(tags.map((item) => item.label)).toContain("近期调班需复核");
     expect(tags.map((item) => item.label)).toContain("特殊类型仅初筛");
     expect(buildStudent360Actions(3).find((item) => item.label === "成长时间线")?.path).toBe(

@@ -24,6 +24,7 @@
         <el-button @click="router.push(`/gaokao-pathways?student_id=${studentId}`)">升学方案</el-button>
         <el-button @click="openStudentGrowthReport">打印成长摘要</el-button>
         <el-button :disabled="!latestExamId" @click="openStudentAnalysisReport">打印成绩报告</el-button>
+        <el-button :loading="exportingFollowupPackage" @click="exportStudentFollowupPackage">生成跟进包</el-button>
         <el-button type="primary" @click="router.push('/recommendations')">升学推荐</el-button>
       </div>
     </header>
@@ -102,6 +103,21 @@
             {{ item.label }}：{{ item.detail }}
           </el-tag>
           <el-tag v-if="!studentRiskTags.length" type="success" effect="light">当前关键数据可用于基础分析</el-tag>
+        </div>
+        <div class="student-risk-grid">
+          <article class="student-risk-card">
+            <span>风险等级</span>
+            <strong>{{ studentRisk?.risk_label ?? "未计算" }}</strong>
+            <p>{{ studentRisk?.reasons.join(" / ") ?? "加载后显示考勤、行为和成绩综合判断。" }}</p>
+          </article>
+          <article class="student-risk-card">
+            <span>近 30 天考勤</span>
+            <strong>{{ studentRisk ? formatAttendanceSummary(studentRisk.attendance_summary) : "未加载" }}</strong>
+          </article>
+          <article class="student-risk-card">
+            <span>近 30 天行为</span>
+            <strong>{{ studentRisk ? formatBehaviorSummary(studentRisk.behavior_summary) : "未加载" }}</strong>
+          </article>
         </div>
         <div class="action-card-grid">
           <article v-for="item in student360Actions" :key="item.label" class="action-card" @click="router.push(item.path)">
@@ -363,6 +379,12 @@ import type { UploadFile } from "element-plus";
 import { useRoute, useRouter } from "vue-router";
 
 import { apiRequest, openFile, uploadFile } from "../api/client";
+import {
+  formatAttendanceSummary,
+  formatBehaviorSummary,
+  type AttendanceRiskSummary,
+  type BehaviorRiskSummary,
+} from "../components/analytics/adviserDashboard";
 import StudentPathwayProfilePanel from "../components/students/StudentPathwayProfilePanel.vue";
 import {
   formatClassTransferEventSummary,
@@ -468,12 +490,27 @@ interface StudentProfile {
   attachments: AttachmentItem[];
 }
 
+interface StudentRiskSummary {
+  risk_level: "urgent" | "follow_up" | "watch" | "normal";
+  risk_label: string;
+  reasons: string[];
+  suggested_actions: string[];
+  attendance_summary: AttendanceRiskSummary;
+  behavior_summary: BehaviorRiskSummary;
+}
+
+interface ReportExportRecord {
+  download_url: string;
+}
+
 const route = useRoute();
 const router = useRouter();
 const profile = ref<StudentProfile | null>(null);
 const classTransferHistory = ref<ClassTransferHistoryItem[]>([]);
+const studentRisk = ref<StudentRiskSummary | null>(null);
 const studentId = computed(() => Number(route.params.studentId));
 const uploadingAttachment = ref(false);
+const exportingFollowupPackage = ref(false);
 const attachmentDraft = reactive({
   title: "",
   attachment_type: "",
@@ -550,6 +587,9 @@ const studentRiskTags = computed(() => {
     attachmentCount: profile.value.attachments.length,
     classTransferCount: classTransferHistory.value.length,
     studentType: profile.value.student.student_type,
+    attendanceImported: studentRisk.value?.attendance_summary.imported,
+    behaviorImported: studentRisk.value?.behavior_summary.imported,
+    riskLevel: studentRisk.value?.risk_level,
   });
 });
 
@@ -586,6 +626,27 @@ function openStudentAnalysisReport(): void {
   openFile(studentAnalysisPrintPreviewPath(studentId.value, latestExamId.value));
 }
 
+async function exportStudentFollowupPackage(): Promise<void> {
+  try {
+    exportingFollowupPackage.value = true;
+    const payload: Record<string, unknown> = {
+      report_type: "student_followup_package",
+      student_id: studentId.value,
+    };
+    if (latestExamId.value) payload.exam_id = latestExamId.value;
+    const result = await apiRequest<ReportExportRecord>("/api/reports/export", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    openFile(result.download_url);
+    ElMessage.success("学生跟进包已生成");
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  } finally {
+    exportingFollowupPackage.value = false;
+  }
+}
+
 async function loadProfile(): Promise<void> {
   try {
     profile.value = await apiRequest<StudentProfile>(`/api/students/${route.params.studentId}/profile`);
@@ -604,8 +665,20 @@ async function loadClassTransferHistory(): Promise<void> {
   }
 }
 
+async function loadStudentRisk(): Promise<void> {
+  try {
+    const query = new URLSearchParams();
+    if (latestExamId.value) query.set("exam_id", String(latestExamId.value));
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    studentRisk.value = await apiRequest<StudentRiskSummary>(`/api/analytics/student-risk/${studentId.value}${suffix}`);
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  }
+}
+
 async function loadDetail(): Promise<void> {
   await Promise.all([loadProfile(), loadClassTransferHistory()]);
+  await loadStudentRisk();
 }
 
 async function handleAttachmentUpload(uploadFileItem: UploadFile): Promise<void> {
@@ -699,6 +772,38 @@ onMounted(loadDetail);
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
+}
+
+.student-risk-grid {
+  display: grid;
+  grid-template-columns: 1.2fr repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.student-risk-card {
+  padding: 14px;
+  border: 1px solid rgba(123, 141, 158, 0.2);
+  border-radius: 8px;
+  background: rgba(248, 251, 253, 0.82);
+}
+
+.student-risk-card span {
+  display: block;
+  color: #6c8094;
+  font-size: 13px;
+}
+
+.student-risk-card strong {
+  display: block;
+  margin-top: 8px;
+  color: #1f3448;
+  line-height: 1.5;
+}
+
+.student-risk-card p {
+  margin: 8px 0 0;
+  color: #61778b;
+  line-height: 1.55;
 }
 
 .action-card {
@@ -972,6 +1077,7 @@ onMounted(loadDetail);
 
 @media (max-width: 980px) {
   .detail-grid,
+  .student-risk-grid,
   .tag-row,
   .attachment-toolbar,
   .hero-meta-grid {

@@ -1,6 +1,22 @@
 from fastapi import APIRouter
 
-from app.api.routes import archives, analytics, base_data, dashboard, evaluation, exams, gaokao, health, recommendations, reports, students, system, teachers, workload
+from app.api.routes import (
+    archives,
+    analytics,
+    base_data,
+    dashboard,
+    evaluation,
+    exams,
+    gaokao,
+    health,
+    recommendations,
+    reports,
+    student_events,
+    students,
+    system,
+    teachers,
+    workload,
+)
 
 api_router = APIRouter()
 api_router.include_router(dashboard.router)
@@ -15,5 +31,7 @@ api_router.include_router(gaokao.router)
 api_router.include_router(recommendations.router)
 api_router.include_router(reports.router)
 api_router.include_router(workload.router)
+api_router.include_router(student_events.attendance_router)
+api_router.include_router(student_events.behavior_router)
 api_router.include_router(system.router)
 api_router.include_router(health.router)
