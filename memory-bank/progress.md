@@ -8,6 +8,15 @@
 
 ## 2026-04-28 新增
 
+- 已完成用户提供山东高考本地资料补库：
+  - 新增 `scripts/import_user_gaokao_local_folder.py`，可从 `/Users/gao/Desktop/高考志愿` 扫描并导入可结构化 Excel，支持预演、JSON 输出、年份过滤、写库前备份和重复执行替换本批次数据
+  - 新增 `docs/user-gaokao-local-import-20260428.md`，记录来源文件、导入行数、备份路径、仍缺数据和“用户提供 / 未核验”可信度边界
+  - 已写入真实 `data/app.db`：raw 招生计划新增 56,505 行，raw 投档结果新增 7,640 行；应用侧 `enrollment_plan` 现为 62,029 行，`admission_record` 现为 183,121 行
+  - 重点补齐 2023 招生计划、2024 本科/专科招生计划、2023 春考投档、2024 艺术/体育投档；未把 PDF、图片、视频导入算法数据库
+  - 写库前备份：`data/backups/app_before_user_gaokao_local_import_20260428_141651.db`；P0 校验另生成 `data/backups/p0_delivery_backup_20260428_141806.zip`
+  - 数据健康当前仍为 `warning`，剩余 P0 缺口为单招 / 综评缺专门录取结果、招生章程限制链 1748 条待人工复核；2024 招生计划偏少缺口已解除
+  - 验证：脚本编译、dry-run、临时库试导入、正式导入、`backend:data-health -- --json`、`backend:p0-check -- --json`、`backend:test -- apps/backend/tests/test_data_health.py -q`（3 passed）、`git diff --check`
+
 - 已完成本地升学规划任务中心第一轮：
   - 新增规划数据域：`student_planning_goal`、`student_planning_task`、`student_planning_note`，迁移为 `20260428_0021_student_planning_schema.py`
   - 新增规划接口：学生规划聚合读取、目标创建/更新、任务创建/更新、路径批量生成任务、复盘记录创建和规划跟进表导出

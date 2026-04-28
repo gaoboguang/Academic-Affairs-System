@@ -2,6 +2,16 @@
 
 ## 当前主线状态（2026-04-28）
 
+- 本轮已完成用户提供的山东高考志愿资料补库：
+  - 新增脚本 `scripts/import_user_gaokao_local_folder.py` 和报告 `docs/user-gaokao-local-import-20260428.md`
+  - 真实主库 `data/app.db` 已导入用户本地资料，导入版本 `user_gaokao_local_20260428`，来源统一标记 `user_provided / pending_local_review`
+  - 写库前备份为 `data/backups/app_before_user_gaokao_local_import_20260428_141651.db`；P0 校验备份包为 `data/backups/p0_delivery_backup_20260428_141806.zip`
+  - 导入内容：2023 山东招生计划 21,928 raw 行；2024 本科招生计划 23,692 raw 行；2024 专科招生计划 10,885 raw 行；2023 春季高考投档 3,724 raw 行；2024 艺术 / 体育投档 3,916 raw 行
+  - 导入后核心数量：`gaokao_admission_plan=63400`、`gaokao_admission_result=190119`、`enrollment_plan=62029`、`admission_record=183121`
+  - 健康状态：`backend:data-health -- --json` 仍为 `warning`，但 P0 缺口从 3 条降为 2 条；2024 招生计划偏少已解决，仍缺单招 / 综评专门录取结果、招生章程限制链 1748 条人工复核
+  - 后续继续补数据时优先找：2025 更完整山东普通类招生计划 Excel / 官方附件、单招 / 综评专门录取结果、可人工核验的招生章程限制链材料；不要把用户资料包中的 PDF/图片/视频直接导入算法表
+  - 已验证：脚本编译、dry-run、临时库试导入、正式导入、`backend:data-health -- --json`、`backend:p0-check -- --json`、`backend:test -- apps/backend/tests/test_data_health.py -q`（3 passed）、`git diff --check`
+
 - 本轮已完成“本地升学规划任务中心”第一轮：
   - 新增迁移 `20260428_0021_student_planning_schema.py`，新增 `student_planning_goal`、`student_planning_task`、`student_planning_note`
   - 后端新增规划聚合、目标/任务、路径生成任务、复盘记录和规划跟进表导出接口；通用报表类型新增 `planning_followup`
