@@ -81,12 +81,24 @@
         </template>
       </el-table-column>
     </el-table>
+    <el-pagination
+      v-if="pagination.total"
+      class="table-pagination"
+      background
+      layout="total, sizes, prev, pager, next"
+      :current-page="pagination.page"
+      :page-size="pagination.page_size"
+      :page-sizes="[50, 100, 200]"
+      :total="pagination.total"
+      @current-change="emit('page-change', $event)"
+      @size-change="emit('page-size-change', $event)"
+    />
     <el-empty v-if="!colleges.length" description="暂无院校数据" />
   </section>
 </template>
 
 <script setup lang="ts">
-import type { CollegeItem } from "./types";
+import type { CollegeItem, PaginationState } from "./types";
 
 interface CollegeFiltersState {
   keyword: string;
@@ -97,12 +109,15 @@ interface CollegeFiltersState {
 defineProps<{
   colleges: CollegeItem[];
   filters: CollegeFiltersState;
+  pagination: PaginationState;
   provinceOptions: string[];
 }>();
 
 const emit = defineEmits<{
   load: [];
   reset: [];
+  "page-change": [value: number];
+  "page-size-change": [value: number];
   create: [];
   edit: [value: CollegeItem];
 }>();
@@ -115,6 +130,11 @@ const emit = defineEmits<{
 
 .toolbar-row {
   margin-bottom: 16px;
+}
+
+.table-pagination {
+  margin-top: 16px;
+  justify-content: flex-end;
 }
 
 .tag-cluster {

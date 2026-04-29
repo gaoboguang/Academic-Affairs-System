@@ -2,6 +2,14 @@
 
 ## 当前状态
 
+- 2026-04-28 已按用户“高考志愿界面重设计计划”完成 `/recommendations` 第一轮重设计：
+  - 首屏标题和导航改为“高考志愿工作台”，默认进入“学生志愿工作台”，页面顶层收成 `工作台 / 历史方案 / 数据与规则 / 数据健康` 四个分区，不再把院校库、专业库、计划库、录取库、规则字典等维护能力铺满首屏
+  - 工作台首屏新增紧凑条件栏和三块核心状态：学生画像与偏好、候选池/冲稳保、志愿草稿篮；旧推荐生成、策略、山东普通类推荐仍保留为工作台内二级入口
+  - 全局风险提示改为可展开的“数据风险与人工复核”栏；“数据健康”分区只读展示山东覆盖矩阵、P0 缺口和跳转高考数据看板
+  - 数据与规则分区继续复用旧维护组件；院校库和专业就业映射前端已接入新增分页接口，配套分页控件和单测
+  - 已验证：`npm run frontend:test -- tests/recommendation-large-table-loading.test.ts`（3 passed）、`npm run frontend:lint`、`npm run frontend:build`、`npm run backend:test -- apps/backend/tests/test_recommendation_workflow.py -q`（15 passed）、`npm run e2e -- tests/e2e/gaokao-volunteer.spec.ts --grep "Stage B 主链路|数据底座"`（2 passed）、`npm run e2e -- tests/e2e/recommendations.spec.ts --grep "Stage B 批量场景"`（1 passed）、`git diff --check`
+  - 本轮未新增迁移、未写真实 `data/app.db`；完整两文件 Playwright 复跑中已有 17 条通过、3 条因入口适配失败，修正后已定向重跑这 3 条并全部通过
+
 - 2026-04-28 已修复高考志愿 `/recommendations` 首屏因大表全量加载导致的卡死/崩溃：
   - 首屏不再加载录取库、招生计划库、专业库等大表，只加载学生/考试选项、推荐设置、历史摘要和山东数据健康摘要；重数据改为切换到对应页签后懒加载
   - 新增分页接口 `/api/majors/page`、`/api/admissions/page`、`/api/enrollment-plans/page`，默认每页 50 条，最大 200 条；推荐页专业库、录取库、招生计划库已改用分页表格

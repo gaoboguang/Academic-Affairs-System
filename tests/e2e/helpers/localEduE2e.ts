@@ -364,7 +364,6 @@ async function openRecommendationCenter(
   await page.goto("/recommendations");
   await expect(page.getByRole("heading", { name: "高考志愿" })).toBeVisible();
 
-  await page.getByRole("tab", { name: "录取库" }).click();
   await ensureAdmissionsImported(page);
   await page.getByRole("tab", { name: "推荐中心" }).click();
 

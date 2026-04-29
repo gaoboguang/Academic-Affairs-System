@@ -10,6 +10,7 @@ from app.schemas.recommendation import (
     AdmissionRecordPageRead,
     AdmissionRecordRead,
     CollegePayload,
+    CollegePageRead,
     CollegeRead,
     EmploymentDirectionPayload,
     EmploymentDirectionRead,
@@ -21,6 +22,7 @@ from app.schemas.recommendation import (
     MajorPayload,
     MajorRead,
     MajorEmploymentMappingPayload,
+    MajorEmploymentMappingPageRead,
     MajorEmploymentMappingRead,
     MajorEmploymentMappingBootstrapResponse,
     ProvinceVolunteerRuleBootstrapResponse,
@@ -67,6 +69,25 @@ def list_colleges(
     session: Session = Depends(get_db_session),
 ) -> list[CollegeRead]:
     return service.list_colleges(session, keyword=keyword, province=province, supports_art=supports_art)
+
+
+@router.get("/colleges/page", response_model=CollegePageRead)
+def list_colleges_page(
+    keyword: str | None = Query(default=None),
+    province: str | None = Query(default=None),
+    supports_art: bool | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    session: Session = Depends(get_db_session),
+) -> CollegePageRead:
+    return service.list_colleges_page(
+        session,
+        keyword=keyword,
+        province=province,
+        supports_art=supports_art,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.post("/colleges", response_model=CollegeRead)
@@ -176,6 +197,27 @@ def list_major_employment_mappings(
         direction_id=direction_id,
         strength=strength,
         keyword=keyword,
+    )
+
+
+@router.get("/major-employment-maps/page", response_model=MajorEmploymentMappingPageRead)
+def list_major_employment_mappings_page(
+    major_id: int | None = Query(default=None),
+    direction_id: int | None = Query(default=None),
+    strength: str | None = Query(default=None),
+    keyword: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    session: Session = Depends(get_db_session),
+) -> MajorEmploymentMappingPageRead:
+    return service.list_major_employment_mappings_page(
+        session,
+        major_id=major_id,
+        direction_id=direction_id,
+        strength=strength,
+        keyword=keyword,
+        page=page,
+        page_size=page_size,
     )
 
 

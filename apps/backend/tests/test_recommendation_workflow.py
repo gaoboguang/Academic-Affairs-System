@@ -1127,6 +1127,35 @@ def test_special_type_rule_dictionary_bootstrap_and_list(client) -> None:
 
 
 def test_recommendation_large_tables_support_paginated_queries(client) -> None:
+    for index, province in enumerate(["广东", "广东", "山东"], start=1):
+        response = client.post(
+            "/api/colleges",
+            json={
+                "name": f"分页测试大学{index}",
+                "college_code": None,
+                "province": province,
+                "city": None,
+                "school_type": None,
+                "school_level_tags_json": [],
+                "intro": None,
+                "website": None,
+                "supports_art": index == 3,
+                "note": None,
+                "alias_names": [],
+                "is_active": True,
+            },
+        )
+        assert response.status_code == 200
+
+    college_page = client.get("/api/colleges/page?keyword=分页测试大学&province=广东&page=1&page_size=1")
+    assert college_page.status_code == 200
+    college_payload = college_page.json()
+    assert college_payload["total"] == 2
+    assert college_payload["page"] == 1
+    assert college_payload["page_size"] == 1
+    assert len(college_payload["items"]) == 1
+    assert college_payload["items"][0]["province"] == "广东"
+
     for major_name in ["分页测试专业A", "分页测试专业B", "分页测试专业C"]:
         response = client.post(
             "/api/majors",
@@ -1150,6 +1179,54 @@ def test_recommendation_large_tables_support_paginated_queries(client) -> None:
     assert major_payload["page"] == 2
     assert major_payload["page_size"] == 2
     assert len(major_payload["items"]) == 1
+
+    direction_response = client.post(
+        "/api/employment-directions",
+        json={
+            "name": "分页测试就业方向",
+            "category": "技术研发类",
+            "alias_names_json": [],
+            "description": None,
+            "common_job_types_json": [],
+            "common_industries_json": [],
+            "prefers_postgraduate": False,
+            "requires_certificate": False,
+            "requires_long_cycle": False,
+            "supports_art": False,
+            "risk_note": None,
+            "source_note": None,
+            "is_active": True,
+        },
+    )
+    assert direction_response.status_code == 200
+    direction_id = direction_response.json()["id"]
+    major_list = client.get("/api/majors?keyword=分页测试专业")
+    assert major_list.status_code == 200
+    for major_item in major_list.json():
+        mapping_response = client.post(
+            "/api/major-employment-maps",
+            json={
+                "major_id": major_item["id"],
+                "direction_id": direction_id,
+                "strength": "high",
+                "recommendation_note": "分页查询测试",
+                "requires_postgraduate": False,
+                "requires_certificate": False,
+                "supported_student_types_json": [],
+                "supports_art": False,
+                "note": None,
+                "is_active": True,
+            },
+        )
+        assert mapping_response.status_code == 200
+
+    mapping_page = client.get("/api/major-employment-maps/page?keyword=分页测试&page=2&page_size=2")
+    assert mapping_page.status_code == 200
+    mapping_payload = mapping_page.json()
+    assert mapping_payload["total"] == 3
+    assert mapping_payload["page"] == 2
+    assert len(mapping_payload["items"]) == 1
+    assert mapping_payload["items"][0]["direction_name"] == "分页测试就业方向"
 
     import_response = client.post(
         "/api/admissions/import",
@@ -1191,6 +1268,10 @@ def test_recommendation_large_tables_support_paginated_queries(client) -> None:
 
     too_large_page_size = client.get("/api/enrollment-plans/page?page_size=500")
     assert too_large_page_size.status_code == 422
+    too_large_college_page_size = client.get("/api/colleges/page?page_size=500")
+    assert too_large_college_page_size.status_code == 422
+    too_large_mapping_page_size = client.get("/api/major-employment-maps/page?page_size=500")
+    assert too_large_mapping_page_size.status_code == 422
 
 
 def test_admission_import_and_recommendation_generation(client, app) -> None:

@@ -165,11 +165,11 @@ export const navSections: AppNavSection[] = [
       },
       {
         path: "/recommendations",
-        label: "高考志愿",
-        description: "维护招生计划、录取库和省份规则，生成志愿推荐方案。",
-        helper: "志愿推荐前请先确认考试、位次、招生计划和省份规则是否完整。",
+        label: "高考志愿工作台",
+        description: "围绕学生画像、候选池、志愿草稿和风险复核完成教师志愿辅导。",
+        helper: "院校库、专业库、招生计划、录取库和规则字典已收进页面内的数据与规则中心。",
         icon: School,
-        tags: ["招生计划", "录取库", "志愿规则"],
+        tags: ["候选池", "草稿篮", "风险复核"],
       },
       {
         path: "/reports",

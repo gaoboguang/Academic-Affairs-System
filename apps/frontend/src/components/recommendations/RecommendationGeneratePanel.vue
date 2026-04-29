@@ -22,6 +22,9 @@
         {{ recommendationModeHint }}
       </template>
     </el-alert>
+    <div v-if="isBatchMode" class="batch-selection-status">
+      已选 {{ form.student_ids.length }} 名学生
+    </div>
 
     <div class="filter-grid">
       <el-select v-if="!isBatchMode" v-model="form.student_id" filterable placeholder="选择学生">
@@ -277,6 +280,13 @@ const generationModeModel = computed({
 
 .recommend-form-alert {
   margin-bottom: 16px;
+}
+
+.batch-selection-status {
+  margin: -4px 0 14px;
+  color: #51687c;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .note-box {

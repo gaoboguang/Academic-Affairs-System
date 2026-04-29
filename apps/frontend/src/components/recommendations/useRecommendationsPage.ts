@@ -61,8 +61,9 @@ export function useRecommendationsPage() {
         workflow.loadStudentAndExamOptions(),
         workflow.loadRecommendationSettings(),
         workflow.loadHistory(),
+        career.loadEmploymentDirections(),
       ]);
-      loadedTabs.add("recommendations");
+      loadedTabs.add("volunteer-workbench");
       volunteerWorkspace.syncFromRecommendationForm();
       if (workflow.historyItems.value.length) {
         await workflow.viewScheme(workflow.historyItems.value[0]);
@@ -78,7 +79,11 @@ export function useRecommendationsPage() {
     loadedTabs.add(tab);
     try {
       if (tab === "colleges") {
-        await catalog.loadColleges();
+        await catalog.loadColleges({ resetPage: true });
+        return;
+      }
+      if (tab === "recommendations") {
+        await catalog.loadCollegeDirectory();
         return;
       }
       if (tab === "majors") {
@@ -93,7 +98,7 @@ export function useRecommendationsPage() {
         await Promise.all([
           catalog.loadMajorDirectory(),
           career.loadEmploymentDirections(),
-          career.loadMajorEmploymentMappings(),
+          career.loadMajorEmploymentMappings({ resetPage: true }),
         ]);
         return;
       }
@@ -131,12 +136,16 @@ export function useRecommendationsPage() {
         await shandongWorkbench.loadShandongDataHealth();
         return;
       }
+      if (tab === "history") {
+        await workflow.loadHistory();
+        return;
+      }
+      if (tab === "data-health") {
+        await shandongWorkbench.loadShandongDataHealth();
+        return;
+      }
       if (tab === "volunteer-workbench") {
-        await Promise.all([
-          catalog.loadCollegeDirectory(),
-          career.loadEmploymentDirections(),
-          planning.loadEnrollmentPlans({ resetPage: true }),
-        ]);
+        await career.loadEmploymentDirections();
       }
     } catch (error) {
       loadedTabs.delete(tab);

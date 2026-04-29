@@ -62,6 +62,41 @@ def list_colleges(
     ).unique().all()
 
 
+def list_colleges_page(
+    session: Session,
+    *,
+    keyword: str | None = None,
+    province: str | None = None,
+    supports_art: bool | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> tuple[Sequence[College], int]:
+    total = session.scalar(
+        select(func.count()).select_from(College).where(
+            and_(*_college_conditions(keyword=keyword, province=province, supports_art=supports_art))
+        )
+    ) or 0
+    stmt = build_college_query(keyword=keyword, province=province, supports_art=supports_art)
+    stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+    return session.scalars(stmt).unique().all(), total
+
+
+def _college_conditions(
+    *,
+    keyword: str | None = None,
+    province: str | None = None,
+    supports_art: bool | None = None,
+) -> list:
+    conditions = [College.is_active.is_(True)]
+    if keyword:
+        conditions.append(College.name.contains(keyword))
+    if province:
+        conditions.append(College.province == province)
+    if supports_art is not None:
+        conditions.append(College.supports_art == supports_art)
+    return conditions
+
+
 def get_college(session: Session, college_id: int) -> College | None:
     stmt = (
         select(College)
@@ -205,6 +240,63 @@ def list_major_employment_mappings(
         stmt = stmt.where(and_(*conditions))
     stmt = stmt.order_by(MajorEmploymentMapping.strength, MajorEmploymentMapping.id.desc())
     return session.scalars(stmt).unique().all()
+
+
+def list_major_employment_mappings_page(
+    session: Session,
+    *,
+    major_id: int | None = None,
+    direction_id: int | None = None,
+    strength: str | None = None,
+    keyword: str | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> tuple[Sequence[MajorEmploymentMapping], int]:
+    conditions = _major_employment_mapping_conditions(
+        major_id=major_id,
+        direction_id=direction_id,
+        strength=strength,
+        keyword=keyword,
+    )
+    total = session.scalar(
+        select(func.count()).select_from(MajorEmploymentMapping).where(and_(*conditions))
+    ) or 0
+    stmt = (
+        select(MajorEmploymentMapping)
+        .options(
+            joinedload(MajorEmploymentMapping.major),
+            joinedload(MajorEmploymentMapping.direction),
+        )
+        .where(and_(*conditions))
+        .order_by(MajorEmploymentMapping.strength, MajorEmploymentMapping.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    return session.scalars(stmt).unique().all(), total
+
+
+def _major_employment_mapping_conditions(
+    *,
+    major_id: int | None = None,
+    direction_id: int | None = None,
+    strength: str | None = None,
+    keyword: str | None = None,
+) -> list:
+    conditions = [MajorEmploymentMapping.is_active.is_(True)]
+    if major_id:
+        conditions.append(MajorEmploymentMapping.major_id == major_id)
+    if direction_id:
+        conditions.append(MajorEmploymentMapping.direction_id == direction_id)
+    if strength:
+        conditions.append(MajorEmploymentMapping.strength == strength)
+    if keyword:
+        conditions.append(
+            or_(
+                MajorEmploymentMapping.major.has(Major.name.contains(keyword)),
+                MajorEmploymentMapping.direction.has(EmploymentDirection.name.contains(keyword)),
+            )
+        )
+    return conditions
 
 
 def list_major_employment_mappings_for_majors(

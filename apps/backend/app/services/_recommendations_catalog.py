@@ -16,6 +16,7 @@ from app.repositories.recommendations import (
     list_admission_records as repo_list_admission_records,
     list_admission_records_page as repo_list_admission_records_page,
     list_colleges as repo_list_colleges,
+    list_colleges_page as repo_list_colleges_page,
     list_majors as repo_list_majors,
     list_majors_page as repo_list_majors_page,
 )
@@ -25,6 +26,7 @@ from app.schemas.recommendation import (
     AdmissionRecordPageRead,
     AdmissionRecordRead,
     CollegePayload,
+    CollegePageRead,
     CollegeRead,
     MajorPageRead,
     MajorPayload,
@@ -45,6 +47,31 @@ def list_colleges(
         _serialize_college(item)
         for item in repo_list_colleges(session, keyword=keyword, province=province, supports_art=supports_art)
     ]
+
+
+def list_colleges_page(
+    session: Session,
+    *,
+    keyword: str | None = None,
+    province: str | None = None,
+    supports_art: bool | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> CollegePageRead:
+    items, total = repo_list_colleges_page(
+        session,
+        keyword=keyword,
+        province=province,
+        supports_art=supports_art,
+        page=page,
+        page_size=page_size,
+    )
+    return CollegePageRead(
+        items=[_serialize_college(item) for item in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 def create_college(session: Session, payload: CollegePayload) -> CollegeRead:

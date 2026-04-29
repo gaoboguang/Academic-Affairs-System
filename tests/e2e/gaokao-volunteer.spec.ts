@@ -38,6 +38,7 @@ test("Stage B 主链路：生源地回退的模拟推荐可同步到工作台并
   const resultPanel = page.locator(".panel-block").filter({ hasText: "方案结果" });
   await expect(resultPanel.getByText(schemeName)).toBeVisible();
 
+  await page.getByRole("button", { name: "历史方案" }).click();
   const historyPanel = page.locator(".panel-block").filter({ hasText: "推荐历史" });
   await historyPanel.getByRole("button", { name: "查询历史" }).click();
   const historyRow = historyPanel.locator(".el-table__row").filter({ hasText: schemeName }).first();
@@ -46,9 +47,11 @@ test("Stage B 主链路：生源地回退的模拟推荐可同步到工作台并
   await expect(historyRow).toContainText("预估分数 + 预估位次");
   await expect(historyRow).toContainText("参考 2026届一模");
 
+  await page.getByRole("button", { name: "打开数据与规则" }).click();
   await page.getByRole("tab", { name: "招生计划库" }).click();
   await ensureEnrollmentPlansImported(page);
   await ensureVolunteerRuleConfigured(page);
+  await page.getByRole("button", { name: "回到工作台" }).click();
   await page.getByRole("tab", { name: "学生志愿工作台" }).click();
   const workbenchPanel = page.locator(".panel-block").filter({ hasText: "学生志愿工作台" }).first();
   await expect(workbenchPanel.getByRole("heading", { name: "学生志愿工作台" })).toBeVisible();
@@ -185,6 +188,7 @@ test("高考志愿数据底座：可维护就业方向库和专业就业映射",
   const workbenchPanel = await openVolunteerWorkbench(page);
   await expect(workbenchPanel.getByRole("heading", { name: "学生志愿工作台" })).toBeVisible();
 
+  await page.getByRole("button", { name: "打开数据与规则" }).click();
   await page.getByRole("tab", { name: "就业方向库" }).click();
   const directionPanel = page.locator(".panel-block").filter({ hasText: "就业方向库" }).first();
   await expect(directionPanel.getByRole("heading", { name: "就业方向库" })).toBeVisible();

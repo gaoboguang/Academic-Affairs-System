@@ -38,6 +38,13 @@ class CollegeRead(ORMModel):
     is_active: bool
 
 
+class CollegePageRead(BaseModel):
+    items: list[CollegeRead]
+    total: int
+    page: int
+    page_size: int
+
+
 class MajorPayload(BaseModel):
     name: str
     major_code: str | None = None
@@ -135,6 +142,13 @@ class MajorEmploymentMappingRead(ORMModel):
     supports_art: bool
     note: str | None = None
     is_active: bool
+
+
+class MajorEmploymentMappingPageRead(BaseModel):
+    items: list[MajorEmploymentMappingRead]
+    total: int
+    page: int
+    page_size: int
 
 
 class MajorEmploymentMappingBootstrapResponse(BaseModel):
