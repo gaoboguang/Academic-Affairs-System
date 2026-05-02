@@ -1,60 +1,84 @@
 <template>
-  <div class="page-shell pathway-center-page">
-    <header class="page-header">
-      <div>
-        <div class="page-eyebrow">升学方案 / 山东路径初筛</div>
-        <h2 class="page-title">山东升学方案中心</h2>
-        <p class="page-subtitle">
-          汇总学生画像、升学路径状态、材料缺口和数据风险。这里先做资格初筛和人工复核提示，不承诺录取概率。
-        </p>
-        <div class="page-chip-row">
-          <span class="page-chip"><strong>学生</strong>{{ selectedStudent?.name || "未选择" }}</span>
-          <span class="page-chip"><strong>目标年份</strong>{{ targetYear }}</span>
-          <span class="page-chip"><strong>路径卡</strong>{{ cards.length }}</span>
-          <span class="page-chip"><strong>状态</strong>{{ statusSummaryCopy }}</span>
-          <span class="page-chip"><strong>P0 缺口</strong>{{ dataHealth?.gaps.length ?? "-" }}</span>
-        </div>
-      </div>
+  <AppPage
+    class="pathway-center-page"
+    eyebrow="升学方案 / 山东路径初筛"
+    title="山东升学方案中心"
+    description="汇总学生画像、升学路径状态、材料缺口和数据风险。这里先做资格初筛和人工复核提示，不承诺录取概率。"
+    :meta="pageMeta"
+  >
+    <template #actions>
       <div class="action-row">
-        <el-button :loading="loading" @click="reloadAll">刷新方案中心</el-button>
+        <el-button :loading="loading" @click="reloadAll"
+          >刷新方案中心</el-button
+        >
         <el-button @click="router.push('/gaokao-data')">查看高考数据</el-button>
-        <el-button :disabled="!selectedStudentId" :loading="generatingPlanningTasks" @click="generatePlanningTasks">
+        <el-button
+          :disabled="!selectedStudentId"
+          :loading="generatingPlanningTasks"
+          @click="generatePlanningTasks"
+        >
           生成规划任务
         </el-button>
-        <el-button :disabled="!cards.length" @click="openPathwayReportPrintPreview">打印报告</el-button>
-        <el-button :disabled="!cards.length" :loading="exportingReport" @click="exportPathwayReport">导出 Excel</el-button>
-        <el-button type="primary" :disabled="!selectedStudentId" @click="openRecommendationWorkbench">
+        <el-button
+          :disabled="!cards.length"
+          @click="openPathwayReportPrintPreview"
+          >打印报告</el-button
+        >
+        <el-button
+          :disabled="!cards.length"
+          :loading="exportingReport"
+          @click="exportPathwayReport"
+          >导出 Excel</el-button
+        >
+        <el-button
+          type="primary"
+          :disabled="!selectedStudentId"
+          @click="openRecommendationWorkbench"
+        >
           山东普通类推荐
         </el-button>
       </div>
-    </header>
+    </template>
 
-    <section class="pathway-filter-strip">
-      <div class="pathway-filter-field">
-        <span>选择学生</span>
-        <el-select
-          v-model="selectedStudentId"
-          filterable
-          placeholder="选择要评估的学生"
-          @change="handleStudentChange"
-        >
-          <el-option
-            v-for="student in studentOptions"
-            :key="student.id"
-            :label="formatPathwayStudentOption(student)"
-            :value="student.id"
+    <AppFilterBar
+      title="全局筛选"
+      description="选择学生和目标年份后，统一刷新画像、路径卡和材料缺口。"
+      sticky
+    >
+      <div class="pathway-filter-grid">
+        <div class="pathway-filter-field">
+          <span>选择学生</span>
+          <el-select
+            v-model="selectedStudentId"
+            filterable
+            placeholder="选择要评估的学生"
+            @change="handleStudentChange"
+          >
+            <el-option
+              v-for="student in studentOptions"
+              :key="student.id"
+              :label="formatPathwayStudentOption(student)"
+              :value="student.id"
+            />
+          </el-select>
+        </div>
+        <div class="pathway-filter-field year-field">
+          <span>目标年份</span>
+          <el-input-number
+            v-model="targetYear"
+            :min="2020"
+            :max="2100"
+            @change="refreshEvaluations"
           />
-        </el-select>
+        </div>
+        <div class="pathway-filter-copy">
+          <strong>当前口径</strong>
+          <span>山东生源地；特殊类型只做资格初筛与材料核验。</span>
+        </div>
       </div>
-      <div class="pathway-filter-field year-field">
-        <span>目标年份</span>
-        <el-input-number v-model="targetYear" :min="2020" :max="2100" @change="refreshEvaluations" />
-      </div>
-      <div class="pathway-filter-copy">
-        <strong>当前口径</strong>
-        <span>山东生源地；单招、综评、春考、艺体、体育、提前批和特殊类型只做资格初筛与材料核验。</span>
-      </div>
-    </section>
+    </AppFilterBar>
+
+    <AppStatGrid :items="pageStatCards" :columns="4" />
 
     <el-alert
       v-if="errorMessage"
@@ -71,7 +95,9 @@
             <h3>学生升学画像摘要</h3>
             <p>来自学生详情页“升学画像”，缺项会直接影响路径初筛。</p>
           </div>
-          <el-button v-if="selectedStudentId" @click="openStudentProfile">编辑画像</el-button>
+          <el-button v-if="selectedStudentId" @click="openStudentProfile"
+            >编辑画像</el-button
+          >
         </div>
         <div v-if="profileSummary.length" class="pathway-profile-grid">
           <div
@@ -95,7 +121,11 @@
           </div>
         </div>
         <div v-if="aggregatedGaps.length" class="pathway-gap-list">
-          <article v-for="gap in aggregatedGaps.slice(0, 5)" :key="gap.key" class="pathway-gap-row">
+          <article
+            v-for="gap in aggregatedGaps.slice(0, 5)"
+            :key="gap.key"
+            class="pathway-gap-row"
+          >
             <div>
               <strong>{{ gap.label }}</strong>
               <span>影响 {{ gap.count }} 条路径</span>
@@ -103,7 +133,9 @@
             <p>{{ gap.nextAction }}</p>
           </article>
         </div>
-        <p v-else class="muted-copy">暂无集中材料缺口。仍需在正式报名前逐校核对官方公告、招生章程和报名时间。</p>
+        <p v-else class="muted-copy">
+          暂无集中材料缺口。仍需在正式报名前逐校核对官方公告、招生章程和报名时间。
+        </p>
       </article>
     </section>
 
@@ -111,17 +143,25 @@
       <div class="section-head">
         <div>
           <h3>升学路径卡片</h3>
-          <p>每张卡片只说明“能不能继续关注、缺什么、下一步做什么”。只有普通类常规批接入完整位次推荐。</p>
+          <p>
+            每张卡片只说明“能不能继续关注、缺什么、下一步做什么”。只有普通类常规批接入完整位次推荐。
+          </p>
         </div>
       </div>
       <div v-if="cards.length" class="pathway-card-grid">
-        <article v-for="card in cards" :key="card.pathwayId" class="pathway-card">
+        <article
+          v-for="card in cards"
+          :key="card.pathwayId"
+          class="pathway-card"
+        >
           <div class="pathway-card-head">
             <div>
               <span>{{ card.group }}</span>
               <h3>{{ card.name }}</h3>
             </div>
-            <el-tag :type="card.statusType" effect="light">{{ card.statusLabel }}</el-tag>
+            <el-tag :type="card.statusType" effect="light">{{
+              card.statusLabel
+            }}</el-tag>
           </div>
           <p class="pathway-card-summary">{{ card.summary }}</p>
           <div class="pathway-card-meta">
@@ -133,13 +173,23 @@
             <div>
               <h4>关键要求</h4>
               <ul>
-                <li v-for="item in card.keyRequirements.slice(0, 3)" :key="item">{{ item }}</li>
+                <li
+                  v-for="item in card.keyRequirements.slice(0, 3)"
+                  :key="item"
+                >
+                  {{ item }}
+                </li>
               </ul>
             </div>
             <div>
               <h4>缺失材料</h4>
               <ul v-if="card.missingMaterials.length">
-                <li v-for="item in card.missingMaterials.slice(0, 3)" :key="item">{{ item }}</li>
+                <li
+                  v-for="item in card.missingMaterials.slice(0, 3)"
+                  :key="item"
+                >
+                  {{ item }}
+                </li>
               </ul>
               <p v-else class="muted-copy">当前没有系统识别到的材料缺口。</p>
             </div>
@@ -153,7 +203,11 @@
           />
           <div class="pathway-card-actions">
             <el-button @click="openPathwayDetail(card)">查看详情</el-button>
-            <el-button v-if="card.canOpenRecommendation" type="primary" @click="openRecommendationWorkbench">
+            <el-button
+              v-if="card.canOpenRecommendation"
+              type="primary"
+              @click="openRecommendationWorkbench"
+            >
               进入普通类推荐
             </el-button>
           </div>
@@ -171,8 +225,14 @@
           </div>
         </div>
         <div class="pathway-action-list">
-          <article v-for="item in nextActions" :key="item.key" class="pathway-action-card">
-            <el-tag :type="formatPathwayStatusTone(item.tone)" effect="light">{{ item.title }}</el-tag>
+          <article
+            v-for="item in nextActions"
+            :key="item.key"
+            class="pathway-action-card"
+          >
+            <el-tag :type="formatPathwayStatusTone(item.tone)" effect="light">{{
+              item.title
+            }}</el-tag>
             <p>{{ item.detail }}</p>
           </article>
         </div>
@@ -182,9 +242,14 @@
         <div class="section-head compact">
           <div>
             <h3>2026 数据发布与 P0 风险</h3>
-            <p>普通类正式计划、一分一段、省控线和投档结果要按官方发布状态理解。</p>
+            <p>
+              普通类正式计划、一分一段、省控线和投档结果要按官方发布状态理解。
+            </p>
           </div>
-          <el-tag :type="dataHealth?.gaps.length ? 'warning' : 'success'" effect="light">
+          <el-tag
+            :type="dataHealth?.gaps.length ? 'warning' : 'success'"
+            effect="light"
+          >
             {{ dataHealth?.summary || "待检查" }}
           </el-tag>
         </div>
@@ -193,14 +258,22 @@
             <el-table-column label="数据项" prop="label" min-width="160" />
             <el-table-column label="状态" width="140">
               <template #default="{ row }">
-                <el-tag :type="publicationTagType(row.status)" effect="light">{{ row.status_label }}</el-tag>
+                <el-tag :type="publicationTagType(row.status)" effect="light">{{
+                  row.status_label
+                }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="下一步" prop="action_label" min-width="220" />
+            <el-table-column
+              label="下一步"
+              prop="action_label"
+              min-width="220"
+            />
           </el-table>
         </div>
         <ul v-if="dataHealth?.gaps.length" class="pathway-risk-list">
-          <li v-for="gap in dataHealth.gaps.slice(0, 5)" :key="gap">{{ gap }}</li>
+          <li v-for="gap in dataHealth.gaps.slice(0, 5)" :key="gap">
+            {{ gap }}
+          </li>
         </ul>
       </article>
     </section>
@@ -213,36 +286,65 @@
     >
       <div v-if="selectedCard" class="pathway-detail-drawer">
         <div class="pathway-detail-head">
-          <el-tag :type="selectedCard.statusType" effect="light">{{ selectedCard.statusLabel }}</el-tag>
+          <el-tag :type="selectedCard.statusType" effect="light">{{
+            selectedCard.statusLabel
+          }}</el-tag>
           <el-tag effect="plain">{{ selectedCard.depthLabel }}</el-tag>
         </div>
         <p>{{ selectedCard.depthHelp }}</p>
         <el-descriptions :column="1" border>
-          <el-descriptions-item label="适用对象">{{ selectedCard.applicableObject }}</el-descriptions-item>
-          <el-descriptions-item label="志愿方式">{{ selectedCard.volunteerMode }}</el-descriptions-item>
-          <el-descriptions-item label="评估分">{{ selectedCard.score ?? "-" }}</el-descriptions-item>
-          <el-descriptions-item label="来源编号">{{ selectedCard.pathway?.source_document_id ?? "待追溯" }}</el-descriptions-item>
+          <el-descriptions-item label="适用对象">{{
+            selectedCard.applicableObject
+          }}</el-descriptions-item>
+          <el-descriptions-item label="志愿方式">{{
+            selectedCard.volunteerMode
+          }}</el-descriptions-item>
+          <el-descriptions-item label="评估分">{{
+            selectedCard.score ?? "-"
+          }}</el-descriptions-item>
+          <el-descriptions-item label="来源编号">{{
+            selectedCard.pathway?.source_document_id ?? "待追溯"
+          }}</el-descriptions-item>
         </el-descriptions>
 
         <section class="pathway-detail-section">
           <h4>规则命中情况</h4>
           <div class="pathway-rule-group">
             <strong>已满足</strong>
-            <p v-if="!selectedCard.evaluation.matched_rules_json.length" class="muted-copy">暂无已满足规则。</p>
+            <p
+              v-if="!selectedCard.evaluation.matched_rules_json.length"
+              class="muted-copy"
+            >
+              暂无已满足规则。
+            </p>
             <ul>
-              <li v-for="rule in selectedCard.evaluation.matched_rules_json" :key="rule.rule_code">{{ formatRuleLine(rule) }}</li>
+              <li
+                v-for="rule in selectedCard.evaluation.matched_rules_json"
+                :key="rule.rule_code"
+              >
+                {{ formatRuleLine(rule) }}
+              </li>
             </ul>
           </div>
           <div class="pathway-rule-group">
             <strong>不满足或信息不足</strong>
             <p
-              v-if="!selectedCard.evaluation.failed_rules_json.length && !selectedCard.evaluation.warning_rules_json.length"
+              v-if="
+                !selectedCard.evaluation.failed_rules_json.length &&
+                !selectedCard.evaluation.warning_rules_json.length
+              "
               class="muted-copy"
             >
               暂无硬性不满足项。
             </p>
             <ul>
-              <li v-for="rule in [...selectedCard.evaluation.failed_rules_json, ...selectedCard.evaluation.warning_rules_json]" :key="rule.rule_code">
+              <li
+                v-for="rule in [
+                  ...selectedCard.evaluation.failed_rules_json,
+                  ...selectedCard.evaluation.warning_rules_json,
+                ]"
+                :key="rule.rule_code"
+              >
                 {{ formatRuleLine(rule) }}
               </li>
             </ul>
@@ -252,8 +354,14 @@
         <section class="pathway-detail-section">
           <h4>材料缺口</h4>
           <ul v-if="selectedCard.evaluation.missing_materials_json.length">
-            <li v-for="item in selectedCard.evaluation.missing_materials_json" :key="`${item.rule_code}-${item.material_key}`">
-              {{ item.material_label || formatPathwayMaterialKey(item.material_key || item.rule_code) }}：{{ item.next_action || item.message || "补齐后重新评估。" }}
+            <li
+              v-for="item in selectedCard.evaluation.missing_materials_json"
+              :key="`${item.rule_code}-${item.material_key}`"
+            >
+              {{
+                item.material_label ||
+                formatPathwayMaterialKey(item.material_key || item.rule_code)
+              }}：{{ item.next_action || item.message || "补齐后重新评估。" }}
             </li>
           </ul>
           <p v-else class="muted-copy">当前没有系统识别到的材料缺口。</p>
@@ -262,12 +370,14 @@
         <section class="pathway-detail-section">
           <h4>下一步</h4>
           <ul>
-            <li v-for="action in selectedCard.nextActions" :key="action">{{ action }}</li>
+            <li v-for="action in selectedCard.nextActions" :key="action">
+              {{ action }}
+            </li>
           </ul>
         </section>
       </div>
     </el-drawer>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
@@ -276,6 +386,10 @@ import ElMessage from "element-plus/es/components/message/index";
 import { useRoute, useRouter } from "vue-router";
 
 import { apiRequest, openFile } from "../api/client";
+import AppFilterBar from "../components/ui/AppFilterBar.vue";
+import AppPage from "../components/ui/AppPage.vue";
+import AppStatGrid from "../components/ui/AppStatGrid.vue";
+import type { PageMetaItem, StatCardItem } from "../components/ui/types";
 import {
   GAOKAO_PATHWAY_PRINT_STORAGE_PREFIX,
   buildGaokaoPathwayReportName,
@@ -330,20 +444,81 @@ const selectedCard = ref<PathwayCenterCard | null>(null);
 const exportingReport = ref(false);
 const generatingPlanningTasks = ref(false);
 
-const selectedStudent = computed(() => studentOptions.value.find((item) => item.id === selectedStudentId.value) ?? null);
-const cards = computed(() => buildPathwayCenterCards(evaluations.value, pathways.value));
-const profileSummary = computed(() => buildPathwayProfileSummary(profile.value));
-const aggregatedGaps = computed(() => collectStudentPathwayGaps(evaluations.value));
-const statusSummary = computed(() => summarizePathwayStatuses(evaluations.value));
-const statusSummaryCopy = computed(() => buildStatusSummaryCopy(statusSummary.value));
-const publicationHighlights = computed(() => buildPublicationStatusHighlights(dataHealth.value));
-const nextActions = computed(() => buildPathwayCenterActions(cards.value, aggregatedGaps.value, dataHealth.value));
+const selectedStudent = computed(
+  () =>
+    studentOptions.value.find((item) => item.id === selectedStudentId.value) ??
+    null,
+);
+const cards = computed(() =>
+  buildPathwayCenterCards(evaluations.value, pathways.value),
+);
+const profileSummary = computed(() =>
+  buildPathwayProfileSummary(profile.value),
+);
+const aggregatedGaps = computed(() =>
+  collectStudentPathwayGaps(evaluations.value),
+);
+const statusSummary = computed(() =>
+  summarizePathwayStatuses(evaluations.value),
+);
+const statusSummaryCopy = computed(() =>
+  buildStatusSummaryCopy(statusSummary.value),
+);
+const publicationHighlights = computed(() =>
+  buildPublicationStatusHighlights(dataHealth.value),
+);
+const nextActions = computed(() =>
+  buildPathwayCenterActions(
+    cards.value,
+    aggregatedGaps.value,
+    dataHealth.value,
+  ),
+);
+const pageMeta = computed<PageMetaItem[]>(() => [
+  { label: "学生", value: selectedStudent.value?.name || "未选择" },
+  { label: "目标年份", value: targetYear.value },
+  { label: "路径卡", value: cards.value.length },
+  { label: "P0 缺口", value: dataHealth.value?.gaps.length ?? "-" },
+]);
+const pageStatCards = computed<StatCardItem[]>(() => [
+  {
+    label: "路径卡",
+    value: cards.value.length,
+    help: statusSummaryCopy.value,
+    tone: cards.value.length ? "primary" : "neutral",
+  },
+  {
+    label: "材料缺口",
+    value: aggregatedGaps.value.length,
+    help: aggregatedGaps.value.length
+      ? "优先处理影响路径最多的材料。"
+      : "暂无集中材料缺口。",
+    tone: aggregatedGaps.value.length ? "warning" : "success",
+  },
+  {
+    label: "下一步行动",
+    value: nextActions.value.length,
+    help: "由路径评估、材料缺口和数据风险自动汇总。",
+    tone: nextActions.value.length ? "info" : "neutral",
+  },
+  {
+    label: "P0 缺口",
+    value: dataHealth.value?.gaps.length ?? "-",
+    help: dataHealth.value?.summary || "刷新后读取当前本地库状态。",
+    tone: dataHealth.value?.gaps.length ? "warning" : "success",
+  },
+]);
 
 async function loadStudents(): Promise<void> {
-  const payload = await apiRequest<StudentListResponse>("/api/students?page=1&page_size=1000");
+  const payload = await apiRequest<StudentListResponse>(
+    "/api/students?page=1&page_size=1000",
+  );
   studentOptions.value = payload.items;
   const queryStudentId = Number(route.query.student_id);
-  if (queryStudentId && payload.items.some((item) => item.id === queryStudentId)) {
+  if (
+    queryStudentId &&
+    payload.items.some((item) => item.id === queryStudentId)
+  ) {
     selectedStudentId.value = queryStudentId;
   } else if (!selectedStudentId.value && payload.items.length) {
     selectedStudentId.value = payload.items[0].id;
@@ -351,11 +526,15 @@ async function loadStudents(): Promise<void> {
 }
 
 async function loadPathways(): Promise<void> {
-  pathways.value = await apiRequest<GaokaoPathwayRead[]>("/api/gaokao/pathways?province=山东");
+  pathways.value = await apiRequest<GaokaoPathwayRead[]>(
+    "/api/gaokao/pathways?province=山东",
+  );
 }
 
 async function loadDataHealth(): Promise<void> {
-  dataHealth.value = await apiRequest<ShandongRecommendationDataHealth>("/api/gaokao/data-health");
+  dataHealth.value = await apiRequest<ShandongRecommendationDataHealth>(
+    "/api/gaokao/data-health",
+  );
 }
 
 async function refreshEvaluations(): Promise<void> {
@@ -374,7 +553,11 @@ async function refreshEvaluations(): Promise<void> {
     profile.value = payload.profile;
     evaluations.value = payload.evaluations;
   } catch (error) {
-    errorMessage.value = formatUserActionError("刷新山东升学路径评估", error, "先确认学生画像和路径规则已装载，再重新刷新。");
+    errorMessage.value = formatUserActionError(
+      "刷新山东升学路径评估",
+      error,
+      "先确认学生画像和路径规则已装载，再重新刷新。",
+    );
   } finally {
     evaluating.value = false;
   }
@@ -387,7 +570,11 @@ async function reloadAll(): Promise<void> {
     await Promise.all([loadStudents(), loadPathways(), loadDataHealth()]);
     await refreshEvaluations();
   } catch (error) {
-    errorMessage.value = formatUserActionError("加载山东升学方案中心", error, "确认本地服务已启动，再刷新本页。");
+    errorMessage.value = formatUserActionError(
+      "加载山东升学方案中心",
+      error,
+      "确认本地服务已启动，再刷新本页。",
+    );
   } finally {
     loading.value = false;
   }
@@ -404,7 +591,9 @@ function openStudentProfile(): void {
 
 function openRecommendationWorkbench(): void {
   router.push("/recommendations");
-  ElMessage.info("进入高考志愿页后，请打开“山东普通类推荐”页签继续查看冲稳保候选。");
+  ElMessage.info(
+    "进入高考志愿页后，请打开“山东普通类推荐”页签继续查看冲稳保候选。",
+  );
 }
 
 function openPathwayDetail(card: PathwayCenterCard): void {
@@ -431,7 +620,10 @@ function openPathwayReportPrintPreview(): void {
     return;
   }
   const storageKey = `${GAOKAO_PATHWAY_PRINT_STORAGE_PREFIX}${Date.now()}`;
-  window.localStorage.setItem(storageKey, JSON.stringify(buildCurrentReportPayload()));
+  window.localStorage.setItem(
+    storageKey,
+    JSON.stringify(buildCurrentReportPayload()),
+  );
   openFile(gaokaoPathwayPrintPreviewPath(storageKey));
 }
 
@@ -443,17 +635,26 @@ async function exportPathwayReport(): Promise<void> {
   try {
     exportingReport.value = true;
     const report = buildCurrentReportPayload();
-    const result = await apiRequest<ExportRecord>("/api/reports/gaokao-pathway/export", {
-      method: "POST",
-      body: JSON.stringify({
-        report_name: buildGaokaoPathwayReportName(report),
-        report,
-      }),
-    });
+    const result = await apiRequest<ExportRecord>(
+      "/api/reports/gaokao-pathway/export",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          report_name: buildGaokaoPathwayReportName(report),
+          report,
+        }),
+      },
+    );
     openFile(result.download_url);
     ElMessage.success("山东升学路径规划报告已生成");
   } catch (error) {
-    ElMessage.error(formatUserActionError("导出山东升学路径规划报告", error, "先确认路径评估结果仍在页面中，再重新点击导出。"));
+    ElMessage.error(
+      formatUserActionError(
+        "导出山东升学路径规划报告",
+        error,
+        "先确认路径评估结果仍在页面中，再重新点击导出。",
+      ),
+    );
   } finally {
     exportingReport.value = false;
   }
@@ -466,7 +667,10 @@ async function generatePlanningTasks(): Promise<void> {
   }
   try {
     generatingPlanningTasks.value = true;
-    const result = await apiRequest<{ created_count: number; skipped_count: number }>("/api/planning/tasks/bulk-create-from-pathway", {
+    const result = await apiRequest<{
+      created_count: number;
+      skipped_count: number;
+    }>("/api/planning/tasks/bulk-create-from-pathway", {
       method: "POST",
       body: JSON.stringify({
         student_id: selectedStudentId.value,
@@ -475,10 +679,18 @@ async function generatePlanningTasks(): Promise<void> {
         include_review_tasks: true,
       }),
     });
-    ElMessage.success(`已生成 ${result.created_count} 项规划任务，跳过 ${result.skipped_count} 项已有任务`);
+    ElMessage.success(
+      `已生成 ${result.created_count} 项规划任务，跳过 ${result.skipped_count} 项已有任务`,
+    );
     router.push(`/students/${selectedStudentId.value}?tab=planning`);
   } catch (error) {
-    ElMessage.error(formatUserActionError("生成升学规划任务", error, "请先确认学生画像和路径评估已加载，再重新生成。"));
+    ElMessage.error(
+      formatUserActionError(
+        "生成升学规划任务",
+        error,
+        "请先确认学生画像和路径评估已加载，再重新生成。",
+      ),
+    );
   } finally {
     generatingPlanningTasks.value = false;
   }
@@ -488,9 +700,15 @@ function formatRuleLine(rule: StudentPathwayRuleEvaluation): string {
   return rule.message ? `${rule.rule_name}：${rule.message}` : rule.rule_name;
 }
 
-function publicationTagType(status: string): "success" | "warning" | "danger" | "info" | "primary" {
+function publicationTagType(
+  status: string,
+): "success" | "warning" | "danger" | "info" | "primary" {
   if (status === "imported" || status === "published") return "success";
-  if (status === "pending_official_release" || status === "manual_review_required") return "warning";
+  if (
+    status === "pending_official_release" ||
+    status === "manual_review_required"
+  )
+    return "warning";
   if (status === "not_applicable") return "info";
   return "primary";
 }
@@ -503,15 +721,11 @@ onMounted(reloadAll);
   gap: 20px;
 }
 
-.pathway-filter-strip {
+.pathway-filter-grid {
   display: grid;
   grid-template-columns: minmax(260px, 1fr) 180px minmax(280px, 1.2fr);
   gap: 14px;
   align-items: end;
-  padding: 18px 20px;
-  border: 1px solid var(--border-soft);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.86);
 }
 
 .pathway-filter-field,
@@ -631,7 +845,11 @@ onMounted(reloadAll);
   padding: 20px;
   border: 1px solid rgba(121, 139, 156, 0.16);
   border-radius: 8px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 253, 0.96));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.98),
+    rgba(247, 250, 253, 0.96)
+  );
   box-shadow: var(--shadow-soft);
 }
 
@@ -744,7 +962,7 @@ onMounted(reloadAll);
 }
 
 @media (max-width: 960px) {
-  .pathway-filter-strip,
+  .pathway-filter-grid,
   .pathway-overview-grid,
   .pathway-bottom-grid,
   .pathway-card-body,

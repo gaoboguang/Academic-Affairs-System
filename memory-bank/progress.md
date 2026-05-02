@@ -8,6 +8,25 @@
 
 ## 2026-05-02 新增
 
+- 已完成全项目企业级中后台 UI 第三阶段重构：
+  - `TimetableWorkloadPage.vue`、`EvaluationQuantPage.vue`、`GaokaoPathwaysPage.vue`、`GaokaoDataPage.vue`、`RecommendationsPage.vue` 的大型业务页首屏已迁移到共享 UI 骨架
+  - 课表工作量页新增标准指标卡和统一 Tabs 分区，保留课表导入、规则配置、结果抽屉等既有业务组件
+  - 评教量化页把评教模板、评教批次、量化规则版本、量化记录改为统一指标卡，并用分区卡收纳操作提示和功能模块
+  - 山东升学方案中心把学生/年份选择改为 sticky 全局筛选区，并补路径卡、材料缺口、下一步行动、P0 缺口指标卡
+  - 高考数据页把总览和山东覆盖页的核心指标改为 `AppStatGrid`，保留证据链、审阅队列和覆盖矩阵业务结构
+  - 高考志愿工作台首屏改为统一 PageContainer、指标卡和 sticky 辅导条件筛选区，未改变推荐、志愿草稿、分页维护和懒加载口径
+  - 验证：`npm run frontend:lint` 通过；`npm run frontend:test` 为 `38 files / 188 tests passed`；`npm run frontend:build` 通过；`npm run e2e -- tests/e2e/recommendations.spec.ts tests/e2e/gaokao-volunteer.spec.ts tests/e2e/planning.spec.ts` 为 `21 passed`；`git diff --check` 通过
+
+- 已完成全项目企业级中后台 UI 第二阶段重构：
+  - 考试成绩中心、导入中心、教师中心、系统设置四个高频页面从旧式局部页面结构进一步迁移到共享 UI 骨架
+  - `ExamsPage.vue` 新增统一 PageContainer、指标卡、sticky 筛选区和表格外壳，考试列表与导入批次保持原业务操作不变
+  - `ImportCenterPage.vue` 新增统一指标卡、预检分区、模板分区和导入批次表格外壳，保留旧标题以兼容既有 E2E
+  - `TeachersPage.vue` 新增统一指标卡、sticky 筛选导入区和教师列表表格外壳
+  - `SystemToolsPage.vue` 统一页面头和指标卡，移除重复旧指标区，保留“备份数量”文案以兼容备份 E2E
+  - `AppStatGrid` / `AppStatCard` 保留 `metric-grid / stat-card / strong` 结构类，公共组件迁移后继续支持旧测试定位
+  - `styles/admin.css` 增强卡片、表格、Tabs、分区、sticky 筛选条和旧业务卡片视觉，使未逐页迁移的大型页面也呈现更明显的企业后台统一风格
+  - 验证：`npm run frontend:lint` 通过；`npm run frontend:test` 为 `38 files / 188 tests passed`；`npm run frontend:build` 通过；`npm run e2e -- tests/e2e/exams-analytics.spec.ts` 为 `3 passed`；`npm run e2e -- tests/e2e/system-backup.spec.ts` 为 `1 passed`；`npm run e2e -- tests/e2e/adviser-dashboard.spec.ts` 为 `1 passed`；`git diff --check` 通过
+
 - 已完成个人成绩分析报告 V1：
   - 学生分析接口新增相对评价指标和诊断输出：总分画像、目标线差距、Z/T 分、排名离差、同档均分差、历史波动、有效分差距、诊断标签、近 5 次趋势和行动建议
   - 有效分按“年级均分贡献”拆目标线，不新增数据库表；目标线继续复用 `score_target_line`，PR 值继续复用既有快照百分位

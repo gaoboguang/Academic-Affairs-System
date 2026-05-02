@@ -1,20 +1,11 @@
 <template>
-  <div class="page-shell">
-    <header class="page-header">
-      <div>
-        <div class="page-eyebrow">系统层 / 设置与修复</div>
-        <h2 class="page-title">系统设置</h2>
-        <p class="page-subtitle">
-          统一管理参数配置、模板、数据修复、备份恢复和审计日志，把系统层动作集中到一个页面。
-        </p>
-        <div class="page-chip-row">
-          <span class="page-chip"><strong>配置项</strong>{{ configItemCount }}</span>
-          <span class="page-chip"><strong>模板</strong>{{ templates.length }}</span>
-          <span class="page-chip"><strong>高风险问题</strong>{{ repairErrorCount }}</span>
-          <span class="page-chip"><strong>最近备份</strong>{{ latestBackupName }}</span>
-          <span class="page-chip"><strong>主库状态</strong>{{ safetyStatus?.sqlite_integrity ?? "待检查" }}</span>
-        </div>
-      </div>
+  <AppPage
+    title="系统设置"
+    eyebrow="系统层 / 设置与修复"
+    description="统一管理参数配置、模板、数据修复、备份恢复和审计日志，让系统级动作集中、可追溯、可回滚。"
+    :meta="systemPageMeta"
+  >
+    <template #actions>
       <div class="action-row">
         <el-button type="primary" :loading="creatingBackup" @click="createBackup">立即备份</el-button>
         <el-switch
@@ -24,41 +15,9 @@
           inactive-text="直接恢复"
         />
       </div>
-    </header>
+    </template>
 
-    <section class="overview-grid">
-      <article class="soft-card overview-panel">
-        <div class="overview-kicker">系统安全</div>
-        <h3>先备份，再修复，再执行恢复</h3>
-        <p>
-          参数、模板、数据修复、备份和审计日志放在同一页，核心目标是让每次系统级动作都可追溯、可回滚。
-        </p>
-      </article>
-      <article v-for="item in overviewCards" :key="item.label" class="soft-card overview-card" :class="item.tone">
-        <span>{{ item.label }}</span>
-        <strong>{{ item.value }}</strong>
-        <p>{{ item.help }}</p>
-      </article>
-    </section>
-
-    <section class="metric-grid">
-      <article class="soft-card stat-card">
-        <span>配置项</span>
-        <strong>{{ configItemCount }}</strong>
-      </article>
-      <article class="soft-card stat-card">
-        <span>模板文件</span>
-        <strong>{{ templates.length }}</strong>
-      </article>
-      <article class="soft-card stat-card">
-        <span>数据问题</span>
-        <strong>{{ repairScan?.issues.length ?? 0 }}</strong>
-      </article>
-      <article class="soft-card stat-card">
-        <span>备份数量</span>
-        <strong>{{ backups.length }}</strong>
-      </article>
-    </section>
+    <AppStatGrid :items="overviewCards" :columns="4" />
 
     <section class="soft-card panel-block safety-panel">
       <div class="section-head">
@@ -277,7 +236,7 @@
         </section>
       </el-tab-pane>
     </el-tabs>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
@@ -286,6 +245,7 @@ import ElMessage from "element-plus/es/components/message/index";
 import ElMessageBox from "element-plus/es/components/message-box/index";
 
 import { apiRequest, openFile } from "../api/client";
+import { AppPage, AppStatGrid, type PageMetaItem, type StatCardItem } from "../components/ui";
 
 interface BackupRecord {
   id: number;
@@ -400,30 +360,37 @@ const repairErrorCount = computed(
   () => repairScan.value?.issues.filter((item) => item.severity === "error").length ?? 0,
 );
 const latestBackupName = computed(() => backups.value[0]?.backup_name ?? "暂无");
-const overviewCards = computed(() => [
+const systemPageMeta = computed<PageMetaItem[]>(() => [
+  { label: "配置项", value: configItemCount.value },
+  { label: "模板", value: templates.value.length },
+  { label: "高风险问题", value: repairErrorCount.value },
+  { label: "最近备份", value: latestBackupName.value },
+  { label: "主库状态", value: safetyStatus.value?.sqlite_integrity ?? "待检查" },
+]);
+const overviewCards = computed<StatCardItem[]>(() => [
   {
-    label: "修复动作",
-    value: repairScan.value?.actions.length ?? 0,
-    help: "当前可直接执行的自动修复动作数量。",
-    tone: "tone-blue",
+    label: "配置项",
+    value: configItemCount.value,
+    help: "当前可在系统设置中维护的参数数量。",
+    tone: "primary",
   },
   {
-    label: "备份记录",
+    label: "模板文件",
+    value: templates.value.length,
+    help: "运行目录中可下载的导入模板。",
+    tone: "info",
+  },
+  {
+    label: "数据问题",
+    value: repairScan.value?.issues.length ?? 0,
+    help: "数据修复扫描发现的问题总数。",
+    tone: repairErrorCount.value ? "danger" : "success",
+  },
+  {
+    label: "备份数量",
     value: backups.value.length,
     help: "恢复前建议确认最近一次可用备份。",
-    tone: "tone-amber",
-  },
-  {
-    label: "审计日志",
-    value: auditLogs.value.length,
-    help: "最近 100 条系统级动作都会记录在这里。",
-    tone: "tone-slate",
-  },
-  {
-    label: "SQLite",
-    value: safetyStatus.value?.sqlite_integrity ?? "待检查",
-    help: "主库完整性检查结果，正常应为 ok。",
-    tone: safetyStatus.value?.sqlite_integrity === "ok" ? "tone-blue" : "tone-amber",
+    tone: backups.value.length ? "warning" : "neutral",
   },
 ]);
 const safetyCards = computed(() => [

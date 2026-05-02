@@ -2,6 +2,25 @@
 
 ## 当前状态
 
+- 2026-05-02 已完成全项目企业级中后台 UI 第三阶段重构，并连同第二阶段作为同一组 UI 阶段成果交付：
+  - 本轮继续只改前端展示层，不修改后端接口、业务计算、路由路径或真实 `data/app.db`
+  - `apps/frontend/src/pages/TimetableWorkloadPage.vue` 已接入 `AppPage + AppStatGrid + AppSectionCard`：首屏新增课表批次、规则项、附加项、结果教师四张标准指标卡，课表导入 / 规则附加项 / 工作量结果收进统一 Tabs 分区
+  - `apps/frontend/src/pages/EvaluationQuantPage.vue` 已接入 `AppPage + AppStatGrid + AppSectionCard`：评教模板、评教批次、量化规则版本、量化记录改为统一指标卡，操作提示和评教/量化模块进入统一分区卡
+  - `apps/frontend/src/pages/GaokaoPathwaysPage.vue` 已接入 `AppPage + AppFilterBar + AppStatGrid`：学生与目标年份选择改为 sticky 全局筛选区，路径卡、材料缺口、下一步行动、P0 缺口改为标准指标卡
+  - `apps/frontend/src/pages/GaokaoDataPage.vue` 已接入 `AppPage + AppStatGrid`：高考数据总览和山东覆盖页的核心指标改为统一指标卡，证据链、审阅队列和覆盖表格保持原业务结构
+  - `apps/frontend/src/pages/RecommendationsPage.vue` 已接入 `AppPage + AppStatGrid + AppFilterBar`：高考志愿工作台首屏指标改为标准卡片，当前辅导条件改为 sticky 筛选区；推荐、山东普通类、数据与规则的懒加载和分页逻辑保持不变
+  - 本轮已通过：`npm run frontend:lint`、`npm run frontend:test`（38 files / 188 tests）、`npm run frontend:build`、`npm run e2e -- tests/e2e/recommendations.spec.ts tests/e2e/gaokao-volunteer.spec.ts tests/e2e/planning.spec.ts`（21 passed）、`git diff --check`
+
+- 2026-05-02 已完成全项目企业级中后台 UI 第二阶段重构：
+  - 本轮继续只改前端展示层，不修改后端接口、业务计算、路由路径或真实 `data/app.db`
+  - `apps/frontend/src/pages/ExamsPage.vue` 已从旧式 `page-header / section` 改为 `AppPage + AppStatGrid + AppFilterBar + AppTableShell`：首屏新增考试总数、已发布考试、已配科目考试、成绩记录四张标准指标卡，筛选区改为 sticky，全量考试表格进入统一表格外壳
+  - `apps/frontend/src/pages/ImportCenterPage.vue` 已接入 `AppPage`、`AppStatGrid`、`AppSectionCard`、`AppTableShell`：保留原 E2E 依赖的页面主标题“统一查看模板、批次、错误报告和撤销说明”，新增导入批次、需复核批次、错误报告、模板入口四张指标卡，预检 / 模板 / 批次列表改为统一分区
+  - `apps/frontend/src/pages/TeachersPage.vue` 已接入 `AppPage`、`AppStatGrid`、`AppFilterBar`、`AppTableShell`：教师总数、学科覆盖、班主任、联系电话改为统一指标卡；筛选导入区 sticky；教师表格进入统一外壳
+  - `apps/frontend/src/pages/SystemToolsPage.vue` 已接入 `AppPage` 和 `AppStatGrid`，移除重复的旧指标区，保留“备份数量”指标文案以兼容 `system-backup` E2E
+  - `apps/frontend/src/components/ui/AppStatGrid.vue` / `AppStatCard.vue` 保留 `metric-grid / stat-card / strong` 结构类，确保既有 E2E 对指标卡的定位不被公共组件迁移破坏
+  - `apps/frontend/src/styles/admin.css` 已增强后台页视觉：页面 header、soft card、分区卡、表格壳、Tabs 容器、操作卡和 sticky 筛选条的背景、阴影、左侧强调线和密度更统一，未逐页迁移的大型页面也会获得更明显的企业后台质感
+  - 已通过：`npm run frontend:lint`、`npm run frontend:test`（38 files / 188 tests）、`npm run frontend:build`、`npm run e2e -- tests/e2e/exams-analytics.spec.ts`（3 passed）、`npm run e2e -- tests/e2e/system-backup.spec.ts`（1 passed）、`npm run e2e -- tests/e2e/adviser-dashboard.spec.ts`（1 passed）、`git diff --check`
+
 - 2026-05-02 已完成全项目企业级中后台 UI 第一轮重构：
   - 前端新增共享 UI 基础层 `apps/frontend/src/components/ui/`：`AppPage`、`AppFilterBar`、`AppStatGrid`、`AppStatCard`、`AppSectionCard`、`AppTableShell`、`AppPrintLayout` 与共享展示类型
   - `apps/frontend/src/styles.css` 已拆为 `styles/tokens.css`、`base.css`、`admin.css`、`element-plus.css`、`print.css`，用统一 tokens 收敛颜色、字号、圆角、阴影、表格、Tabs、打印页和历史 `overview/stat` 类

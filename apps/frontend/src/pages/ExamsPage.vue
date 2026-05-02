@@ -1,17 +1,16 @@
 <template>
-  <div class="page-shell">
-    <header class="page-header">
-      <div>
-        <h2 class="page-title">考试成绩中心</h2>
-        <p class="page-subtitle">
-          当前支持考试维护、考试科目配置、成绩模板下载、Excel 导入、快照重建和导入批次查看。
-        </p>
-      </div>
+  <AppPage
+    title="考试成绩中心"
+    eyebrow="考试治理 / 成绩中心"
+    description="集中维护考试、科目、成绩导入和快照重建；先完成考试配置，再进入分析中心查看口径与结果。"
+    :meta="examPageMeta"
+  >
+    <template #actions>
       <div class="action-row">
         <el-button @click="downloadTemplate">成绩模板下载</el-button>
         <el-button type="primary" @click="openCreate">新建考试</el-button>
       </div>
-    </header>
+    </template>
 
     <el-alert
       v-for="item in scoreReadinessMessages"
@@ -23,7 +22,13 @@
       :title="item"
     />
 
-    <section class="soft-card panel-block">
+    <AppStatGrid :items="examStatCards" :columns="4" />
+
+    <AppFilterBar
+      title="全局筛选"
+      description="按考试名称和学期快速定位，查询结果会同步到下方考试列表。"
+      sticky
+    >
       <div class="filter-grid">
         <el-input v-model="filters.name" placeholder="按考试名称筛选" />
         <el-select v-model="filters.semester_id" clearable placeholder="选择学期">
@@ -35,13 +40,16 @@
           />
         </el-select>
       </div>
-      <div class="action-row import-row">
+      <template #actions>
         <el-button type="primary" @click="loadExams">查询</el-button>
         <el-button @click="resetFilters">重置</el-button>
-      </div>
-    </section>
+      </template>
+    </AppFilterBar>
 
-    <section class="soft-card panel-block">
+    <AppTableShell
+      title="考试列表"
+      description="每场考试的科目配置、成绩导入和快照重建都从这里进入。"
+    >
       <el-table :data="exams.items" stripe>
         <el-table-column label="考试名称" prop="name" min-width="180" />
         <el-table-column label="类型" prop="exam_type" width="100" />
@@ -71,7 +79,7 @@
           </template>
         </el-table-column>
       </el-table>
-    </section>
+    </AppTableShell>
 
     <el-dialog
       v-model="dialogVisible"
@@ -417,27 +425,29 @@
       </section>
 
       <ImportFeedbackPanel :result="importResult" />
-      <el-table :data="scoreBatches" stripe style="margin-top: 16px">
-        <el-table-column label="批次 ID" prop="id" width="90" />
-        <el-table-column label="来源文件" prop="source_filename" min-width="180" />
-        <el-table-column label="导入时间" prop="import_time" min-width="160" />
-        <el-table-column label="成功" prop="success_rows" width="90" />
-        <el-table-column label="失败" prop="failed_rows" width="90" />
-        <el-table-column label="识别方式" min-width="140">
-          <template #default="{ row }">
-            {{ formatScoreBatchImportMode(row) }}
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" width="110">
-          <template #default="{ row }">
-            <el-tag :type="scoreBatchStatusType(row.status)" effect="light">
-              {{ formatScoreBatchStatus(row.status) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-      </el-table>
+      <AppTableShell class="score-batch-shell" title="最近导入批次">
+        <el-table :data="scoreBatches" stripe>
+          <el-table-column label="批次 ID" prop="id" width="90" />
+          <el-table-column label="来源文件" prop="source_filename" min-width="180" />
+          <el-table-column label="导入时间" prop="import_time" min-width="160" />
+          <el-table-column label="成功" prop="success_rows" width="90" />
+          <el-table-column label="失败" prop="failed_rows" width="90" />
+          <el-table-column label="识别方式" min-width="140">
+            <template #default="{ row }">
+              {{ formatScoreBatchImportMode(row) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="110">
+            <template #default="{ row }">
+              <el-tag :type="scoreBatchStatusType(row.status)" effect="light">
+                {{ formatScoreBatchStatus(row.status) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+      </AppTableShell>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
@@ -466,6 +476,14 @@ import {
   type ScoreImportPreview,
   type ScoreImportProfile,
 } from "../components/exams/scoreImportMapping";
+import {
+  AppFilterBar,
+  AppPage,
+  AppStatGrid,
+  AppTableShell,
+  type PageMetaItem,
+  type StatCardItem,
+} from "../components/ui";
 import { useReferenceStore } from "../stores/reference";
 import { formatImportStatus, importStatusTagType, type ImportFeedbackResult } from "../utils/importFeedback";
 import { buildScoreReadinessMessages } from "../utils/scoreReadiness";
@@ -588,6 +606,41 @@ const scoreReadinessMessages = computed(() =>
     scoreRecordTotal: scoreRecordTotal.value,
   }),
 );
+const publishedExamCount = computed(() => exams.items.filter((item) => item.status === "published").length);
+const configuredSubjectCount = computed(() =>
+  exams.items.reduce((total, item) => total + (item.subject_count > 0 ? 1 : 0), 0),
+);
+const examPageMeta = computed<PageMetaItem[]>(() => [
+  { label: "考试", value: exams.total },
+  { label: "已发布", value: publishedExamCount.value },
+  { label: "成绩记录", value: scoreRecordTotal.value },
+]);
+const examStatCards = computed<StatCardItem[]>(() => [
+  {
+    label: "考试总数",
+    value: exams.total,
+    help: "当前考试成绩中心维护的考试数量。",
+    tone: "primary",
+  },
+  {
+    label: "已发布考试",
+    value: publishedExamCount.value,
+    help: "可用于正式分析与报表输出的考试。",
+    tone: "success",
+  },
+  {
+    label: "已配科目考试",
+    value: configuredSubjectCount.value,
+    help: "至少配置过一个考试科目的考试。",
+    tone: configuredSubjectCount.value === exams.items.length && exams.items.length ? "success" : "warning",
+  },
+  {
+    label: "成绩记录",
+    value: scoreRecordTotal.value,
+    help: "系统当前已保存的成绩明细记录。",
+    tone: scoreRecordTotal.value ? "info" : "neutral",
+  },
+]);
 const scoreImportStepActive = computed(() => {
   if (importResult.value) return 2;
   if (scorePreview.value) return 1;
@@ -1001,6 +1054,10 @@ onMounted(async () => {
 
 .score-import-steps {
   margin-bottom: 14px;
+}
+
+.score-batch-shell {
+  margin-top: 16px;
 }
 
 .score-mapping-panel {

@@ -1,9 +1,9 @@
 <template>
-  <el-card class="app-stat-card" :class="`tone-${tone ?? 'neutral'}`" shadow="never">
+  <el-card class="app-stat-card stat-card" :class="`tone-${tone ?? 'neutral'}`" shadow="never">
     <div class="app-stat-label">{{ label }}</div>
     <div class="app-stat-value">
       <span v-if="loading">...</span>
-      <span v-else>{{ value }}</span>
+      <strong v-else>{{ value }}</strong>
       <em v-if="suffix">{{ suffix }}</em>
     </div>
     <p v-if="help" class="app-stat-help">{{ help }}</p>

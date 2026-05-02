@@ -2,6 +2,44 @@
 
 ## 当前主线状态（2026-05-02）
 
+- 本轮已完成“全项目企业级中后台 UI 第三阶段重构”，用户提出“能不能一步完成”后，本轮按一个可验证阶段连续交付：
+  - 本轮连同第二阶段改动一起处于同一工作区变更中，目标是提交一组完整的 UI 阶段成果
+  - `apps/frontend/src/pages/TimetableWorkloadPage.vue`：接入 `AppPage`、`AppStatGrid`、`AppSectionCard`；新增课表批次、规则项、附加项、结果教师四张标准指标卡；课表导入、规则附加项、工作量结果保留在统一 Tabs 分区内
+  - `apps/frontend/src/pages/EvaluationQuantPage.vue`：接入 `AppPage`、`AppStatGrid`、`AppSectionCard`；评教模板、评教批次、量化规则版本、量化记录改为统一指标卡；操作提示和评教/量化模块进入统一分区卡
+  - `apps/frontend/src/pages/GaokaoPathwaysPage.vue`：接入 `AppPage`、`AppFilterBar`、`AppStatGrid`；学生与目标年份改为 sticky 全局筛选区；路径卡、材料缺口、下一步行动、P0 缺口改为标准指标卡
+  - `apps/frontend/src/pages/GaokaoDataPage.vue`：接入 `AppPage`、`AppStatGrid`；总览和山东覆盖的核心指标改为统一指标卡；证据链、审阅队列、覆盖矩阵保持原结构
+  - `apps/frontend/src/pages/RecommendationsPage.vue`：接入 `AppPage`、`AppStatGrid`、`AppFilterBar`；高考志愿工作台首屏指标改为标准卡片；当前辅导条件改为 sticky 筛选区；推荐/志愿草稿/分页维护/懒加载逻辑未改
+  - 本轮只改前端展示层和 memory-bank，不改后端 API、数据库、业务算法、路由路径或真实 `data/app.db`
+- 第三阶段验证已通过：
+  - `npm run frontend:lint`
+  - `npm run frontend:test`：`38 files / 188 tests passed`
+  - `npm run frontend:build`
+  - `npm run e2e -- tests/e2e/recommendations.spec.ts tests/e2e/gaokao-volunteer.spec.ts tests/e2e/planning.spec.ts`：`21 passed`
+  - `git diff --check`
+- 后续建议：
+  - 可进入第四阶段处理剩余较旧页面：`BaseDataPage.vue`、`GrowthArchivePage.vue`、`StudentDetailPage.vue`、`TeacherDetailPage.vue`、各打印页逐步替换 `AppPrintLayout`
+  - 若用户要求“最终全量验收”，下一步跑完整 `npm run check:all`
+
+- 本轮已完成“全项目企业级中后台 UI 第二阶段重构”：
+  - 目标是回应“第一轮 UI 变化不够明显”的反馈，本轮不只套外层容器，而是把高频页面内部结构迁移到共享 UI 组件
+  - `apps/frontend/src/pages/ExamsPage.vue`：接入 `AppPage`、`AppStatGrid`、`AppFilterBar`、`AppTableShell`；新增考试总数、已发布考试、已配科目考试、成绩记录四张指标卡；筛选区 sticky；考试列表统一表格外壳
+  - `apps/frontend/src/pages/ImportCenterPage.vue`：接入 `AppPage`、`AppStatGrid`、`AppSectionCard`、`AppTableShell`；新增导入批次、需复核批次、错误报告、模板入口指标卡；预检 / 模板 / 批次列表统一分区；页面主标题保留“统一查看模板、批次、错误报告和撤销说明”以兼容 `adviser-dashboard` E2E
+  - `apps/frontend/src/pages/TeachersPage.vue`：接入 `AppPage`、`AppStatGrid`、`AppFilterBar`、`AppTableShell`；教师总数、学科覆盖、班主任、联系电话改为统一指标卡；筛选导入区 sticky；教师表格统一外壳
+  - `apps/frontend/src/pages/SystemToolsPage.vue`：接入 `AppPage` 和 `AppStatGrid`；移除重复旧指标区；保留“备份数量”指标文案以兼容 `system-backup` E2E
+  - `apps/frontend/src/components/ui/AppStatGrid.vue` / `AppStatCard.vue`：保留 `metric-grid / stat-card / strong` 结构类，避免公共组件迁移破坏旧 E2E 对指标卡的 DOM 定位
+  - `apps/frontend/src/styles/admin.css`：增强页面 header、soft card、分区卡、表格壳、Tabs 容器、操作卡和 sticky 筛选条的企业后台视觉；未逐页迁移的大型页面也会被全局样式拉齐
+  - 本轮只改前端展示层和 memory-bank，不改后端 API、数据库、业务算法、路由路径或真实 `data/app.db`
+- 第二阶段验证已通过：
+  - `npm run frontend:lint`
+  - `npm run frontend:test`：`38 files / 188 tests passed`
+  - `npm run frontend:build`
+  - `npm run e2e -- tests/e2e/exams-analytics.spec.ts`：`3 passed`
+  - `npm run e2e -- tests/e2e/system-backup.spec.ts`：`1 passed`
+  - `npm run e2e -- tests/e2e/adviser-dashboard.spec.ts`：`1 passed`
+  - `git diff --check`
+- 历史备注：
+  - 第二阶段完成时曾建议第三阶段处理大型高风险页面；本轮已完成该第三阶段，后续应转入第四阶段剩余旧页面和打印页统一
+
 - 本轮已完成“全项目企业级中后台 UI 第一轮重构”：
   - 新增公共 UI 组件层：`apps/frontend/src/components/ui/`，包含页面容器、sticky 筛选条、指标卡栅格、区块卡、表格壳、打印布局和共享类型
   - 新增样式分层：`apps/frontend/src/styles/tokens.css`、`base.css`、`admin.css`、`element-plus.css`、`print.css`；`apps/frontend/src/styles.css` 只负责导入这些层

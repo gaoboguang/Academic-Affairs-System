@@ -1,34 +1,37 @@
 <template>
-  <div class="page-shell">
-    <header class="page-header">
-      <div>
-        <div class="page-eyebrow">高考志愿 / 教师工作台</div>
-        <h2 class="page-title">高考志愿工作台</h2>
-        <p class="page-subtitle">
-          围绕教师的一次志愿辅导流程组织：选学生、刷候选、排草稿、查风险、保存或导出。
-        </p>
-        <div class="page-chip-row recommendation-chip-row">
-          <span v-for="item in summaryCards" :key="item.label" class="page-chip">
-            <strong>{{ item.label }}</strong>{{ item.value }}
-          </span>
-        </div>
-      </div>
+  <AppPage
+    eyebrow="高考志愿 / 教师工作台"
+    title="高考志愿工作台"
+    description="围绕教师的一次志愿辅导流程组织：选学生、刷候选、排草稿、查风险、保存或导出。"
+    :meta="pageMeta"
+  >
+    <template #actions>
       <div class="action-row">
-        <el-button @click="$router.push('/gaokao-pathways')">升学方案中心</el-button>
+        <el-button @click="$router.push('/gaokao-pathways')"
+          >升学方案中心</el-button
+        >
         <el-button @click="activeTab = 'data-health'">数据健康</el-button>
         <el-button @click="activeTab = 'colleges'">打开数据与规则</el-button>
-        <el-button type="primary" @click="activeTab = 'volunteer-workbench'">回到工作台</el-button>
+        <el-button type="primary" @click="activeTab = 'volunteer-workbench'"
+          >回到工作台</el-button
+        >
       </div>
-    </header>
+    </template>
+
+    <AppStatGrid :items="pageStatCards" :columns="4" />
 
     <el-collapse class="risk-review-collapse">
       <el-collapse-item name="risk-review">
         <template #title>
           <span class="risk-review-title">数据风险与人工复核</span>
-          <span class="risk-review-count">{{ recommendationGlobalRiskNotices.length }} 条</span>
+          <span class="risk-review-count"
+            >{{ recommendationGlobalRiskNotices.length }} 条</span
+          >
         </template>
         <ul class="risk-review-list">
-          <li v-for="notice in recommendationGlobalRiskNotices" :key="notice">{{ notice }}</li>
+          <li v-for="notice in recommendationGlobalRiskNotices" :key="notice">
+            {{ notice }}
+          </li>
         </ul>
       </el-collapse-item>
     </el-collapse>
@@ -47,14 +50,21 @@
       </button>
     </nav>
 
-    <section v-if="activePrimarySection === 'workbench'" class="recommendation-section-stack">
-      <div class="soft-card command-bar">
-        <div class="command-copy">
-          <strong>当前辅导条件</strong>
-          <p>先选学生和考试，再刷新候选池；草稿保存后可打印或导出。</p>
-        </div>
+    <section
+      v-if="activePrimarySection === 'workbench'"
+      class="recommendation-section-stack"
+    >
+      <AppFilterBar
+        title="当前辅导条件"
+        description="先选学生和考试，再刷新候选池；草稿保存后可打印或导出。"
+        sticky
+      >
         <div class="command-fields">
-          <el-select v-model="volunteerWorkbenchForm.student_id" filterable placeholder="学生">
+          <el-select
+            v-model="volunteerWorkbenchForm.student_id"
+            filterable
+            placeholder="学生"
+          >
             <el-option
               v-for="student in studentOptions"
               :key="student.id"
@@ -62,43 +72,127 @@
               :value="student.id"
             />
           </el-select>
-          <el-select v-model="volunteerWorkbenchForm.exam_id" filterable placeholder="参考考试">
-            <el-option v-for="exam in examOptions" :key="exam.id" :label="exam.name" :value="exam.id" />
+          <el-select
+            v-model="volunteerWorkbenchForm.exam_id"
+            filterable
+            placeholder="参考考试"
+          >
+            <el-option
+              v-for="exam in examOptions"
+              :key="exam.id"
+              :label="exam.name"
+              :value="exam.id"
+            />
           </el-select>
-          <el-select v-model="volunteerWorkbenchForm.province" filterable placeholder="省份">
-            <el-option v-for="province in provinceOptions" :key="province" :label="province" :value="province" />
+          <el-select
+            v-model="volunteerWorkbenchForm.province"
+            filterable
+            placeholder="省份"
+          >
+            <el-option
+              v-for="province in provinceOptions"
+              :key="province"
+              :label="province"
+              :value="province"
+            />
           </el-select>
-          <el-select v-model="volunteerWorkbenchForm.target_year" filterable placeholder="年份">
-            <el-option v-for="year in workbenchYearOptions" :key="year" :label="String(year)" :value="year" />
+          <el-select
+            v-model="volunteerWorkbenchForm.target_year"
+            filterable
+            placeholder="年份"
+          >
+            <el-option
+              v-for="year in workbenchYearOptions"
+              :key="year"
+              :label="String(year)"
+              :value="year"
+            />
           </el-select>
-          <el-select v-model="volunteerWorkbenchForm.batch" clearable filterable placeholder="批次">
-            <el-option v-for="batch in workbenchBatchOptions" :key="batch" :label="batch" :value="batch" />
+          <el-select
+            v-model="volunteerWorkbenchForm.batch"
+            clearable
+            filterable
+            placeholder="批次"
+          >
+            <el-option
+              v-for="batch in workbenchBatchOptions"
+              :key="batch"
+              :label="batch"
+              :value="batch"
+            />
           </el-select>
-          <el-select v-model="volunteerWorkbenchForm.exam_mode" clearable filterable placeholder="考试/分数模式">
-            <el-option v-for="mode in workbenchExamModeOptions" :key="mode" :label="mode" :value="mode" />
+          <el-select
+            v-model="volunteerWorkbenchForm.exam_mode"
+            clearable
+            filterable
+            placeholder="考试/分数模式"
+          >
+            <el-option
+              v-for="mode in workbenchExamModeOptions"
+              :key="mode"
+              :label="mode"
+              :value="mode"
+            />
           </el-select>
-          <el-select v-model="volunteerWorkbenchForm.score_input_mode" placeholder="分数输入">
-            <el-option v-for="item in scoreInputModeOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <el-select
+            v-model="volunteerWorkbenchForm.score_input_mode"
+            placeholder="分数输入"
+          >
+            <el-option
+              v-for="item in scoreInputModeOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
-          <el-button type="primary" :loading="workbenchLoading" @click="loadVolunteerWorkbenchPreview">刷新候选池</el-button>
+          <el-button
+            type="primary"
+            :loading="workbenchLoading"
+            @click="loadVolunteerWorkbenchPreview"
+            >刷新候选池</el-button
+          >
         </div>
-      </div>
+      </AppFilterBar>
 
       <div class="workbench-priority-grid">
         <article class="soft-card priority-card">
           <span>学生画像与偏好</span>
-          <strong>{{ workbenchExplanation.items[0]?.value || "未选择学生" }}</strong>
-          <p>{{ studentCareerPreference ? "已读取学生职业意向" : "可在工作台内补充职业方向、行业和岗位偏好" }}</p>
+          <strong>{{
+            workbenchExplanation.items[0]?.value || "未选择学生"
+          }}</strong>
+          <p>
+            {{
+              studentCareerPreference
+                ? "已读取学生职业意向"
+                : "可在工作台内补充职业方向、行业和岗位偏好"
+            }}
+          </p>
         </article>
         <article class="soft-card priority-card">
           <span>候选池 / 冲稳保</span>
-          <strong>{{ workbenchPreview ? `${workbenchPreview.returned_candidate_count ?? workbenchPreview.candidates.length} / ${workbenchPreview.candidate_count}` : "待刷新" }}</strong>
-          <p>{{ workbenchPreview?.is_candidate_truncated ? "结果已截断，请继续缩小条件" : "刷新后展示冲刺、稳妥和保底候选" }}</p>
+          <strong>{{
+            workbenchPreview
+              ? `${workbenchPreview.returned_candidate_count ?? workbenchPreview.candidates.length} / ${workbenchPreview.candidate_count}`
+              : "待刷新"
+          }}</strong>
+          <p>
+            {{
+              workbenchPreview?.is_candidate_truncated
+                ? "结果已截断，请继续缩小条件"
+                : "刷新后展示冲刺、稳妥和保底候选"
+            }}
+          </p>
         </article>
         <article class="soft-card priority-card">
           <span>志愿草稿篮</span>
           <strong>{{ volunteerDraft.length }} 条</strong>
-          <p>{{ remainingVolunteerSlots === null ? "等待命中省份规则" : `剩余 ${remainingVolunteerSlots} 个志愿位` }}</p>
+          <p>
+            {{
+              remainingVolunteerSlots === null
+                ? "等待命中省份规则"
+                : `剩余 ${remainingVolunteerSlots} 个志愿位`
+            }}
+          </p>
         </article>
       </div>
 
@@ -241,7 +335,9 @@
             @generate="generateShandongRecommendation"
             @reset="resetShandongRecommendation"
             @load-data-health="loadShandongDataHealth"
-            @sync-from-recommendation="syncShandongRecommendationFromRecommendation"
+            @sync-from-recommendation="
+              syncShandongRecommendationFromRecommendation
+            "
             @print-report="openShandongRecommendationPrintPreview"
             @export-report="exportShandongRecommendationReport"
           />
@@ -249,7 +345,10 @@
       </el-tabs>
     </section>
 
-    <section v-else-if="activePrimarySection === 'history'" class="history-layout">
+    <section
+      v-else-if="activePrimarySection === 'history'"
+      class="history-layout"
+    >
       <RecommendationHistoryPanel
         :history-items="historyItems"
         :student-options="studentOptions"
@@ -285,164 +384,166 @@
       />
     </section>
 
-    <section v-else-if="activePrimarySection === 'data-rules'" class="recommendation-section-stack">
+    <section
+      v-else-if="activePrimarySection === 'data-rules'"
+      class="recommendation-section-stack"
+    >
       <el-tabs v-model="activeTab" class="secondary-tabs data-rules-tabs">
         <el-tab-pane label="院校库" name="colleges">
-        <RecommendationCollegesPanel
-          :colleges="colleges"
-          :filters="collegeFilters"
-          :pagination="collegePagination"
-          :province-options="provinceOptions"
-          @load="loadColleges({ resetPage: true })"
-          @reset="resetCollegeFilters"
-          @page-change="handleCollegePageChange"
-          @page-size-change="handleCollegePageSizeChange"
-          @create="openCreateCollege"
-          @edit="openEditCollege"
-        />
-      </el-tab-pane>
+          <RecommendationCollegesPanel
+            :colleges="colleges"
+            :filters="collegeFilters"
+            :pagination="collegePagination"
+            :province-options="provinceOptions"
+            @load="loadColleges({ resetPage: true })"
+            @reset="resetCollegeFilters"
+            @page-change="handleCollegePageChange"
+            @page-size-change="handleCollegePageSizeChange"
+            @create="openCreateCollege"
+            @edit="openEditCollege"
+          />
+        </el-tab-pane>
 
-      <el-tab-pane label="专业库" name="majors">
-        <RecommendationMajorsPanel
-          :majors="majors"
-          :filters="majorFilters"
-          :pagination="majorPagination"
-          @load="loadMajors({ resetPage: true })"
-          @reset="resetMajorFilters"
-          @page-change="handleMajorPageChange"
-          @page-size-change="handleMajorPageSizeChange"
-          @create="openCreateMajor"
-          @edit="openEditMajor"
-        />
-      </el-tab-pane>
+        <el-tab-pane label="专业库" name="majors">
+          <RecommendationMajorsPanel
+            :majors="majors"
+            :filters="majorFilters"
+            :pagination="majorPagination"
+            @load="loadMajors({ resetPage: true })"
+            @reset="resetMajorFilters"
+            @page-change="handleMajorPageChange"
+            @page-size-change="handleMajorPageSizeChange"
+            @create="openCreateMajor"
+            @edit="openEditMajor"
+          />
+        </el-tab-pane>
 
-      <el-tab-pane label="就业方向库" name="employment-directions">
-        <RecommendationEmploymentDirectionsPanel
-          :directions="employmentDirections"
-          :filters="employmentDirectionFilters"
-          :category-options="employmentDirectionCategoryFilterOptions"
-          @load="loadEmploymentDirections"
-          @reset="resetEmploymentDirectionFilters"
-          @create="openCreateEmploymentDirection"
-          @edit="openEditEmploymentDirection"
-        />
-      </el-tab-pane>
+        <el-tab-pane label="就业方向库" name="employment-directions">
+          <RecommendationEmploymentDirectionsPanel
+            :directions="employmentDirections"
+            :filters="employmentDirectionFilters"
+            :category-options="employmentDirectionCategoryFilterOptions"
+            @load="loadEmploymentDirections"
+            @reset="resetEmploymentDirectionFilters"
+            @create="openCreateEmploymentDirection"
+            @edit="openEditEmploymentDirection"
+          />
+        </el-tab-pane>
 
-      <el-tab-pane label="专业就业映射" name="major-employment-maps">
-        <RecommendationMajorEmploymentMappingsPanel
-          :mappings="majorEmploymentMappings"
-          :filters="majorEmploymentMappingFilters"
-          :major-options="majorDirectory"
-          :direction-options="employmentDirectionOptions"
-          :strength-options="employmentMappingStrengthOptions"
-          :pagination="majorEmploymentMappingPagination"
-          @load="loadMajorEmploymentMappings({ resetPage: true })"
-          @reset="resetMajorEmploymentMappingFilters"
-          @page-change="handleMajorEmploymentMappingPageChange"
-          @page-size-change="handleMajorEmploymentMappingPageSizeChange"
-          @create="openCreateMajorEmploymentMapping"
-          @edit="openEditMajorEmploymentMapping"
-        />
-      </el-tab-pane>
+        <el-tab-pane label="专业就业映射" name="major-employment-maps">
+          <RecommendationMajorEmploymentMappingsPanel
+            :mappings="majorEmploymentMappings"
+            :filters="majorEmploymentMappingFilters"
+            :major-options="majorDirectory"
+            :direction-options="employmentDirectionOptions"
+            :strength-options="employmentMappingStrengthOptions"
+            :pagination="majorEmploymentMappingPagination"
+            @load="loadMajorEmploymentMappings({ resetPage: true })"
+            @reset="resetMajorEmploymentMappingFilters"
+            @page-change="handleMajorEmploymentMappingPageChange"
+            @page-size-change="handleMajorEmploymentMappingPageSizeChange"
+            @create="openCreateMajorEmploymentMapping"
+            @edit="openEditMajorEmploymentMapping"
+          />
+        </el-tab-pane>
 
-      <el-tab-pane label="招生计划库" name="enrollment-plans">
-        <RecommendationEnrollmentPlansPanel
-          :enrollment-plans="enrollmentPlans"
-          :filters="enrollmentPlanFilters"
-          :year-options="planYearOptions"
-          :province-options="provinceOptions"
-          :batch-options="batchOptions"
-          :college-options="collegeDirectory"
-          :student-type-options="recommendationStudentTypeOptions"
-          :enrollment-plan-import-result="enrollmentPlanImportResult"
-          :pagination="enrollmentPlanPagination"
-          @download-template="downloadEnrollmentPlanTemplate"
-          @import="handleEnrollmentPlanImport"
-          @load="loadEnrollmentPlans({ resetPage: true })"
-          @reset="resetEnrollmentPlanFilters"
-          @page-change="handleEnrollmentPlanPageChange"
-          @page-size-change="handleEnrollmentPlanPageSizeChange"
-        />
-      </el-tab-pane>
+        <el-tab-pane label="招生计划库" name="enrollment-plans">
+          <RecommendationEnrollmentPlansPanel
+            :enrollment-plans="enrollmentPlans"
+            :filters="enrollmentPlanFilters"
+            :year-options="planYearOptions"
+            :province-options="provinceOptions"
+            :batch-options="batchOptions"
+            :college-options="collegeDirectory"
+            :student-type-options="recommendationStudentTypeOptions"
+            :enrollment-plan-import-result="enrollmentPlanImportResult"
+            :pagination="enrollmentPlanPagination"
+            @download-template="downloadEnrollmentPlanTemplate"
+            @import="handleEnrollmentPlanImport"
+            @load="loadEnrollmentPlans({ resetPage: true })"
+            @reset="resetEnrollmentPlanFilters"
+            @page-change="handleEnrollmentPlanPageChange"
+            @page-size-change="handleEnrollmentPlanPageSizeChange"
+          />
+        </el-tab-pane>
 
-      <el-tab-pane label="录取库" name="admissions">
-        <RecommendationAdmissionsPanel
-          :admissions="admissions"
-          :filters="admissionFilters"
-          :admission-year-options="admissionYearOptions"
-          :province-options="provinceOptions"
-          :college-options="collegeDirectory"
-          :student-type-options="recommendationStudentTypeOptions"
-          :admission-import-result="admissionImportResult"
-          :pagination="admissionPagination"
-          @download-template="downloadAdmissionTemplate"
-          @import="handleAdmissionImport"
-          @load="loadAdmissions({ resetPage: true })"
-          @reset="resetAdmissionFilters"
-          @page-change="handleAdmissionPageChange"
-          @page-size-change="handleAdmissionPageSizeChange"
-        />
-      </el-tab-pane>
+        <el-tab-pane label="录取库" name="admissions">
+          <RecommendationAdmissionsPanel
+            :admissions="admissions"
+            :filters="admissionFilters"
+            :admission-year-options="admissionYearOptions"
+            :province-options="provinceOptions"
+            :college-options="collegeDirectory"
+            :student-type-options="recommendationStudentTypeOptions"
+            :admission-import-result="admissionImportResult"
+            :pagination="admissionPagination"
+            @download-template="downloadAdmissionTemplate"
+            @import="handleAdmissionImport"
+            @load="loadAdmissions({ resetPage: true })"
+            @reset="resetAdmissionFilters"
+            @page-change="handleAdmissionPageChange"
+            @page-size-change="handleAdmissionPageSizeChange"
+          />
+        </el-tab-pane>
 
-      <el-tab-pane label="省份规则" name="volunteer-rules">
-        <RecommendationVolunteerRulesPanel
-          :rules="provinceVolunteerRules"
-          :filters="volunteerRuleFilters"
-          :bootstrapping="bootstrappingVolunteerRules"
-          :year-options="ruleYearOptions"
-          :province-options="provinceOptions"
-          :exam-mode-options="examModeOptions"
-          :candidate-type-options="gaokaoCandidateTypeOptions"
-          @load="loadProvinceVolunteerRules"
-          @bootstrap="bootstrapProvinceVolunteerRules"
-          @reset="resetVolunteerRuleFilters"
-          @create="openCreateVolunteerRule"
-          @edit="openEditVolunteerRule"
-        />
-      </el-tab-pane>
+        <el-tab-pane label="省份规则" name="volunteer-rules">
+          <RecommendationVolunteerRulesPanel
+            :rules="provinceVolunteerRules"
+            :filters="volunteerRuleFilters"
+            :bootstrapping="bootstrappingVolunteerRules"
+            :year-options="ruleYearOptions"
+            :province-options="provinceOptions"
+            :exam-mode-options="examModeOptions"
+            :candidate-type-options="gaokaoCandidateTypeOptions"
+            @load="loadProvinceVolunteerRules"
+            @bootstrap="bootstrapProvinceVolunteerRules"
+            @reset="resetVolunteerRuleFilters"
+            @create="openCreateVolunteerRule"
+            @edit="openEditVolunteerRule"
+          />
+        </el-tab-pane>
 
-      <el-tab-pane label="特殊类型规则" name="special-type-rules">
-        <RecommendationSpecialTypeRulesPanel
-          :rules="specialTypeRules"
-          :filters="specialTypeRuleFilters"
-          :bootstrapping="bootstrappingSpecialTypeRules"
-          :year-options="specialTypeRuleYearOptions"
-          :province-options="provinceOptions"
-          :student-type-options="recommendationStudentTypeOptions"
-          @load="loadSpecialTypeRules"
-          @bootstrap="bootstrapSpecialTypeRules"
-          @reset="resetSpecialTypeRuleFilters"
-        />
-      </el-tab-pane>
+        <el-tab-pane label="特殊类型规则" name="special-type-rules">
+          <RecommendationSpecialTypeRulesPanel
+            :rules="specialTypeRules"
+            :filters="specialTypeRuleFilters"
+            :bootstrapping="bootstrappingSpecialTypeRules"
+            :year-options="specialTypeRuleYearOptions"
+            :province-options="provinceOptions"
+            :student-type-options="recommendationStudentTypeOptions"
+            @load="loadSpecialTypeRules"
+            @bootstrap="bootstrapSpecialTypeRules"
+            @reset="resetSpecialTypeRuleFilters"
+          />
+        </el-tab-pane>
 
-      <el-tab-pane label="赋分规则" name="score-transform-rules">
-        <RecommendationScoreTransformRulesPanel
-          :rules="provinceScoreTransformRules"
-          :filters="scoreTransformRuleFilters"
-          :bootstrapping="bootstrappingScoreTransformRules"
-          :year-options="scoreTransformRuleYearOptions"
-          :province-options="provinceOptions"
-          :exam-mode-options="examModeOptions"
-          @load="loadProvinceScoreTransformRules"
-          @bootstrap="bootstrapProvinceScoreTransformRules"
-          @reset="resetScoreTransformRuleFilters"
-        />
-      </el-tab-pane>
+        <el-tab-pane label="赋分规则" name="score-transform-rules">
+          <RecommendationScoreTransformRulesPanel
+            :rules="provinceScoreTransformRules"
+            :filters="scoreTransformRuleFilters"
+            :bootstrapping="bootstrappingScoreTransformRules"
+            :year-options="scoreTransformRuleYearOptions"
+            :province-options="provinceOptions"
+            :exam-mode-options="examModeOptions"
+            @load="loadProvinceScoreTransformRules"
+            @bootstrap="bootstrapProvinceScoreTransformRules"
+            @reset="resetScoreTransformRuleFilters"
+          />
+        </el-tab-pane>
 
-      <el-tab-pane label="选科字典" name="subject-requirements">
-        <RecommendationSubjectRequirementDictsPanel
-          :dicts="subjectRequirementDicts"
-          :filters="subjectRequirementDictFilters"
-          :bootstrapping="bootstrappingSubjectRequirementDicts"
-          :year-options="subjectRequirementDictYearOptions"
-          :province-options="provinceOptions"
-          :exam-mode-options="examModeOptions"
-          @load="loadSubjectRequirementDicts"
-          @bootstrap="bootstrapSubjectRequirementDicts"
-          @reset="resetSubjectRequirementDictFilters"
-        />
-      </el-tab-pane>
-
+        <el-tab-pane label="选科字典" name="subject-requirements">
+          <RecommendationSubjectRequirementDictsPanel
+            :dicts="subjectRequirementDicts"
+            :filters="subjectRequirementDictFilters"
+            :bootstrapping="bootstrappingSubjectRequirementDicts"
+            :year-options="subjectRequirementDictYearOptions"
+            :province-options="provinceOptions"
+            :exam-mode-options="examModeOptions"
+            @load="loadSubjectRequirementDicts"
+            @bootstrap="bootstrapSubjectRequirementDicts"
+            @reset="resetSubjectRequirementDictFilters"
+          />
+        </el-tab-pane>
       </el-tabs>
     </section>
 
@@ -451,7 +552,13 @@
         <article class="soft-card data-health-card">
           <span>健康摘要</span>
           <strong>{{ shandongDataHealth?.summary || "待加载" }}</strong>
-          <p>{{ shandongDataHealth ? "山东覆盖、P0 缺口和发布状态来自本地数据健康接口。" : "点击刷新读取当前本地库状态。" }}</p>
+          <p>
+            {{
+              shandongDataHealth
+                ? "山东覆盖、P0 缺口和发布状态来自本地数据健康接口。"
+                : "点击刷新读取当前本地库状态。"
+            }}
+          </p>
         </article>
         <article class="soft-card data-health-card">
           <span>P0 缺口</span>
@@ -460,7 +567,9 @@
         </article>
         <article class="soft-card data-health-card">
           <span>2026 发布状态</span>
-          <strong>{{ shandongDataHealth?.publication_status?.length ?? 0 }}</strong>
+          <strong>{{
+            shandongDataHealth?.publication_status?.length ?? 0
+          }}</strong>
           <p>正式数据未发布前，不把模拟结果包装成录取结论。</p>
         </article>
       </div>
@@ -469,11 +578,20 @@
         <div class="section-head">
           <div>
             <h3>数据健康</h3>
-            <p>只读查看山东覆盖、P0 缺口和人工复核入口；维护动作收在“数据与规则”。</p>
+            <p>
+              只读查看山东覆盖、P0
+              缺口和人工复核入口；维护动作收在“数据与规则”。
+            </p>
           </div>
           <div class="action-row">
-            <el-button :loading="loadingShandongDataHealth" @click="loadShandongDataHealth">刷新</el-button>
-            <el-button @click="$router.push('/gaokao-data')">打开高考数据看板</el-button>
+            <el-button
+              :loading="loadingShandongDataHealth"
+              @click="loadShandongDataHealth"
+              >刷新</el-button
+            >
+            <el-button @click="$router.push('/gaokao-data')"
+              >打开高考数据看板</el-button
+            >
           </div>
         </div>
 
@@ -482,20 +600,35 @@
             <h4>2023-2025 覆盖矩阵</h4>
             <el-table :data="shandongCoverageRows" size="small" stripe>
               <el-table-column label="年份" prop="year" width="90" />
-              <el-table-column label="一分一段" prop="scoreRank" min-width="120" />
-              <el-table-column label="省控线" prop="scoreLine" min-width="120" />
+              <el-table-column
+                label="一分一段"
+                prop="scoreRank"
+                min-width="120"
+              />
+              <el-table-column
+                label="省控线"
+                prop="scoreLine"
+                min-width="120"
+              />
               <el-table-column label="招生计划" prop="plan" min-width="120" />
               <el-table-column label="录取结果" prop="result" min-width="120" />
             </el-table>
-            <el-empty v-if="!shandongCoverageRows.length" description="暂无覆盖矩阵，请刷新数据健康" />
+            <el-empty
+              v-if="!shandongCoverageRows.length"
+              description="暂无覆盖矩阵，请刷新数据健康"
+            />
           </article>
 
           <article class="health-column">
             <h4>P0 缺口</h4>
             <ul v-if="shandongDataHealth?.gaps.length" class="health-gap-list">
-              <li v-for="gap in shandongDataHealth.gaps" :key="gap">{{ gap }}</li>
+              <li v-for="gap in shandongDataHealth.gaps" :key="gap">
+                {{ gap }}
+              </li>
             </ul>
-            <p v-else class="muted-copy">当前未加载缺口，或 P0 规则内未发现明显缺口。</p>
+            <p v-else class="muted-copy">
+              当前未加载缺口，或 P0 规则内未发现明显缺口。
+            </p>
           </article>
         </div>
       </section>
@@ -559,7 +692,7 @@
       @submit="submitVolunteerRule"
       @closed="handleVolunteerRuleDialogClosed"
     />
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
@@ -589,6 +722,14 @@ import RecommendationVolunteerWorkbenchPanel from "../components/recommendations
 import { scoreInputModeOptions } from "../components/recommendations/helpers";
 import { RECOMMENDATION_GLOBAL_RISK_NOTICES } from "../components/recommendations/recommendationCopy";
 import { useRecommendationsPage } from "../components/recommendations/useRecommendationsPage";
+import AppFilterBar from "../components/ui/AppFilterBar.vue";
+import AppPage from "../components/ui/AppPage.vue";
+import AppStatGrid from "../components/ui/AppStatGrid.vue";
+import type {
+  PageMetaItem,
+  StatCardItem,
+  UiTone,
+} from "../components/ui/types";
 
 const recommendationGlobalRiskNotices = RECOMMENDATION_GLOBAL_RISK_NOTICES;
 
@@ -840,7 +981,11 @@ const {
 
 type PrimarySectionKey = "workbench" | "history" | "data-rules" | "data-health";
 
-const workbenchTabs = new Set(["volunteer-workbench", "recommendations", "shandong-workbench"]);
+const workbenchTabs = new Set([
+  "volunteer-workbench",
+  "recommendations",
+  "shandong-workbench",
+]);
 const dataRuleTabs = new Set([
   "colleges",
   "majors",
@@ -858,12 +1003,16 @@ const primarySections = computed(() => [
   {
     key: "workbench" as const,
     label: "工作台",
-    value: volunteerDraft.value.length ? `${volunteerDraft.value.length} 条草稿` : "默认入口",
+    value: volunteerDraft.value.length
+      ? `${volunteerDraft.value.length} 条草稿`
+      : "默认入口",
   },
   {
     key: "history" as const,
     label: "历史方案",
-    value: historyItems.value.length ? `${historyItems.value.length} 份` : "待生成",
+    value: historyItems.value.length
+      ? `${historyItems.value.length} 份`
+      : "待生成",
   },
   {
     key: "data-rules" as const,
@@ -873,9 +1022,35 @@ const primarySections = computed(() => [
   {
     key: "data-health" as const,
     label: "数据健康",
-    value: shandongDataHealth.value ? `${shandongDataHealth.value.gaps.length} 条缺口` : "待刷新",
+    value: shandongDataHealth.value
+      ? `${shandongDataHealth.value.gaps.length} 条缺口`
+      : "待刷新",
   },
 ]);
+
+function normalizeTone(tone?: string): UiTone {
+  if (!tone) return "neutral";
+  if (tone.includes("green") || tone.includes("teal")) return "success";
+  if (tone.includes("amber")) return "warning";
+  if (tone.includes("blue") || tone.includes("indigo")) return "primary";
+  return "neutral";
+}
+
+const pageMeta = computed<PageMetaItem[]>(() =>
+  summaryCards.value.slice(0, 4).map((item) => ({
+    label: item.label,
+    value: item.value,
+  })),
+);
+
+const pageStatCards = computed<StatCardItem[]>(() =>
+  summaryCards.value.map((item) => ({
+    label: item.label,
+    value: item.value,
+    help: item.help,
+    tone: normalizeTone(item.tone),
+  })),
+);
 
 const activePrimarySection = computed<PrimarySectionKey>(() => {
   if (activeTab.value === "history") return "history";
@@ -899,10 +1074,6 @@ function switchPrimarySection(section: PrimarySectionKey): void {
 <style scoped>
 .panel-block {
   padding: 24px;
-}
-
-.recommendation-chip-row {
-  max-width: 760px;
 }
 
 .risk-review-collapse {
@@ -954,7 +1125,10 @@ function switchPrimarySection(section: PrimarySectionKey): void {
   color: #25394f;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    background 0.16s ease;
 }
 
 .section-nav-button span,
@@ -987,20 +1161,6 @@ function switchPrimarySection(section: PrimarySectionKey): void {
   gap: 16px;
 }
 
-.command-bar {
-  display: grid;
-  grid-template-columns: minmax(210px, 0.26fr) minmax(0, 1fr);
-  gap: 16px;
-  align-items: start;
-  padding: 18px;
-}
-
-.command-copy strong {
-  color: #20354a;
-  font-size: 16px;
-}
-
-.command-copy p,
 .priority-card p,
 .data-health-card p {
   margin: 7px 0 0;
@@ -1085,7 +1245,6 @@ function switchPrimarySection(section: PrimarySectionKey): void {
 
 @media (max-width: 1080px) {
   .recommendation-section-nav,
-  .command-bar,
   .command-fields,
   .workbench-priority-grid,
   .data-health-grid,

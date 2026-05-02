@@ -1,5 +1,5 @@
 <template>
-  <el-row class="app-stat-grid" :gutter="16">
+  <el-row class="app-stat-grid metric-grid" :gutter="16">
     <el-col
       v-for="item in items"
       :key="item.label"
