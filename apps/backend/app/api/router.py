@@ -10,10 +10,10 @@ from app.api.routes import (
     exams,
     gaokao,
     health,
+    knowledge,
     planning,
     recommendations,
     reports,
-    student_events,
     students,
     system,
     teachers,
@@ -29,13 +29,12 @@ api_router.include_router(teachers.router)
 api_router.include_router(archives.router)
 api_router.include_router(exams.router)
 api_router.include_router(analytics.router)
+api_router.include_router(knowledge.router)
 api_router.include_router(evaluation.router)
 api_router.include_router(gaokao.router)
 api_router.include_router(recommendations.router)
 api_router.include_router(planning.router)
 api_router.include_router(reports.router)
 api_router.include_router(workload.router)
-api_router.include_router(student_events.attendance_router)
-api_router.include_router(student_events.behavior_router)
 api_router.include_router(system.router)
 api_router.include_router(health.router)

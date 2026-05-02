@@ -2,6 +2,19 @@
 
 ## 当前主线状态（2026-05-02）
 
+- 本轮已完成用户要求的“成绩知识点分析 V2.2：知识体系、错因、讲评与任务闭环”：
+  - 新增迁移 `apps/backend/alembic/versions/20260502_0029_knowledge_v22_schema.py`，扩展知识点树、别名、错因标签和题分/快照错因字段；仍复用 V1/V2 的题分表与快照，不另起错题本或任务系统
+  - 新增 `apps/backend/app/services/knowledge_base.py`、`apps/backend/app/api/routes/knowledge.py`、`apps/backend/app/schemas/knowledge.py`，支持知识树、知识点、别名、错因标签 CRUD 和知识库 Excel 导入
+  - 题分导入支持 `错因标签`、`错因备注`；知识点归一顺序为同科标准点精确匹配、同科别名匹配、`>` 路径建树、未匹配扁平文本放入“未归类”
+  - 学生分析 `knowledge_points` / `knowledge_trends` 返回知识路径、错因统计、主错因；知识点快照会聚合题分记录错因，建议文案包含主错因提示
+  - 新增班级讲评接口 `GET /api/analytics/classes/{class_id}/knowledge-briefing?exam_id=...&subject_id=...`，返回班级薄弱知识点、弱项学生、错因分布、涉及题号、讲评优先级和建议
+  - 新增知识点补弱任务接口：学生预览/生成、班级预览/生成；任务写入 `student_planning_task`，`source_type/task_type=knowledge_remediation`，`source_ref_id=exam_id:student_id:knowledge_point_id`，重复 active 任务跳过
+  - 前端新增 `/knowledge-base` 知识库维护入口；分析中心学生分析增加补弱任务预览/生成，班级分析新增“班级知识点讲评清单”并支持批量生成学生补弱任务
+  - 输出中心新增 `class_knowledge_briefing`，`student_knowledge_plan` 增加打印预览；新增 `/print/student-knowledge/:studentId/:examId` 和 `/print/class-knowledge-briefing/:classId/:examId`
+  - 新增后端专项测试 `apps/backend/tests/test_knowledge_v22.py`；前端 `student-report` 和 `report-type-config` 测试已覆盖错因、任务预览、讲评优先级和打印路径
+  - 验证：`py_compile` 通过；后端知识库专项 `4 passed`；后端学生分析/规划/知识库定向 `17 passed`；前端定向 `13 passed`；临时空库迁移、`frontend:lint`、`frontend:build`、考试分析+报表 E2E `11 passed`、`git diff --check` 均通过
+  - 注意：本轮未执行真实 `data/app.db` 迁移；如要让真实库使用 V2.2，需先备份主库再执行 `npm run backend:migrate`，并核验 Alembic 到 `20260502_0029`
+
 - 本轮已完成用户要求的“成绩知识点分析 V1”：
   - 后端新增迁移 `apps/backend/alembic/versions/20260502_0026_score_knowledge_analysis_schema.py`，包括 `score_question_import_batch`、`knowledge_point`、`score_question`、`score_question_knowledge_point`、`score_question_record`、`score_knowledge_snapshot`
   - 新增 `apps/backend/app/importers/score_questions.py` 和 `apps/backend/app/analytics/knowledge.py`：标准题分明细 Excel 导入后，按知识点合并多题得分，重建学生知识点诊断快照
@@ -12,14 +25,35 @@
   - 验证：`npm run backend:test -- apps/backend/tests/test_student_analysis_report_v1.py -q` 为 `7 passed`；`npm run frontend:test -- tests/student-report.test.ts tests/report-type-config.test.ts tests/score-readiness.test.ts` 为 `3 files / 13 tests passed`；`npm run frontend:lint`、`npm run frontend:build`、`npm run e2e -- tests/e2e/exams-analytics.spec.ts`（4 passed）、临时空库迁移和 `git diff --check` 均通过
   - 注意：V1 只按本次考试扁平知识点做个人学习清单；阅卷平台复杂表头映射、错因标签、连续考试趋势、班级讲评清单、知识树和任务自动生成仍是后续版本
 
+- 本轮正在完成“安全删除学生考勤与行为数据域”：
+  - 新增迁移 `apps/backend/alembic/versions/20260502_0028_remove_attendance_behavior.py`，用于删除 `attendance_record`、`behavior_record`，并清理对应 `import_job` 与 `audit_log` 用户可见历史
+  - 已删除旧 `student_events` 模型、schema、importer、service、router；`/api/attendance/*` 与 `/api/behavior/*` 不再注册，测试应确认 404
+  - 新增 `apps/backend/app/services/student_followup.py` 与 `apps/backend/app/schemas/student_followup.py`，继续服务 `/api/analytics/adviser-dashboard` 和 `/api/analytics/student-risk/{student_id}`，响应不再含 `attendance_summary`、`behavior_summary`、`attendance_status`、`behavior_status` 等字段
+  - 班主任驾驶舱、学生详情 360、班主任周报、学生跟进包已改为成绩波动、成长档案、升学规划任务跟进；班级画像 `risk_summary` 改为 `score_risk_count/planning_risk_count/growth_record_count`
+  - 导入中心和模板生成不再提供考勤/行为导入；E2E fixtures `tests/e2e/fixtures/attendance-import.xlsx`、`tests/e2e/fixtures/behavior-import.xlsx` 已删除
+  - 收尾时必须先备份真实 `data/app.db` 到 `data/backups/`，再执行 `npm run backend:migrate`，并校验 `attendance_record`、`behavior_record` 不存在且 SQLite `integrity_check=ok`
+
+- 本轮已完成用户要求的“成绩知识点分析 V2：学生个人连续趋势补弱”第一阶段：
+  - 不新增数据库迁移；后端复用 `score_knowledge_snapshot`，从当前考试往前取最近 5 次 `is_trend_enabled=true` 且该学生有知识点快照的考试，按 `subject_id + knowledge_point_id` 即时聚合趋势
+  - 趋势诊断要求同知识点至少出现 2 次且累计满分样本达阈值；标签固定为 `持续薄弱`、`正在改善`、`波动反复`、`偶发失误`、`保持观察`、`样本不足`
+  - `GET /api/analytics/students/{student_id}?exam_id=...` 新增 `knowledge_trends`；`action_suggestions` 新增 `knowledge_trend_focus`，合并 Top 3 持续薄弱 / 波动反复知识点
+  - 前端分析中心“知识点诊断”下新增“连续知识点趋势”，沿用科目筛选；输出中心 `学生知识点学习清单` 和 `学生成绩分析单` Excel 均新增 `连续趋势` sheet
+  - 新增 E2E fixtures `tests/e2e/fixtures/score-question-details-trend-1.xlsx` 与 `score-question-details-trend-2.xlsx`；`ensureExamWithScores` 改为 API 幂等前置，避免同名草稿考试导致 UI 选择不稳定
+  - 验证：`py_compile` 通过；`npm run backend:test -- apps/backend/tests/test_student_analysis_report_v1.py -q` 为 `11 passed`；`npm run frontend:test -- tests/student-report.test.ts tests/report-type-config.test.ts tests/score-readiness.test.ts` 为 `3 files / 14 tests passed`；`npm run frontend:lint`、`npm run frontend:build`、`npm run e2e -- tests/e2e/exams-analytics.spec.ts`（5 passed）、`git diff --check` 均通过
+  - 后续边界：错因标签、知识点别名维护、层级知识树、班级讲评清单、自动学习任务和专门打印页已在 V2.2 完成；后续可继续做错因质量看板、别名批量审核、知识树版本管理和学习任务完成效果回流
+
 - 本轮已完成“年级班级”独立对象入口：
   - 后端新增 `class_honor` 表与迁移 `20260502_0027_class_honor_schema.py`，结构化保存班级荣誉标题、级别、获奖日期、来源和备注
   - 新增 `apps/backend/app/services/class_profiles.py`、`apps/backend/app/api/routes/classes.py`、`apps/backend/app/schemas/class_profile.py`，提供 `/api/classes/overview`、`/api/classes/{class_id}/profile`、`/api/grades/{grade_id}/profile` 和班级荣誉 CRUD
-  - 班级聚合复用现有 `school_class.head_teacher_id`、`teaching_assignment`、`student.current_class_id`、成绩总分快照、考试时点班级映射、考勤/行为近 30 天信号；不新增多用户、云同步或审批流
+  - 班级聚合复用现有 `school_class.head_teacher_id`、`teaching_assignment`、`student.current_class_id`、成绩总分快照、考试时点班级映射、成长档案和规划任务跟进信号；不新增多用户、云同步或审批流
   - 前端新增 `/classes`、`/classes/:classId`、`/grades/:gradeId`，侧边栏“基础数据”下新增“年级班级”；速览页有年级分组、卡片/表格切换和班型/班主任/任课/荣誉筛选；班级详情支持学生跳转、任课关系新增、荣誉维护和分析/报表入口；年级详情展示班级横向矩阵
   - 新增测试：`apps/backend/tests/test_class_profiles.py`、`apps/frontend/tests/class-profile.test.ts`、`tests/e2e/classes.spec.ts`
   - 验证：`py_compile` 通过；`npm run backend:test -- apps/backend/tests/test_class_profiles.py -q` 为 `3 passed`；`npm run backend:test -- apps/backend/tests/test_class_profiles.py apps/backend/tests/test_api_m1.py -q` 为 `7 passed`；`npm run frontend:test -- tests/class-profile.test.ts tests/navigation.test.ts` 为 `8 passed`；`npm run frontend:lint`、`npm run frontend:build`、临时空库 `backend:migrate`、`npm run e2e -- tests/e2e/classes.spec.ts`（2 passed）、`git diff --check` 均通过
-  - 注意：真实 `data/app.db` 本轮未迁移；若要在真实库使用荣誉表，先按项目流程备份再运行 `npm run backend:migrate`
+  - 2026-05-02 已在收口分支 `codex/class-profile-next-step` 备份真实主库到 `data/backups/app_before_class_profile_migrate_20260502_213457.db`，执行 `npm run backend:migrate` 升级到 Alembic `20260502_0027`
+  - 真实库校验：`class_honor` 表存在，SQLite `integrity_check=ok`；`/api/classes/overview`、`/api/classes/{class_id}/profile`、`/api/grades/{grade_id}/profile`、`/api/classes/{class_id}/honors` GET 冒烟均为 200；当前真实库速览为 17 个班、803 名学生、0 条有效荣誉
+  - 收口验证：班级后端定向 `7 passed`、前端 class-profile/navigation `8 passed`、`frontend:lint`、`frontend:build`、班级 E2E `2 passed`、`git diff --check`、`npm run check`（后端 `128 passed`、前端 lint、前端 `194 passed`、前端构建）均通过
+  - 已补任课教师设置入口：`/classes` 卡片和表格操作会跳到 `/classes/:classId?tab=teachers&action=assignment`，班级详情自动切换“任课教师”并打开新增任教关系弹窗；`/teachers?assignments=1` 会自动打开教师中心“任教关系维护”
+  - 任课入口验证：`npm run frontend:test -- tests/class-profile.test.ts tests/navigation.test.ts` 为 `9 passed`；`npm run frontend:lint`、`npm run frontend:build`、`npm run e2e -- tests/e2e/classes.spec.ts`（4 passed）、`git diff --check` 均通过
 
 - 本轮已修复分析中心“二模学生只显示 200 / 有成绩学生查不到”的口径问题：
   - 根因：`AnalyticsPage.vue` 学生下拉只请求 `/api/students?page=1&page_size=200`，概览卡又把这个下拉样本数显示为“学生”，导致用户误以为二模成绩只有 200 人；真实二模总分快照为 501 人
@@ -260,32 +294,7 @@
   - 已通过：临时空库迁移、后端新增定向、后端全量 `107 passed`、前端定向、`frontend:lint`、`frontend:build`、新增 E2E `planning.spec.ts`
   - 最终验收：`npm run check:all` 通过，后端 `107 passed`、前端 lint 通过、前端 `35 files / 180 tests passed`、前端构建通过、E2E `34 passed`；`npm run desktop:dist:mac` 通过；打包后端二进制用临时空数据目录启动成功，自动创建 `app.db`，健康检查和首页摘要可响应；本轮未写真实 `data/app.db`
 
-- 本轮已完成用户给定的 M11-M15 成熟化计划，定位仍是个人本地使用工具：本地单机、SQLite、中文界面、无公网依赖、无账号/权限/云同步/家长端/学生端。
-- 新增考勤行为数据域：
-  - Alembic 迁移：`apps/backend/alembic/versions/20260427_0020_attendance_behavior_schema.py`
-  - 模型与服务：`attendance_record`、`behavior_record`；导入复用现有 `import_job`、错误报告和模板机制
-  - 接口：`POST /api/attendance/import`、`GET /api/attendance/records`、`POST /api/behavior/import`、`GET /api/behavior/records`，另有考勤/行为模板下载
-- 新增班主任驾驶舱与学生风险摘要：
-  - 分析中心新增“班主任驾驶舱”页签
-  - 后端新增 `/api/analytics/adviser-dashboard` 与 `/api/analytics/student-risk/{student_id}`
-  - 风险等级为 `urgent/follow_up/watch/normal`；没有考勤/行为数据时显示“未导入”，不要当作 0 风险
-- 新增输出闭环：
-  - 学生详情 360° 展示近 30/90 天考勤、行为、风险等级和风险原因
-  - 输出中心新增 `adviser_weekly_summary` 班主任周报和 `student_followup_package` 学生跟进包，支持 Excel 与打印页
-- 桌面空库与成熟平台收尾：
-  - 新增 `docs/desktop_empty_db_initialization_20260427.md`
-  - 首页下一步建议、导入中心初始化清单、系统数据健康已接入成绩、考勤、行为、任教关系和备份缺口
-  - 本轮未写真实 `data/app.db`；真实使用前仍建议用户先备份再迁移
-- 验证状态：
-  - 后端定向 `2 passed`；前端定向 `4 files / 17 tests passed`
-  - 临时空 SQLite `alembic upgrade head` 通过；`git diff --check` 通过
-  - 新增 `tests/e2e/adviser-dashboard.spec.ts`，覆盖导入考勤/行为、班主任驾驶舱、学生详情和班主任周报；补充后 `npm run check:e2e` 全量 `33 passed`
-  - 最终 `npm run check:all` 已重新跑完整门禁：后端 `105 passed`、前端 lint 通过、前端 `34 files / 174 tests passed`、前端构建通过、E2E `33 passed`
-  - 最终 `npm run desktop:dist:mac` 通过；打包后端二进制用临时空数据目录启动成功并自动创建 `app.db`，健康检查和首页摘要可响应
-- 后续优先：
-  - 真实学校成绩、考勤、行为 Excel 试跑，并让用户确认导入模板字段是否贴合本校表格
-  - 让班主任驾驶舱接入更多真实学校口径，例如请假类别、处分等级和周报字段顺序
-  - macOS 正式图标、签名、公证；Windows `dir/nsis` 在 Windows 或可交叉构建环境验证
+- 历史说明：2026-04-28 的 M11-M15 曾新增学生考勤/行为数据域；该方向已因高中使用场景调整而废弃。后续不要恢复学生考勤/行为模板、表、接口或前端展示；保留并演进班主任驾驶舱、学生跟进包时，优先使用成绩、成长档案和升学规划任务。
 
 ## 当前主线状态（2026-04-27）
 

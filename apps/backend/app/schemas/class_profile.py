@@ -52,8 +52,9 @@ class ClassScoreSummary(BaseModel):
 class ClassRiskSummary(BaseModel):
     follow_up_count: int = 0
     urgent_count: int = 0
-    attendance_risk_count: int = 0
-    behavior_risk_count: int = 0
+    score_risk_count: int = 0
+    planning_risk_count: int = 0
+    growth_record_count: int = 0
 
 
 class ClassOverviewItem(BaseModel):

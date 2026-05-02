@@ -34,8 +34,9 @@ export interface ClassScoreSummary {
 export interface ClassRiskSummary {
   follow_up_count: number;
   urgent_count: number;
-  attendance_risk_count: number;
-  behavior_risk_count: number;
+  score_risk_count: number;
+  planning_risk_count: number;
+  growth_record_count: number;
 }
 
 export interface ClassOverviewItem {
@@ -145,6 +146,14 @@ export function formatClassTeachers(teachers: ClassTeacherSummary[], limit = 3):
   return `${labels.join("、")}${suffix}`;
 }
 
+export function getTeachingSetupLabel(item: Pick<ClassOverviewItem, "teaching_complete">): string {
+  return item.teaching_complete ? "维护任课" : "设置任课";
+}
+
+export function buildTeachingSetupPath(classId: number): string {
+  return `/classes/${classId}?tab=teachers&action=assignment`;
+}
+
 export function buildClassOverviewCards(payload: ClassesOverviewResponse | null): StatCardItem[] {
   const groups = payload?.grades ?? [];
   const classCount = payload?.total_classes ?? 0;
@@ -169,7 +178,7 @@ export function buildClassProfileCards(profile: ClassProfileResponse | null): St
     { label: "任课教师", value: overview?.teacher_count ?? 0, help: "当前学期维护的任课教师数。", tone: "success" },
     { label: "班级荣誉", value: overview?.honor_count ?? 0, help: "已记录的结构化班级荣誉。", tone: "neutral" },
     { label: "成绩样本", value: overview?.score_summary.sample_count ?? 0, help: "当前考试下可用于班级画像的样本。", tone: "warning" },
-    { label: "需跟进", value: overview?.risk_summary.follow_up_count ?? 0, help: "近 30 天考勤/行为触发的跟进信号。", tone: "neutral" },
+    { label: "需跟进", value: overview?.risk_summary.follow_up_count ?? 0, help: "成绩低位、规划任务或成长档案触发的跟进信号。", tone: "neutral" },
   ];
 }
 

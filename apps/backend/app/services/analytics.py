@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
+from datetime import datetime
 import math
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.analytics.score_contexts import effective_class_id, effective_class_name, load_exam_context_map
@@ -12,6 +13,7 @@ from app.analytics.scores import calculate_rate, safe_mean, safe_median, safe_st
 from app.models import (
     Exam,
     Grade,
+    KnowledgePoint,
     SchoolClass,
     ScoreKnowledgeSnapshot,
     ScoreRecord,
@@ -31,6 +33,7 @@ from app.repositories.exams import (
     get_subject_snapshots_for_exam,
     get_total_snapshots_for_exam,
 )
+from app.services.knowledge_base import build_knowledge_paths
 from app.schemas.exam import (
     ClassAnalyticsResponse,
     ExamAnalyzableStudentItem,
@@ -52,6 +55,8 @@ from app.schemas.exam import (
     StudentAnalyticsResponse,
     StudentActionSuggestion,
     StudentKnowledgePointAnalytics,
+    StudentKnowledgeTrendAnalytics,
+    StudentKnowledgeTrendPoint,
     StudentSubjectAnalytics,
     StudentSubjectEffectiveTarget,
     StudentSubjectTrendPoint,
@@ -63,6 +68,21 @@ from app.schemas.exam import (
     TeacherAssignmentAnalytics,
     TeacherPanoramaResponse,
 )
+from app.schemas.knowledge import (
+    ClassKnowledgeBriefingItem,
+    ClassKnowledgeBriefingResponse,
+    ClassKnowledgeBriefingStudent,
+    KnowledgeErrorTagStat,
+)
+
+
+KNOWLEDGE_TREND_WINDOW = 5
+KNOWLEDGE_TREND_MIN_EXAM_COUNT = 2
+KNOWLEDGE_TREND_MIN_FULL_SCORE = 5.0
+KNOWLEDGE_WEAK_RATE_THRESHOLD = 0.7
+KNOWLEDGE_SEVERE_RATE_THRESHOLD = 0.55
+KNOWLEDGE_IMPROVEMENT_DELTA = 0.15
+KNOWLEDGE_VOLATILE_DELTA = 0.25
 
 
 def _score_value_label(score_value_type: str | None) -> str:
@@ -257,8 +277,12 @@ def get_student_analytics(session: Session, student_id: int, exam_id: int) -> St
         )
 
     knowledge_points = _list_student_knowledge_points(session, student_id=student_id, exam_id=exam.id)
+    knowledge_trends = _list_student_knowledge_trends(session, student_id=student_id, current_exam=exam)
     action_suggestions = _merge_knowledge_action_suggestions(
-        _build_student_action_suggestions(subjects, target_line_gaps),
+        _merge_knowledge_trend_action_suggestions(
+            _build_student_action_suggestions(subjects, target_line_gaps),
+            knowledge_trends,
+        ),
         knowledge_points,
     )
     grade_rank_delta = (
@@ -314,6 +338,7 @@ def get_student_analytics(session: Session, student_id: int, exam_id: int) -> St
             for subject in subjects
         ],
         knowledge_points=knowledge_points,
+        knowledge_trends=knowledge_trends,
         action_suggestions=action_suggestions,
         subjects=subjects,
     )
@@ -328,6 +353,7 @@ def _list_student_knowledge_points(
 ) -> list[StudentKnowledgePointAnalytics]:
     rows = session.scalars(
         select(ScoreKnowledgeSnapshot)
+        .options(joinedload(ScoreKnowledgeSnapshot.subject), joinedload(ScoreKnowledgeSnapshot.knowledge_point))
         .where(
             ScoreKnowledgeSnapshot.exam_id == exam_id,
             ScoreKnowledgeSnapshot.student_id == student_id,
@@ -341,12 +367,14 @@ def _list_student_knowledge_points(
         )
         .limit(limit)
     ).all()
+    paths = _knowledge_paths_for_snapshots(session, rows)
     return [
         StudentKnowledgePointAnalytics(
             subject_id=item.subject_id,
             subject_name=item.subject.name if item.subject else str(item.subject_id),
             knowledge_point_id=item.knowledge_point_id,
             knowledge_point_name=item.knowledge_point.name if item.knowledge_point else str(item.knowledge_point_id),
+            knowledge_path=paths.get(item.knowledge_point_id),
             score=item.score,
             full_score=item.full_score,
             score_rate=item.score_rate,
@@ -355,12 +383,404 @@ def _list_student_knowledge_points(
             lost_score=item.lost_score,
             priority_score=item.priority_score,
             diagnosis_label=item.diagnosis_label,
+            error_tag_stats=item.error_tags_json or [],
+            dominant_error_tag=item.dominant_error_tag,
             question_count=item.question_count,
             question_numbers=item.question_numbers_json or [],
             suggestion=item.suggestion,
         )
         for item in rows
     ]
+
+
+def _list_student_knowledge_trends(
+    session: Session,
+    *,
+    student_id: int,
+    current_exam: Exam,
+    limit: int = 10,
+) -> list[StudentKnowledgeTrendAnalytics]:
+    exam_boundary = or_(
+        Exam.exam_date < current_exam.exam_date,
+        and_(Exam.exam_date == current_exam.exam_date, Exam.id <= current_exam.id),
+    )
+    snapshot_exam_rows = list(
+        session.execute(
+            select(
+                ScoreKnowledgeSnapshot.exam_id,
+                func.max(Exam.exam_date).label("exam_date"),
+            )
+            .join(Exam, Exam.id == ScoreKnowledgeSnapshot.exam_id)
+            .where(
+                ScoreKnowledgeSnapshot.student_id == student_id,
+                ScoreKnowledgeSnapshot.is_active.is_(True),
+                Exam.is_active.is_(True),
+                Exam.is_trend_enabled.is_(True),
+                exam_boundary,
+            )
+            .group_by(ScoreKnowledgeSnapshot.exam_id)
+            .order_by(func.max(Exam.exam_date).desc(), ScoreKnowledgeSnapshot.exam_id.desc())
+            .limit(KNOWLEDGE_TREND_WINDOW)
+        ).all()
+    )
+    if not snapshot_exam_rows:
+        return []
+    exam_ids = [row.exam_id for row in snapshot_exam_rows]
+    exams = list(session.scalars(select(Exam).where(Exam.id.in_(exam_ids))).all())
+    exam_map = {exam.id: exam for exam in exams}
+    rows = list(
+        session.scalars(
+            select(ScoreKnowledgeSnapshot)
+            .options(
+                joinedload(ScoreKnowledgeSnapshot.subject),
+                joinedload(ScoreKnowledgeSnapshot.knowledge_point),
+            )
+            .where(
+                ScoreKnowledgeSnapshot.student_id == student_id,
+                ScoreKnowledgeSnapshot.exam_id.in_(exam_ids),
+                ScoreKnowledgeSnapshot.is_active.is_(True),
+            )
+        ).all()
+    )
+    grouped: dict[tuple[int, int], list[ScoreKnowledgeSnapshot]] = defaultdict(list)
+    for row in rows:
+        grouped[(row.subject_id, row.knowledge_point_id)].append(row)
+
+    trends: list[StudentKnowledgeTrendAnalytics] = []
+    for items in grouped.values():
+        ordered_items = sorted(
+            items,
+            key=lambda item: (
+                exam_map[item.exam_id].exam_date if item.exam_id in exam_map else current_exam.exam_date,
+                item.exam_id,
+            ),
+        )
+        total_full_score = round(sum(item.full_score for item in ordered_items), 4)
+        if len(ordered_items) < KNOWLEDGE_TREND_MIN_EXAM_COUNT and total_full_score < KNOWLEDGE_TREND_MIN_FULL_SCORE:
+            continue
+        trend = _build_student_knowledge_trend(ordered_items, exam_map, session=session)
+        if trend.trend_label == "样本不足" and trend.priority_score <= 0:
+            continue
+        trends.append(trend)
+
+    return sorted(
+        trends,
+        key=lambda item: (
+            item.priority_score,
+            item.weak_exam_count,
+            item.total_lost_score,
+            item.trend_exam_count,
+        ),
+        reverse=True,
+    )[:limit]
+
+
+def _build_student_knowledge_trend(
+    items: list[ScoreKnowledgeSnapshot],
+    exam_map: dict[int, Exam],
+    *,
+    session: Session,
+) -> StudentKnowledgeTrendAnalytics:
+    latest = items[-1]
+    rates = [item.score_rate for item in items if item.score_rate is not None]
+    gaps = [item.grade_gap_rate for item in items if item.grade_gap_rate is not None]
+    weak_exam_count = sum(1 for item in items if _knowledge_snapshot_is_weak(item))
+    total_full_score = round(sum(item.full_score for item in items), 4)
+    total_lost_score = round(sum(item.lost_score for item in items), 4)
+    latest_score_rate = latest.score_rate
+    average_score_rate = round(sum(rates) / len(rates), 4) if rates else None
+    latest_grade_gap_rate = latest.grade_gap_rate
+    average_grade_gap_rate = round(sum(gaps) / len(gaps), 4) if gaps else None
+    trend_delta = (
+        round(rates[-1] - rates[0], 4)
+        if len(rates) >= KNOWLEDGE_TREND_MIN_EXAM_COUNT
+        else None
+    )
+    trend_label = _diagnose_knowledge_trend(
+        exam_count=len(items),
+        total_full_score=total_full_score,
+        weak_exam_count=weak_exam_count,
+        rates=rates,
+        latest_score_rate=latest_score_rate,
+        trend_delta=trend_delta,
+    )
+    priority_score = _calculate_knowledge_trend_priority(
+        trend_label=trend_label,
+        total_lost_score=total_lost_score,
+        average_score_rate=average_score_rate,
+        weak_exam_count=weak_exam_count,
+        exam_count=len(items),
+    )
+    points = [
+        StudentKnowledgeTrendPoint(
+            exam_id=item.exam_id,
+            exam_name=exam_map[item.exam_id].name if item.exam_id in exam_map else str(item.exam_id),
+            exam_date=exam_map[item.exam_id].exam_date if item.exam_id in exam_map else latest.exam.exam_date,
+            score_rate=item.score_rate,
+            grade_average_rate=item.grade_average_rate,
+            grade_gap_rate=item.grade_gap_rate,
+            full_score=item.full_score,
+            lost_score=item.lost_score,
+            diagnosis_label=item.diagnosis_label,
+            dominant_error_tag=item.dominant_error_tag,
+            question_numbers=item.question_numbers_json or [],
+        )
+        for item in items
+    ]
+    subject_name = latest.subject.name if latest.subject else str(latest.subject_id)
+    point_name = latest.knowledge_point.name if latest.knowledge_point else str(latest.knowledge_point_id)
+    paths = build_knowledge_paths(
+        list(session.scalars(select(KnowledgePoint).where(KnowledgePoint.subject_id == latest.subject_id)).all())
+    )
+    error_tags = _merge_error_tag_stats([item.error_tags_json for item in items])
+    return StudentKnowledgeTrendAnalytics(
+        subject_id=latest.subject_id,
+        subject_name=subject_name,
+        knowledge_point_id=latest.knowledge_point_id,
+        knowledge_point_name=point_name,
+        knowledge_path=paths.get(latest.knowledge_point_id),
+        trend_exam_count=len(items),
+        weak_exam_count=weak_exam_count,
+        latest_score_rate=latest_score_rate,
+        average_score_rate=average_score_rate,
+        latest_grade_gap_rate=latest_grade_gap_rate,
+        average_grade_gap_rate=average_grade_gap_rate,
+        trend_delta=trend_delta,
+        total_full_score=total_full_score,
+        total_lost_score=total_lost_score,
+        priority_score=priority_score,
+        trend_label=trend_label,
+        error_tag_stats=error_tags,
+        dominant_error_tag=error_tags[0]["tag"] if error_tags else None,
+        points=points,
+        suggestion=_build_knowledge_trend_suggestion(trend_label, subject_name, point_name),
+    )
+
+
+def get_class_knowledge_briefing(
+    session: Session,
+    class_id: int,
+    exam_id: int,
+    subject_id: int | None = None,
+) -> ClassKnowledgeBriefingResponse:
+    exam = get_exam(session, exam_id)
+    school_class = session.get(SchoolClass, class_id)
+    if not exam:
+        raise HTTPException(status_code=404, detail="考试不存在")
+    if not school_class:
+        raise HTTPException(status_code=404, detail="班级不存在")
+    context_map = load_exam_context_map(session, exam_id)
+    stmt = (
+        select(ScoreKnowledgeSnapshot)
+        .options(
+            joinedload(ScoreKnowledgeSnapshot.student).joinedload(Student.current_class),
+            joinedload(ScoreKnowledgeSnapshot.subject),
+            joinedload(ScoreKnowledgeSnapshot.knowledge_point),
+        )
+        .where(
+            ScoreKnowledgeSnapshot.exam_id == exam_id,
+            ScoreKnowledgeSnapshot.is_active.is_(True),
+        )
+    )
+    if subject_id is not None:
+        stmt = stmt.where(ScoreKnowledgeSnapshot.subject_id == subject_id)
+    snapshots = [
+        item
+        for item in session.scalars(stmt).all()
+        if item.student and effective_class_id(item.student, context_map.get(item.student_id)) == class_id
+    ]
+    if not snapshots:
+        return ClassKnowledgeBriefingResponse(
+            exam_id=exam.id,
+            exam_name=exam.name,
+            class_id=school_class.id,
+            class_name=school_class.name,
+            subject_id=subject_id,
+            generated_at=datetime.now(),
+            notices=["当前班级暂无题分知识点快照，请先导入题分明细。"],
+        )
+
+    point_paths = _knowledge_paths_for_snapshots(session, snapshots)
+    grouped: dict[tuple[int, int], list[ScoreKnowledgeSnapshot]] = defaultdict(list)
+    for item in snapshots:
+        grouped[(item.subject_id, item.knowledge_point_id)].append(item)
+
+    rows: list[ClassKnowledgeBriefingItem] = []
+    for items in grouped.values():
+        weak_items = [item for item in items if _knowledge_snapshot_is_weak(item) and item.priority_score > 0]
+        if not weak_items:
+            continue
+        total_student_count = len({item.student_id for item in items})
+        weak_student_count = len({item.student_id for item in weak_items})
+        lost_score_total = round(sum(item.lost_score for item in weak_items), 4)
+        average_score_rate = _safe_average([item.score_rate for item in weak_items])
+        grade_average_rate = _safe_average([item.grade_average_rate for item in items])
+        question_numbers = sorted({number for item in weak_items for number in (item.question_numbers_json or [])})
+        error_tags = _merge_error_tag_stats([item.error_tags_json for item in weak_items])
+        latest = weak_items[0]
+        priority_score = round(weak_student_count * 1.5 + lost_score_total + len(error_tags) * 0.5, 4)
+        priority_label = "高" if priority_score >= 12 or weak_student_count >= 3 else ("中" if priority_score >= 6 else "低")
+        subject_name = latest.subject.name if latest.subject else str(latest.subject_id)
+        point_name = latest.knowledge_point.name if latest.knowledge_point else str(latest.knowledge_point_id)
+        rows.append(
+            ClassKnowledgeBriefingItem(
+                subject_id=latest.subject_id,
+                subject_name=subject_name,
+                knowledge_point_id=latest.knowledge_point_id,
+                knowledge_point_name=point_name,
+                knowledge_path=point_paths.get(latest.knowledge_point_id),
+                weak_student_count=weak_student_count,
+                total_student_count=total_student_count,
+                average_score_rate=average_score_rate,
+                grade_average_rate=grade_average_rate,
+                lost_score_total=lost_score_total,
+                question_numbers=question_numbers,
+                error_tag_stats=[KnowledgeErrorTagStat(tag=str(item["tag"]), count=int(item["count"])) for item in error_tags],
+                priority_score=priority_score,
+                priority_label=priority_label,
+                suggestion=_build_class_knowledge_suggestion(subject_name, point_name, weak_student_count, error_tags),
+                weak_students=[
+                    ClassKnowledgeBriefingStudent(
+                        student_id=item.student_id,
+                        student_name=item.student.name if item.student else str(item.student_id),
+                        student_no=item.student.student_no if item.student else None,
+                        class_name=effective_class_name(item.student, context_map.get(item.student_id)) if item.student else None,
+                        score_rate=item.score_rate,
+                        lost_score=item.lost_score,
+                        diagnosis_label=item.diagnosis_label,
+                        main_error_tag=item.dominant_error_tag,
+                    )
+                    for item in sorted(weak_items, key=lambda current: (current.score_rate or 1.0, -current.lost_score, current.student_id))
+                ],
+            )
+        )
+    rows.sort(key=lambda item: (item.priority_score, item.weak_student_count, item.lost_score_total), reverse=True)
+    return ClassKnowledgeBriefingResponse(
+        exam_id=exam.id,
+        exam_name=exam.name,
+        class_id=school_class.id,
+        class_name=school_class.name,
+        subject_id=subject_id,
+        generated_at=datetime.now(),
+        items=rows,
+        notices=[] if rows else ["当前班级暂无达到阈值的薄弱知识点。"],
+    )
+
+
+def _knowledge_snapshot_is_weak(item: ScoreKnowledgeSnapshot) -> bool:
+    if item.diagnosis_label in {"优先补弱", "需要巩固", "低于年级"}:
+        return True
+    return item.score_rate is not None and item.score_rate < KNOWLEDGE_WEAK_RATE_THRESHOLD
+
+
+def _knowledge_paths_for_snapshots(
+    session: Session,
+    snapshots: list[ScoreKnowledgeSnapshot],
+) -> dict[int, str]:
+    subject_ids = list({item.subject_id for item in snapshots})
+    if not subject_ids:
+        return {}
+    points = list(
+        session.scalars(
+            select(KnowledgePoint).where(
+                KnowledgePoint.subject_id.in_(subject_ids),
+                KnowledgePoint.is_active.is_(True),
+            )
+        ).all()
+    )
+    return build_knowledge_paths(points)
+
+
+def _merge_error_tag_stats(values: list[object]) -> list[dict[str, object]]:
+    counter: Counter[str] = Counter()
+    for value in values:
+        if not isinstance(value, list):
+            continue
+        for item in value:
+            if isinstance(item, dict):
+                tag = item.get("tag") or item.get("name")
+                count = item.get("count", 1)
+                if tag:
+                    counter[str(tag)] += int(count or 1)
+            elif isinstance(item, str):
+                counter[item] += 1
+    return [{"tag": tag, "count": count} for tag, count in counter.most_common() if tag and count > 0]
+
+
+def _safe_average(values: list[float | None]) -> float | None:
+    numbers = [value for value in values if value is not None]
+    if not numbers:
+        return None
+    return round(sum(numbers) / len(numbers), 4)
+
+
+def _build_class_knowledge_suggestion(
+    subject_name: str,
+    point_name: str,
+    weak_student_count: int,
+    error_tags: list[dict[str, object]],
+) -> str:
+    error_text = f"，集中错因为{error_tags[0]['tag']}" if error_tags else ""
+    return f"{subject_name}-{point_name} 有 {weak_student_count} 名学生达到薄弱阈值{error_text}。建议先做 10 分钟共性讲评，再给弱项学生布置同类补弱任务。"
+
+
+def _diagnose_knowledge_trend(
+    *,
+    exam_count: int,
+    total_full_score: float,
+    weak_exam_count: int,
+    rates: list[float],
+    latest_score_rate: float | None,
+    trend_delta: float | None,
+) -> str:
+    if exam_count < KNOWLEDGE_TREND_MIN_EXAM_COUNT or total_full_score < KNOWLEDGE_TREND_MIN_FULL_SCORE:
+        return "样本不足"
+    if trend_delta is not None and latest_score_rate is not None and trend_delta >= KNOWLEDGE_IMPROVEMENT_DELTA and latest_score_rate >= KNOWLEDGE_WEAK_RATE_THRESHOLD:
+        return "正在改善"
+    if len(rates) >= 3 and max(rates) - min(rates) >= KNOWLEDGE_VOLATILE_DELTA and weak_exam_count >= 2:
+        return "波动反复"
+    if weak_exam_count >= max(2, math.ceil(exam_count * 0.6)):
+        return "持续薄弱"
+    if weak_exam_count == 1:
+        return "偶发失误"
+    return "保持观察"
+
+
+def _calculate_knowledge_trend_priority(
+    *,
+    trend_label: str,
+    total_lost_score: float,
+    average_score_rate: float | None,
+    weak_exam_count: int,
+    exam_count: int,
+) -> float:
+    if trend_label == "样本不足":
+        return 0.0
+    improvement_space = max(1.0 - (average_score_rate if average_score_rate is not None else 1.0), 0.0)
+    persistence = weak_exam_count / exam_count if exam_count else 0.0
+    label_weight = {
+        "持续薄弱": 1.25,
+        "波动反复": 1.1,
+        "正在改善": 0.75,
+        "偶发失误": 0.35,
+        "保持观察": 0.2,
+    }.get(trend_label, 0.0)
+    return round(total_lost_score * improvement_space * (1.0 + persistence) * label_weight, 4)
+
+
+def _build_knowledge_trend_suggestion(trend_label: str, subject_name: str, point_name: str) -> str:
+    label = f"{subject_name}-{point_name}"
+    if trend_label == "持续薄弱":
+        return f"{label} 已连续暴露短板，建议列为下一阶段固定补弱专题，先补概念和基础模型。"
+    if trend_label == "波动反复":
+        return f"{label} 表现不稳定，建议复盘不同题型下的失分步骤，建立易错清单。"
+    if trend_label == "正在改善":
+        return f"{label} 已有改善迹象，建议保持同类题巩固，避免训练中断。"
+    if trend_label == "偶发失误":
+        return f"{label} 本次更像偶发失误，先复盘本次题目，不必扩大训练量。"
+    if trend_label == "样本不足":
+        return "题分样本不足，暂不作为连续补弱重点。"
+    return f"{label} 暂保持观察，后续结合下一次题分明细再判断。"
 
 
 def _merge_knowledge_action_suggestions(
@@ -380,6 +800,30 @@ def _merge_knowledge_action_suggestions(
             category="knowledge_focus",
             title="知识点清单",
             summary=f"下一阶段优先处理 {'、'.join(point_names)}，先复盘涉及题号，再补同类题巩固。",
+            subject_names=subject_names,
+            priority=4,
+        )
+    )
+    return sorted(suggestions, key=lambda item: item.priority)
+
+
+def _merge_knowledge_trend_action_suggestions(
+    suggestions: list[StudentActionSuggestion],
+    knowledge_trends: list[StudentKnowledgeTrendAnalytics],
+) -> list[StudentActionSuggestion]:
+    focus_points = [
+        item for item in knowledge_trends
+        if item.trend_label in {"持续薄弱", "波动反复"} and item.priority_score > 0
+    ][:3]
+    if not focus_points:
+        return suggestions
+    subject_names = list(dict.fromkeys(item.subject_name for item in focus_points))
+    point_names = [f"{item.subject_name}-{item.knowledge_point_name}" for item in focus_points]
+    suggestions.append(
+        StudentActionSuggestion(
+            category="knowledge_trend_focus",
+            title="连续薄弱",
+            summary=f"{'、'.join(point_names)} 在多次题分明细中反复暴露，建议列入阶段固定补弱清单。",
             subject_names=subject_names,
             priority=4,
         )

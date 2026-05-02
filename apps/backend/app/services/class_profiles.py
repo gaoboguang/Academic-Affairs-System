@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from collections import Counter, defaultdict
-from datetime import date, timedelta
+from collections import defaultdict
+from datetime import date
 
 from fastapi import HTTPException
 from sqlalchemy import desc, func, select
@@ -10,8 +10,6 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.analytics.score_contexts import effective_class_id, load_exam_context_map
 from app.models import (
-    AttendanceRecord,
-    BehaviorRecord,
     ClassHonor,
     Exam,
     Grade,
@@ -19,6 +17,8 @@ from app.models import (
     ScoreTotalSnapshot,
     Semester,
     Student,
+    StudentGrowthRecord,
+    StudentPlanningTask,
     Teacher,
     TeachingAssignment,
 )
@@ -192,7 +192,7 @@ def _build_class_overview_items(
     assignments_by_class = _list_assignments(session, class_ids, semester.id if semester else None)
     honors_by_class = _list_recent_honors(session, class_ids)
     score_by_class = _build_score_summary_by_class(session, class_ids, exam)
-    risk_by_class = _build_risk_summary_by_class(session, class_ids)
+    risk_by_class = _build_risk_summary_by_class(session, class_ids, exam)
 
     result: list[ClassOverviewItem] = []
     for school_class in classes:
@@ -364,52 +364,69 @@ def _build_score_summary_by_class(
     return result
 
 
-def _build_risk_summary_by_class(session: Session, class_ids: list[int]) -> dict[int, ClassRiskSummary]:
+def _build_risk_summary_by_class(
+    session: Session,
+    class_ids: list[int],
+    exam: Exam | None,
+) -> dict[int, ClassRiskSummary]:
     if not class_ids:
         return {}
-    since = date.today() - timedelta(days=30)
     class_id_set = set(class_ids)
-    attendance_rows = session.execute(
-        select(Student.current_class_id, AttendanceRecord.status, func.count(AttendanceRecord.id))
-        .join(Student, AttendanceRecord.student_id == Student.id)
+    score_snapshots: list[ScoreTotalSnapshot] = []
+    if exam:
+        score_snapshots = session.scalars(
+            select(ScoreTotalSnapshot)
+            .options(joinedload(ScoreTotalSnapshot.student))
+            .where(ScoreTotalSnapshot.is_active.is_(True), ScoreTotalSnapshot.exam_id == exam.id)
+        ).all()
+    planning_rows = session.execute(
+        select(Student.current_class_id, StudentPlanningTask.status, StudentPlanningTask.due_date, func.count(StudentPlanningTask.id))
+        .join(Student, StudentPlanningTask.student_id == Student.id)
         .where(
             Student.current_class_id.in_(class_ids),
             Student.is_active.is_(True),
-            AttendanceRecord.is_active.is_(True),
-            AttendanceRecord.record_date >= since,
+            StudentPlanningTask.is_active.is_(True),
+            StudentPlanningTask.status.in_({"not_started", "in_progress", "review", "paused"}),
         )
-        .group_by(Student.current_class_id, AttendanceRecord.status)
+        .group_by(Student.current_class_id, StudentPlanningTask.status, StudentPlanningTask.due_date)
     ).all()
-    behavior_rows = session.execute(
-        select(Student.current_class_id, BehaviorRecord.severity, func.count(BehaviorRecord.id))
-        .join(Student, BehaviorRecord.student_id == Student.id)
+    growth_rows = session.execute(
+        select(Student.current_class_id, func.count(StudentGrowthRecord.id))
+        .join(Student, StudentGrowthRecord.student_id == Student.id)
         .where(
             Student.current_class_id.in_(class_ids),
             Student.is_active.is_(True),
-            BehaviorRecord.is_active.is_(True),
-            BehaviorRecord.record_date >= since,
+            StudentGrowthRecord.is_active.is_(True),
         )
-        .group_by(Student.current_class_id, BehaviorRecord.severity)
+        .group_by(Student.current_class_id)
     ).all()
     result = {class_id: ClassRiskSummary() for class_id in class_id_set}
-    attendance_by_class: dict[int, Counter[str]] = defaultdict(Counter)
-    behavior_by_class: dict[int, Counter[str]] = defaultdict(Counter)
-    for class_id, status, count in attendance_rows:
+    score_risk_by_class: dict[int, set[int]] = defaultdict(set)
+    context_map = load_exam_context_map(session, exam.id) if exam else {}
+    for snapshot in score_snapshots:
+        if not snapshot.student or not snapshot.student.is_active:
+            continue
+        class_id = effective_class_id(snapshot.student, context_map.get(snapshot.student_id))
+        if class_id in class_id_set and snapshot.grade_percentile is not None and snapshot.grade_percentile <= 0.25:
+            score_risk_by_class[int(class_id)].add(int(snapshot.student_id))
+    planning_risk_by_class: dict[int, int] = defaultdict(int)
+    urgent_by_class: dict[int, int] = defaultdict(int)
+    today = date.today()
+    for class_id, _status, due_date, count in planning_rows:
         if class_id is not None:
-            attendance_by_class[int(class_id)][status] += int(count)
-    for class_id, severity, count in behavior_rows:
-        if class_id is not None:
-            behavior_by_class[int(class_id)][severity] += int(count)
+            planning_risk_by_class[int(class_id)] += int(count)
+            if due_date is not None and due_date < today:
+                urgent_by_class[int(class_id)] += int(count)
+    growth_by_class = {int(class_id): int(count) for class_id, count in growth_rows if class_id is not None}
     for class_id in class_id_set:
-        attendance = attendance_by_class.get(class_id, Counter())
-        behavior = behavior_by_class.get(class_id, Counter())
-        attendance_risk = attendance.get("truancy", 0) + attendance.get("late", 0) + attendance.get("early_leave", 0)
-        behavior_risk = behavior.get("severe", 0) + behavior.get("high", 0)
+        score_risk = len(score_risk_by_class.get(class_id, set()))
+        planning_risk = planning_risk_by_class.get(class_id, 0)
         result[class_id] = ClassRiskSummary(
-            follow_up_count=attendance_risk + behavior_risk,
-            urgent_count=attendance.get("truancy", 0) + behavior.get("severe", 0),
-            attendance_risk_count=attendance_risk,
-            behavior_risk_count=behavior_risk,
+            follow_up_count=score_risk + planning_risk,
+            urgent_count=urgent_by_class.get(class_id, 0),
+            score_risk_count=score_risk,
+            planning_risk_count=planning_risk,
+            growth_record_count=growth_by_class.get(class_id, 0),
         )
     return result
 

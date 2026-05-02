@@ -7,6 +7,7 @@
   >
     <template #actions>
       <el-button :loading="loading" @click="reloadAll">刷新速览</el-button>
+      <el-button @click="router.push('/teachers?assignments=1')">批量维护任课</el-button>
       <el-button type="primary" @click="router.push('/base-data')">维护主数据</el-button>
     </template>
 
@@ -113,7 +114,12 @@
             <p class="class-teachers">{{ formatClassTeachers(item.teacher_summary) }}</p>
             <div class="class-card-foot">
               <span>{{ item.latest_honor?.title ?? "暂无班级荣誉" }}</span>
-              <el-button type="primary" plain @click="router.push(`/classes/${item.class_id}`)">详情</el-button>
+              <div class="class-card-actions">
+                <el-button plain @click="router.push(buildTeachingSetupPath(item.class_id))">
+                  {{ getTeachingSetupLabel(item) }}
+                </el-button>
+                <el-button type="primary" plain @click="router.push(`/classes/${item.class_id}`)">详情</el-button>
+              </div>
             </div>
           </article>
         </div>
@@ -142,6 +148,14 @@
             <el-table-column label="荣誉" min-width="180">
               <template #default="{ row }">{{ row.latest_honor?.title ?? "暂无" }}</template>
             </el-table-column>
+            <el-table-column label="操作" width="180" fixed="right">
+              <template #default="{ row }">
+                <el-button link type="primary" @click="router.push(`/classes/${row.class_id}`)">详情</el-button>
+                <el-button link type="primary" @click="router.push(buildTeachingSetupPath(row.class_id))">
+                  {{ getTeachingSetupLabel(row) }}
+                </el-button>
+              </template>
+            </el-table-column>
           </el-table>
         </AppTableShell>
       </AppSectionCard>
@@ -166,11 +180,13 @@ import {
   type PageMetaItem,
 } from "../components/ui";
 import {
+  buildTeachingSetupPath,
   buildClassOverviewCards,
   filterClasses,
   formatClassTeachers,
   formatPercent,
   formatScore,
+  getTeachingSetupLabel,
   type ClassesOverviewResponse,
   type GradeOverviewGroup,
 } from "../components/classes/classProfile";
@@ -313,6 +329,13 @@ onMounted(reloadAll);
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.class-card-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .class-card-head span,

@@ -25,9 +25,12 @@ def _build_question_workbook(exam_name: str, rows: list[list[object]]) -> bytes:
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "数据"
-    sheet.append(["考试名称", "学号", "姓名", "科目", "题号", "题目满分", "学生得分", "知识点", "题型", "能力层级", "备注"])
+    sheet.append(["考试名称", "学号", "姓名", "科目", "题号", "题目满分", "学生得分", "知识点", "题型", "能力层级", "错因标签", "错因备注", "备注"])
     for row in rows:
-        sheet.append([exam_name, *row])
+        normalized_row = list(row)
+        if len(normalized_row) == 10:
+            normalized_row = [*normalized_row[:9], "", "", normalized_row[9]]
+        sheet.append([exam_name, *normalized_row])
     buffer = BytesIO()
     workbook.save(buffer)
     return buffer.getvalue()
@@ -305,6 +308,189 @@ def test_student_knowledge_import_builds_learning_plan(client) -> None:
     workbook = load_workbook(BytesIO(download_response.content))
     assert {"学习清单", "知识点诊断", "下一步建议"} <= set(workbook.sheetnames)
     assert workbook["知识点诊断"].cell(row=2, column=2).value == "函数单调性"
+
+
+def test_student_knowledge_trends_rank_stable_weakness_and_exports(client) -> None:
+    student_ids = [_create_student(client, index) for index in range(1, 4)]
+    exam_specs = [
+        ("知识点趋势一", "2026-03-01", 2, 8, 9),
+        ("知识点趋势二", "2026-04-01", 3, 8, 9),
+        ("知识点趋势三", "2026-05-01", 4, 9, 10),
+    ]
+    current_exam_id = 0
+    for exam_name, exam_date, target_score, second_score, third_score in exam_specs:
+        current_exam_id = _create_exam(
+            client,
+            exam_name,
+            exam_date,
+            _rows_for_exam(
+                {1: 70 + target_score, 2: 120, 3: 130},
+                {1: 120, 2: 100, 3: 95},
+            ),
+        )
+        rows = [
+            ["20261001", "测试生1", "数学", "12", 10, target_score, "函数单调性", "选择题", "理解", ""],
+            ["20261002", "测试生2", "数学", "12", 10, second_score, "函数单调性", "选择题", "理解", ""],
+            ["20261003", "测试生3", "数学", "12", 10, third_score, "函数单调性", "选择题", "理解", ""],
+        ]
+        import_response = client.post(
+            f"/api/exams/{current_exam_id}/score-questions/import",
+            data={"strategy": "overwrite"},
+            files={
+                "file": (
+                    f"{exam_name}.xlsx",
+                    _build_question_workbook(exam_name, rows),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+        )
+        assert import_response.status_code == 200
+
+    response = client.get(f"/api/analytics/students/{student_ids[0]}?exam_id={current_exam_id}")
+    assert response.status_code == 200
+    payload = response.json()
+    trends = payload["knowledge_trends"]
+
+    assert trends[0]["knowledge_point_name"] == "函数单调性"
+    assert trends[0]["trend_exam_count"] == 3
+    assert trends[0]["weak_exam_count"] == 3
+    assert trends[0]["trend_label"] == "持续薄弱"
+    assert trends[0]["priority_score"] > 0
+    assert [point["score_rate"] for point in trends[0]["points"]] == [0.2, 0.3, 0.4]
+    assert any(item["category"] == "knowledge_trend_focus" for item in payload["action_suggestions"])
+
+    export_response = client.post(
+        "/api/reports/export",
+        json={"report_type": "student_knowledge_plan", "exam_id": current_exam_id, "student_id": student_ids[0]},
+    )
+    assert export_response.status_code == 200
+    download_response = client.get(export_response.json()["download_url"])
+    assert download_response.status_code == 200
+    workbook = load_workbook(BytesIO(download_response.content))
+    assert "连续趋势" in workbook.sheetnames
+    trend_sheet = workbook["连续趋势"]
+    trend_headers = {cell.value: index for index, cell in enumerate(trend_sheet[1], start=1)}
+    assert trend_sheet.cell(row=2, column=trend_headers["知识点"]).value == "函数单调性"
+    assert trend_sheet.cell(row=2, column=trend_headers["趋势标签"]).value == "持续薄弱"
+
+
+def test_student_knowledge_trends_detect_improvement_and_fluctuation(client) -> None:
+    student_ids = [_create_student(client, index) for index in range(1, 3)]
+    exam_specs = [
+        ("知识点趋势波动一", "2026-03-02", 2, 2),
+        ("知识点趋势波动二", "2026-04-02", 5, 9),
+        ("知识点趋势波动三", "2026-05-02", 8, 3),
+    ]
+    current_exam_id = 0
+    for exam_name, exam_date, improving_score, fluctuating_score in exam_specs:
+        current_exam_id = _create_exam(
+            client,
+            exam_name,
+            exam_date,
+            _rows_for_exam(
+                {1: 90 + improving_score, 2: 90 + fluctuating_score},
+                {1: 120, 2: 110},
+            ),
+        )
+        rows = [
+            ["20261001", "测试生1", "数学", "12", 10, improving_score, "导数应用", "解答题", "综合应用", ""],
+            ["20261002", "测试生2", "数学", "12", 10, fluctuating_score, "导数应用", "解答题", "综合应用", ""],
+        ]
+        import_response = client.post(
+            f"/api/exams/{current_exam_id}/score-questions/import",
+            data={"strategy": "overwrite"},
+            files={
+                "file": (
+                    f"{exam_name}.xlsx",
+                    _build_question_workbook(exam_name, rows),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+        )
+        assert import_response.status_code == 200
+
+    improving_response = client.get(f"/api/analytics/students/{student_ids[0]}?exam_id={current_exam_id}")
+    assert improving_response.status_code == 200
+    improving_trend = improving_response.json()["knowledge_trends"][0]
+    assert improving_trend["knowledge_point_name"] == "导数应用"
+    assert improving_trend["trend_label"] == "正在改善"
+    assert improving_trend["trend_delta"] == 0.6
+
+    fluctuation_response = client.get(f"/api/analytics/students/{student_ids[1]}?exam_id={current_exam_id}")
+    assert fluctuation_response.status_code == 200
+    fluctuation_trend = fluctuation_response.json()["knowledge_trends"][0]
+    assert fluctuation_trend["knowledge_point_name"] == "导数应用"
+    assert fluctuation_trend["trend_label"] == "波动反复"
+
+
+def test_student_knowledge_trends_require_multiple_question_detail_exams(client) -> None:
+    student_id = _create_student(client, 1)
+    exam_id = _create_exam(
+        client,
+        "单次题分趋势测试",
+        "2026-05-08",
+        _rows_for_exam({1: 90}, {1: 100}),
+    )
+    import_response = client.post(
+        f"/api/exams/{exam_id}/score-questions/import",
+        data={"strategy": "overwrite"},
+        files={
+            "file": (
+                "single-question.xlsx",
+                _build_question_workbook(
+                    "单次题分趋势测试",
+                    [["20261001", "测试生1", "数学", "12", 10, 4, "函数单调性", "选择题", "理解", ""]],
+                ),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert import_response.status_code == 200
+
+    response = client.get(f"/api/analytics/students/{student_id}?exam_id={exam_id}")
+    assert response.status_code == 200
+    assert response.json()["knowledge_trends"] == []
+
+
+def test_student_knowledge_trends_window_uses_student_snapshot_exams(client) -> None:
+    student_id = _create_student(client, 1)
+    current_exam_id = 0
+    snapshot_specs = {
+        1: ("趋势窗口一", 3),
+        6: ("趋势窗口六", 4),
+    }
+    for index in range(1, 7):
+        exam_name, score = snapshot_specs.get(index, (f"趋势窗口{index}", None))
+        current_exam_id = _create_exam(
+            client,
+            exam_name,
+            f"2026-0{index}-01",
+            _rows_for_exam({1: 80 + index}, {1: 100}),
+        )
+        if score is None:
+            continue
+        import_response = client.post(
+            f"/api/exams/{current_exam_id}/score-questions/import",
+            data={"strategy": "overwrite"},
+            files={
+                "file": (
+                    f"{exam_name}.xlsx",
+                    _build_question_workbook(
+                        exam_name,
+                        [["20261001", "测试生1", "数学", "12", 10, score, "函数单调性", "选择题", "理解", ""]],
+                    ),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+        )
+        assert import_response.status_code == 200
+
+    response = client.get(f"/api/analytics/students/{student_id}?exam_id={current_exam_id}")
+    assert response.status_code == 200
+    trends = response.json()["knowledge_trends"]
+    assert trends[0]["trend_label"] == "持续薄弱"
+    assert trends[0]["trend_exam_count"] == 2
+    assert [point["exam_name"] for point in trends[0]["points"]] == ["趋势窗口一", "趋势窗口六"]
 
 
 def test_question_score_import_reports_duplicates(client) -> None:

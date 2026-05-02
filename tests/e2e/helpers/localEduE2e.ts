@@ -7,10 +7,14 @@ import type { Locator, Page } from "@playwright/test";
 const scoresFixture = path.resolve(process.cwd(), "tests/e2e/fixtures/scores-import.xlsx");
 const invalidScoresFixture = path.resolve(process.cwd(), "tests/e2e/fixtures/scores-invalid.xlsx");
 const scoreQuestionDetailsFixture = path.resolve(process.cwd(), "tests/e2e/fixtures/score-question-details-import.xlsx");
+const scoreQuestionTrendFixtureOne = path.resolve(process.cwd(), "tests/e2e/fixtures/score-question-details-trend-1.xlsx");
+const scoreQuestionTrendFixtureTwo = path.resolve(process.cwd(), "tests/e2e/fixtures/score-question-details-trend-2.xlsx");
 const admissionsFixture = path.resolve(process.cwd(), "tests/e2e/fixtures/admissions-import.xlsx");
 const crossProvinceAdmissionsFixture = path.resolve(process.cwd(), "tests/e2e/fixtures/admissions-cross-province.xlsx");
 const enrollmentPlansFixture = path.resolve(process.cwd(), "tests/e2e/fixtures/enrollment-plans-import.xlsx");
 const e2eExamName = "2026届高一4月月考";
+const e2eKnowledgeTrendExamOneName = "E2E知识点趋势一";
+const e2eKnowledgeTrendExamTwoName = "E2E知识点趋势二";
 const gaokaoTargetYear = "2026";
 
 interface VolunteerRuleOptions {
@@ -71,6 +75,109 @@ async function expectToast(page: Page, text: string): Promise<void> {
 async function importFixtureByApi(page: Page, url: string, fixturePath: string): Promise<void> {
   const response = await page.request.post(url, {
     multipart: {
+      file: {
+        name: path.basename(fixturePath),
+        mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        buffer: fs.readFileSync(fixturePath),
+      },
+    },
+  });
+  expect(response.ok()).toBeTruthy();
+}
+
+async function getCurrentSemesterId(page: Page): Promise<number> {
+  const semestersResponse = await page.request.get("/api/base/semesters");
+  expect(semestersResponse.ok()).toBeTruthy();
+  const semesters = (await semestersResponse.json()) as Array<{ id: number; is_current?: boolean }>;
+  const semesterId = semesters.find((item) => item.is_current)?.id ?? semesters[0]?.id;
+  expect(semesterId).toBeTruthy();
+  return semesterId;
+}
+
+async function getCoreSubjectIds(page: Page): Promise<{ chineseId: number; mathId: number }> {
+  const subjectsResponse = await page.request.get("/api/base/subjects");
+  expect(subjectsResponse.ok()).toBeTruthy();
+  const subjects = (await subjectsResponse.json()) as Array<{ id: number; name: string }>;
+  const chinese = subjects.find((item) => item.name === "语文");
+  const math = subjects.find((item) => item.name === "数学");
+  expect(chinese?.id).toBeTruthy();
+  expect(math?.id).toBeTruthy();
+  return { chineseId: chinese!.id, mathId: math!.id };
+}
+
+async function importScoresByApi(page: Page, examId: number, fixturePath: string): Promise<void> {
+  const response = await page.request.post(`/api/exams/${examId}/scores/import`, {
+    multipart: {
+      strategy: "overwrite",
+      rebuild: "true",
+      file: {
+        name: path.basename(fixturePath),
+        mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        buffer: fs.readFileSync(fixturePath),
+      },
+    },
+  });
+  expect(response.ok()).toBeTruthy();
+}
+
+async function ensureExamWithSubjectsByApi(page: Page, examName: string, examDate: string): Promise<number> {
+  const examListResponse = await page.request.get(`/api/exams?page=1&page_size=200&name=${encodeURIComponent(examName)}`);
+  expect(examListResponse.ok()).toBeTruthy();
+  const examListPayload = (await examListResponse.json()) as { items: Array<{ id: number; name: string; subject_count?: number }> };
+  const existing = examListPayload.items.find((item) => item.name === examName && (item.subject_count ?? 0) > 0)
+    ?? examListPayload.items.find((item) => item.name === examName);
+  let examId = existing?.id;
+  if (!examId) {
+    const semesterId = await getCurrentSemesterId(page);
+    const createResponse = await page.request.post("/api/exams", {
+      data: {
+        name: examName,
+        exam_type: "阶段测试",
+        exam_date: examDate,
+        semester_id: semesterId,
+        grade_scope_json: [1],
+        is_trend_enabled: true,
+        status: "published",
+        note: "",
+        is_active: true,
+      },
+    });
+    expect(createResponse.ok()).toBeTruthy();
+    const created = (await createResponse.json()) as { id: number };
+    examId = created.id;
+  }
+
+  const { chineseId, mathId } = await getCoreSubjectIds(page);
+  const subjectResponse = await page.request.post(`/api/exams/${examId}/subjects`, {
+    data: [
+      {
+        subject_id: chineseId,
+        full_score: 150,
+        is_in_total: true,
+        excellent_line: 110,
+        pass_line: 90,
+        sort_order: 1,
+        is_active: true,
+      },
+      {
+        subject_id: mathId,
+        full_score: 150,
+        is_in_total: true,
+        excellent_line: 110,
+        pass_line: 90,
+        sort_order: 2,
+        is_active: true,
+      },
+    ],
+  });
+  expect(subjectResponse.ok()).toBeTruthy();
+  return examId;
+}
+
+async function importQuestionDetailsByApi(page: Page, examId: number, fixturePath: string): Promise<void> {
+  const response = await page.request.post(`/api/exams/${examId}/score-questions/import`, {
+    multipart: {
+      strategy: "overwrite",
       file: {
         name: path.basename(fixturePath),
         mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -157,56 +264,8 @@ async function confirmDialogIfVisible(
 }
 
 async function ensureExamWithScores(page: Page): Promise<void> {
-  await page.goto("/exams");
-  await expect(page.getByRole("heading", { name: "考试成绩中心" })).toBeVisible();
-
-  const examRows = page.locator(".el-table__row").filter({ hasText: e2eExamName });
-  if ((await examRows.count()) === 0) {
-    const createButton = page.getByRole("button", { name: "新建考试" });
-    await createButton.click();
-    const examDialog = page.locator('[role="dialog"]').filter({ hasText: "新建考试" });
-    if (!(await examDialog.isVisible().catch(() => false))) {
-      await createButton.click();
-    }
-    await expect(examDialog).toBeVisible({ timeout: 15000 });
-
-    await examDialog.locator(".el-form-item").filter({ hasText: "考试名称" }).locator("input").fill(e2eExamName);
-    await examDialog.locator(".el-form-item").filter({ hasText: "考试日期" }).locator("input").fill("2026-04-10");
-    await examDialog.locator(".el-form-item").filter({ hasText: "学期" }).locator(".el-select").click();
-    await page.keyboard.press("ArrowDown");
-    await page.keyboard.press("Enter");
-
-    await examDialog.getByRole("button", { name: "保存" }).click();
-    await expect(page.getByText("考试保存成功")).toBeVisible();
-  }
-
-  const examRow = page.locator(".el-table__row").filter({ hasText: e2eExamName }).first();
-  await expect(examRow).toBeVisible();
-
-  await examRow.getByRole("button", { name: "科目配置" }).click();
-  const subjectDialog = page.locator('[role="dialog"]').filter({ hasText: "科目配置" });
-  await expect(subjectDialog).toBeVisible();
-
-  if ((await subjectDialog.locator(".el-table__row").count()) === 0) {
-    await subjectDialog.getByRole("button", { name: "常规九科" }).click();
-    await expect(subjectDialog.locator(".el-table__row").filter({ hasText: "语文" }).first()).toBeVisible();
-    await expect(subjectDialog.locator(".el-table__row").filter({ hasText: "数学" }).first()).toBeVisible();
-    await subjectDialog.getByRole("button", { name: "保存科目配置" }).click();
-    await expect(page.getByText("考试科目保存成功")).toBeVisible();
-  } else {
-    await subjectDialog.getByRole("button", { name: "取消" }).click();
-  }
-
-  await examRow.getByRole("button", { name: "导入成绩" }).click();
-  const importDialog = page.locator('[role="dialog"]').filter({ hasText: "导入成绩" });
-  await expect(importDialog).toBeVisible();
-  await importDialog
-    .locator(".el-upload")
-    .filter({ hasText: "按统一模板导入" })
-    .locator('input[type="file"]')
-    .setInputFiles(scoresFixture);
-  await expect(importDialog.locator(".el-alert").getByText("成绩导入完成", { exact: false })).toBeVisible();
-  await expect(importDialog.locator(".el-table__row").first()).toBeVisible();
+  const examId = await ensureExamWithSubjectsByApi(page, e2eExamName, "2026-04-10");
+  await importScoresByApi(page, examId, scoresFixture);
 }
 
 async function ensureAdmissionsImported(page: Page): Promise<void> {
@@ -498,10 +557,13 @@ export {
   confirmDialogIfVisible,
   createVolunteerDraft,
   e2eExamName,
+  e2eKnowledgeTrendExamOneName,
+  e2eKnowledgeTrendExamTwoName,
   ensureAdmissionsImported,
   ensureCrossProvinceAdmissionsImported,
   ensureEnrollmentPlansImported,
   ensureExamWithScores,
+  ensureExamWithSubjectsByApi,
   ensureMajorEmploymentProfile,
   ensureStudentOriginProvince,
   ensureVolunteerRuleConfigured,
@@ -511,7 +573,10 @@ export {
   gaokaoTargetYear,
   generateRecommendationScheme,
   importFixtureByApi,
+  importQuestionDetailsByApi,
   invalidScoresFixture,
+  scoreQuestionTrendFixtureOne,
+  scoreQuestionTrendFixtureTwo,
   scoreQuestionDetailsFixture,
   openRecommendationCenter,
   openVolunteerWorkbench,

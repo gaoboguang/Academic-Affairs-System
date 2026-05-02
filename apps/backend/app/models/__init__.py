@@ -16,7 +16,9 @@ from app.models.class_profile import ClassHonor
 from app.models.exam import (
     Exam,
     ExamSubject,
+    ErrorReasonTag,
     KnowledgePoint,
+    KnowledgePointAlias,
     ScoreClassMapping,
     ScoreExamStudentContext,
     ScoreImportBatch,
@@ -65,7 +67,6 @@ from app.models.student import (
     StudentClassTransferItem,
     StudentGuardian,
 )
-from app.models.student_event import AttendanceRecord, BehaviorRecord
 from app.models.system import AuditLog, BackupRecord, ConfigItem, ImportJob, ReportExportRecord, StoredFile
 from app.models.teacher import (
     ClassAdviserAssignment,
@@ -91,9 +92,7 @@ __all__ = [
     "AdviserQuantRuleVersion",
     "AuditLog",
     "AdmissionRecord",
-    "AttendanceRecord",
     "BackupRecord",
-    "BehaviorRecord",
     "Base",
     "College",
     "CollegeAlias",
@@ -107,6 +106,7 @@ __all__ = [
     "EnrollmentPlan",
     "Exam",
     "ExamSubject",
+    "ErrorReasonTag",
     "EvaluationBatch",
     "EvaluationQuestion",
     "EvaluationResponse",
@@ -119,6 +119,7 @@ __all__ = [
     "GaokaoSourceDocument",
     "ImportJob",
     "KnowledgePoint",
+    "KnowledgePointAlias",
     "Major",
     "MajorEmploymentMapping",
     "ReportExportRecord",

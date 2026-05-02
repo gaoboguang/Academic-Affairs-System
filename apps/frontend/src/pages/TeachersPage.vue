@@ -292,10 +292,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import ElMessage from "element-plus/es/components/message/index";
 import type { UploadFile } from "element-plus";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 
 import { apiRequest, openFile, uploadFile } from "../api/client";
 import ImportFeedbackPanel from "../components/common/ImportFeedbackPanel.vue";
@@ -341,6 +341,7 @@ interface AssignmentItem {
 }
 
 const referenceStore = useReferenceStore();
+const route = useRoute();
 const router = useRouter();
 const importStrategy = ref("skip_existing");
 const dialogVisible = ref(false);
@@ -502,6 +503,16 @@ async function openAssignmentDialog(): Promise<void> {
   assignmentDialogVisible.value = true;
 }
 
+function shouldOpenAssignmentsFromRoute(): boolean {
+  const value = route.query.assignments;
+  return value === "1" || value === "true";
+}
+
+async function applyRouteIntent(): Promise<void> {
+  if (!shouldOpenAssignmentsFromRoute() || assignmentDialogVisible.value) return;
+  await openAssignmentDialog();
+}
+
 async function openEdit(row: TeacherItem): Promise<void> {
   try {
     const detail = await apiRequest<Record<string, unknown>>(`/api/teachers/${row.id}`);
@@ -612,7 +623,15 @@ function handleAssignmentDialogClosed(): void {
 onMounted(async () => {
   await referenceStore.loadAll();
   await Promise.all([loadTeachers(), loadAssignments()]);
+  await applyRouteIntent();
 });
+
+watch(
+  () => route.query.assignments,
+  () => {
+    void applyRouteIntent();
+  },
+);
 </script>
 
 <style scoped>

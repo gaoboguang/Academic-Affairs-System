@@ -83,7 +83,7 @@
           <div class="section-head compact">
             <div>
               <h3>班主任驾驶舱</h3>
-              <p>按年级或班级汇总成绩、考勤和行为风险，形成每日可执行的学生跟进清单。</p>
+              <p>按年级或班级汇总成绩波动、成长档案和规划任务，形成每日可执行的学生跟进清单。</p>
             </div>
           </div>
           <div class="filter-grid adviser-filter-grid">
@@ -132,12 +132,12 @@
           </div>
           <div v-if="adviserDashboard" class="adviser-summary-grid">
             <article class="soft-card inner-panel">
-              <h4>考勤概况</h4>
-              <p>{{ formatAttendanceSummary(adviserDashboard.attendance_summary) }}</p>
+              <h4>成长档案</h4>
+              <p>{{ formatGrowthSummary(adviserDashboard.growth_summary) }}</p>
             </article>
             <article class="soft-card inner-panel">
-              <h4>行为概况</h4>
-              <p>{{ formatBehaviorSummary(adviserDashboard.behavior_summary) }}</p>
+              <h4>规划任务</h4>
+              <p>{{ formatPlanningSummary(adviserDashboard.planning_summary) }}</p>
             </article>
             <article class="soft-card inner-panel">
               <h4>本周行动清单</h4>
@@ -322,19 +322,34 @@
                 <h4>知识点诊断</h4>
                 <p>按失分规模、可提升空间和科目短板权重排序，用于下一阶段学习清单。</p>
               </div>
-              <el-select v-model="knowledgeSubjectFilter" clearable placeholder="全部科目" style="width: 180px">
-                <el-option
-                  v-for="subject in studentAnalytics.subjects"
-                  :key="subject.subject_id"
-                  :label="subject.subject_name"
-                  :value="subject.subject_id"
-                />
-              </el-select>
+              <div class="knowledge-actions">
+                <el-select v-model="knowledgeSubjectFilter" clearable placeholder="全部科目" style="width: 180px">
+                  <el-option
+                    v-for="subject in studentAnalytics.subjects"
+                    :key="subject.subject_id"
+                    :label="subject.subject_name"
+                    :value="subject.subject_id"
+                  />
+                </el-select>
+                <el-button :loading="previewingStudentKnowledgeTasks" @click="previewStudentKnowledgeTasks">预览补弱任务</el-button>
+                <el-button type="primary" plain :loading="generatingStudentKnowledgeTasks" @click="generateStudentKnowledgeTasks">一键生成任务</el-button>
+                <el-button plain @click="openStudentKnowledgePrint">打印清单</el-button>
+              </div>
             </div>
+            <el-alert
+              v-if="studentKnowledgeTaskPreview"
+              class="table-gap"
+              type="info"
+              show-icon
+              :closable="false"
+              :title="formatTaskPreviewSummary(studentKnowledgeTaskPreview.create_count, studentKnowledgeTaskPreview.skip_count)"
+            />
             <div v-if="filteredKnowledgePoints.length" class="table-shell table-gap">
               <el-table :data="filteredKnowledgePoints" stripe>
                 <el-table-column label="科目" prop="subject_name" width="90" />
-                <el-table-column label="知识点" prop="knowledge_point_name" min-width="150" />
+                <el-table-column label="知识路径" min-width="190">
+                  <template #default="{ row }">{{ knowledgeDisplayName(row) }}</template>
+                </el-table-column>
                 <el-table-column label="得分率" width="90">
                   <template #default="{ row }">{{ formatPercentValue(row.score_rate) }}</template>
                 </el-table-column>
@@ -352,6 +367,9 @@
                     <el-tag :type="getKnowledgeDiagnosisTone(row.diagnosis_label)" effect="light">{{ row.diagnosis_label }}</el-tag>
                   </template>
                 </el-table-column>
+                <el-table-column label="主错因" min-width="130">
+                  <template #default="{ row }">{{ row.dominant_error_tag || formatErrorTagStats(row.error_tag_stats) }}</template>
+                </el-table-column>
                 <el-table-column label="题号" width="120">
                   <template #default="{ row }">{{ formatQuestionNumbers(row.question_numbers) }}</template>
                 </el-table-column>
@@ -359,6 +377,45 @@
               </el-table>
             </div>
             <el-empty v-else description="当前学生暂无知识点题分明细。请先导入阅卷题分表。" />
+            <div class="panel-title-row knowledge-trend-title">
+              <div>
+                <h4>连续知识点趋势</h4>
+                <p>按最近 5 次已导入题分明细的趋势考试，识别持续薄弱、改善和反复波动的知识点。</p>
+              </div>
+            </div>
+            <div v-if="filteredKnowledgeTrends.length" class="table-shell table-gap">
+              <el-table :data="filteredKnowledgeTrends" stripe>
+                <el-table-column label="科目" prop="subject_name" width="90" />
+                <el-table-column label="知识路径" min-width="190">
+                  <template #default="{ row }">{{ knowledgeDisplayName(row) }}</template>
+                </el-table-column>
+                <el-table-column label="趋势标签" width="110">
+                  <template #default="{ row }">
+                    <el-tag :type="getKnowledgeTrendTone(row.trend_label)" effect="light">{{ row.trend_label }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="最近得分率" width="110">
+                  <template #default="{ row }">{{ formatPercentValue(row.latest_score_rate) }}</template>
+                </el-table-column>
+                <el-table-column label="平均得分率" width="110">
+                  <template #default="{ row }">{{ formatPercentValue(row.average_score_rate) }}</template>
+                </el-table-column>
+                <el-table-column label="薄弱次数" width="100">
+                  <template #default="{ row }">{{ row.weak_exam_count }} / {{ row.trend_exam_count }}</template>
+                </el-table-column>
+                <el-table-column label="主错因" min-width="130">
+                  <template #default="{ row }">{{ row.dominant_error_tag || formatErrorTagStats(row.error_tag_stats) }}</template>
+                </el-table-column>
+                <el-table-column label="趋势变化" width="100">
+                  <template #default="{ row }">{{ formatSignedNumber(row.trend_delta ? row.trend_delta * 100 : row.trend_delta, "%") }}</template>
+                </el-table-column>
+                <el-table-column label="轨迹" min-width="260">
+                  <template #default="{ row }">{{ formatKnowledgeTrendTrack(row.points) }}</template>
+                </el-table-column>
+                <el-table-column label="建议" prop="suggestion" min-width="260" />
+              </el-table>
+            </div>
+            <el-empty v-else description="需要至少 2 次导入题分明细后才能判断连续知识点趋势。" />
           </article>
           <div v-if="studentAnalytics" class="student-report-grid table-gap">
             <article class="soft-card inner-panel">
@@ -436,6 +493,62 @@
               <el-table-column label="及格率" prop="pass_rate" width="100" />
             </el-table>
           </div>
+          <article v-if="classAnalytics" class="soft-card inner-panel knowledge-panel table-gap">
+            <div class="panel-title-row">
+              <div>
+                <h4>班级知识点讲评清单</h4>
+                <p>按弱项学生数、失分规模和错因分布排序，服务备课组讲评与个人补弱任务。</p>
+              </div>
+              <div class="knowledge-actions">
+                <el-select v-model="classKnowledgeSubjectFilter" clearable placeholder="全部科目" style="width: 180px">
+                  <el-option
+                    v-for="subject in classAnalytics.subject_breakdown"
+                    :key="subject.subject_id"
+                    :label="subject.subject_name"
+                    :value="subject.subject_id"
+                  />
+                </el-select>
+                <el-button :loading="loadingClassKnowledgeBriefing" @click="loadClassKnowledgeBriefing">加载讲评清单</el-button>
+                <el-button :disabled="!selectedClassKnowledgeIds.length" @click="previewClassKnowledgeTasks">预览任务</el-button>
+                <el-button type="primary" plain :disabled="!selectedClassKnowledgeIds.length" :loading="generatingClassKnowledgeTasks" @click="generateClassKnowledgeTasks">批量生成任务</el-button>
+                <el-button plain @click="openClassKnowledgePrint">打印讲评</el-button>
+              </div>
+            </div>
+            <el-alert
+              v-if="classKnowledgeTaskPreview"
+              class="table-gap"
+              type="info"
+              show-icon
+              :closable="false"
+              :title="formatTaskPreviewSummary(classKnowledgeTaskPreview.create_count, classKnowledgeTaskPreview.skip_count)"
+            />
+            <div v-if="classKnowledgeBriefing?.items?.length" class="table-shell table-gap">
+              <el-table :data="classKnowledgeBriefing.items" stripe @selection-change="handleClassKnowledgeSelection">
+                <el-table-column type="selection" width="45" />
+                <el-table-column label="科目" prop="subject_name" width="90" />
+                <el-table-column label="知识路径" prop="knowledge_path" min-width="190" />
+                <el-table-column label="弱项学生" width="100">
+                  <template #default="{ row }">{{ row.weak_student_count }} / {{ row.total_student_count }}</template>
+                </el-table-column>
+                <el-table-column label="平均得分率" width="110">
+                  <template #default="{ row }">{{ formatPercentValue(row.average_score_rate) }}</template>
+                </el-table-column>
+                <el-table-column label="错因分布" min-width="160">
+                  <template #default="{ row }">{{ formatErrorTagStats(row.error_tag_stats) }}</template>
+                </el-table-column>
+                <el-table-column label="题号" width="120">
+                  <template #default="{ row }">{{ formatQuestionNumbers(row.question_numbers) }}</template>
+                </el-table-column>
+                <el-table-column label="优先级" width="90">
+                  <template #default="{ row }">
+                    <el-tag :type="getBriefingPriorityTone(row.priority_label)" effect="light">{{ row.priority_label }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="建议" prop="suggestion" min-width="260" />
+              </el-table>
+            </div>
+            <el-empty v-else description="当前班级暂无知识点讲评清单。请先导入题分明细。" />
+          </article>
         </section>
       </el-tab-pane>
 
@@ -754,8 +867,8 @@ import { apiRequest, uploadFile } from "../api/client";
 import {
   adviserRiskTagType,
   buildAdviserDashboardEmptyTips,
-  formatAttendanceSummary,
-  formatBehaviorSummary,
+  formatGrowthSummary,
+  formatPlanningSummary,
   type AdviserDashboardResponse,
   type AdviserRiskStudentItem,
 } from "../components/analytics/adviserDashboard";
@@ -764,14 +877,21 @@ import GradePanoramaPanel from "../components/analytics/GradePanoramaPanel.vue";
 import {
   buildStudentRadarRows,
   filterKnowledgePointsBySubject,
+  filterKnowledgeTrendsBySubject,
+  formatErrorTagStats,
   formatExamStudentOptionLabel,
   formatDiagnosisTags,
+  formatKnowledgeTrendTrack,
   formatPercentValue,
   formatQuestionNumbers,
   formatSignedNumber,
+  formatTaskPreviewSummary,
+  getBriefingPriorityTone,
   getKnowledgeDiagnosisTone,
+  getKnowledgeTrendTone,
   getSuggestionTone,
   getTargetGapSummary,
+  knowledgeDisplayName,
   pickExamStudentSelection,
   type RadarMetric,
 } from "../components/analytics/studentReport";
@@ -785,6 +905,7 @@ import type {
 import { AppFilterBar, AppPage, AppSectionCard, AppStatGrid, type StatCardItem } from "../components/ui";
 import { useReferenceStore } from "../stores/reference";
 import { buildScoreReadinessMessages } from "../utils/scoreReadiness";
+import { classKnowledgeBriefingPrintPreviewPath, studentKnowledgePrintPreviewPath } from "../utils/print";
 
 interface ExamOption {
   id: number;
@@ -880,6 +1001,7 @@ const targetLineDrafts = ref<ScoreTargetLineDraft[]>([]);
 const savingTargetLines = ref(false);
 const studentRadarMetric = ref<RadarMetric>("pr");
 const knowledgeSubjectFilter = ref<number | null>(null);
+const classKnowledgeSubjectFilter = ref<number | null>(null);
 const importingQuestionScores = ref(false);
 const questionImportStrategy = ref("overwrite");
 const questionImportResult = ref<(ImportFeedbackResult & { batch_id?: number; snapshot_count?: number }) | null>(null);
@@ -890,6 +1012,14 @@ const studentRadarOptions = [
 
 const studentAnalytics = ref<any>(null);
 const classAnalytics = ref<any>(null);
+const classKnowledgeBriefing = ref<any>(null);
+const selectedClassKnowledgeIds = ref<number[]>([]);
+const loadingClassKnowledgeBriefing = ref(false);
+const studentKnowledgeTaskPreview = ref<any>(null);
+const classKnowledgeTaskPreview = ref<any>(null);
+const previewingStudentKnowledgeTasks = ref(false);
+const generatingStudentKnowledgeTasks = ref(false);
+const generatingClassKnowledgeTasks = ref(false);
 const gradeAnalytics = ref<any>(null);
 const teacherAnalytics = ref<any>(null);
 const gradePanorama = ref<GradePanoramaResponse | null>(null);
@@ -961,6 +1091,11 @@ const filteredKnowledgePoints = computed(() =>
     ? filterKnowledgePointsBySubject(studentAnalytics.value.knowledge_points ?? [], knowledgeSubjectFilter.value)
     : [],
 );
+const filteredKnowledgeTrends = computed(() =>
+  studentAnalytics.value
+    ? filterKnowledgeTrendsBySubject(studentAnalytics.value.knowledge_trends ?? [], knowledgeSubjectFilter.value)
+    : [],
+);
 const adviserDashboardTips = computed(() => buildAdviserDashboardEmptyTips(adviserDashboard.value));
 
 const adviserOverviewCards = computed(() => {
@@ -985,9 +1120,9 @@ const adviserOverviewCards = computed(() => {
       tone: "tone-amber",
     },
     {
-      label: "行为风险",
-      value: overview?.behavior_risk_count ?? 0,
-      help: "高关注行为或安全心理类记录触发的风险。",
+      label: "规划任务",
+      value: overview?.open_task_count ?? 0,
+      help: "当前范围内未完成的升学规划与阶段跟进任务。",
       tone: "tone-slate",
     },
   ];
@@ -1068,6 +1203,7 @@ async function loadStudentAnalytics(): Promise<void> {
   if (!selectedExamId.value || !selectedStudentId.value) return;
   try {
     studentAnalytics.value = await apiRequest(`/api/analytics/students/${selectedStudentId.value}?exam_id=${selectedExamId.value}`);
+    studentKnowledgeTaskPreview.value = null;
   } catch (error) {
     ElMessage.error((error as Error).message);
   }
@@ -1100,9 +1236,104 @@ async function loadClassAnalytics(): Promise<void> {
   if (!selectedExamId.value || !selectedClassId.value) return;
   try {
     classAnalytics.value = await apiRequest(`/api/analytics/classes/${selectedClassId.value}?exam_id=${selectedExamId.value}`);
+    classKnowledgeBriefing.value = null;
+    classKnowledgeTaskPreview.value = null;
+    selectedClassKnowledgeIds.value = [];
   } catch (error) {
     ElMessage.error((error as Error).message);
   }
+}
+
+async function loadClassKnowledgeBriefing(): Promise<void> {
+  if (!selectedExamId.value || !selectedClassId.value) return;
+  try {
+    loadingClassKnowledgeBriefing.value = true;
+    const query = new URLSearchParams({ exam_id: String(selectedExamId.value) });
+    if (classKnowledgeSubjectFilter.value) query.set("subject_id", String(classKnowledgeSubjectFilter.value));
+    classKnowledgeBriefing.value = await apiRequest(`/api/analytics/classes/${selectedClassId.value}/knowledge-briefing?${query.toString()}`);
+    selectedClassKnowledgeIds.value = [];
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  } finally {
+    loadingClassKnowledgeBriefing.value = false;
+  }
+}
+
+async function previewStudentKnowledgeTasks(): Promise<void> {
+  if (!selectedExamId.value || !selectedStudentId.value) return;
+  try {
+    previewingStudentKnowledgeTasks.value = true;
+    studentKnowledgeTaskPreview.value = await apiRequest(
+      `/api/planning/students/${selectedStudentId.value}/knowledge-tasks/preview?exam_id=${selectedExamId.value}`,
+    );
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  } finally {
+    previewingStudentKnowledgeTasks.value = false;
+  }
+}
+
+async function generateStudentKnowledgeTasks(): Promise<void> {
+  if (!selectedExamId.value || !selectedStudentId.value) return;
+  try {
+    generatingStudentKnowledgeTasks.value = true;
+    const result = await apiRequest<{ created_count: number; skipped_count: number }>(
+      `/api/planning/students/${selectedStudentId.value}/knowledge-tasks/generate?exam_id=${selectedExamId.value}`,
+      { method: "POST", body: JSON.stringify({}) },
+    );
+    ElMessage.success(`已生成 ${result.created_count} 项，跳过 ${result.skipped_count} 项已有任务`);
+    await previewStudentKnowledgeTasks();
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  } finally {
+    generatingStudentKnowledgeTasks.value = false;
+  }
+}
+
+async function previewClassKnowledgeTasks(): Promise<void> {
+  if (!selectedExamId.value || !selectedClassId.value || !selectedClassKnowledgeIds.value.length) return;
+  try {
+    const query = new URLSearchParams({ exam_id: String(selectedExamId.value) });
+    selectedClassKnowledgeIds.value.forEach((id) => query.append("knowledge_point_ids", String(id)));
+    classKnowledgeTaskPreview.value = await apiRequest(`/api/planning/classes/${selectedClassId.value}/knowledge-tasks/preview?${query.toString()}`);
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  }
+}
+
+async function generateClassKnowledgeTasks(): Promise<void> {
+  if (!selectedExamId.value || !selectedClassId.value || !selectedClassKnowledgeIds.value.length) return;
+  try {
+    generatingClassKnowledgeTasks.value = true;
+    const result = await apiRequest<{ created_count: number; skipped_count: number }>(
+      `/api/planning/classes/${selectedClassId.value}/knowledge-tasks/generate?exam_id=${selectedExamId.value}`,
+      {
+        method: "POST",
+        body: JSON.stringify({ knowledge_point_ids: selectedClassKnowledgeIds.value }),
+      },
+    );
+    ElMessage.success(`已生成 ${result.created_count} 项，跳过 ${result.skipped_count} 项已有任务`);
+    await previewClassKnowledgeTasks();
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  } finally {
+    generatingClassKnowledgeTasks.value = false;
+  }
+}
+
+function handleClassKnowledgeSelection(rows: Array<{ knowledge_point_id: number }>): void {
+  selectedClassKnowledgeIds.value = rows.map((item) => item.knowledge_point_id);
+  classKnowledgeTaskPreview.value = null;
+}
+
+function openStudentKnowledgePrint(): void {
+  if (!selectedExamId.value || !selectedStudentId.value) return;
+  window.open(studentKnowledgePrintPreviewPath(selectedStudentId.value, selectedExamId.value), "_blank", "noopener,noreferrer");
+}
+
+function openClassKnowledgePrint(): void {
+  if (!selectedExamId.value || !selectedClassId.value) return;
+  window.open(classKnowledgeBriefingPrintPreviewPath(selectedClassId.value, selectedExamId.value), "_blank", "noopener,noreferrer");
 }
 
 async function loadTeacherAnalytics(): Promise<void> {
@@ -1358,6 +1589,10 @@ function resetAnalyticsState(): void {
   studentAnalytics.value = null;
   knowledgeSubjectFilter.value = null;
   classAnalytics.value = null;
+  classKnowledgeBriefing.value = null;
+  classKnowledgeTaskPreview.value = null;
+  studentKnowledgeTaskPreview.value = null;
+  selectedClassKnowledgeIds.value = [];
   gradeAnalytics.value = null;
   teacherAnalytics.value = null;
   gradePanorama.value = null;
@@ -1394,6 +1629,11 @@ watch(selectedExamId, async (examId) => {
   gradeAnalytics.value = null;
   studentAnalytics.value = null;
   knowledgeSubjectFilter.value = null;
+  classKnowledgeSubjectFilter.value = null;
+  classKnowledgeBriefing.value = null;
+  classKnowledgeTaskPreview.value = null;
+  studentKnowledgeTaskPreview.value = null;
+  selectedClassKnowledgeIds.value = [];
   questionImportResult.value = null;
   targetLineDrafts.value = [];
   if (examId) {
@@ -1525,6 +1765,17 @@ onMounted(async () => {
   margin: 6px 0 0;
   color: var(--text-muted);
   line-height: 1.55;
+}
+
+.knowledge-trend-title {
+  margin-top: 18px;
+}
+
+.knowledge-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .adviser-filter-grid {

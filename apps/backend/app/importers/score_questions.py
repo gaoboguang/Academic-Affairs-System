@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 from app.analytics.knowledge import (
     rebuild_score_knowledge_snapshots,
     replace_question_knowledge_points,
-    upsert_knowledge_point,
     upsert_question,
 )
 from app.core.config import Settings
@@ -23,6 +22,7 @@ from app.importers.base import (
 )
 from app.models import Exam, ExamSubject, ScoreQuestionImportBatch, ScoreQuestionRecord, Student, Subject
 from app.schemas.common import ImportResult
+from app.services import knowledge_base
 from app.utils.parsers import clean_text
 
 
@@ -34,6 +34,8 @@ class ScoreQuestionPayload:
     score: float | None
     score_status: str
     raw_text: str | None
+    error_tags: list[dict[str, object]]
+    error_note: str | None
     note: str | None
 
 
@@ -49,6 +51,8 @@ class ScoreQuestionImporter:
         "知识点",
         "题型",
         "能力层级",
+        "错因标签",
+        "错因备注",
         "备注",
     ]
 
@@ -76,7 +80,8 @@ class ScoreQuestionImporter:
         strategy: str = "overwrite",
     ) -> tuple[ImportResult, int]:
         headers, rows = read_template_rows(content)
-        if headers[: len(self.expected_headers)] != self.expected_headers:
+        required_headers = self.expected_headers[:10]
+        if headers[: len(required_headers)] != required_headers:
             raise ValueError("题分明细导入模板表头不匹配，请使用系统题分明细模板。")
 
         success_rows = 0
@@ -92,6 +97,7 @@ class ScoreQuestionImporter:
             "unmatched_subject": 0,
             "invalid_score": 0,
             "small_sample": 0,
+            "error_tag": 0,
         }
 
         for row_number, row_values in rows:
@@ -135,7 +141,7 @@ class ScoreQuestionImporter:
         error_report_path = save_error_report(
             settings=self.settings,
             prefix="score_question_import_errors",
-            headers=self.expected_headers,
+            headers=headers,
             errors=row_errors,
         )
         snapshot_count = rebuild_score_knowledge_snapshots(self.session, self.exam.id) if success_rows else 0
@@ -170,6 +176,8 @@ class ScoreQuestionImporter:
         knowledge_text = clean_text(row.get("知识点"))
         question_type = clean_text(row.get("题型"))
         ability_level = clean_text(row.get("能力层级"))
+        error_tag_text = clean_text(row.get("错因标签"))
+        error_note = clean_text(row.get("错因备注"))
         note = clean_text(row.get("备注"))
 
         if not student_no:
@@ -211,13 +219,17 @@ class ScoreQuestionImporter:
             ability_level=ability_level,
             sort_order=row_number,
         )
-        knowledge_point_ids = [
-            upsert_knowledge_point(self.session, subject.id, name).id
+        knowledge_points = [
+            knowledge_base.resolve_knowledge_point(self.session, subject.id, name)
             for name in _split_knowledge_points(knowledge_text)
         ]
-        if not knowledge_point_ids:
+        if not knowledge_points:
             raise ValueError("知识点不能为空")
-        replace_question_knowledge_points(self.session, question.id, knowledge_point_ids)
+        replace_question_knowledge_points(self.session, question.id, knowledge_points)
+        error_tags = knowledge_base.ensure_error_tags_by_names(
+            self.session,
+            knowledge_base.split_error_tags(error_tag_text),
+        )
 
         return ScoreQuestionPayload(
             student_id=student.id,
@@ -226,6 +238,8 @@ class ScoreQuestionImporter:
             score=round(score, 4) if score is not None else None,
             score_status="normal" if score is not None else "absent",
             raw_text=score_text,
+            error_tags=error_tags,
+            error_note=error_note,
             note=note,
         )
 
@@ -235,6 +249,8 @@ class ScoreQuestionImporter:
         record.score = payload.score
         record.score_status = payload.score_status
         record.raw_text = payload.raw_text
+        record.error_tags_json = payload.error_tags
+        record.error_note = payload.error_note
         record.import_batch_id = batch_id
         record.note = payload.note
         record.is_active = True

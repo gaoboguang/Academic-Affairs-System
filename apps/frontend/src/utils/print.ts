@@ -10,8 +10,16 @@ export function studentAnalysisPrintPreviewPath(studentId: number, examId: numbe
   return `/print/student-analysis/${studentId}/${examId}`;
 }
 
+export function studentKnowledgePrintPreviewPath(studentId: number, examId: number): string {
+  return `/print/student-knowledge/${studentId}/${examId}`;
+}
+
 export function classAnalysisPrintPreviewPath(classId: number, examId: number): string {
   return `/print/class-analysis/${classId}/${examId}`;
+}
+
+export function classKnowledgeBriefingPrintPreviewPath(classId: number, examId: number): string {
+  return `/print/class-knowledge-briefing/${classId}/${examId}`;
 }
 
 export function gradeSummaryPrintPreviewPath(gradeId: number, examId: number): string {

@@ -101,10 +101,9 @@ export const importCenterTrialRunSteps: ImportCenterTrialRunStep[] = [
   { title: "3. 导入学生与教师", detail: "先维护学生学号、教师工号和班级归属，保证后续导入能匹配。", actionLabel: "学生中心", path: "/students" },
   { title: "4. 维护任教关系", detail: "确认教师、学期、年级、班级和学科关系，再导入成绩或课表。", actionLabel: "教师中心", path: "/teachers" },
   { title: "5. 创建考试并导入成绩", detail: "考试名称、科目、满分和统计口径确认后，再上传成绩表。", actionLabel: "考试成绩", path: "/exams" },
-  { title: "6. 导入考勤", detail: "用考勤模板补齐迟到、请假、旷课等日常出勤记录。", actionLabel: "考勤模板", path: "/import-center" },
-  { title: "7. 导入行为", detail: "用行为模板补齐表扬、违纪、谈话、心理关注和安全事件。", actionLabel: "行为模板", path: "/import-center" },
-  { title: "8. 查看驾驶舱", detail: "进入班主任驾驶舱查看风险分层和本周行动清单。", actionLabel: "分析中心", path: "/analytics" },
-  { title: "9. 导出报表", detail: "确认分析口径后再导出班主任周报、学生跟进包或成绩报告。", actionLabel: "报表中心", path: "/reports" },
+  { title: "6. 维护成长与规划", detail: "补充成长档案、升学规划目标和阶段任务，让学生跟进包有依据。", actionLabel: "学生中心", path: "/students" },
+  { title: "7. 查看驾驶舱", detail: "进入班主任驾驶舱查看成绩波动、成长档案和规划任务跟进清单。", actionLabel: "分析中心", path: "/analytics" },
+  { title: "8. 导出报表", detail: "确认分析口径后再导出班主任周报、学生跟进包或成绩报告。", actionLabel: "报表中心", path: "/reports" },
 ];
 
 export function formatImportCenterStatus(status: string): string {

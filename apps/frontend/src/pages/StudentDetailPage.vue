@@ -108,15 +108,15 @@
           <article class="student-risk-card">
             <span>风险等级</span>
             <strong>{{ studentRisk?.risk_label ?? "未计算" }}</strong>
-            <p>{{ studentRisk?.reasons.join(" / ") ?? "加载后显示考勤、行为和成绩综合判断。" }}</p>
+            <p>{{ studentRisk?.reasons.join(" / ") ?? "加载后显示成绩、成长档案和规划任务综合判断。" }}</p>
           </article>
           <article class="student-risk-card">
-            <span>近 30 天考勤</span>
-            <strong>{{ studentRisk ? formatAttendanceSummary(studentRisk.attendance_summary) : "未加载" }}</strong>
+            <span>成长档案</span>
+            <strong>{{ studentRisk ? formatStudentGrowthSummary(studentRisk.growth_summary) : "未加载" }}</strong>
           </article>
           <article class="student-risk-card">
-            <span>近 30 天行为</span>
-            <strong>{{ studentRisk ? formatBehaviorSummary(studentRisk.behavior_summary) : "未加载" }}</strong>
+            <span>规划任务</span>
+            <strong>{{ studentRisk ? formatStudentPlanningSummary(studentRisk.planning_summary) : "未加载" }}</strong>
           </article>
         </div>
         <div class="action-card-grid">
@@ -402,12 +402,6 @@ import type { UploadFile } from "element-plus";
 import { useRoute, useRouter } from "vue-router";
 
 import { apiRequest, openFile, uploadFile } from "../api/client";
-import {
-  formatAttendanceSummary,
-  formatBehaviorSummary,
-  type AttendanceRiskSummary,
-  type BehaviorRiskSummary,
-} from "../components/analytics/adviserDashboard";
 import StudentPathwayProfilePanel from "../components/students/StudentPathwayProfilePanel.vue";
 import StudentPlanningPanel from "../components/students/StudentPlanningPanel.vue";
 import {
@@ -535,8 +529,18 @@ interface StudentRiskSummary {
   risk_label: string;
   reasons: string[];
   suggested_actions: string[];
-  attendance_summary: AttendanceRiskSummary;
-  behavior_summary: BehaviorRiskSummary;
+  growth_summary: {
+    record_count: number;
+    latest_record_date?: string | null;
+  };
+  planning_summary: {
+    open_task_count: number;
+    overdue_task_count: number;
+    due_soon_task_count: number;
+    high_priority_open_count: number;
+    no_goal: boolean;
+    next_due_date?: string | null;
+  };
 }
 
 interface ReportExportRecord {
@@ -628,8 +632,6 @@ const studentRiskTags = computed(() => {
     attachmentCount: profile.value.attachments.length,
     classTransferCount: classTransferHistory.value.length,
     studentType: profile.value.student.student_type,
-    attendanceImported: studentRisk.value?.attendance_summary.imported,
-    behaviorImported: studentRisk.value?.behavior_summary.imported,
     riskLevel: studentRisk.value?.risk_level,
   });
 });
@@ -656,6 +658,16 @@ function formatStudentType(value?: string | null): string {
     repeat: "复读生",
   };
   return mapping[value] ?? value;
+}
+
+function formatStudentGrowthSummary(summary: StudentRiskSummary["growth_summary"]): string {
+  if (summary.record_count <= 0) return "暂无成长档案记录";
+  return `${summary.record_count} 条，最近 ${summary.latest_record_date ?? "-"}`;
+}
+
+function formatStudentPlanningSummary(summary: StudentRiskSummary["planning_summary"]): string {
+  if (summary.open_task_count <= 0) return summary.no_goal ? "尚未建立规划目标" : "暂无开放任务";
+  return `开放 ${summary.open_task_count} 项，逾期 ${summary.overdue_task_count}`;
 }
 
 function openStudentGrowthReport(): void {

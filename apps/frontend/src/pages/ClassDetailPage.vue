@@ -8,6 +8,7 @@
     <template #actions>
       <el-button @click="router.push('/classes')">返回速览</el-button>
       <el-button @click="openClassEdit">编辑班级</el-button>
+      <el-button @click="openAssignmentDialog">设置任课教师</el-button>
       <el-button type="primary" @click="openHonorDialog()">新增荣誉</el-button>
     </template>
 
@@ -92,7 +93,9 @@
               <el-table-column label="周课时" prop="weekly_periods_manual" width="100" />
               <el-table-column label="学期" prop="semester_name" min-width="170" />
             </el-table>
-            <el-empty v-if="!profile.assignments.length" description="当前学期暂无任课关系。" />
+            <el-empty v-if="!profile.assignments.length" description="当前学期暂无任课关系。">
+              <el-button type="primary" plain @click="openAssignmentDialog">设置任课教师</el-button>
+            </el-empty>
           </AppTableShell>
         </el-tab-pane>
 
@@ -130,7 +133,7 @@
             </article>
             <article class="action-card" @click="router.push(`/analytics?adviser_class_id=${classId}`)">
               <strong>班主任驾驶舱</strong>
-              <p>查看考勤、行为、成绩风险和学生跟进清单。</p>
+              <p>查看成绩波动、成长档案、规划任务和学生跟进清单。</p>
             </article>
             <article class="action-card" @click="router.push('/reports')">
               <strong>报表中心</strong>
@@ -246,7 +249,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import ElMessage from "element-plus/es/components/message/index";
 import ElMessageBox from "element-plus/es/components/message-box/index";
 import { useRoute, useRouter } from "vue-router";
@@ -336,6 +339,26 @@ const filteredStudents = computed<StudentListItem[]>(() =>
   }),
 );
 
+function readQueryValue(value: unknown): string | null {
+  if (Array.isArray(value)) return typeof value[0] === "string" ? value[0] : null;
+  return typeof value === "string" ? value : null;
+}
+
+function applyRouteIntent(): void {
+  const tab = readQueryValue(route.query.tab);
+  if (tab && ["students", "teachers", "honors", "outputs"].includes(tab)) {
+    activeTab.value = tab;
+  }
+  if (
+    readQueryValue(route.query.action) === "assignment"
+    && activeTab.value === "teachers"
+    && profile.value
+    && !assignmentDialogVisible.value
+  ) {
+    openAssignmentDialog();
+  }
+}
+
 function formatSemesterName(item: OptionItem): string {
   return `${item.academic_year_name ?? ""} ${item.name}`.trim();
 }
@@ -363,6 +386,7 @@ async function reloadAll(): Promise<void> {
   try {
     loading.value = true;
     await Promise.all([loadOptions(), loadProfile()]);
+    applyRouteIntent();
   } catch (error) {
     ElMessage.error((error as Error).message);
   } finally {
@@ -470,6 +494,7 @@ async function deleteHonor(row: ClassHonorRead): Promise<void> {
 }
 
 function openAssignmentDialog(): void {
+  activeTab.value = "teachers";
   assignmentForm.teacher_id = null;
   assignmentForm.semester_id = referenceStore.semesters.find((item) => item.is_current)?.id ?? referenceStore.semesters[0]?.id ?? null;
   assignmentForm.grade_id = profile.value?.overview.grade_id ?? null;
@@ -509,6 +534,11 @@ function openClassAnalysisPrint(): void {
   }
   openFile(`/print/class-analysis/${classId.value}/${examId}`);
 }
+
+watch(
+  () => route.query,
+  () => applyRouteIntent(),
+);
 
 onMounted(reloadAll);
 </script>

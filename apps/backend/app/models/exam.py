@@ -178,11 +178,41 @@ class KnowledgePoint(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     __table_args__ = (UniqueConstraint("subject_id", "name", name="uq_knowledge_point_subject_name"),)
 
     subject_id: Mapped[int] = mapped_column(ForeignKey("subject.id"), nullable=False)
+    parent_id: Mapped[int | None] = mapped_column(ForeignKey("knowledge_point.id"), nullable=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     code: Mapped[str | None] = mapped_column(String(80), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    source_type: Mapped[str] = mapped_column(String(30), default="manual", nullable=False)
 
     subject = relationship("Subject")
+    parent = relationship("KnowledgePoint", remote_side="KnowledgePoint.id")
+
+
+class KnowledgePointAlias(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "knowledge_point_alias"
+    __table_args__ = (UniqueConstraint("subject_id", "alias_name", name="uq_knowledge_point_alias_subject_name"),)
+
+    subject_id: Mapped[int] = mapped_column(ForeignKey("subject.id"), nullable=False)
+    knowledge_point_id: Mapped[int] = mapped_column(ForeignKey("knowledge_point.id"), nullable=False)
+    alias_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    normalized_alias: Mapped[str] = mapped_column(String(120), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(30), default="manual", nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    subject = relationship("Subject")
+    knowledge_point = relationship("KnowledgePoint")
+
+
+class ErrorReasonTag(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "error_reason_tag"
+    __table_args__ = (UniqueConstraint("name", name="uq_error_reason_tag_name"),)
+
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
+    normalized_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_builtin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
 class ScoreQuestion(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
@@ -210,6 +240,8 @@ class ScoreQuestionKnowledgePoint(PrimaryKeyMixin, TimestampMixin, ActiveMixin, 
     question_id: Mapped[int] = mapped_column(ForeignKey("score_question.id"), nullable=False)
     knowledge_point_id: Mapped[int] = mapped_column(ForeignKey("knowledge_point.id"), nullable=False)
     weight: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)
+    match_source: Mapped[str] = mapped_column(String(30), default="standard", nullable=False)
+    raw_knowledge_text: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     question = relationship("ScoreQuestion")
     knowledge_point = relationship("KnowledgePoint")
@@ -226,6 +258,8 @@ class ScoreQuestionRecord(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     score: Mapped[float | None] = mapped_column(Float, nullable=True)
     score_status: Mapped[str] = mapped_column(String(30), default="normal", nullable=False)
     raw_text: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    error_tags_json: Mapped[list[dict]] = mapped_column(JSON, default=list, nullable=False)
+    error_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     import_batch_id: Mapped[int | None] = mapped_column(ForeignKey("score_question_import_batch.id"), nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -256,6 +290,8 @@ class ScoreKnowledgeSnapshot(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base)
     question_numbers_json: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     priority_score: Mapped[float] = mapped_column(Float, default=0, nullable=False)
     diagnosis_label: Mapped[str] = mapped_column(String(50), default="正常", nullable=False)
+    error_tags_json: Mapped[list[dict]] = mapped_column(JSON, default=list, nullable=False)
+    dominant_error_tag: Mapped[str | None] = mapped_column(String(80), nullable=True)
     suggestion: Mapped[str | None] = mapped_column(Text, nullable=True)
     rebuilt_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False), default=datetime.now, nullable=False

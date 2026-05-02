@@ -98,20 +98,6 @@ IMPORT_CENTER_TYPES = {
         "guidance": "先下载课表模板，确认学期、教师、班级和学科名称，再回到课表工作量页上传。",
         "rollback": "课表工作量默认读取最新有效课表批次；需要撤销时重新导入正确批次并复核未匹配项，当前不自动删除历史批次。",
     },
-    "attendance": {
-        "label": "考勤导入",
-        "business_path": "/import-center",
-        "template": "attendance_import_template.xlsx",
-        "guidance": "先下载考勤模板，按学号、日期、范围和节次维护出勤状态，再上传到考勤导入接口。",
-        "rollback": "考勤导入会按同一学生、日期、范围、节次覆盖更新；需要撤销时优先恢复导入前备份，或重新导入正确考勤台账覆盖修正。",
-    },
-    "behavior": {
-        "label": "行为导入",
-        "business_path": "/import-center",
-        "template": "behavior_import_template.xlsx",
-        "guidance": "先下载行为模板，按学号、日期、类型和标题维护行为事件，再上传到行为导入接口。",
-        "rollback": "行为事件默认追加；需要撤销时优先恢复导入前备份，或在后续行为管理页停用错误记录。",
-    },
     "admissions": {
         "label": "录取数据导入",
         "business_path": "/recommendations",
@@ -141,8 +127,6 @@ IMPORT_JOB_TYPE_ALIASES = {
     "exam_score_import": "scores",
     "score_import": "scores",
     "timetable_import": "timetable",
-    "attendance_import": "attendance",
-    "behavior_import": "behavior",
     "admission_import": "admissions",
     "evaluation_import": "evaluation",
 }

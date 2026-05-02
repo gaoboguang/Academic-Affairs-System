@@ -127,6 +127,14 @@ export const navSections: AppNavSection[] = [
         tags: ["学生分析", "班级分析", "教师分析"],
       },
       {
+        path: "/knowledge-base",
+        label: "知识库",
+        description: "维护知识点树、别名和错因标签，支撑题分明细归一与补弱任务。",
+        helper: "先维护标准知识点和平台别名，再导入题分明细，诊断结果会更稳定。",
+        icon: Notebook,
+        tags: ["知识点树", "别名", "错因标签"],
+      },
+      {
         path: "/import-center",
         label: "导入中心",
         description: "统一查看导入模板、批次、错误报告和撤销说明。",

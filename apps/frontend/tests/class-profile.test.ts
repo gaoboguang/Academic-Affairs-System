@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildTeachingSetupPath,
   buildClassOverviewCards,
   buildClassProfileCards,
   filterClasses,
   formatClassTeachers,
   formatPercent,
   formatScore,
+  getTeachingSetupLabel,
   type ClassesOverviewResponse,
   type ClassOverviewItem,
   type ClassProfileResponse,
@@ -37,7 +39,7 @@ const classOne: ClassOverviewItem = {
     is_active: true,
   },
   score_summary: { exam_id: 1, exam_name: "月考", sample_count: 2, average_score: 245 },
-  risk_summary: { follow_up_count: 1, urgent_count: 0, attendance_risk_count: 1, behavior_risk_count: 0 },
+  risk_summary: { follow_up_count: 1, urgent_count: 0, score_risk_count: 1, planning_risk_count: 0, growth_record_count: 1 },
   teaching_complete: true,
 };
 
@@ -54,7 +56,7 @@ const classTwo: ClassOverviewItem = {
   honor_count: 0,
   latest_honor: null,
   score_summary: { sample_count: 0 },
-  risk_summary: { follow_up_count: 0, urgent_count: 0, attendance_risk_count: 0, behavior_risk_count: 0 },
+  risk_summary: { follow_up_count: 0, urgent_count: 0, score_risk_count: 0, planning_risk_count: 0, growth_record_count: 0 },
   teaching_complete: false,
 };
 
@@ -107,5 +109,11 @@ describe("class profile helpers", () => {
     expect(filterClasses([classOne, classTwo], { headTeacher: "missing" }).map((item) => item.class_id)).toEqual([2]);
     expect(filterClasses([classOne, classTwo], { teaching: "complete" }).map((item) => item.class_id)).toEqual([1]);
     expect(filterClasses([classOne, classTwo], { classType: "normal" }).map((item) => item.class_id)).toEqual([2]);
+  });
+
+  it("builds teaching setup entry labels and deep links", () => {
+    expect(getTeachingSetupLabel(classOne)).toBe("维护任课");
+    expect(getTeachingSetupLabel(classTwo)).toBe("设置任课");
+    expect(buildTeachingSetupPath(12)).toBe("/classes/12?tab=teachers&action=assignment");
   });
 });

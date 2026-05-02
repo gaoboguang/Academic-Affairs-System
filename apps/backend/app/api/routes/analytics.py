@@ -16,9 +16,10 @@ from app.schemas.exam import (
     TeacherAnalyticsResponse,
     TeacherPanoramaResponse,
 )
-from app.schemas.student_event import AdviserDashboardResponse, StudentRiskResponse
+from app.schemas.knowledge import ClassKnowledgeBriefingResponse
+from app.schemas.student_followup import AdviserDashboardResponse, StudentRiskResponse
 from app.services import analytics as service
-from app.services import student_events as student_event_service
+from app.services import student_followup as student_followup_service
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -32,7 +33,7 @@ def get_adviser_dashboard(
     end_date: date | None = None,
     session: Session = Depends(get_db_session),
 ) -> AdviserDashboardResponse:
-    return student_event_service.get_adviser_dashboard(
+    return student_followup_service.get_adviser_dashboard(
         session,
         grade_id=grade_id,
         class_id=class_id,
@@ -50,7 +51,7 @@ def get_student_risk(
     end_date: date | None = None,
     session: Session = Depends(get_db_session),
 ) -> StudentRiskResponse:
-    return student_event_service.get_student_risk(
+    return student_followup_service.get_student_risk(
         session,
         student_id,
         exam_id=exam_id,
@@ -83,6 +84,16 @@ def get_class_analytics(
     session: Session = Depends(get_db_session),
 ) -> ClassAnalyticsResponse:
     return service.get_class_analytics(session, class_id, exam_id)
+
+
+@router.get("/classes/{class_id}/knowledge-briefing", response_model=ClassKnowledgeBriefingResponse)
+def get_class_knowledge_briefing(
+    class_id: int,
+    exam_id: int = Query(..., ge=1),
+    subject_id: int | None = Query(default=None, ge=1),
+    session: Session = Depends(get_db_session),
+) -> ClassKnowledgeBriefingResponse:
+    return service.get_class_knowledge_briefing(session, class_id, exam_id, subject_id=subject_id)
 
 
 @router.get("/classes/{class_id}/panorama", response_model=ClassPanoramaResponse)

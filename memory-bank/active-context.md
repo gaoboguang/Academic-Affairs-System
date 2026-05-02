@@ -2,6 +2,16 @@
 
 ## 当前状态
 
+- 2026-05-02 已完成“成绩知识点分析 V2.2：知识体系、错因、讲评与任务闭环”：
+  - 新增迁移 `20260502_0029_knowledge_v22_schema.py`，扩展 `knowledge_point` 支持单父级知识树，新增 `knowledge_point_alias`、`error_reason_tag`，并为题分记录、题目知识点映射和知识点快照补错因与归一来源字段
+  - 题分明细导入支持 `错因标签`、`错因备注` 可选列；知识点列按“标准点精确匹配 → 别名归一 → 路径建树 → 未归类扁平点”处理，错因按 `、 , ; |` 分隔，未知错因自动创建
+  - 新增 `/api/knowledge/*` 知识库维护接口，支持知识树、知识点、别名、错因标签和知识库 Excel 导入；模板中心新增 `knowledge_base_import_template.xlsx`
+  - 学生分析的 `knowledge_points`、`knowledge_trends` 增加知识路径、错因统计和主错因；学生端补弱任务支持预览和一键生成，写入既有 `student_planning_task`，`source_type/task_type=knowledge_remediation`
+  - 新增班级讲评接口 `GET /api/analytics/classes/{class_id}/knowledge-briefing`，返回班级薄弱知识点、弱项学生、错因分布、涉及题号、讲评优先级和建议；班级批量任务可按选中知识点生成弱项学生补弱任务
+  - 前端新增“知识库”入口、学生分析补弱任务按钮、班级知识点讲评清单、学生/班级专门打印页和输出中心 `class_knowledge_briefing`；`student_knowledge_plan` 支持打印预览
+  - 导出增强：学生知识点学习清单包含知识路径、错因和任务建议；新增班级知识点讲评清单 Excel，包含讲评摘要、讲评清单、弱项学生、任务建议 sheet
+  - 验证：后端知识库专项 `4 passed`；后端学生分析/规划/知识库定向 `17 passed`；前端 student-report/report-type 定向 `13 passed`；`py_compile`、临时空库 `backend:migrate`、`frontend:lint`、`frontend:build`、考试分析+报表 E2E `11 passed`、`git diff --check` 均通过
+
 - 2026-05-02 已完成“成绩知识点分析 V1”：
   - 新增题分明细数据域、知识点、题目映射、学生题分和知识点诊断快照，迁移为 `20260502_0026_score_knowledge_analysis_schema.py`
   - 分析中心学生分析新增“导入题分明细”和“知识点诊断”，按学生/科目展示 Top 10 薄弱知识点、涉及题号、年级均值差距、失分规模、优先级和复习建议
@@ -10,12 +20,30 @@
   - V1 只基于本次考试题分做扁平知识点诊断；连续考试趋势、错因标签、任务自动生成和知识树留到 V2
   - 验证：知识点相关后端定向 `7 passed`、前端定向 `13 passed`、`frontend:lint`、`frontend:build`、考试分析 E2E `4 passed`、`git diff --check` 均通过
 
+- 2026-05-02 已按高中使用场景移除学生考勤与行为事件数据域：
+  - 新增迁移 `20260502_0028_remove_attendance_behavior.py`，删除 `attendance_record`、`behavior_record` 表，并清理对应导入任务和审计日志
+  - 后端移除考勤/行为模型、schema、importer、service 与 `/api/attendance/*`、`/api/behavior/*` 路由；旧路由应返回 404
+  - 班主任驾驶舱、学生风险摘要、班主任周报和学生跟进包保留，数据来源改为成绩样本/低位/下滑、成长档案、升学规划目标与任务
+  - 导入中心、模板中心、学生详情 360、班级画像、报表配置和打印预览不再展示考勤/行为概况或导入入口
+  - E2E fixture `attendance-import.xlsx`、`behavior-import.xlsx` 已删除；后续不要再补回学生考勤或行为事件模板
+
+- 2026-05-02 已完成“成绩知识点分析 V2：学生个人连续趋势补弱”第一阶段：
+  - 不新增迁移，复用 `score_knowledge_snapshot` 即时计算个人知识点趋势；窗口为当前考试往前最近 5 次 `is_trend_enabled=true` 且该学生有知识点快照的考试
+  - 趋势匹配按 `subject_id + knowledge_point_id`，至少出现 2 次且累计满分样本达阈值后进入诊断；标签固定为 `持续薄弱`、`正在改善`、`波动反复`、`偶发失误`、`保持观察`、`样本不足`
+  - 学生分析接口新增 `knowledge_trends`，行动建议新增 `knowledge_trend_focus`；分析中心“知识点诊断”下新增“连续知识点趋势”；学生知识点学习清单和学生成绩分析 Excel 新增连续趋势 sheet
+  - 新增趋势后端、前端 helper 和 E2E 覆盖；`tests/e2e/helpers/localEduE2e.ts` 的考试前置改为 API 幂等创建/配科/导入，避免同名草稿考试干扰分析链路
+  - 已通过：后端学生分析定向 `11 passed`、后端编译、前端 student-report/report-type/score-readiness 定向 `14 passed`、`frontend:lint`、`frontend:build`、考试分析 E2E `5 passed`
+
 - 2026-05-02 已完成“年级班级”独立对象入口首版：
   - 新增班级荣誉结构化表 `class_honor` 和迁移 `20260502_0027_class_honor_schema.py`
-  - 新增班级/年级聚合接口和班级荣誉 CRUD，复用现有班主任、任教关系、学生、成绩快照、考试时点班级映射、考勤/行为风险信号
+  - 新增班级/年级聚合接口和班级荣誉 CRUD，复用现有班主任、任教关系、学生、成绩快照、考试时点班级映射、成长档案和规划任务跟进信号
   - 前端新增 `/classes`、`/classes/:classId`、`/grades/:gradeId` 和侧边栏“年级班级”，支持速览筛选、班级详情、荣誉维护、任课新增、学生/分析/报表跳转
   - 已通过后端定向、前端定向、lint、build、临时空库迁移、班级 E2E 和 `git diff --check`
-  - 真实 `data/app.db` 未在本轮迁移；真实使用前仍需先备份再运行 `npm run backend:migrate`
+  - 2026-05-02 收口分支 `codex/class-profile-next-step` 已备份真实主库到 `data/backups/app_before_class_profile_migrate_20260502_213457.db`，并执行 `npm run backend:migrate` 升级到 Alembic `20260502_0027`
+  - 收口校验：`class_honor` 表存在，SQLite `integrity_check=ok`；真实库 `/api/classes/overview`、`/api/classes/{class_id}/profile`、`/api/grades/{grade_id}/profile`、`/api/classes/{class_id}/honors` GET 冒烟均为 200；当前真实库速览为 17 个班、803 名学生、0 条有效荣誉
+  - 收口验证：班级后端定向 `7 passed`、前端 class-profile/navigation `8 passed`、`frontend:lint`、`frontend:build`、班级 E2E `2 passed`、`git diff --check`、`npm run check`（后端 `128 passed`、前端 lint、前端 `194 passed`、前端构建）均通过
+  - 2026-05-02 已补“设置任课教师”入口：`/classes` 班级卡和表格操作可深链到 `/classes/:classId?tab=teachers&action=assignment`，班级详情会自动切到任课页签并打开新增任教关系弹窗；顶部“批量维护任课”可跳到 `/teachers?assignments=1` 并自动打开教师中心任教关系维护弹窗
+  - 任课入口验证：`npm run frontend:test -- tests/class-profile.test.ts tests/navigation.test.ts` 为 `9 passed`，`npm run frontend:lint`、`npm run frontend:build`、`npm run e2e -- tests/e2e/classes.spec.ts`（4 passed）、`git diff --check` 均通过
 
 - 2026-05-02 已修复企业后台 UI 指标卡竖排崩溃：
   - 根因是 `AppStatGrid` 的 Element Plus `el-row` 同时带了旧兼容类 `metric-grid`，全局 `.metric-grid { display: grid }` 覆盖了 `el-row` 的 flex 布局，导致 `el-col` 百分比宽度被压成窄条，中文逐字竖排
@@ -135,16 +163,7 @@
   - 已通过：临时空 SQLite `alembic upgrade head`、新增后端定向 `2 passed`、后端全量 `107 passed`、新增/相关前端 `3 files / 16 tests passed`、`frontend:lint`、`frontend:build`、新增 E2E `planning.spec.ts` `1 passed`
   - 最终验收：`npm run check:all` 通过，后端 `107 passed`、前端 lint 通过、前端 `35 files / 180 tests passed`、前端构建通过、E2E `34 passed`；`npm run desktop:dist:mac` 通过；打包后端二进制用临时空数据目录启动成功，自动创建 `app.db`，`/api/system/health` 与 `/api/dashboard/summary` 可响应
 
-- 2026-04-28 已完成 M11-M15：考勤行为数据域、班主任驾驶舱、学生 360/输出中心联动、桌面空库开局说明和成熟平台感收尾：
-  - M11：新增 `attendance_record`、`behavior_record` 模型与 Alembic 迁移 `20260427_0020_attendance_behavior_schema.py`；新增考勤/行为导入模板、导入服务、查询接口和审计摘要，考勤重复按学生+日期+范围+节次覆盖，行为同文件重复给 warning
-  - M12：分析中心新增“班主任驾驶舱”页签；后端新增 `/api/analytics/adviser-dashboard` 与 `/api/analytics/student-risk/{student_id}`，按本地确定性规则输出 `urgent/follow_up/watch/normal`，考勤/行为缺失显示“未导入”而不是 0 风险
-  - M13：学生详情 360° 增加近 30/90 天考勤、行为和风险摘要，并接入“生成学生跟进包”；输出中心新增 `adviser_weekly_summary` 与 `student_followup_package` 的 Excel 和打印页
-  - M14：新增 `docs/desktop_empty_db_initialization_20260427.md`，说明桌面版空库初始化顺序、模板导入、备份恢复和 Windows 打包待办；本轮不写真实 `data/app.db`
-  - M15：首页下一步建议、导入中心初始化清单和系统数据健康已接入成绩、考勤、行为、任教关系、备份等本地教务数据缺口
-  - 验证：新增后端定向 `2 passed`；新增/相关前端定向 `4 files / 17 tests passed`；临时空 SQLite `alembic upgrade head` 通过；`git diff --check` 通过
-  - 质量门禁：已重新执行完整 `npm run check:all`，后端 `105 passed`、前端 lint 通过、前端 `34 files / 174 tests passed`、前端构建通过、E2E `33 passed`
-  - 桌面验证：已在最终样式修复后重新执行 `npm run desktop:dist:mac` 并通过；打包后的后端二进制用临时空数据目录启动成功，自动创建 `app.db`，`/api/system/health` 与 `/api/dashboard/summary` 可响应
-  - 剩余边界：macOS 正式图标、签名、公证未做；Windows `dir/nsis` 仍需在 Windows 或可交叉构建环境验证；真实使用前用户仍应先备份主库再迁移
+- 2026-04-28 曾完成 M11-M15 的考勤/行为数据域；该数据域已在 2026-05-02 因高中使用场景调整废弃并移除。保留的能力只有班主任驾驶舱、学生跟进包和本地输出闭环，且跟进信号已改为成绩、成长档案和升学规划任务。
 
 - 2026-04-27 已完成 M4/M5/M6/M7/M8/M9/M10 窗口任务：
   - M4：成绩导入增加质量摘要，覆盖缺考、非法分数、重复学生、未匹配学生、未匹配科目；考试、分析、报表等成绩链路补 `score_record=0` 空态、单考试边界和统计口径提示

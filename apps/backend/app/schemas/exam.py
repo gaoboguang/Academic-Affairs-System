@@ -248,6 +248,7 @@ class StudentKnowledgePointAnalytics(BaseModel):
     subject_name: str
     knowledge_point_id: int
     knowledge_point_name: str
+    knowledge_path: str | None = None
     score: float
     full_score: float
     score_rate: float | None = None
@@ -256,8 +257,47 @@ class StudentKnowledgePointAnalytics(BaseModel):
     lost_score: float
     priority_score: float
     diagnosis_label: str
+    error_tag_stats: list[dict[str, object]] = Field(default_factory=list)
+    dominant_error_tag: str | None = None
     question_count: int
     question_numbers: list[str] = Field(default_factory=list)
+    suggestion: str | None = None
+
+
+class StudentKnowledgeTrendPoint(BaseModel):
+    exam_id: int
+    exam_name: str
+    exam_date: date
+    score_rate: float | None = None
+    grade_average_rate: float | None = None
+    grade_gap_rate: float | None = None
+    full_score: float
+    lost_score: float
+    diagnosis_label: str
+    dominant_error_tag: str | None = None
+    question_numbers: list[str] = Field(default_factory=list)
+
+
+class StudentKnowledgeTrendAnalytics(BaseModel):
+    subject_id: int
+    subject_name: str
+    knowledge_point_id: int
+    knowledge_point_name: str
+    knowledge_path: str | None = None
+    trend_exam_count: int
+    weak_exam_count: int
+    latest_score_rate: float | None = None
+    average_score_rate: float | None = None
+    latest_grade_gap_rate: float | None = None
+    average_grade_gap_rate: float | None = None
+    trend_delta: float | None = None
+    total_full_score: float
+    total_lost_score: float
+    priority_score: float
+    trend_label: str
+    error_tag_stats: list[dict[str, object]] = Field(default_factory=list)
+    dominant_error_tag: str | None = None
+    points: list[StudentKnowledgeTrendPoint] = Field(default_factory=list)
     suggestion: str | None = None
 
 
@@ -350,6 +390,7 @@ class StudentAnalyticsResponse(BaseModel):
     trend_points: list[StudentTotalTrendPoint] = Field(default_factory=list)
     subject_trends: list[StudentSubjectTrendSeries] = Field(default_factory=list)
     knowledge_points: list[StudentKnowledgePointAnalytics] = Field(default_factory=list)
+    knowledge_trends: list[StudentKnowledgeTrendAnalytics] = Field(default_factory=list)
     action_suggestions: list[StudentActionSuggestion] = Field(default_factory=list)
     subjects: list[StudentSubjectAnalytics]
 

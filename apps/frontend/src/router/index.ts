@@ -14,6 +14,7 @@ const TeachersPage = () => import("../pages/TeachersPage.vue");
 const TeacherDetailPage = () => import("../pages/TeacherDetailPage.vue");
 const ExamsPage = () => import("../pages/ExamsPage.vue");
 const AnalyticsPage = () => import("../pages/AnalyticsPage.vue");
+const KnowledgeBasePage = () => import("../pages/KnowledgeBasePage.vue");
 const ImportCenterPage = () => import("../pages/ImportCenterPage.vue");
 const GaokaoDataPage = () => import("../pages/GaokaoDataPage.vue");
 const GaokaoPathwaysPage = () => import("../pages/GaokaoPathwaysPage.vue");
@@ -28,7 +29,9 @@ const GaokaoPathwayReportPrintPage = () => import("../pages/GaokaoPathwayReportP
 const GaokaoDataCoveragePrintPage = () => import("../pages/GaokaoDataCoveragePrintPage.vue");
 const GrowthSummaryPrintPage = () => import("../pages/GrowthSummaryPrintPage.vue");
 const StudentAnalysisPrintPage = () => import("../pages/StudentAnalysisPrintPage.vue");
+const StudentKnowledgePrintPage = () => import("../pages/StudentKnowledgePrintPage.vue");
 const ClassAnalysisPrintPage = () => import("../pages/ClassAnalysisPrintPage.vue");
+const ClassKnowledgeBriefingPrintPage = () => import("../pages/ClassKnowledgeBriefingPrintPage.vue");
 const GradeSummaryPrintPage = () => import("../pages/GradeSummaryPrintPage.vue");
 const TeacherAnalysisPrintPage = () => import("../pages/TeacherAnalysisPrintPage.vue");
 const WorkloadPrintPage = () => import("../pages/WorkloadPrintPage.vue");
@@ -68,9 +71,19 @@ const router = createRouter({
       component: StudentAnalysisPrintPage,
     },
     {
+      path: "/print/student-knowledge/:studentId/:examId",
+      name: "student-knowledge-print",
+      component: StudentKnowledgePrintPage,
+    },
+    {
       path: "/print/class-analysis/:classId/:examId",
       name: "class-analysis-print",
       component: ClassAnalysisPrintPage,
+    },
+    {
+      path: "/print/class-knowledge-briefing/:classId/:examId",
+      name: "class-knowledge-briefing-print",
+      component: ClassKnowledgeBriefingPrintPage,
     },
     {
       path: "/print/grade-summary/:gradeId/:examId",
@@ -185,6 +198,11 @@ const router = createRouter({
           path: "analytics",
           name: "analytics",
           component: AnalyticsPage,
+        },
+        {
+          path: "knowledge-base",
+          name: "knowledge-base",
+          component: KnowledgeBasePage,
         },
         {
           path: "import-center",

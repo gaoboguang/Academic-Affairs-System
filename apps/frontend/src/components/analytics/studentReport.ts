@@ -71,6 +71,7 @@ export interface StudentKnowledgePointAnalytics {
   subject_name: string;
   knowledge_point_id: number;
   knowledge_point_name: string;
+  knowledge_path?: string | null;
   score: number;
   full_score: number;
   score_rate?: number | null;
@@ -79,8 +80,46 @@ export interface StudentKnowledgePointAnalytics {
   lost_score: number;
   priority_score: number;
   diagnosis_label: string;
+  error_tag_stats?: Array<{ tag?: string; name?: string; count?: number }>;
+  dominant_error_tag?: string | null;
   question_count: number;
   question_numbers?: string[];
+  suggestion?: string | null;
+}
+
+export interface StudentKnowledgeTrendPoint {
+  exam_id: number;
+  exam_name: string;
+  exam_date: string;
+  score_rate?: number | null;
+  grade_average_rate?: number | null;
+  grade_gap_rate?: number | null;
+  full_score: number;
+  lost_score: number;
+  diagnosis_label: string;
+  question_numbers?: string[];
+}
+
+export interface StudentKnowledgeTrendAnalytics {
+  subject_id: number;
+  subject_name: string;
+  knowledge_point_id: number;
+  knowledge_point_name: string;
+  knowledge_path?: string | null;
+  trend_exam_count: number;
+  weak_exam_count: number;
+  latest_score_rate?: number | null;
+  average_score_rate?: number | null;
+  latest_grade_gap_rate?: number | null;
+  average_grade_gap_rate?: number | null;
+  trend_delta?: number | null;
+  total_full_score: number;
+  total_lost_score: number;
+  priority_score: number;
+  trend_label: string;
+  error_tag_stats?: Array<{ tag?: string; name?: string; count?: number }>;
+  dominant_error_tag?: string | null;
+  points: StudentKnowledgeTrendPoint[];
   suggestion?: string | null;
 }
 
@@ -106,6 +145,7 @@ export interface StudentAnalyticsReportV1 {
   target_line_gaps?: StudentTargetLineGap[];
   subjects: StudentSubjectAnalyticsV1[];
   knowledge_points?: StudentKnowledgePointAnalytics[];
+  knowledge_trends?: StudentKnowledgeTrendAnalytics[];
   trend_points?: StudentTotalTrendPoint[];
   subject_trends?: StudentSubjectTrendSeries[];
   action_suggestions?: StudentActionSuggestion[];
@@ -164,13 +204,19 @@ export function getTargetGapSummary(gaps?: StudentTargetLineGap[] | null): strin
 
 export function getSuggestionTone(category: string): "success" | "warning" | "info" {
   if (category === "keep_strength") return "success";
-  if (category === "fix_weakness" || category === "target_warning" || category === "knowledge_focus") return "warning";
+  if (category === "fix_weakness" || category === "target_warning" || category === "knowledge_focus" || category === "knowledge_trend_focus") return "warning";
   return "info";
 }
 
 export function getKnowledgeDiagnosisTone(label?: string | null): "success" | "warning" | "info" {
   if (label === "正常") return "success";
   if (label === "优先补弱" || label === "需要巩固" || label === "低于年级") return "warning";
+  return "info";
+}
+
+export function getKnowledgeTrendTone(label?: string | null): "success" | "warning" | "info" {
+  if (label === "正在改善" || label === "保持观察") return "success";
+  if (label === "持续薄弱" || label === "波动反复") return "warning";
   return "info";
 }
 
@@ -182,8 +228,50 @@ export function filterKnowledgePointsBySubject(
   return points.filter((item) => item.subject_id === subjectId);
 }
 
+export function filterKnowledgeTrendsBySubject(
+  points: StudentKnowledgeTrendAnalytics[],
+  subjectId?: number | null,
+): StudentKnowledgeTrendAnalytics[] {
+  if (!subjectId) return points;
+  return points.filter((item) => item.subject_id === subjectId);
+}
+
 export function formatQuestionNumbers(values?: string[] | null): string {
   return values?.length ? values.join("、") : "-";
+}
+
+export function formatKnowledgeTrendTrack(points?: StudentKnowledgeTrendPoint[] | null): string {
+  if (!points?.length) return "-";
+  return points
+    .map((item) => `${item.exam_name} ${formatPercentValue(item.score_rate)}`)
+    .join(" / ");
+}
+
+export function formatErrorTagStats(values?: Array<{ tag?: string; name?: string; count?: number }> | null): string {
+  if (!values?.length) return "-";
+  return values
+    .map((item) => {
+      const tag = item.tag ?? item.name;
+      return tag ? `${tag}${item.count ? `×${item.count}` : ""}` : "";
+    })
+    .filter(Boolean)
+    .join("、") || "-";
+}
+
+export function knowledgeDisplayName(item: { knowledge_point_name: string; knowledge_path?: string | null }): string {
+  return item.knowledge_path || item.knowledge_point_name;
+}
+
+export function getBriefingPriorityTone(label?: string | null): "success" | "warning" | "danger" | "info" {
+  if (label === "高") return "danger";
+  if (label === "中") return "warning";
+  if (label === "低") return "info";
+  return "info";
+}
+
+export function formatTaskPreviewSummary(createCount: number, skipCount: number): string {
+  if (!createCount && !skipCount) return "暂无可生成任务";
+  return `可生成 ${createCount} 项，已存在 ${skipCount} 项`;
 }
 
 export function pickExamStudentSelection(
