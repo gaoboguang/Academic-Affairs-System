@@ -8,6 +8,12 @@
 
 ## 2026-05-02 新增
 
+- 已修复企业后台指标卡竖排布局崩溃：
+  - 根因是 `AppStatGrid` 根节点同时带 `el-row` 与旧 `metric-grid` 类，导致全局 grid 样式覆盖 Element Plus Row 的 flex 栅格
+  - `AppStatGrid.vue` 已移除 `metric-grid` 兼容类，`admin.css` 补齐 `.app-stat-grid` 和 `.app-stat-card.stat-card` 的布局保护
+  - `system-backup` E2E 改用 `.app-stat-grid .stat-card` 定位，新增 `admin-stat-grid-layout.spec.ts` 覆盖考试、分析、升学方案、志愿工作台和系统设置五个页面的指标卡宽高
+  - 验证：`npm run frontend:lint` 通过；`npm run frontend:test` 为 `38 files / 188 tests passed`；`npm run frontend:build` 通过；布局专项 + 系统备份 E2E 为 `6 passed`；推荐/高考/考试/系统定向 E2E 为 `29 passed`
+
 - 已完成全项目企业级中后台 UI 第三阶段重构：
   - `TimetableWorkloadPage.vue`、`EvaluationQuantPage.vue`、`GaokaoPathwaysPage.vue`、`GaokaoDataPage.vue`、`RecommendationsPage.vue` 的大型业务页首屏已迁移到共享 UI 骨架
   - 课表工作量页新增标准指标卡和统一 Tabs 分区，保留课表导入、规则配置、结果抽屉等既有业务组件
@@ -23,7 +29,7 @@
   - `ImportCenterPage.vue` 新增统一指标卡、预检分区、模板分区和导入批次表格外壳，保留旧标题以兼容既有 E2E
   - `TeachersPage.vue` 新增统一指标卡、sticky 筛选导入区和教师列表表格外壳
   - `SystemToolsPage.vue` 统一页面头和指标卡，移除重复旧指标区，保留“备份数量”文案以兼容备份 E2E
-  - `AppStatGrid` / `AppStatCard` 保留 `metric-grid / stat-card / strong` 结构类，公共组件迁移后继续支持旧测试定位
+  - `AppStatCard` 保留 `stat-card / strong` 结构类；后续已从 `AppStatGrid` 移除 `metric-grid` 兼容类，避免全局 grid 样式覆盖 Element Plus Row
   - `styles/admin.css` 增强卡片、表格、Tabs、分区、sticky 筛选条和旧业务卡片视觉，使未逐页迁移的大型页面也呈现更明显的企业后台统一风格
   - 验证：`npm run frontend:lint` 通过；`npm run frontend:test` 为 `38 files / 188 tests passed`；`npm run frontend:build` 通过；`npm run e2e -- tests/e2e/exams-analytics.spec.ts` 为 `3 passed`；`npm run e2e -- tests/e2e/system-backup.spec.ts` 为 `1 passed`；`npm run e2e -- tests/e2e/adviser-dashboard.spec.ts` 为 `1 passed`；`git diff --check` 通过
 

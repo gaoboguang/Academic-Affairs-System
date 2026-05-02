@@ -5,7 +5,7 @@ test("系统设置主流程：创建备份后备份数量增加", async ({ page 
 
   await expect(page.getByRole("heading", { name: "系统设置" })).toBeVisible();
 
-  const backupCountLocator = page.locator(".metric-grid .stat-card").filter({ hasText: "备份数量" }).locator("strong");
+  const backupCountLocator = page.locator(".app-stat-grid .stat-card").filter({ hasText: "备份数量" }).locator("strong");
   const initialBackupCount = Number((await backupCountLocator.textContent()) ?? "0");
 
   await page.getByRole("button", { name: "立即备份" }).click();

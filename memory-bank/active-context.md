@@ -2,6 +2,13 @@
 
 ## 当前状态
 
+- 2026-05-02 已修复企业后台 UI 指标卡竖排崩溃：
+  - 根因是 `AppStatGrid` 的 Element Plus `el-row` 同时带了旧兼容类 `metric-grid`，全局 `.metric-grid { display: grid }` 覆盖了 `el-row` 的 flex 布局，导致 `el-col` 百分比宽度被压成窄条，中文逐字竖排
+  - 已从 `AppStatGrid` 根节点移除 `metric-grid`，并在 `admin.css` 明确设置 `.app-stat-grid` 宽度、行间距、列伸展和 `.app-stat-card.stat-card` 外层 padding 归零
+  - `tests/e2e/system-backup.spec.ts` 改用 `.app-stat-grid .stat-card` 定位备份数量，不再依赖旧 `.metric-grid` 容器
+  - 新增 `tests/e2e/admin-stat-grid-layout.spec.ts`，覆盖 `/exams`、`/analytics`、`/gaokao-pathways`、`/recommendations`、`/system-tools`，断言桌面宽度下指标卡宽度不小于 160px 且高度不过长
+  - 已通过：`npm run frontend:lint`、`npm run frontend:test`（38 files / 188 tests）、`npm run frontend:build`、`npm run e2e -- tests/e2e/admin-stat-grid-layout.spec.ts tests/e2e/system-backup.spec.ts`（6 passed）、`npm run e2e -- tests/e2e/exams-analytics.spec.ts tests/e2e/gaokao-volunteer.spec.ts tests/e2e/recommendations.spec.ts tests/e2e/system-backup.spec.ts tests/e2e/admin-stat-grid-layout.spec.ts`（29 passed）
+
 - 2026-05-02 已完成全项目企业级中后台 UI 第三阶段重构，并连同第二阶段作为同一组 UI 阶段成果交付：
   - 本轮继续只改前端展示层，不修改后端接口、业务计算、路由路径或真实 `data/app.db`
   - `apps/frontend/src/pages/TimetableWorkloadPage.vue` 已接入 `AppPage + AppStatGrid + AppSectionCard`：首屏新增课表批次、规则项、附加项、结果教师四张标准指标卡，课表导入 / 规则附加项 / 工作量结果收进统一 Tabs 分区
@@ -17,7 +24,7 @@
   - `apps/frontend/src/pages/ImportCenterPage.vue` 已接入 `AppPage`、`AppStatGrid`、`AppSectionCard`、`AppTableShell`：保留原 E2E 依赖的页面主标题“统一查看模板、批次、错误报告和撤销说明”，新增导入批次、需复核批次、错误报告、模板入口四张指标卡，预检 / 模板 / 批次列表改为统一分区
   - `apps/frontend/src/pages/TeachersPage.vue` 已接入 `AppPage`、`AppStatGrid`、`AppFilterBar`、`AppTableShell`：教师总数、学科覆盖、班主任、联系电话改为统一指标卡；筛选导入区 sticky；教师表格进入统一外壳
   - `apps/frontend/src/pages/SystemToolsPage.vue` 已接入 `AppPage` 和 `AppStatGrid`，移除重复的旧指标区，保留“备份数量”指标文案以兼容 `system-backup` E2E
-  - `apps/frontend/src/components/ui/AppStatGrid.vue` / `AppStatCard.vue` 保留 `metric-grid / stat-card / strong` 结构类，确保既有 E2E 对指标卡的定位不被公共组件迁移破坏
+  - `apps/frontend/src/components/ui/AppStatCard.vue` 保留 `stat-card / strong` 结构类；`AppStatGrid.vue` 后续已移除 `metric-grid` 兼容类以避免和 Element Plus Row 布局冲突
   - `apps/frontend/src/styles/admin.css` 已增强后台页视觉：页面 header、soft card、分区卡、表格壳、Tabs 容器、操作卡和 sticky 筛选条的背景、阴影、左侧强调线和密度更统一，未逐页迁移的大型页面也会获得更明显的企业后台质感
   - 已通过：`npm run frontend:lint`、`npm run frontend:test`（38 files / 188 tests）、`npm run frontend:build`、`npm run e2e -- tests/e2e/exams-analytics.spec.ts`（3 passed）、`npm run e2e -- tests/e2e/system-backup.spec.ts`（1 passed）、`npm run e2e -- tests/e2e/adviser-dashboard.spec.ts`（1 passed）、`git diff --check`
 

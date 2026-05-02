@@ -2,6 +2,13 @@
 
 ## 当前主线状态（2026-05-02）
 
+- 本轮已修复用户截图中的“指标卡变窄、文字竖排”UI 崩溃：
+  - 根因：`AppStatGrid` 的 `el-row` 同时带 `metric-grid` 旧类，`admin.css` 全局 `.metric-grid { display: grid }` 覆盖了 Element Plus Row 的 flex 布局
+  - 修复：`AppStatGrid.vue` 移除 `metric-grid`；`admin.css` 补齐 `.app-stat-grid` 宽度、行间距、列伸展和 `.app-stat-card.stat-card` padding 归零
+  - 测试：`system-backup` E2E 改为 `.app-stat-grid .stat-card`；新增 `tests/e2e/admin-stat-grid-layout.spec.ts`，覆盖考试、分析、升学方案、志愿工作台、系统设置五个页面的指标卡宽高
+  - 已通过：`npm run frontend:lint`、`npm run frontend:test`、`npm run frontend:build`、布局专项 + 系统备份 E2E `6 passed`、推荐/高考/考试/系统定向 E2E `29 passed`
+  - 待本轮最终：跑完整 `npm run check:all`，通过后提交 `fix: restore admin stat grid layout`
+
 - 本轮已完成“全项目企业级中后台 UI 第三阶段重构”，用户提出“能不能一步完成”后，本轮按一个可验证阶段连续交付：
   - 本轮连同第二阶段改动一起处于同一工作区变更中，目标是提交一组完整的 UI 阶段成果
   - `apps/frontend/src/pages/TimetableWorkloadPage.vue`：接入 `AppPage`、`AppStatGrid`、`AppSectionCard`；新增课表批次、规则项、附加项、结果教师四张标准指标卡；课表导入、规则附加项、工作量结果保留在统一 Tabs 分区内
@@ -26,7 +33,7 @@
   - `apps/frontend/src/pages/ImportCenterPage.vue`：接入 `AppPage`、`AppStatGrid`、`AppSectionCard`、`AppTableShell`；新增导入批次、需复核批次、错误报告、模板入口指标卡；预检 / 模板 / 批次列表统一分区；页面主标题保留“统一查看模板、批次、错误报告和撤销说明”以兼容 `adviser-dashboard` E2E
   - `apps/frontend/src/pages/TeachersPage.vue`：接入 `AppPage`、`AppStatGrid`、`AppFilterBar`、`AppTableShell`；教师总数、学科覆盖、班主任、联系电话改为统一指标卡；筛选导入区 sticky；教师表格统一外壳
   - `apps/frontend/src/pages/SystemToolsPage.vue`：接入 `AppPage` 和 `AppStatGrid`；移除重复旧指标区；保留“备份数量”指标文案以兼容 `system-backup` E2E
-  - `apps/frontend/src/components/ui/AppStatGrid.vue` / `AppStatCard.vue`：保留 `metric-grid / stat-card / strong` 结构类，避免公共组件迁移破坏旧 E2E 对指标卡的 DOM 定位
+  - `apps/frontend/src/components/ui/AppStatCard.vue`：保留 `stat-card / strong` 结构类；`AppStatGrid.vue` 后续已移除 `metric-grid` 以避免全局 grid 样式覆盖 `el-row`
   - `apps/frontend/src/styles/admin.css`：增强页面 header、soft card、分区卡、表格壳、Tabs 容器、操作卡和 sticky 筛选条的企业后台视觉；未逐页迁移的大型页面也会被全局样式拉齐
   - 本轮只改前端展示层和 memory-bank，不改后端 API、数据库、业务算法、路由路径或真实 `data/app.db`
 - 第二阶段验证已通过：

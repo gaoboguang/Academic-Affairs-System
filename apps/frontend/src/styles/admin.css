@@ -283,11 +283,24 @@
 }
 
 .app-stat-grid {
+  width: 100%;
   row-gap: var(--space-md);
+  align-items: stretch;
+}
+
+.app-stat-grid > .el-col {
+  display: flex;
+  min-width: 0;
+}
+
+.app-stat-grid .app-stat-card {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .app-stat-card.el-card {
   height: 100%;
+  padding: 0;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
