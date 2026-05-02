@@ -6,6 +6,7 @@ import type { Locator, Page } from "@playwright/test";
 
 const scoresFixture = path.resolve(process.cwd(), "tests/e2e/fixtures/scores-import.xlsx");
 const invalidScoresFixture = path.resolve(process.cwd(), "tests/e2e/fixtures/scores-invalid.xlsx");
+const scoreQuestionDetailsFixture = path.resolve(process.cwd(), "tests/e2e/fixtures/score-question-details-import.xlsx");
 const admissionsFixture = path.resolve(process.cwd(), "tests/e2e/fixtures/admissions-import.xlsx");
 const crossProvinceAdmissionsFixture = path.resolve(process.cwd(), "tests/e2e/fixtures/admissions-cross-province.xlsx");
 const enrollmentPlansFixture = path.resolve(process.cwd(), "tests/e2e/fixtures/enrollment-plans-import.xlsx");
@@ -511,6 +512,7 @@ export {
   generateRecommendationScheme,
   importFixtureByApi,
   invalidScoresFixture,
+  scoreQuestionDetailsFixture,
   openRecommendationCenter,
   openVolunteerWorkbench,
   scoresFixture,

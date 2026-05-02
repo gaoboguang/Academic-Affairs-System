@@ -2,6 +2,21 @@
 
 ## 当前状态
 
+- 2026-05-02 已完成“成绩知识点分析 V1”：
+  - 新增题分明细数据域、知识点、题目映射、学生题分和知识点诊断快照，迁移为 `20260502_0026_score_knowledge_analysis_schema.py`
+  - 分析中心学生分析新增“导入题分明细”和“知识点诊断”，按学生/科目展示 Top 10 薄弱知识点、涉及题号、年级均值差距、失分规模、优先级和复习建议
+  - 题分导入采用标准 Excel 模板：考试、学号、姓名、科目、题号、题目满分、学生得分、知识点、题型、能力层级；同题重复会报错，已存在题分可覆盖或跳过
+  - 输出中心新增 `student_knowledge_plan` 学生知识点学习清单导出，学生分析 Excel 也补充知识点诊断 sheet
+  - V1 只基于本次考试题分做扁平知识点诊断；连续考试趋势、错因标签、任务自动生成和知识树留到 V2
+  - 验证：知识点相关后端定向 `7 passed`、前端定向 `13 passed`、`frontend:lint`、`frontend:build`、考试分析 E2E `4 passed`、`git diff --check` 均通过
+
+- 2026-05-02 已完成“年级班级”独立对象入口首版：
+  - 新增班级荣誉结构化表 `class_honor` 和迁移 `20260502_0027_class_honor_schema.py`
+  - 新增班级/年级聚合接口和班级荣誉 CRUD，复用现有班主任、任教关系、学生、成绩快照、考试时点班级映射、考勤/行为风险信号
+  - 前端新增 `/classes`、`/classes/:classId`、`/grades/:gradeId` 和侧边栏“年级班级”，支持速览筛选、班级详情、荣誉维护、任课新增、学生/分析/报表跳转
+  - 已通过后端定向、前端定向、lint、build、临时空库迁移、班级 E2E 和 `git diff --check`
+  - 真实 `data/app.db` 未在本轮迁移；真实使用前仍需先备份再运行 `npm run backend:migrate`
+
 - 2026-05-02 已修复企业后台 UI 指标卡竖排崩溃：
   - 根因是 `AppStatGrid` 的 Element Plus `el-row` 同时带了旧兼容类 `metric-grid`，全局 `.metric-grid { display: grid }` 覆盖了 `el-row` 的 flex 布局，导致 `el-col` 百分比宽度被压成窄条，中文逐字竖排
   - 已从 `AppStatGrid` 根节点移除 `metric-grid`，并在 `admin.css` 明确设置 `.app-stat-grid` 宽度、行间距、列伸展和 `.app-stat-card.stat-card` 外层 padding 归零

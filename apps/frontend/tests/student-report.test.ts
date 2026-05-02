@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildStudentRadarRows,
+  filterKnowledgePointsBySubject,
   formatExamStudentOptionLabel,
   formatDiagnosisTags,
   formatPercentValue,
+  formatQuestionNumbers,
   formatSignedNumber,
+  getKnowledgeDiagnosisTone,
   getSuggestionTone,
   getTargetGapSummary,
   pickExamStudentSelection,
@@ -49,5 +52,44 @@ describe("student report helpers", () => {
     expect(pickExamStudentSelection(students, 1)).toBe(201);
     expect(pickExamStudentSelection([], 250)).toBeNull();
     expect(formatExamStudentOptionLabel(students[1])).toBe("S250 - 可检索学生（5班 / 校内250名）");
+  });
+
+  it("filters and formats knowledge point diagnostics", () => {
+    const points = [
+      {
+        subject_id: 2,
+        subject_name: "数学",
+        knowledge_point_id: 1,
+        knowledge_point_name: "函数单调性",
+        score: 6,
+        full_score: 20,
+        lost_score: 14,
+        priority_score: 9.8,
+        diagnosis_label: "优先补弱",
+        question_count: 2,
+        question_numbers: ["12", "18"],
+      },
+      {
+        subject_id: 1,
+        subject_name: "语文",
+        knowledge_point_id: 2,
+        knowledge_point_name: "文言实词",
+        score: 8,
+        full_score: 10,
+        lost_score: 2,
+        priority_score: 0.4,
+        diagnosis_label: "正常",
+        question_count: 1,
+        question_numbers: ["5"],
+      },
+    ];
+
+    expect(filterKnowledgePointsBySubject(points, 2)).toHaveLength(1);
+    expect(filterKnowledgePointsBySubject(points, null)).toHaveLength(2);
+    expect(formatQuestionNumbers(points[0].question_numbers)).toBe("12、18");
+    expect(formatQuestionNumbers([])).toBe("-");
+    expect(getKnowledgeDiagnosisTone("优先补弱")).toBe("warning");
+    expect(getKnowledgeDiagnosisTone("正常")).toBe("success");
+    expect(getSuggestionTone("knowledge_focus")).toBe("warning");
   });
 });

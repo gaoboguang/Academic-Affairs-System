@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from io import BytesIO
 
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from sqlalchemy import select
 
 from app.models import Exam, ScoreSubjectSnapshot, ScoreTotalSnapshot, Semester, Student
@@ -14,6 +14,18 @@ def _build_score_workbook(exam_name: str, rows: list[list[object]]) -> bytes:
     sheet = workbook.active
     sheet.title = "数据"
     sheet.append(["考试名称", "学号", "姓名", "班级", "科目", "分数", "缺考标记", "备注"])
+    for row in rows:
+        sheet.append([exam_name, *row])
+    buffer = BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()
+
+
+def _build_question_workbook(exam_name: str, rows: list[list[object]]) -> bytes:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "数据"
+    sheet.append(["考试名称", "学号", "姓名", "科目", "题号", "题目满分", "学生得分", "知识点", "题型", "能力层级", "备注"])
     for row in rows:
         sheet.append([exam_name, *row])
     buffer = BytesIO()
@@ -227,6 +239,127 @@ def test_exam_analyzable_students_returns_empty_for_exam_without_scores(client) 
     students_response = client.get(f"/api/analytics/exams/{exam_id}/students")
     assert students_response.status_code == 200
     assert students_response.json() == {"exam_id": exam_id, "total": 0, "items": []}
+
+
+def test_student_knowledge_import_builds_learning_plan(client) -> None:
+    student_ids = [_create_student(client, index) for index in range(1, 4)]
+    exam_name = "知识点诊断测试"
+    exam_id = _create_exam(
+        client,
+        exam_name,
+        "2026-05-05",
+        _rows_for_exam(
+            {1: 60, 2: 120, 3: 125},
+            {1: 120, 2: 100, 3: 95},
+        ),
+    )
+    question_rows = [
+        ["20261001", "测试生1", "数学", "12", 10, 2, "函数单调性", "选择题", "理解", ""],
+        ["20261001", "测试生1", "数学", "18", 10, 4, "函数单调性、导数应用", "解答题", "综合应用", ""],
+        ["20261001", "测试生1", "数学", "4", 4, 1, "集合", "选择题", "识记", ""],
+        ["20261002", "测试生2", "数学", "12", 10, 8, "函数单调性", "选择题", "理解", ""],
+        ["20261002", "测试生2", "数学", "18", 10, 9, "函数单调性、导数应用", "解答题", "综合应用", ""],
+        ["20261003", "测试生3", "数学", "12", 10, 9, "函数单调性", "选择题", "理解", ""],
+        ["20261003", "测试生3", "数学", "18", 10, 10, "函数单调性、导数应用", "解答题", "综合应用", ""],
+    ]
+
+    import_response = client.post(
+        f"/api/exams/{exam_id}/score-questions/import",
+        data={"strategy": "overwrite"},
+        files={
+            "file": (
+                "questions.xlsx",
+                _build_question_workbook(exam_name, question_rows),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert import_response.status_code == 200
+    import_payload = import_response.json()
+    assert import_payload["success_rows"] == 7
+    assert import_payload["failed_rows"] == 0
+    assert import_payload["snapshot_count"] >= 5
+
+    response = client.get(f"/api/analytics/students/{student_ids[0]}?exam_id={exam_id}")
+    assert response.status_code == 200
+    payload = response.json()
+    knowledge_points = payload["knowledge_points"]
+
+    assert knowledge_points[0]["knowledge_point_name"] == "函数单调性"
+    assert knowledge_points[0]["subject_name"] == "数学"
+    assert knowledge_points[0]["score_rate"] < knowledge_points[0]["grade_average_rate"]
+    assert knowledge_points[0]["lost_score"] > 0
+    assert knowledge_points[0]["priority_score"] > 0
+    assert knowledge_points[0]["diagnosis_label"] == "优先补弱"
+    assert set(knowledge_points[0]["question_numbers"]) == {"12", "18"}
+    assert any(item["title"] == "知识点清单" for item in payload["action_suggestions"])
+
+    export_response = client.post(
+        "/api/reports/export",
+        json={"report_type": "student_knowledge_plan", "exam_id": exam_id, "student_id": student_ids[0]},
+    )
+    assert export_response.status_code == 200
+    assert export_response.json()["report_name"] == "学生知识点学习清单"
+    download_response = client.get(export_response.json()["download_url"])
+    assert download_response.status_code == 200
+    workbook = load_workbook(BytesIO(download_response.content))
+    assert {"学习清单", "知识点诊断", "下一步建议"} <= set(workbook.sheetnames)
+    assert workbook["知识点诊断"].cell(row=2, column=2).value == "函数单调性"
+
+
+def test_question_score_import_reports_duplicates(client) -> None:
+    _create_student(client, 1)
+    exam_name = "题分重复测试"
+    exam_id = _create_exam(
+        client,
+        exam_name,
+        "2026-05-06",
+        _rows_for_exam({1: 90}, {1: 100}),
+    )
+
+    response = client.post(
+        f"/api/exams/{exam_id}/score-questions/import",
+        data={"strategy": "overwrite"},
+        files={
+            "file": (
+                "duplicate-questions.xlsx",
+                _build_question_workbook(
+                    exam_name,
+                    [
+                        ["20261001", "测试生1", "数学", "12", 10, 6, "函数单调性", "选择题", "理解", ""],
+                        ["20261001", "测试生1", "数学", "12", 10, 8, "函数单调性", "选择题", "理解", ""],
+                    ],
+                ),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success_rows"] == 1
+    assert payload["failed_rows"] == 1
+    assert "重复" in payload["error_preview"][0]
+
+
+def test_student_knowledge_plan_requires_question_details(client) -> None:
+    student_id = _create_student(client, 1)
+    exam_id = _create_exam(
+        client,
+        "无题分知识点测试",
+        "2026-05-07",
+        _rows_for_exam({1: 90}, {1: 100}),
+    )
+
+    response = client.get(f"/api/analytics/students/{student_id}?exam_id={exam_id}")
+    assert response.status_code == 200
+    assert response.json()["knowledge_points"] == []
+
+    export_response = client.post(
+        "/api/reports/export",
+        json={"report_type": "student_knowledge_plan", "exam_id": exam_id, "student_id": student_id},
+    )
+    assert export_response.status_code == 404
+    assert export_response.json()["detail"] == "该学生暂无本次考试知识点题分明细"
 
 
 def test_student_analysis_report_v1_metrics(client) -> None:

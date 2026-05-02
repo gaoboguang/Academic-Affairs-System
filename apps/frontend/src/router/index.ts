@@ -4,6 +4,9 @@ import AppLayout from "../layouts/AppLayout.vue";
 
 const DashboardPage = () => import("../pages/DashboardPage.vue");
 const BaseDataPage = () => import("../pages/BaseDataPage.vue");
+const ClassesOverviewPage = () => import("../pages/ClassesOverviewPage.vue");
+const ClassDetailPage = () => import("../pages/ClassDetailPage.vue");
+const GradeDetailPage = () => import("../pages/GradeDetailPage.vue");
 const StudentsPage = () => import("../pages/StudentsPage.vue");
 const StudentDetailPage = () => import("../pages/StudentDetailPage.vue");
 const GrowthArchivePage = () => import("../pages/GrowthArchivePage.vue");
@@ -132,6 +135,21 @@ const router = createRouter({
           path: "base-data",
           name: "base-data",
           component: BaseDataPage,
+        },
+        {
+          path: "classes",
+          name: "classes",
+          component: ClassesOverviewPage,
+        },
+        {
+          path: "classes/:classId",
+          name: "class-detail",
+          component: ClassDetailPage,
+        },
+        {
+          path: "grades/:gradeId",
+          name: "grade-detail",
+          component: GradeDetailPage,
         },
         {
           path: "students",

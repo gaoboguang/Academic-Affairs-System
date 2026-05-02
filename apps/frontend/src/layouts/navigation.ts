@@ -7,6 +7,7 @@ import {
   Histogram,
   HomeFilled,
   Notebook,
+  OfficeBuilding,
   Reading,
   School,
   Setting,
@@ -66,6 +67,15 @@ export const navSections: AppNavSection[] = [
         helper: "多数业务页面依赖这里的数据，修改前请确认影响范围。",
         icon: Files,
         tags: ["学年学期", "字典", "班级结构"],
+      },
+      {
+        path: "/classes",
+        label: "年级班级",
+        description: "按年级和班级查看班主任、任课教师、荣誉、学生与分析入口。",
+        helper: "这里是班级对象入口；基础数据页仍负责主数据配置。",
+        icon: OfficeBuilding,
+        tags: ["年级", "班级档案", "班级荣誉"],
+        matchPrefixes: ["/classes/", "/grades/"],
       },
       {
         path: "/students",

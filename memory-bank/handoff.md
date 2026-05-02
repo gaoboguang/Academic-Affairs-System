@@ -2,6 +2,25 @@
 
 ## 当前主线状态（2026-05-02）
 
+- 本轮已完成用户要求的“成绩知识点分析 V1”：
+  - 后端新增迁移 `apps/backend/alembic/versions/20260502_0026_score_knowledge_analysis_schema.py`，包括 `score_question_import_batch`、`knowledge_point`、`score_question`、`score_question_knowledge_point`、`score_question_record`、`score_knowledge_snapshot`
+  - 新增 `apps/backend/app/importers/score_questions.py` 和 `apps/backend/app/analytics/knowledge.py`：标准题分明细 Excel 导入后，按知识点合并多题得分，重建学生知识点诊断快照
+  - 诊断规则：得分率按学生得分合计 / 题目满分合计；优先级按失分规模、可提升空间和科目短板权重；满分合计低于阈值标记“样本偏小”且优先级为 0
+  - 新接口：`POST /api/exams/{exam_id}/score-questions/import`；学生分析 `GET /api/analytics/students/{student_id}?exam_id=...` 返回 `knowledge_points` 并把重点知识点合并进行动建议
+  - 前端分析中心“学生分析”新增“导入题分明细”和“知识点诊断”区域，支持按科目筛选；模板中心新增题分明细模板；输出中心新增 `student_knowledge_plan` 学生知识点学习清单 Excel
+  - 新增/补充测试：`apps/backend/tests/test_student_analysis_report_v1.py`、`apps/frontend/tests/student-report.test.ts`、`apps/frontend/tests/report-type-config.test.ts`、`tests/e2e/exams-analytics.spec.ts` 与 fixture `tests/e2e/fixtures/score-question-details-import.xlsx`
+  - 验证：`npm run backend:test -- apps/backend/tests/test_student_analysis_report_v1.py -q` 为 `7 passed`；`npm run frontend:test -- tests/student-report.test.ts tests/report-type-config.test.ts tests/score-readiness.test.ts` 为 `3 files / 13 tests passed`；`npm run frontend:lint`、`npm run frontend:build`、`npm run e2e -- tests/e2e/exams-analytics.spec.ts`（4 passed）、临时空库迁移和 `git diff --check` 均通过
+  - 注意：V1 只按本次考试扁平知识点做个人学习清单；阅卷平台复杂表头映射、错因标签、连续考试趋势、班级讲评清单、知识树和任务自动生成仍是后续版本
+
+- 本轮已完成“年级班级”独立对象入口：
+  - 后端新增 `class_honor` 表与迁移 `20260502_0027_class_honor_schema.py`，结构化保存班级荣誉标题、级别、获奖日期、来源和备注
+  - 新增 `apps/backend/app/services/class_profiles.py`、`apps/backend/app/api/routes/classes.py`、`apps/backend/app/schemas/class_profile.py`，提供 `/api/classes/overview`、`/api/classes/{class_id}/profile`、`/api/grades/{grade_id}/profile` 和班级荣誉 CRUD
+  - 班级聚合复用现有 `school_class.head_teacher_id`、`teaching_assignment`、`student.current_class_id`、成绩总分快照、考试时点班级映射、考勤/行为近 30 天信号；不新增多用户、云同步或审批流
+  - 前端新增 `/classes`、`/classes/:classId`、`/grades/:gradeId`，侧边栏“基础数据”下新增“年级班级”；速览页有年级分组、卡片/表格切换和班型/班主任/任课/荣誉筛选；班级详情支持学生跳转、任课关系新增、荣誉维护和分析/报表入口；年级详情展示班级横向矩阵
+  - 新增测试：`apps/backend/tests/test_class_profiles.py`、`apps/frontend/tests/class-profile.test.ts`、`tests/e2e/classes.spec.ts`
+  - 验证：`py_compile` 通过；`npm run backend:test -- apps/backend/tests/test_class_profiles.py -q` 为 `3 passed`；`npm run backend:test -- apps/backend/tests/test_class_profiles.py apps/backend/tests/test_api_m1.py -q` 为 `7 passed`；`npm run frontend:test -- tests/class-profile.test.ts tests/navigation.test.ts` 为 `8 passed`；`npm run frontend:lint`、`npm run frontend:build`、临时空库 `backend:migrate`、`npm run e2e -- tests/e2e/classes.spec.ts`（2 passed）、`git diff --check` 均通过
+  - 注意：真实 `data/app.db` 本轮未迁移；若要在真实库使用荣誉表，先按项目流程备份再运行 `npm run backend:migrate`
+
 - 本轮已修复分析中心“二模学生只显示 200 / 有成绩学生查不到”的口径问题：
   - 根因：`AnalyticsPage.vue` 学生下拉只请求 `/api/students?page=1&page_size=200`，概览卡又把这个下拉样本数显示为“学生”，导致用户误以为二模成绩只有 200 人；真实二模总分快照为 501 人
   - 后端新增 `GET /api/analytics/exams/{exam_id}/students`，按当前考试返回可分析学生；优先读取 `score_total_snapshot`，没有总分快照时用 `score_subject_snapshot` 兜底；返回学生、班级、总分、校内名次和 PR 等下拉/概览字段

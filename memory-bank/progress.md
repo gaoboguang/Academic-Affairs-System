@@ -8,6 +8,22 @@
 
 ## 2026-05-02 新增
 
+- 已完成成绩知识点分析 V1：
+  - 新增 Alembic 迁移 `20260502_0026_score_knowledge_analysis_schema.py`，落地题分导入批次、知识点、考试题目、题目知识点映射、学生题分记录和知识点诊断快照
+  - 新增 `ScoreQuestionImporter` 和 `/api/exams/{exam_id}/score-questions/import`，支持标准题分明细 Excel 导入、学生/科目匹配、同文件重复题号检测、覆盖/跳过策略和导入质量摘要
+  - 新增 `apps/backend/app/analytics/knowledge.py`，按知识点合并多题计算得分率、年级均值差距、失分规模、优先级和薄弱标签；满分样本低于阈值时标记“样本偏小”且不参与优先级
+  - 学生分析接口返回 `knowledge_points`，行动建议自动合并“知识点清单”；分析中心学生分析新增知识点诊断区和题分明细导入入口
+  - 输出中心新增 `student_knowledge_plan` 学生知识点学习清单；学生成绩分析单 Excel 同步新增知识点诊断 sheet；模板中心新增题分明细导入模板
+  - 新增/补充后端、前端和 E2E 测试；验证：后端学生分析定向 `7 passed`、前端 student-report/report-type/score-readiness 定向 `13 passed`、`frontend:lint`、`frontend:build`、`tests/e2e/exams-analytics.spec.ts` `4 passed`、`git diff --check`
+
+- 已完成年级班级档案与速览模块首版：
+  - 新增 `class_honor` 结构化班级荣誉表和迁移 `20260502_0027_class_honor_schema.py`
+  - 新增班级档案聚合接口：`GET /api/classes/overview`、`GET /api/classes/{class_id}/profile`、`GET /api/grades/{grade_id}/profile`
+  - 新增班级荣誉 CRUD：`GET/POST /api/classes/{class_id}/honors`、`PUT/DELETE /api/classes/{class_id}/honors/{honor_id}`
+  - 前端新增独立菜单“年级班级”，路由为 `/classes`、`/classes/:classId`、`/grades/:gradeId`
+  - 年级班级速览支持年级分组、卡片/表格切换、班型/班主任/任课/荣誉筛选；班级详情支持学生、任课教师、荣誉维护和分析输出入口；年级详情提供班级横向矩阵
+  - 验证：后端班级档案定向 `3 passed`；后端班级档案 + API 基础回归 `7 passed`；前端 class-profile + navigation 单测 `8 passed`；`frontend:lint`、`frontend:build`、临时空库迁移、`tests/e2e/classes.spec.ts` `2 passed`、`git diff --check` 均通过
+
 - 已修复分析中心当前考试学生样本口径：
   - 新增 `GET /api/analytics/exams/{exam_id}/students`，按考试快照返回可分析学生，优先使用总分快照、分科快照兜底
   - 分析中心学生下拉改为随考试加载本次有成绩学生，不再使用全校学生前 200 条；二模真实可分析学生为 501

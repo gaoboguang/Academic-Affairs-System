@@ -4,6 +4,8 @@ import {
   ensureExamWithScores,
   expectToast,
   invalidScoresFixture,
+  scoreQuestionDetailsFixture,
+  selectDropdownOption,
 } from "./helpers/localEduE2e";
 
 test("考试主流程：新建考试、导入成绩并带到分析中心", async ({ page }) => {
@@ -15,6 +17,33 @@ test("考试主流程：新建考试、导入成绩并带到分析中心", async
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
   await expect(page.locator(".page-chip-row").first()).toContainText(e2eExamName);
+});
+
+test("分析中心：导入题分明细后展示学生知识点诊断", async ({ page }) => {
+  await ensureExamWithScores(page);
+  await page.goto("/analytics");
+  await expect(page.getByRole("heading", { name: "分析中心" })).toBeVisible();
+
+  const examSelect = page.locator(".panel-block").filter({ hasText: "选择考试" }).locator(".el-select").first();
+  await selectDropdownOption(page, examSelect, e2eExamName);
+
+  await page.getByRole("tab", { name: "学生分析" }).click();
+  const studentPanel = page.locator(".panel-block").filter({ hasText: "学生分析" });
+  await selectDropdownOption(page, studentPanel.locator(".el-select").first(), "2026001 - 张三");
+
+  await studentPanel
+    .locator(".el-upload")
+    .filter({ hasText: "导入题分明细" })
+    .locator('input[type="file"]')
+    .setInputFiles(scoreQuestionDetailsFixture);
+  await expectToast(page, "题分明细导入完成");
+
+  await studentPanel.getByRole("button", { name: "查询" }).click();
+  const knowledgePanel = page.locator(".knowledge-panel");
+  await expect(knowledgePanel.getByRole("heading", { name: "知识点诊断" })).toBeVisible();
+  await expect(knowledgePanel.locator(".el-table__row").filter({ hasText: "函数单调性" }).first()).toContainText("优先补弱");
+  await expect(knowledgePanel.locator(".el-table__row").filter({ hasText: "函数单调性" }).first()).toContainText("12、18");
+  await expect(studentPanel.getByText("知识点清单")).toBeVisible();
 });
 
 test("分析中心：多学年全景对比可展示两学年趋势", async ({ page }) => {

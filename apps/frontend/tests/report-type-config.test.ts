@@ -16,8 +16,9 @@ import {
 
 describe("report type config", () => {
   it("exposes stable report type options and labels", () => {
-    expect(REPORT_TYPE_OPTIONS).toHaveLength(13);
+    expect(REPORT_TYPE_OPTIONS).toHaveLength(14);
     expect(getReportTypeLabel("student_analysis")).toBe("学生成绩分析单");
+    expect(getReportTypeLabel("student_knowledge_plan")).toBe("学生知识点学习清单");
     expect(getReportTypeLabel("unknown_report")).toBe("unknown_report");
   });
 
@@ -33,11 +34,17 @@ describe("report type config", () => {
       requiredParams: ["学生", "推荐方案"],
       formats: ["Excel", "打印预览"],
     });
+    expect(getReportCatalogItem("student_knowledge_plan")).toMatchObject({
+      domain: "students",
+      requiredParams: ["考试", "学生"],
+      formats: ["Excel"],
+    });
   });
 
   it("knows which fields each report type uses", () => {
     expect(reportTypeUsesField("student_analysis", "exam_id")).toBe(true);
     expect(reportTypeUsesField("student_analysis", "student_id")).toBe(true);
+    expect(reportTypeUsesField("student_knowledge_plan", "student_id")).toBe(true);
     expect(reportTypeUsesField("student_analysis", "class_id")).toBe(false);
     expect(reportTypeUsesField("teacher_workload", "rule_version_id")).toBe(true);
     expect(reportTypeUsesField("recommendation_summary", "scheme_id")).toBe(true);
@@ -69,6 +76,7 @@ describe("report type config", () => {
     expect(getReportRuleOptionScope("adviser_quant_summary")).toBe("adviser");
     expect(getReportRuleOptionScope("student_followup_package")).toBeNull();
     expect(getReportRuleOptionScope("planning_followup")).toBeNull();
+    expect(getReportRuleOptionScope("student_knowledge_plan")).toBeNull();
     expect(getReportRuleOptionScope("student_analysis")).toBeNull();
 
     expect(
