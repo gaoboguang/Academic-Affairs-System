@@ -72,6 +72,11 @@ class ScoreImportResponse(ImportResult):
     detection_summary: dict[str, Any] | None = None
 
 
+class ScoreQuestionImportResponse(ImportResult):
+    batch_id: int
+    snapshot_count: int = 0
+
+
 class ScoreImportMappingPayload(BaseModel):
     layout_type: str
     sheet_name: str | None = None
@@ -197,6 +202,26 @@ class ScoreRebuildResponse(BaseModel):
     audit: ScoreRankAuditResponse
 
 
+class ExamAnalyzableStudentItem(BaseModel):
+    id: int
+    student_no: str
+    name: str
+    current_grade_id: int | None = None
+    current_grade_name: str | None = None
+    current_class_id: int | None = None
+    current_class_name: str | None = None
+    total_score: float | None = None
+    class_rank: int | None = None
+    grade_rank: int | None = None
+    grade_percentile: float | None = None
+
+
+class ExamAnalyzableStudentListResponse(BaseModel):
+    exam_id: int
+    total: int
+    items: list[ExamAnalyzableStudentItem] = Field(default_factory=list)
+
+
 class StudentTargetLineGap(BaseModel):
     line_id: int
     line_name: str
@@ -216,6 +241,24 @@ class StudentSubjectEffectiveTarget(BaseModel):
     actual_score: float | None = None
     gap_score: float | None = None
     basis: str = "年级均分贡献"
+
+
+class StudentKnowledgePointAnalytics(BaseModel):
+    subject_id: int
+    subject_name: str
+    knowledge_point_id: int
+    knowledge_point_name: str
+    score: float
+    full_score: float
+    score_rate: float | None = None
+    grade_average_rate: float | None = None
+    grade_gap_rate: float | None = None
+    lost_score: float
+    priority_score: float
+    diagnosis_label: str
+    question_count: int
+    question_numbers: list[str] = Field(default_factory=list)
+    suggestion: str | None = None
 
 
 class StudentSubjectAnalytics(BaseModel):
@@ -306,6 +349,7 @@ class StudentAnalyticsResponse(BaseModel):
     target_line_gaps: list[StudentTargetLineGap] = Field(default_factory=list)
     trend_points: list[StudentTotalTrendPoint] = Field(default_factory=list)
     subject_trends: list[StudentSubjectTrendSeries] = Field(default_factory=list)
+    knowledge_points: list[StudentKnowledgePointAnalytics] = Field(default_factory=list)
     action_suggestions: list[StudentActionSuggestion] = Field(default_factory=list)
     subjects: list[StudentSubjectAnalytics]
 

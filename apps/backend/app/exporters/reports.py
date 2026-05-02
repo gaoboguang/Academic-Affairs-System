@@ -845,8 +845,80 @@ def export_student_analysis_report(settings: Settings, payload: dict[str, object
             _join_values(row.get("subject_names")),
             row.get("priority"),
         ])
+    _append_knowledge_sheet(workbook, payload.get("knowledge_points") or [])
     _append_analysis_insight_sheet(workbook, _build_student_analysis_insight_rows(payload))
     return _save_workbook(settings, workbook, "student_analysis_report")
+
+
+def export_student_knowledge_report(settings: Settings, payload: dict[str, object]) -> str:
+    workbook = Workbook()
+    summary = workbook.active
+    summary.title = "学习清单"
+    summary.append(["考试", payload.get("exam_name")])
+    summary.append(["学生", payload.get("student_name")])
+    summary.append(["总分", payload.get("total_score")])
+    summary.append(["校内名次", payload.get("grade_rank")])
+    summary.append(["知识点数量", len(payload.get("knowledge_points") or [])])
+    summary.append(["本次画像", payload.get("overview_sentence") or "-"])
+
+    _append_knowledge_sheet(workbook, payload.get("knowledge_points") or [], title="知识点诊断")
+
+    actions = workbook.create_sheet("下一步建议")
+    actions.append(["标题", "建议", "涉及科目", "优先级"])
+    for row in payload.get("action_suggestions") or []:
+        if not isinstance(row, dict):
+            continue
+        if row.get("category") not in {"knowledge_focus", "fix_weakness", "target_warning"}:
+            continue
+        actions.append([
+            row.get("title"),
+            row.get("summary"),
+            _join_values(row.get("subject_names")),
+            row.get("priority"),
+        ])
+    return _save_workbook(settings, workbook, "student_knowledge_report")
+
+
+def _append_knowledge_sheet(
+    workbook: Workbook,
+    rows: object,
+    *,
+    title: str = "知识点诊断",
+) -> None:
+    sheet = workbook.create_sheet(title)
+    sheet.append([
+        "科目",
+        "知识点",
+        "得分",
+        "满分",
+        "得分率",
+        "年级均值",
+        "年级差距",
+        "失分",
+        "优先级",
+        "诊断",
+        "涉及题号",
+        "建议",
+    ])
+    if not isinstance(rows, list):
+        return
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        sheet.append([
+            row.get("subject_name"),
+            row.get("knowledge_point_name"),
+            row.get("score"),
+            row.get("full_score"),
+            _format_percent(row.get("score_rate")),
+            _format_percent(row.get("grade_average_rate")),
+            _format_gap(row.get("grade_gap_rate"), ""),
+            row.get("lost_score"),
+            row.get("priority_score"),
+            row.get("diagnosis_label"),
+            _join_values(row.get("question_numbers")),
+            row.get("suggestion"),
+        ])
 
 
 def export_class_analysis_report(settings: Settings, payload: dict[str, object]) -> str:

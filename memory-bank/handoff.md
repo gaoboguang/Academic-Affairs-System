@@ -2,6 +2,13 @@
 
 ## 当前主线状态（2026-05-02）
 
+- 本轮已修复分析中心“二模学生只显示 200 / 有成绩学生查不到”的口径问题：
+  - 根因：`AnalyticsPage.vue` 学生下拉只请求 `/api/students?page=1&page_size=200`，概览卡又把这个下拉样本数显示为“学生”，导致用户误以为二模成绩只有 200 人；真实二模总分快照为 501 人
+  - 后端新增 `GET /api/analytics/exams/{exam_id}/students`，按当前考试返回可分析学生；优先读取 `score_total_snapshot`，没有总分快照时用 `score_subject_snapshot` 兜底；返回学生、班级、总分、校内名次和 PR 等下拉/概览字段
+  - 分析中心切换考试后会重新加载本次考试有成绩学生，不再加载全校前 200 人；概览卡“学生”改为“可分析学生”，“学生结果”改为“分科条目”
+  - 本轮不新增迁移、不写真实 `data/app.db`；真实库只读确认 `202604高三二模` 可分析学生为 501
+  - 验证：`py_compile` 通过；`npm run backend:test -- apps/backend/tests/test_student_analysis_report_v1.py -q` 为 `4 passed`；`npm run frontend:test -- tests/student-report.test.ts` 为 `3 passed`；`npm run frontend:lint`、`npm run frontend:build`、`npm run e2e -- tests/e2e/exams-analytics.spec.ts`、`git diff --check` 均通过
+
 - 本轮已修复用户截图中的“指标卡变窄、文字竖排”UI 崩溃：
   - 根因：`AppStatGrid` 的 `el-row` 同时带 `metric-grid` 旧类，`admin.css` 全局 `.metric-grid { display: grid }` 覆盖了 Element Plus Row 的 flex 布局
   - 修复：`AppStatGrid.vue` 移除 `metric-grid`；`admin.css` 补齐 `.app-stat-grid` 宽度、行间距、列伸展和 `.app-stat-card.stat-card` padding 归零

@@ -4,6 +4,7 @@ from app.api.routes import (
     archives,
     analytics,
     base_data,
+    classes,
     dashboard,
     evaluation,
     exams,
@@ -22,6 +23,7 @@ from app.api.routes import (
 api_router = APIRouter()
 api_router.include_router(dashboard.router)
 api_router.include_router(base_data.router)
+api_router.include_router(classes.router)
 api_router.include_router(students.router)
 api_router.include_router(teachers.router)
 api_router.include_router(archives.router)

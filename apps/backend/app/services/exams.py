@@ -12,6 +12,7 @@ from app.analytics.score_contexts import ensure_exam_student_contexts, upsert_sc
 from app.analytics.scores import rebuild_exam_snapshots
 from app.core.config import Settings
 from app.importers.score_layouts import ScoreImportMapping, ScoreLayoutAdapter
+from app.importers.score_questions import ScoreQuestionImporter
 from app.importers.scores import ScoreImporter
 from app.models import (
     ConfigItem,
@@ -23,6 +24,7 @@ from app.models import (
     ScoreExamStudentContext,
     ScoreImportBatch,
     ScoreImportProfile,
+    ScoreQuestionImportBatch,
     ScoreTargetLine,
     ScoreTotalSnapshot,
     Semester,
@@ -40,6 +42,7 @@ from app.schemas.exam import (
     ScoreClassMappingRead,
     ScoreImportPreviewResponse,
     ScoreImportProfileRead,
+    ScoreQuestionImportResponse,
     ScoreImportResponse,
     ScoreRankAuditResponse,
     ScoreRankDiffItem,
@@ -319,6 +322,59 @@ def preview_score_import(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return ScoreImportPreviewResponse.model_validate(preview.to_dict())
+
+
+def import_score_questions(
+    session: Session,
+    settings: Settings,
+    *,
+    exam_id: int,
+    filename: str | None,
+    content: bytes,
+    strategy: str,
+) -> ScoreQuestionImportResponse:
+    exam = get_exam(session, exam_id)
+    if not exam:
+        raise HTTPException(status_code=404, detail="考试不存在")
+    if not repo_list_exam_subjects(session, exam_id):
+        raise HTTPException(status_code=400, detail="请先配置考试科目")
+    if strategy not in {"overwrite", "skip_existing"}:
+        raise HTTPException(status_code=400, detail="题分导入策略只能是 overwrite 或 skip_existing")
+
+    batch = ScoreQuestionImportBatch(
+        exam_id=exam_id,
+        source_filename=filename,
+        import_time=datetime.now(),
+    )
+    session.add(batch)
+    session.flush()
+    job = create_import_job(session, "score_questions", filename)
+    job.started_at = datetime.now()
+
+    importer = ScoreQuestionImporter(session, settings, exam)
+    try:
+        result, snapshot_count = importer.execute(content=content, batch=batch, strategy=strategy)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    batch.total_rows = result.total_rows
+    batch.success_rows = result.success_rows
+    batch.failed_rows = result.failed_rows
+    batch.status = result.status
+    batch.error_report_path = result.error_report_path
+
+    job.finished_at = datetime.now()
+    job.status = result.status
+    job.result_json = {"exam_id": exam_id, "batch_id": batch.id, "snapshot_count": snapshot_count, **result.model_dump()}
+    write_audit_log(
+        session,
+        module="exams",
+        action="import_score_questions",
+        target_type="score_question_import_batch",
+        target_id=str(batch.id),
+        detail_json=job.result_json,
+    )
+    return ScoreQuestionImportResponse(batch_id=batch.id, snapshot_count=snapshot_count, **result.model_dump())
 
 
 def get_score_import_batches(session: Session, exam_id: int) -> list[dict]:

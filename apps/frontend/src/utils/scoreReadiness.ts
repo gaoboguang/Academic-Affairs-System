@@ -25,7 +25,7 @@ export function buildScoreReportGuardMessages(
   reportType: string,
   context: ScoreReadinessContext,
 ): string[] {
-  const scoreReportTypes = new Set(["student_analysis", "class_analysis", "grade_summary", "teacher_analysis"]);
+  const scoreReportTypes = new Set(["student_analysis", "student_knowledge_plan", "class_analysis", "grade_summary", "teacher_analysis"]);
   if (!scoreReportTypes.has(reportType)) return [];
   if (context.scoreRecordTotal <= 0) {
     return ["成绩类报表需要先导入成绩记录；当前成绩库为空，生成报表容易造成误读。"];

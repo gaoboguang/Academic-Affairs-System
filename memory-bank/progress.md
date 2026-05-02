@@ -8,6 +8,12 @@
 
 ## 2026-05-02 新增
 
+- 已修复分析中心当前考试学生样本口径：
+  - 新增 `GET /api/analytics/exams/{exam_id}/students`，按考试快照返回可分析学生，优先使用总分快照、分科快照兜底
+  - 分析中心学生下拉改为随考试加载本次有成绩学生，不再使用全校学生前 200 条；二模真实可分析学生为 501
+  - 概览卡文案从“学生 / 学生结果”调整为“可分析学生 / 分科条目”，避免把下拉加载上限误读为考试人数
+  - 新增后端接口测试和前端选择器 helper 测试；验证通过：后端定向 `4 passed`、前端定向 `3 passed`、`frontend:lint`、`frontend:build`、考试分析 E2E `3 passed`、`git diff --check`
+
 - 已修复企业后台指标卡竖排布局崩溃：
   - 根因是 `AppStatGrid` 根节点同时带 `el-row` 与旧 `metric-grid` 类，导致全局 grid 样式覆盖 Element Plus Row 的 flex 栅格
   - `AppStatGrid.vue` 已移除 `metric-grid` 兼容类，`admin.css` 补齐 `.app-stat-grid` 和 `.app-stat-card.stat-card` 的布局保护

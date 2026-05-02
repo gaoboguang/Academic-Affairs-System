@@ -21,6 +21,7 @@ from app.exporters.reports import (
     export_planning_followup_report,
     export_student_analysis_report,
     export_student_followup_package,
+    export_student_knowledge_report,
     export_teacher_analysis_report,
 )
 from app.exporters.workload import export_workload_results
@@ -48,6 +49,7 @@ from app.services import workload as workload_service
 
 REPORT_TYPE_NAME_MAP = {
     "student_analysis": "学生成绩分析单",
+    "student_knowledge_plan": "学生知识点学习清单",
     "class_analysis": "班级成绩分析报表",
     "grade_summary": "年级成绩汇总表",
     "teacher_analysis": "教师任教分析报表",
@@ -221,6 +223,14 @@ def _export_report_file(session: Session, settings, payload: ReportExportPayload
             raise HTTPException(status_code=400, detail="学生成绩分析单需要考试和学生参数")
         data = analytics_service.get_student_analytics(session, payload.student_id, payload.exam_id)
         return export_student_analysis_report(settings, data.model_dump(mode="json"))
+
+    if payload.report_type == "student_knowledge_plan":
+        if not payload.exam_id or not payload.student_id:
+            raise HTTPException(status_code=400, detail="学生知识点学习清单需要考试和学生参数")
+        data = analytics_service.get_student_analytics(session, payload.student_id, payload.exam_id)
+        if not data.knowledge_points:
+            raise HTTPException(status_code=404, detail="该学生暂无本次考试知识点题分明细")
+        return export_student_knowledge_report(settings, data.model_dump(mode="json"))
 
     if payload.report_type == "class_analysis":
         if not payload.exam_id or not payload.class_id:

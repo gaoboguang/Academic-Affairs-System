@@ -132,6 +132,7 @@ const REPORT_PARAM_LABELS: Record<string, string> = {
 
 export const REPORT_TYPE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "student_analysis", label: "学生成绩分析单" },
+  { value: "student_knowledge_plan", label: "学生知识点学习清单" },
   { value: "class_analysis", label: "班级成绩分析报表" },
   { value: "grade_summary", label: "年级成绩汇总表" },
   { value: "teacher_analysis", label: "教师任教分析报表" },
@@ -158,6 +159,16 @@ const REPORT_TYPE_CONFIGS: Record<string, ReportTypeConfig> = {
     requiredFields: ["exam_id", "student_id"],
     buildPrintPreviewPath: (form) =>
       form.student_id && form.exam_id ? studentAnalysisPrintPreviewPath(form.student_id, form.exam_id) : null,
+  },
+  student_knowledge_plan: {
+    value: "student_knowledge_plan",
+    label: "学生知识点学习清单",
+    domain: "students",
+    purpose: "给学生规划下一阶段学习重点，聚焦薄弱知识点、涉及题号和复习动作。",
+    dataSources: ["题分明细", "考试成绩", "知识点诊断"],
+    formats: ["Excel"],
+    riskTags: ["需导入题分明细", "需选择考试", "需选择学生"],
+    requiredFields: ["exam_id", "student_id"],
   },
   class_analysis: {
     value: "class_analysis",

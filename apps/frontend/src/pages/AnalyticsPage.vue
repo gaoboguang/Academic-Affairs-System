@@ -206,13 +206,34 @@
               <el-option
                 v-for="student in studentOptions"
                 :key="student.id"
-                :label="`${student.student_no} - ${student.name}`"
+                :label="formatExamStudentOptionLabel(student)"
                 :value="student.id"
               />
             </el-select>
-            <el-button type="primary" @click="loadStudentAnalytics">查询</el-button>
+            <el-button type="primary" :disabled="!selectedStudentId" @click="loadStudentAnalytics">查询</el-button>
+          </div>
+          <div class="action-row knowledge-import-row">
+            <el-select v-model="questionImportStrategy" style="width: 180px">
+              <el-option label="覆盖已有题分" value="overwrite" />
+              <el-option label="跳过已有题分" value="skip_existing" />
+            </el-select>
+            <el-upload :show-file-list="false" :auto-upload="false" :on-change="handleQuestionScoreImport">
+              <el-button plain :disabled="!selectedExamId" :loading="importingQuestionScores">导入题分明细</el-button>
+            </el-upload>
+            <el-alert
+              v-if="questionImportResult"
+              class="inline-import-result"
+              :type="questionImportResult.failed_rows ? 'warning' : 'success'"
+              show-icon
+              :closable="false"
+              :title="questionImportResult.message"
+            />
           </div>
           <el-empty v-if="!studentAnalytics && !scoreRecordTotal" description="当前成绩记录为 0。请先到考试成绩中心导入成绩，再查看学生分析。" />
+          <el-empty
+            v-else-if="!studentAnalytics && selectedExamId && !studentOptions.length"
+            description="当前考试暂无可分析学生。请确认已导入成绩并重建成绩快照。"
+          />
           <div v-if="studentAnalytics" class="metric-grid analytics-grid">
             <div class="soft-card stat-card">
               <div class="metric-label">总分{{ studentAnalytics.score_value_label ? `（${studentAnalytics.score_value_label}）` : "" }}</div>
@@ -295,6 +316,50 @@
               </el-table-column>
             </el-table>
           </div>
+          <article v-if="studentAnalytics" class="soft-card inner-panel knowledge-panel table-gap">
+            <div class="panel-title-row">
+              <div>
+                <h4>知识点诊断</h4>
+                <p>按失分规模、可提升空间和科目短板权重排序，用于下一阶段学习清单。</p>
+              </div>
+              <el-select v-model="knowledgeSubjectFilter" clearable placeholder="全部科目" style="width: 180px">
+                <el-option
+                  v-for="subject in studentAnalytics.subjects"
+                  :key="subject.subject_id"
+                  :label="subject.subject_name"
+                  :value="subject.subject_id"
+                />
+              </el-select>
+            </div>
+            <div v-if="filteredKnowledgePoints.length" class="table-shell table-gap">
+              <el-table :data="filteredKnowledgePoints" stripe>
+                <el-table-column label="科目" prop="subject_name" width="90" />
+                <el-table-column label="知识点" prop="knowledge_point_name" min-width="150" />
+                <el-table-column label="得分率" width="90">
+                  <template #default="{ row }">{{ formatPercentValue(row.score_rate) }}</template>
+                </el-table-column>
+                <el-table-column label="年级均值" width="100">
+                  <template #default="{ row }">{{ formatPercentValue(row.grade_average_rate) }}</template>
+                </el-table-column>
+                <el-table-column label="年级差距" width="100">
+                  <template #default="{ row }">{{ formatSignedNumber(row.grade_gap_rate ? row.grade_gap_rate * 100 : row.grade_gap_rate, "%") }}</template>
+                </el-table-column>
+                <el-table-column label="失分" width="80">
+                  <template #default="{ row }">{{ formatSignedNumber(-row.lost_score, "分") }}</template>
+                </el-table-column>
+                <el-table-column label="诊断" width="110">
+                  <template #default="{ row }">
+                    <el-tag :type="getKnowledgeDiagnosisTone(row.diagnosis_label)" effect="light">{{ row.diagnosis_label }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="题号" width="120">
+                  <template #default="{ row }">{{ formatQuestionNumbers(row.question_numbers) }}</template>
+                </el-table-column>
+                <el-table-column label="建议" prop="suggestion" min-width="260" />
+              </el-table>
+            </div>
+            <el-empty v-else description="当前学生暂无知识点题分明细。请先导入阅卷题分表。" />
+          </article>
           <div v-if="studentAnalytics" class="student-report-grid table-gap">
             <article class="soft-card inner-panel">
               <h4>进退步轨迹</h4>
@@ -683,7 +748,9 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import ElMessage from "element-plus/es/components/message/index";
 
-import { apiRequest } from "../api/client";
+import type { UploadFile } from "element-plus";
+
+import { apiRequest, uploadFile } from "../api/client";
 import {
   adviserRiskTagType,
   buildAdviserDashboardEmptyTips,
@@ -696,13 +763,19 @@ import ClassPanoramaPanel from "../components/analytics/ClassPanoramaPanel.vue";
 import GradePanoramaPanel from "../components/analytics/GradePanoramaPanel.vue";
 import {
   buildStudentRadarRows,
+  filterKnowledgePointsBySubject,
+  formatExamStudentOptionLabel,
   formatDiagnosisTags,
   formatPercentValue,
+  formatQuestionNumbers,
   formatSignedNumber,
+  getKnowledgeDiagnosisTone,
   getSuggestionTone,
   getTargetGapSummary,
+  pickExamStudentSelection,
   type RadarMetric,
 } from "../components/analytics/studentReport";
+import type { ImportFeedbackResult } from "../utils/importFeedback";
 import TeacherPanoramaPanel from "../components/analytics/TeacherPanoramaPanel.vue";
 import type {
   ClassPanoramaResponse,
@@ -722,6 +795,9 @@ interface StudentOption {
   id: number;
   student_no: string;
   name: string;
+  current_class_name?: string | null;
+  total_score?: number | null;
+  grade_rank?: number | null;
 }
 
 interface TeacherOption {
@@ -803,6 +879,10 @@ const rebuildingSnapshots = ref(false);
 const targetLineDrafts = ref<ScoreTargetLineDraft[]>([]);
 const savingTargetLines = ref(false);
 const studentRadarMetric = ref<RadarMetric>("pr");
+const knowledgeSubjectFilter = ref<number | null>(null);
+const importingQuestionScores = ref(false);
+const questionImportStrategy = ref("overwrite");
+const questionImportResult = ref<(ImportFeedbackResult & { batch_id?: number; snapshot_count?: number }) | null>(null);
 const studentRadarOptions = [
   { label: "PR", value: "pr" },
   { label: "T分", value: "t_score" },
@@ -820,7 +900,7 @@ const selectedExamName = computed(
 );
 const analyticsPageMeta = computed(() => [
   { label: "考试", value: examOptions.value.length },
-  { label: "学生", value: studentOptions.value.length },
+  { label: "可分析学生", value: studentOptions.value.length },
   { label: "教师", value: teacherOptions.value.length },
   { label: "当前考试", value: selectedExamName.value },
 ]);
@@ -839,13 +919,13 @@ const analyticsOverviewCards = computed<StatCardItem[]>(() => [
     tone: "primary",
   },
   {
-    label: "学生",
+    label: "可分析学生",
     value: studentOptions.value.length,
-    help: "当前学生选择器可检索的学生样本。",
+    help: "当前考试已有成绩快照、可进入个人分析的学生数。",
     tone: "neutral",
   },
   {
-    label: "学生结果",
+    label: "分科条目",
     value: studentAnalytics.value ? studentAnalytics.value.subjects?.length ?? 0 : 0,
     help: "当前学生分析里可查看的分科条目。",
     tone: "primary",
@@ -875,6 +955,11 @@ const rankAuditCards = computed<StatCardItem[]>(() =>
 );
 const studentRadarRows = computed(() =>
   studentAnalytics.value ? buildStudentRadarRows(studentAnalytics.value.subjects ?? [], studentRadarMetric.value) : [],
+);
+const filteredKnowledgePoints = computed(() =>
+  studentAnalytics.value
+    ? filterKnowledgePointsBySubject(studentAnalytics.value.knowledge_points ?? [], knowledgeSubjectFilter.value)
+    : [],
 );
 const adviserDashboardTips = computed(() => buildAdviserDashboardEmptyTips(adviserDashboard.value));
 
@@ -910,9 +995,8 @@ const adviserOverviewCards = computed(() => {
 
 async function loadOptions(): Promise<void> {
   await referenceStore.loadCore();
-  const [examPayload, studentPayload, teacherPayload] = await Promise.all([
+  const [examPayload, teacherPayload] = await Promise.all([
     apiRequest<{ items: ExamOption[] }>("/api/exams?page=1&page_size=100"),
-    apiRequest<{ items: StudentOption[] }>("/api/students?page=1&page_size=200"),
     apiRequest<{ items: TeacherOption[] }>("/api/teachers?page=1&page_size=200"),
   ]);
   try {
@@ -922,13 +1006,12 @@ async function loadOptions(): Promise<void> {
     scoreRecordTotal.value = 0;
   }
   examOptions.value = examPayload.items;
-  studentOptions.value = studentPayload.items;
   teacherOptions.value = teacherPayload.items;
   if (!selectedExamId.value && examOptions.value.length) {
     selectedExamId.value = examOptions.value[0].id;
   }
-  if (!selectedStudentId.value && studentOptions.value.length) {
-    selectedStudentId.value = studentOptions.value[0].id;
+  if (selectedExamId.value) {
+    await loadExamStudentOptions({ preserveCurrent: true });
   }
   if (!selectedClassId.value && referenceStore.classes.length) {
     selectedClassId.value = referenceStore.classes[0].id;
@@ -953,12 +1036,63 @@ async function loadOptions(): Promise<void> {
   }
 }
 
+async function loadExamStudentOptions(options: { preserveCurrent?: boolean } = {}): Promise<void> {
+  if (!selectedExamId.value) {
+    studentOptions.value = [];
+    selectedStudentId.value = null;
+    studentAnalytics.value = null;
+    return;
+  }
+  try {
+    const payload = await apiRequest<{ items: StudentOption[]; total: number }>(
+      `/api/analytics/exams/${selectedExamId.value}/students`,
+    );
+    studentOptions.value = payload.items;
+    const nextStudentId = pickExamStudentSelection(
+      studentOptions.value,
+      options.preserveCurrent ? selectedStudentId.value : null,
+    );
+    if (selectedStudentId.value !== nextStudentId) {
+      selectedStudentId.value = nextStudentId;
+      studentAnalytics.value = null;
+    }
+  } catch (error) {
+    studentOptions.value = [];
+    selectedStudentId.value = null;
+    studentAnalytics.value = null;
+    ElMessage.error((error as Error).message);
+  }
+}
+
 async function loadStudentAnalytics(): Promise<void> {
   if (!selectedExamId.value || !selectedStudentId.value) return;
   try {
     studentAnalytics.value = await apiRequest(`/api/analytics/students/${selectedStudentId.value}?exam_id=${selectedExamId.value}`);
   } catch (error) {
     ElMessage.error((error as Error).message);
+  }
+}
+
+async function handleQuestionScoreImport(uploadFileItem: UploadFile): Promise<void> {
+  if (!uploadFileItem.raw || !selectedExamId.value) return;
+  try {
+    importingQuestionScores.value = true;
+    questionImportResult.value = await uploadFile<ImportFeedbackResult & { batch_id: number; snapshot_count: number }>(
+      `/api/exams/${selectedExamId.value}/score-questions/import`,
+      uploadFileItem.raw,
+      { strategy: questionImportStrategy.value },
+    );
+    ElMessage({
+      type: questionImportResult.value.failed_rows ? "warning" : "success",
+      message: questionImportResult.value.message,
+    });
+    if (selectedStudentId.value) {
+      await loadStudentAnalytics();
+    }
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  } finally {
+    importingQuestionScores.value = false;
   }
 }
 
@@ -1222,6 +1356,7 @@ function resetTeacherPanoramaFilters(): void {
 
 function resetAnalyticsState(): void {
   studentAnalytics.value = null;
+  knowledgeSubjectFilter.value = null;
   classAnalytics.value = null;
   gradeAnalytics.value = null;
   teacherAnalytics.value = null;
@@ -1257,9 +1392,18 @@ function formatTargetLineCounts(value?: Record<string, number> | null): string {
 watch(selectedExamId, async (examId) => {
   rankAudit.value = null;
   gradeAnalytics.value = null;
+  studentAnalytics.value = null;
+  knowledgeSubjectFilter.value = null;
+  questionImportResult.value = null;
   targetLineDrafts.value = [];
   if (examId) {
-    await loadTargetLines();
+    await Promise.all([
+      loadTargetLines(),
+      loadExamStudentOptions({ preserveCurrent: true }),
+    ]);
+  } else {
+    studentOptions.value = [];
+    selectedStudentId.value = null;
   }
 });
 
@@ -1366,6 +1510,21 @@ onMounted(async () => {
 
 .analytics-grid {
   margin-top: 16px;
+}
+
+.knowledge-import-row {
+  margin-top: 12px;
+}
+
+.inline-import-result {
+  flex: 1;
+  min-width: 260px;
+}
+
+.knowledge-panel p {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  line-height: 1.55;
 }
 
 .adviser-filter-grid {

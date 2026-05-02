@@ -66,6 +66,33 @@ export interface StudentActionSuggestion {
   priority: number;
 }
 
+export interface StudentKnowledgePointAnalytics {
+  subject_id: number;
+  subject_name: string;
+  knowledge_point_id: number;
+  knowledge_point_name: string;
+  score: number;
+  full_score: number;
+  score_rate?: number | null;
+  grade_average_rate?: number | null;
+  grade_gap_rate?: number | null;
+  lost_score: number;
+  priority_score: number;
+  diagnosis_label: string;
+  question_count: number;
+  question_numbers?: string[];
+  suggestion?: string | null;
+}
+
+export interface ExamAnalyzableStudentOption {
+  id: number;
+  student_no: string;
+  name: string;
+  current_class_name?: string | null;
+  total_score?: number | null;
+  grade_rank?: number | null;
+}
+
 export interface StudentAnalyticsReportV1 {
   student_name: string;
   exam_name: string;
@@ -78,6 +105,7 @@ export interface StudentAnalyticsReportV1 {
   overview_sentence?: string;
   target_line_gaps?: StudentTargetLineGap[];
   subjects: StudentSubjectAnalyticsV1[];
+  knowledge_points?: StudentKnowledgePointAnalytics[];
   trend_points?: StudentTotalTrendPoint[];
   subject_trends?: StudentSubjectTrendSeries[];
   action_suggestions?: StudentActionSuggestion[];
@@ -136,6 +164,43 @@ export function getTargetGapSummary(gaps?: StudentTargetLineGap[] | null): strin
 
 export function getSuggestionTone(category: string): "success" | "warning" | "info" {
   if (category === "keep_strength") return "success";
-  if (category === "fix_weakness" || category === "target_warning") return "warning";
+  if (category === "fix_weakness" || category === "target_warning" || category === "knowledge_focus") return "warning";
   return "info";
+}
+
+export function getKnowledgeDiagnosisTone(label?: string | null): "success" | "warning" | "info" {
+  if (label === "正常") return "success";
+  if (label === "优先补弱" || label === "需要巩固" || label === "低于年级") return "warning";
+  return "info";
+}
+
+export function filterKnowledgePointsBySubject(
+  points: StudentKnowledgePointAnalytics[],
+  subjectId?: number | null,
+): StudentKnowledgePointAnalytics[] {
+  if (!subjectId) return points;
+  return points.filter((item) => item.subject_id === subjectId);
+}
+
+export function formatQuestionNumbers(values?: string[] | null): string {
+  return values?.length ? values.join("、") : "-";
+}
+
+export function pickExamStudentSelection(
+  students: ExamAnalyzableStudentOption[],
+  currentStudentId?: number | null,
+): number | null {
+  if (currentStudentId && students.some((item) => item.id === currentStudentId)) {
+    return currentStudentId;
+  }
+  return students[0]?.id ?? null;
+}
+
+export function formatExamStudentOptionLabel(student: ExamAnalyzableStudentOption): string {
+  const details = [
+    student.current_class_name,
+    typeof student.grade_rank === "number" ? `校内${student.grade_rank}名` : null,
+  ].filter(Boolean);
+  const suffix = details.length ? `（${details.join(" / ")}）` : "";
+  return `${student.student_no} - ${student.name}${suffix}`;
 }

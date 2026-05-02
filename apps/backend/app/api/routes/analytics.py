@@ -9,6 +9,7 @@ from app.api.deps import get_db_session
 from app.schemas.exam import (
     ClassAnalyticsResponse,
     ClassPanoramaResponse,
+    ExamAnalyzableStudentListResponse,
     GradeAnalyticsResponse,
     GradePanoramaResponse,
     StudentAnalyticsResponse,
@@ -56,6 +57,14 @@ def get_student_risk(
         start_date=start_date,
         end_date=end_date,
     )
+
+
+@router.get("/exams/{exam_id}/students", response_model=ExamAnalyzableStudentListResponse)
+def list_exam_analyzable_students(
+    exam_id: int,
+    session: Session = Depends(get_db_session),
+) -> ExamAnalyzableStudentListResponse:
+    return service.list_exam_analyzable_students(session, exam_id)
 
 
 @router.get("/students/{student_id}", response_model=StudentAnalyticsResponse)

@@ -12,13 +12,20 @@ from app.models.evaluation import (
 from app.models.archive import StudentGrowthAttachment, StudentGrowthRecord
 from app.models.base import Base
 from app.models.base_data import AcademicYear, DictItem, DictType, Grade, SchoolClass, Semester, Subject
+from app.models.class_profile import ClassHonor
 from app.models.exam import (
     Exam,
     ExamSubject,
+    KnowledgePoint,
     ScoreClassMapping,
     ScoreExamStudentContext,
     ScoreImportBatch,
     ScoreImportProfile,
+    ScoreKnowledgeSnapshot,
+    ScoreQuestion,
+    ScoreQuestionImportBatch,
+    ScoreQuestionKnowledgePoint,
+    ScoreQuestionRecord,
     ScoreRecord,
     ScoreSubjectSnapshot,
     ScoreTargetLine,
@@ -92,6 +99,7 @@ __all__ = [
     "CollegeAlias",
     "CollegeMajor",
     "ClassAdviserAssignment",
+    "ClassHonor",
     "ConfigItem",
     "DictItem",
     "DictType",
@@ -110,6 +118,7 @@ __all__ = [
     "GaokaoImportRun",
     "GaokaoSourceDocument",
     "ImportJob",
+    "KnowledgePoint",
     "Major",
     "MajorEmploymentMapping",
     "ReportExportRecord",
@@ -120,6 +129,11 @@ __all__ = [
     "ScoreClassMapping",
     "ScoreExamStudentContext",
     "ScoreImportProfile",
+    "ScoreKnowledgeSnapshot",
+    "ScoreQuestion",
+    "ScoreQuestionImportBatch",
+    "ScoreQuestionKnowledgePoint",
+    "ScoreQuestionRecord",
     "ScoreRecord",
     "ScoreSubjectSnapshot",
     "ScoreTargetLine",

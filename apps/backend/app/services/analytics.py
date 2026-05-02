@@ -4,12 +4,26 @@ from collections import defaultdict
 import math
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.analytics.score_contexts import effective_class_id, effective_class_name, load_exam_context_map
 from app.analytics.scores import calculate_rate, safe_mean, safe_median, safe_stddev
-from app.models import Exam, Grade, SchoolClass, ScoreRecord, ScoreTargetLine, Semester, Subject, Teacher, TeachingAssignment
+from app.models import (
+    Exam,
+    Grade,
+    SchoolClass,
+    ScoreKnowledgeSnapshot,
+    ScoreRecord,
+    ScoreSubjectSnapshot,
+    ScoreTargetLine,
+    ScoreTotalSnapshot,
+    Semester,
+    Student,
+    Subject,
+    Teacher,
+    TeachingAssignment,
+)
 from app.repositories.exams import (
     get_exam,
     get_previous_trend_exam,
@@ -19,6 +33,8 @@ from app.repositories.exams import (
 )
 from app.schemas.exam import (
     ClassAnalyticsResponse,
+    ExamAnalyzableStudentItem,
+    ExamAnalyzableStudentListResponse,
     ClassPanoramaResponse,
     GradeAnalyticsResponse,
     GradeClassAnalyticsItem,
@@ -35,6 +51,7 @@ from app.schemas.exam import (
     GradeTargetLineSummary,
     StudentAnalyticsResponse,
     StudentActionSuggestion,
+    StudentKnowledgePointAnalytics,
     StudentSubjectAnalytics,
     StudentSubjectEffectiveTarget,
     StudentSubjectTrendPoint,
@@ -50,6 +67,70 @@ from app.schemas.exam import (
 
 def _score_value_label(score_value_type: str | None) -> str:
     return "赋分" if score_value_type == "converted" else "原始分"
+
+
+def list_exam_analyzable_students(session: Session, exam_id: int) -> ExamAnalyzableStudentListResponse:
+    exam = get_exam(session, exam_id)
+    if not exam:
+        raise HTTPException(status_code=404, detail="考试不存在")
+
+    total_rows = list(
+        session.execute(
+            select(Student, ScoreTotalSnapshot)
+            .join(ScoreTotalSnapshot, ScoreTotalSnapshot.student_id == Student.id)
+            .where(ScoreTotalSnapshot.exam_id == exam_id, Student.is_active.is_(True))
+            .order_by(
+                ScoreTotalSnapshot.grade_rank.is_(None),
+                ScoreTotalSnapshot.grade_rank.asc(),
+                ScoreTotalSnapshot.total_score.desc(),
+                Student.student_no.asc(),
+                Student.id.asc(),
+            )
+        ).all()
+    )
+
+    if total_rows:
+        items = [
+            _build_exam_analyzable_student_item(student, total_snapshot)
+            for student, total_snapshot in total_rows
+        ]
+        return ExamAnalyzableStudentListResponse(exam_id=exam.id, total=len(items), items=items)
+
+    fallback_rows = list(
+        session.execute(
+            select(Student)
+            .join(ScoreSubjectSnapshot, ScoreSubjectSnapshot.student_id == Student.id)
+            .where(ScoreSubjectSnapshot.exam_id == exam_id, Student.is_active.is_(True))
+            .group_by(Student.id)
+            .order_by(
+                func.min(ScoreSubjectSnapshot.grade_rank).is_(None),
+                func.min(ScoreSubjectSnapshot.grade_rank).asc(),
+                Student.student_no.asc(),
+                Student.id.asc(),
+            )
+        ).scalars()
+    )
+    items = [_build_exam_analyzable_student_item(student, None) for student in fallback_rows]
+    return ExamAnalyzableStudentListResponse(exam_id=exam.id, total=len(items), items=items)
+
+
+def _build_exam_analyzable_student_item(
+    student: Student,
+    total_snapshot: ScoreTotalSnapshot | None,
+) -> ExamAnalyzableStudentItem:
+    return ExamAnalyzableStudentItem(
+        id=student.id,
+        student_no=student.student_no,
+        name=student.name,
+        current_grade_id=student.current_grade_id,
+        current_grade_name=student.current_grade.name if student.current_grade else None,
+        current_class_id=student.current_class_id,
+        current_class_name=student.current_class.name if student.current_class else None,
+        total_score=total_snapshot.total_score if total_snapshot else None,
+        class_rank=total_snapshot.class_rank if total_snapshot else None,
+        grade_rank=total_snapshot.grade_rank if total_snapshot else None,
+        grade_percentile=total_snapshot.grade_percentile if total_snapshot else None,
+    )
 
 
 def get_student_analytics(session: Session, student_id: int, exam_id: int) -> StudentAnalyticsResponse:
@@ -175,7 +256,11 @@ def get_student_analytics(session: Session, student_id: int, exam_id: int) -> St
             )
         )
 
-    action_suggestions = _build_student_action_suggestions(subjects, target_line_gaps)
+    knowledge_points = _list_student_knowledge_points(session, student_id=student_id, exam_id=exam.id)
+    action_suggestions = _merge_knowledge_action_suggestions(
+        _build_student_action_suggestions(subjects, target_line_gaps),
+        knowledge_points,
+    )
     grade_rank_delta = (
         previous_total.grade_rank - total_snapshot.grade_rank
         if total_snapshot
@@ -228,9 +313,78 @@ def get_student_analytics(session: Session, student_id: int, exam_id: int) -> St
             )
             for subject in subjects
         ],
+        knowledge_points=knowledge_points,
         action_suggestions=action_suggestions,
         subjects=subjects,
     )
+
+
+def _list_student_knowledge_points(
+    session: Session,
+    *,
+    student_id: int,
+    exam_id: int,
+    limit: int = 10,
+) -> list[StudentKnowledgePointAnalytics]:
+    rows = session.scalars(
+        select(ScoreKnowledgeSnapshot)
+        .where(
+            ScoreKnowledgeSnapshot.exam_id == exam_id,
+            ScoreKnowledgeSnapshot.student_id == student_id,
+            ScoreKnowledgeSnapshot.is_active.is_(True),
+        )
+        .order_by(
+            ScoreKnowledgeSnapshot.priority_score.desc(),
+            ScoreKnowledgeSnapshot.lost_score.desc(),
+            ScoreKnowledgeSnapshot.full_score.desc(),
+            ScoreKnowledgeSnapshot.id.asc(),
+        )
+        .limit(limit)
+    ).all()
+    return [
+        StudentKnowledgePointAnalytics(
+            subject_id=item.subject_id,
+            subject_name=item.subject.name if item.subject else str(item.subject_id),
+            knowledge_point_id=item.knowledge_point_id,
+            knowledge_point_name=item.knowledge_point.name if item.knowledge_point else str(item.knowledge_point_id),
+            score=item.score,
+            full_score=item.full_score,
+            score_rate=item.score_rate,
+            grade_average_rate=item.grade_average_rate,
+            grade_gap_rate=item.grade_gap_rate,
+            lost_score=item.lost_score,
+            priority_score=item.priority_score,
+            diagnosis_label=item.diagnosis_label,
+            question_count=item.question_count,
+            question_numbers=item.question_numbers_json or [],
+            suggestion=item.suggestion,
+        )
+        for item in rows
+    ]
+
+
+def _merge_knowledge_action_suggestions(
+    suggestions: list[StudentActionSuggestion],
+    knowledge_points: list[StudentKnowledgePointAnalytics],
+) -> list[StudentActionSuggestion]:
+    focus_points = [
+        item for item in knowledge_points
+        if item.diagnosis_label in {"优先补弱", "需要巩固", "低于年级"} and item.priority_score > 0
+    ][:3]
+    if not focus_points:
+        return suggestions
+    subject_names = list(dict.fromkeys(item.subject_name for item in focus_points))
+    point_names = [f"{item.subject_name}-{item.knowledge_point_name}" for item in focus_points]
+    suggestions.append(
+        StudentActionSuggestion(
+            category="knowledge_focus",
+            title="知识点清单",
+            summary=f"下一阶段优先处理 {'、'.join(point_names)}，先复盘涉及题号，再补同类题巩固。",
+            subject_names=subject_names,
+            priority=4,
+        )
+    )
+    return sorted(suggestions, key=lambda item: item.priority)
 
 
 def _list_active_target_lines(session: Session, exam_id: int) -> list[ScoreTargetLine]:

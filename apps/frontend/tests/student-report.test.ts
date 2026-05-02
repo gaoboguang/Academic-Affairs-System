@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildStudentRadarRows,
+  formatExamStudentOptionLabel,
   formatDiagnosisTags,
   formatPercentValue,
   formatSignedNumber,
   getSuggestionTone,
   getTargetGapSummary,
+  pickExamStudentSelection,
 } from "../src/components/analytics/studentReport";
 
 describe("student report helpers", () => {
@@ -35,5 +37,17 @@ describe("student report helpers", () => {
     ])).toBe("本科线：-5分");
     expect(getSuggestionTone("keep_strength")).toBe("success");
     expect(getSuggestionTone("fix_weakness")).toBe("warning");
+  });
+
+  it("keeps or resets student selection within current exam sample", () => {
+    const students = [
+      { id: 201, student_no: "S201", name: "后段学生", current_class_name: "3班", grade_rank: 201 },
+      { id: 250, student_no: "S250", name: "可检索学生", current_class_name: "5班", grade_rank: 250 },
+    ];
+
+    expect(pickExamStudentSelection(students, 250)).toBe(250);
+    expect(pickExamStudentSelection(students, 1)).toBe(201);
+    expect(pickExamStudentSelection([], 250)).toBeNull();
+    expect(formatExamStudentOptionLabel(students[1])).toBe("S250 - 可检索学生（5班 / 校内250名）");
   });
 });

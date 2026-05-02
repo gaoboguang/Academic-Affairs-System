@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from datetime import date
 from io import BytesIO
 
 from openpyxl import Workbook
+from sqlalchemy import select
+
+from app.models import Exam, ScoreSubjectSnapshot, ScoreTotalSnapshot, Semester, Student
 
 
 def _build_score_workbook(exam_name: str, rows: list[list[object]]) -> bytes:
@@ -101,6 +105,128 @@ def _rows_for_exam(math_scores: dict[int, int], chinese_scores: dict[int, int]) 
         rows.append([student_no, student_name, class_name, "语文", chinese_scores[index], "", ""])
         rows.append([student_no, student_name, class_name, "数学", math_scores[index], "", ""])
     return rows
+
+
+def _seed_exam_total_snapshots(app, count: int) -> int:
+    with app.state.db.session_scope() as session:
+        semester = session.scalar(select(Semester).where(Semester.is_current.is_(True)))
+        assert semester is not None
+        exam = Exam(
+            name="大样本学生名单测试",
+            exam_type="阶段测试",
+            exam_date=date(2026, 5, 2),
+            semester_id=semester.id,
+            grade_scope_json=[1],
+            status="published",
+        )
+        session.add(exam)
+        session.flush()
+
+        students = [
+            Student(
+                student_no=f"ANALYZABLE{i:04d}",
+                name=f"可分析生{i:03d}",
+                current_grade_id=1,
+                current_class_id=1,
+                status="active",
+            )
+            for i in range(1, count + 1)
+        ]
+        session.add_all(students)
+        session.flush()
+        session.add_all(
+            [
+                ScoreTotalSnapshot(
+                    exam_id=exam.id,
+                    student_id=student.id,
+                    total_score=float(700 - index),
+                    class_rank=index,
+                    grade_rank=index,
+                    grade_percentile=round((count - index) / count, 4),
+                )
+                for index, student in enumerate(students, start=1)
+            ]
+        )
+        return exam.id
+
+
+def test_exam_analyzable_students_returns_all_total_snapshot_students(client, app) -> None:
+    exam_id = _seed_exam_total_snapshots(app, 205)
+
+    response = client.get(f"/api/analytics/exams/{exam_id}/students")
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert payload["exam_id"] == exam_id
+    assert payload["total"] == 205
+    assert len(payload["items"]) == 205
+    assert payload["items"][0]["name"] == "可分析生001"
+    assert payload["items"][0]["grade_rank"] == 1
+    assert payload["items"][-1]["name"] == "可分析生205"
+
+
+def test_exam_analyzable_students_falls_back_to_subject_snapshots(client, app) -> None:
+    with app.state.db.session_scope() as session:
+        semester = session.scalar(select(Semester).where(Semester.is_current.is_(True)))
+        assert semester is not None
+        exam = Exam(
+            name="仅分科快照测试",
+            exam_type="阶段测试",
+            exam_date=date(2026, 5, 3),
+            semester_id=semester.id,
+            grade_scope_json=[1],
+            status="published",
+        )
+        student = Student(
+            student_no="SUBJECTONLY001",
+            name="仅分科学生",
+            current_grade_id=1,
+            current_class_id=1,
+            status="active",
+        )
+        session.add_all([exam, student])
+        session.flush()
+        session.add(
+            ScoreSubjectSnapshot(
+                exam_id=exam.id,
+                student_id=student.id,
+                subject_id=1,
+                score=88,
+                grade_rank=7,
+            )
+        )
+        exam_id = exam.id
+
+    response = client.get(f"/api/analytics/exams/{exam_id}/students")
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert payload["total"] == 1
+    assert payload["items"][0]["name"] == "仅分科学生"
+    assert payload["items"][0]["total_score"] is None
+
+
+def test_exam_analyzable_students_returns_empty_for_exam_without_scores(client) -> None:
+    response = client.post(
+        "/api/exams",
+        json={
+            "name": "无成绩考试",
+            "exam_type": "阶段测试",
+            "exam_date": "2026-05-04",
+            "semester_id": 2,
+            "grade_scope_json": [1],
+            "is_trend_enabled": True,
+            "status": "published",
+            "note": "",
+            "is_active": True,
+        },
+    )
+    assert response.status_code == 200
+    exam_id = response.json()["id"]
+
+    students_response = client.get(f"/api/analytics/exams/{exam_id}/students")
+    assert students_response.status_code == 200
+    assert students_response.json() == {"exam_id": exam_id, "total": 0, "items": []}
 
 
 def test_student_analysis_report_v1_metrics(client) -> None:

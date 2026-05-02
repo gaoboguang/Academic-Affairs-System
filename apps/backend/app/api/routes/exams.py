@@ -14,6 +14,7 @@ from app.schemas.exam import (
     ScoreClassMappingPayload,
     ScoreImportPreviewResponse,
     ScoreImportProfileRead,
+    ScoreQuestionImportResponse,
     ScoreImportResponse,
     ScoreRankAuditResponse,
     ScoreRebuildResponse,
@@ -123,6 +124,25 @@ async def preview_score_import(
         content=content,
         mapping_json=mapping_json,
         profile_id=profile_id,
+    )
+
+
+@router.post("/{exam_id}/score-questions/import", response_model=ScoreQuestionImportResponse)
+async def import_score_questions(
+    exam_id: int,
+    file: UploadFile = File(...),
+    strategy: str = Form(default="overwrite"),
+    session: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+) -> ScoreQuestionImportResponse:
+    content = await file.read()
+    return service.import_score_questions(
+        session,
+        settings,
+        exam_id=exam_id,
+        filename=file.filename,
+        content=content,
+        strategy=strategy,
     )
 
 

@@ -62,6 +62,24 @@ class ScoreImportBatch(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     records = relationship("ScoreRecord", back_populates="import_batch")
 
 
+class ScoreQuestionImportBatch(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "score_question_import_batch"
+
+    exam_id: Mapped[int] = mapped_column(ForeignKey("exam.id"), nullable=False)
+    source_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    import_time: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False), default=datetime.now, nullable=False
+    )
+    total_rows: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    success_rows: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    failed_rows: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="processing", nullable=False)
+    error_report_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    exam = relationship("Exam")
+
+
 class ScoreImportProfile(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     __tablename__ = "score_import_profile"
     __table_args__ = (UniqueConstraint("name", name="uq_score_import_profile_name"),)
@@ -153,6 +171,100 @@ class ScoreTargetLine(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     exam = relationship("Exam")
+
+
+class KnowledgePoint(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "knowledge_point"
+    __table_args__ = (UniqueConstraint("subject_id", "name", name="uq_knowledge_point_subject_name"),)
+
+    subject_id: Mapped[int] = mapped_column(ForeignKey("subject.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    subject = relationship("Subject")
+
+
+class ScoreQuestion(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "score_question"
+    __table_args__ = (UniqueConstraint("exam_id", "subject_id", "question_no", name="uq_score_question"),)
+
+    exam_id: Mapped[int] = mapped_column(ForeignKey("exam.id"), nullable=False)
+    subject_id: Mapped[int] = mapped_column(ForeignKey("subject.id"), nullable=False)
+    question_no: Mapped[str] = mapped_column(String(50), nullable=False)
+    full_score: Mapped[float] = mapped_column(Float, nullable=False)
+    question_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    ability_level: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    exam = relationship("Exam")
+    subject = relationship("Subject")
+
+
+class ScoreQuestionKnowledgePoint(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "score_question_knowledge_point"
+    __table_args__ = (
+        UniqueConstraint("question_id", "knowledge_point_id", name="uq_score_question_knowledge_point"),
+    )
+
+    question_id: Mapped[int] = mapped_column(ForeignKey("score_question.id"), nullable=False)
+    knowledge_point_id: Mapped[int] = mapped_column(ForeignKey("knowledge_point.id"), nullable=False)
+    weight: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)
+
+    question = relationship("ScoreQuestion")
+    knowledge_point = relationship("KnowledgePoint")
+
+
+class ScoreQuestionRecord(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "score_question_record"
+    __table_args__ = (UniqueConstraint("exam_id", "student_id", "question_id", name="uq_score_question_record"),)
+
+    exam_id: Mapped[int] = mapped_column(ForeignKey("exam.id"), nullable=False)
+    student_id: Mapped[int] = mapped_column(ForeignKey("student.id"), nullable=False)
+    subject_id: Mapped[int] = mapped_column(ForeignKey("subject.id"), nullable=False)
+    question_id: Mapped[int] = mapped_column(ForeignKey("score_question.id"), nullable=False)
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    score_status: Mapped[str] = mapped_column(String(30), default="normal", nullable=False)
+    raw_text: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    import_batch_id: Mapped[int | None] = mapped_column(ForeignKey("score_question_import_batch.id"), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    exam = relationship("Exam")
+    student = relationship("Student")
+    subject = relationship("Subject")
+    question = relationship("ScoreQuestion")
+    import_batch = relationship("ScoreQuestionImportBatch")
+
+
+class ScoreKnowledgeSnapshot(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "score_knowledge_snapshot"
+    __table_args__ = (
+        UniqueConstraint("exam_id", "student_id", "subject_id", "knowledge_point_id", name="uq_score_knowledge_snapshot"),
+    )
+
+    exam_id: Mapped[int] = mapped_column(ForeignKey("exam.id"), nullable=False)
+    student_id: Mapped[int] = mapped_column(ForeignKey("student.id"), nullable=False)
+    subject_id: Mapped[int] = mapped_column(ForeignKey("subject.id"), nullable=False)
+    knowledge_point_id: Mapped[int] = mapped_column(ForeignKey("knowledge_point.id"), nullable=False)
+    score: Mapped[float] = mapped_column(Float, default=0, nullable=False)
+    full_score: Mapped[float] = mapped_column(Float, default=0, nullable=False)
+    score_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    grade_average_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    grade_gap_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    lost_score: Mapped[float] = mapped_column(Float, default=0, nullable=False)
+    question_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    question_numbers_json: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    priority_score: Mapped[float] = mapped_column(Float, default=0, nullable=False)
+    diagnosis_label: Mapped[str] = mapped_column(String(50), default="正常", nullable=False)
+    suggestion: Mapped[str | None] = mapped_column(Text, nullable=True)
+    rebuilt_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False), default=datetime.now, nullable=False
+    )
+
+    exam = relationship("Exam")
+    student = relationship("Student")
+    subject = relationship("Subject")
+    knowledge_point = relationship("KnowledgePoint")
 
 
 class ScoreTotalSnapshot(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
