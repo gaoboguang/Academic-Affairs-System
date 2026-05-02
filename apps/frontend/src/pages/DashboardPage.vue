@@ -1,26 +1,15 @@
 <template>
-  <div class="page-shell">
-    <header class="page-header">
-      <div>
-        <div class="page-eyebrow">工作台 / 今日教务决策台</div>
-        <h2 class="page-title">先判断系统能不能试用，再进入具体工作</h2>
-        <p class="page-subtitle">
-          汇总学生、教师、考试、成绩、导入、备份和高考数据健康状态，把下一步要做的事直接摆在首页。
-        </p>
-        <div class="page-chip-row">
-          <span class="page-chip"><strong>学生</strong>{{ summary.student_total }}</span>
-          <span class="page-chip"><strong>教师</strong>{{ summary.teacher_total }}</span>
-          <span class="page-chip"><strong>成绩记录</strong>{{ summary.score_record_total }}</span>
-          <span class="page-chip"><strong>P0 缺口</strong>{{ summary.data_health?.p0_gap_count ?? "-" }}</span>
-          <span class="page-chip"><strong>最近导入</strong>{{ latestImport ? formatImportJobType(latestImport.job_type) : "暂无" }}</span>
-        </div>
-      </div>
-      <div class="action-row">
+  <AppPage
+    title="先判断系统能不能试用，再进入具体工作"
+    eyebrow="工作台 / 今日教务决策台"
+    description="汇总学生、教师、考试、成绩、导入、备份和高考数据健康状态，把下一步要做的事直接摆在首页。"
+    :meta="dashboardMeta"
+  >
+    <template #actions>
         <el-button @click="router.push('/import-center')">导入中心</el-button>
         <el-button @click="router.push('/system-tools')">系统设置</el-button>
         <el-button type="primary" @click="reload">刷新概况</el-button>
-      </div>
-    </header>
+    </template>
 
     <section class="metric-grid">
       <button
@@ -177,7 +166,7 @@
       </div>
       <el-empty v-if="!summary.recent_imports.length" description="暂无导入记录" />
     </section>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
@@ -194,6 +183,7 @@ import {
   type DashboardDataHealthSummary,
 } from "../components/dashboard/dashboardDecisions";
 import MetricCard from "../components/MetricCard.vue";
+import { AppPage } from "../components/ui";
 import { formatImportStatus as formatUnifiedImportStatus, importStatusTagType } from "../utils/importFeedback";
 
 interface ImportJob {
@@ -307,6 +297,13 @@ const summary = reactive<DashboardSummary>({
 
 const latestImport = computed(() => summary.recent_imports[0] ?? null);
 const latestBackupLabel = computed(() => formatDashboardBackupLabel(summary.latest_backup));
+const dashboardMeta = computed(() => [
+  { label: "学生", value: summary.student_total },
+  { label: "教师", value: summary.teacher_total },
+  { label: "成绩记录", value: summary.score_record_total },
+  { label: "P0 缺口", value: summary.data_health?.p0_gap_count ?? "-" },
+  { label: "最近导入", value: latestImport.value ? formatImportJobType(latestImport.value.job_type) : "暂无" },
+]);
 
 const statusCards = computed(() => [
   { label: "学生总数", value: summary.student_total, helpText: "当前库内学生记录，点击进入学生中心。", path: "/students" },

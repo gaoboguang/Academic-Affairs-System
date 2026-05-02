@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from collections import defaultdict
+import math
 
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
+from app.analytics.score_contexts import effective_class_id, effective_class_name, load_exam_context_map
 from app.analytics.scores import calculate_rate, safe_mean, safe_median, safe_stddev
-from app.models import Exam, Grade, SchoolClass, ScoreRecord, Semester, Subject, Teacher, TeachingAssignment
+from app.models import Exam, Grade, SchoolClass, ScoreRecord, ScoreTargetLine, Semester, Subject, Teacher, TeachingAssignment
 from app.repositories.exams import (
     get_exam,
     get_previous_trend_exam,
@@ -20,15 +22,25 @@ from app.schemas.exam import (
     ClassPanoramaResponse,
     GradeAnalyticsResponse,
     GradeClassAnalyticsItem,
+    GradeClassContributionItem,
+    GradeCriticalStudentItem,
     GradeDistributionItem,
     GradePanoramaExamPointRead,
     GradePanoramaResponse,
     GradePanoramaSubjectPointRead,
     GradePanoramaSubjectTrendRead,
     GradePanoramaYearSummaryRead,
+    GradeRankAuditSummary,
     GradeSubjectAnalyticsItem,
+    GradeTargetLineSummary,
     StudentAnalyticsResponse,
+    StudentActionSuggestion,
     StudentSubjectAnalytics,
+    StudentSubjectEffectiveTarget,
+    StudentSubjectTrendPoint,
+    StudentSubjectTrendSeries,
+    StudentTargetLineGap,
+    StudentTotalTrendPoint,
     SubjectAggregateItem,
     TeacherAnalyticsResponse,
     TeacherAssignmentAnalytics,
@@ -36,17 +48,20 @@ from app.schemas.exam import (
 )
 
 
+def _score_value_label(score_value_type: str | None) -> str:
+    return "赋分" if score_value_type == "converted" else "原始分"
+
+
 def get_student_analytics(session: Session, student_id: int, exam_id: int) -> StudentAnalyticsResponse:
     exam = get_exam(session, exam_id)
     if not exam:
         raise HTTPException(status_code=404, detail="考试不存在")
 
-    total_snapshot = next(
-        (item for item in get_total_snapshots_for_exam(session, exam_id) if item.student_id == student_id),
-        None,
-    )
+    all_total_snapshots = list(get_total_snapshots_for_exam(session, exam_id))
+    all_subject_snapshots = list(get_subject_snapshots_for_exam(session, exam_id))
+    total_snapshot = next((item for item in all_total_snapshots if item.student_id == student_id), None)
     subject_snapshots = [
-        item for item in get_subject_snapshots_for_exam(session, exam_id) if item.student_id == student_id
+        item for item in all_subject_snapshots if item.student_id == student_id
     ]
     if not total_snapshot and not subject_snapshots:
         raise HTTPException(status_code=404, detail="该学生暂无本次考试分析数据")
@@ -55,10 +70,7 @@ def get_student_analytics(session: Session, student_id: int, exam_id: int) -> St
     previous_total = None
     previous_subject_map: dict[int, object] = {}
     if previous_exam:
-        previous_total = next(
-            (item for item in get_total_snapshots_for_exam(session, previous_exam.id) if item.student_id == student_id),
-            None,
-        )
+        previous_total = next((item for item in get_total_snapshots_for_exam(session, previous_exam.id) if item.student_id == student_id), None)
         previous_subject_map = {
             item.subject_id: item
             for item in get_subject_snapshots_for_exam(session, previous_exam.id)
@@ -70,7 +82,28 @@ def get_student_analytics(session: Session, student_id: int, exam_id: int) -> St
         if total_snapshot and total_snapshot.student
         else (subject_snapshots[0].student.name if subject_snapshots and subject_snapshots[0].student else str(student_id))
     )
-    subjects = []
+    target_lines = _list_active_target_lines(session, exam.id)
+    total_line_thresholds = _resolve_target_line_score_thresholds(target_lines, all_total_snapshots)
+    target_line_gaps = _build_student_target_line_gaps(target_lines, total_line_thresholds, total_snapshot)
+    subject_groups = _group_subject_snapshots(all_subject_snapshots)
+    subject_mean_stddev = {
+        subject_id: (safe_mean([item.score for item in items if item.score is not None]), safe_stddev([item.score for item in items if item.score is not None]))
+        for subject_id, items in subject_groups.items()
+    }
+    effective_targets_by_subject = _build_effective_score_targets_by_subject(
+        subject_groups,
+        subject_snapshots,
+        target_lines,
+        total_line_thresholds,
+    )
+    peer_subject_averages, peer_sample_count, peer_sample_note = _build_peer_subject_averages(
+        all_total_snapshots,
+        all_subject_snapshots,
+        total_snapshot.grade_rank if total_snapshot else None,
+    )
+    trend_points, subject_trend_map = _build_student_score_trends(session, student_id, exam)
+
+    subjects: list[StudentSubjectAnalytics] = []
     for item in sorted(subject_snapshots, key=lambda current: current.subject_id):
         previous_item = previous_subject_map.get(item.subject_id)
         score_delta = None
@@ -79,11 +112,42 @@ def get_student_analytics(session: Session, student_id: int, exam_id: int) -> St
             score_delta = round(item.score - previous_item.score, 2)
         if previous_item and previous_item.grade_rank is not None and item.grade_rank is not None:
             rank_delta = previous_item.grade_rank - item.grade_rank
+        subject_mean, subject_stddev = subject_mean_stddev.get(item.subject_id, (0.0, 0.0))
+        z_score = _calculate_z_score(item.score, subject_mean, subject_stddev)
+        t_score = _calculate_t_score(z_score)
+        rank_deviation = (
+            total_snapshot.grade_rank - item.grade_rank
+            if total_snapshot
+            and total_snapshot.grade_rank is not None
+            and item.grade_rank is not None
+            else None
+        )
+        peer_average_score = peer_subject_averages.get(item.subject_id)
+        peer_average_delta = (
+            round(item.score - peer_average_score, 2)
+            if item.score is not None and peer_average_score is not None
+            else None
+        )
+        subject_trend_points = subject_trend_map.get(item.subject_id, [])
+        trend_rank_stddev = _rank_stddev(subject_trend_points)
+        effective_targets = effective_targets_by_subject.get(item.subject_id, [])
+        diagnosis_tags = _build_subject_diagnosis_tags(
+            rank_deviation=rank_deviation,
+            rank_sample_count=len(subject_groups.get(item.subject_id, [])),
+            peer_average_delta=peer_average_delta,
+            trend_rank_stddev=trend_rank_stddev,
+            trend_exam_count=len([point for point in subject_trend_points if point.grade_rank is not None]),
+            effective_targets=effective_targets,
+        )
         subjects.append(
             StudentSubjectAnalytics(
                 subject_id=item.subject_id,
                 subject_name=item.subject.name if item.subject else str(item.subject_id),
                 score=item.score,
+                original_score=item.original_score,
+                converted_score=item.converted_score,
+                score_value_type=item.score_value_type,
+                score_value_label=_score_value_label(item.score_value_type),
                 score_status="normal" if item.score is not None else "absent",
                 class_rank=item.class_rank,
                 grade_rank=item.grade_rank,
@@ -93,8 +157,33 @@ def get_student_analytics(session: Session, student_id: int, exam_id: int) -> St
                 pass_flag=item.pass_flag,
                 score_delta=score_delta,
                 rank_delta=rank_delta,
+                z_score=z_score,
+                t_score=t_score,
+                rank_deviation=rank_deviation,
+                peer_average_score=peer_average_score,
+                peer_average_delta=peer_average_delta,
+                peer_sample_count=peer_sample_count,
+                peer_sample_note=peer_sample_note,
+                trend_rank_stddev=trend_rank_stddev,
+                trend_exam_count=len([point for point in subject_trend_points if point.grade_rank is not None]),
+                effective_score_targets=effective_targets,
+                primary_effective_line_name=effective_targets[0].line_name if effective_targets else None,
+                primary_effective_score=effective_targets[0].target_score if effective_targets else None,
+                primary_effective_score_gap=effective_targets[0].gap_score if effective_targets else None,
+                diagnosis=_format_subject_diagnosis(diagnosis_tags),
+                diagnosis_tags=diagnosis_tags,
             )
         )
+
+    action_suggestions = _build_student_action_suggestions(subjects, target_line_gaps)
+    grade_rank_delta = (
+        previous_total.grade_rank - total_snapshot.grade_rank
+        if total_snapshot
+        and previous_total
+        and previous_total.grade_rank is not None
+        and total_snapshot.grade_rank is not None
+        else None
+    )
 
     return StudentAnalyticsResponse(
         exam_id=exam.id,
@@ -102,6 +191,8 @@ def get_student_analytics(session: Session, student_id: int, exam_id: int) -> St
         student_id=student_id,
         student_name=student_name,
         total_score=total_snapshot.total_score if total_snapshot else 0.0,
+        score_value_type=total_snapshot.score_value_type if total_snapshot else "original",
+        score_value_label=_score_value_label(total_snapshot.score_value_type if total_snapshot else None),
         class_rank=total_snapshot.class_rank if total_snapshot else None,
         grade_rank=total_snapshot.grade_rank if total_snapshot else None,
         class_percentile=total_snapshot.class_percentile if total_snapshot else None,
@@ -121,8 +212,388 @@ def get_student_analytics(session: Session, student_id: int, exam_id: int) -> St
             and total_snapshot.class_rank is not None
             else None
         ),
+        grade_rank_delta=grade_rank_delta,
+        overview_sentence=_build_student_overview_sentence(
+            grade_rank_delta=grade_rank_delta,
+            subjects=subjects,
+            target_line_gaps=target_line_gaps,
+        ),
+        target_line_gaps=target_line_gaps,
+        trend_points=trend_points,
+        subject_trends=[
+            StudentSubjectTrendSeries(
+                subject_id=subject.subject_id,
+                subject_name=subject.subject_name,
+                points=subject_trend_map.get(subject.subject_id, []),
+            )
+            for subject in subjects
+        ],
+        action_suggestions=action_suggestions,
         subjects=subjects,
     )
+
+
+def _list_active_target_lines(session: Session, exam_id: int) -> list[ScoreTargetLine]:
+    return list(
+        session.scalars(
+            select(ScoreTargetLine)
+            .where(ScoreTargetLine.exam_id == exam_id, ScoreTargetLine.is_active.is_(True))
+            .order_by(ScoreTargetLine.sort_order.asc(), ScoreTargetLine.id.asc())
+        ).all()
+    )
+
+
+def _resolve_target_line_score_thresholds(
+    target_lines: list[ScoreTargetLine],
+    total_snapshots,
+) -> dict[int, float]:
+    thresholds: dict[int, float] = {}
+    ranked_snapshots = sorted(
+        [item for item in total_snapshots if item.grade_rank is not None],
+        key=lambda item: (item.grade_rank or 0, -item.total_score),
+    )
+    for line in target_lines:
+        threshold: float | None = None
+        if line.score_value is not None:
+            threshold = float(line.score_value)
+        elif line.line_type == "rank" and line.rank_value is not None:
+            candidates = [item for item in ranked_snapshots if item.grade_rank is not None and item.grade_rank <= line.rank_value]
+            if candidates:
+                threshold = min(item.total_score for item in candidates)
+        if threshold is not None:
+            thresholds[line.id] = round(threshold, 2)
+    return thresholds
+
+
+def _build_student_target_line_gaps(
+    target_lines: list[ScoreTargetLine],
+    thresholds: dict[int, float],
+    total_snapshot,
+) -> list[StudentTargetLineGap]:
+    if not total_snapshot:
+        return []
+    rows: list[StudentTargetLineGap] = []
+    for line in target_lines:
+        reached = _line_reached(line, total_snapshot)
+        threshold_score = thresholds.get(line.id)
+        gap_score = (
+            round(total_snapshot.total_score - threshold_score, 2)
+            if threshold_score is not None
+            else None
+        )
+        gap_rank = (
+            line.rank_value - total_snapshot.grade_rank
+            if line.rank_value is not None and total_snapshot.grade_rank is not None
+            else None
+        )
+        status = "reached" if reached else "below"
+        if _line_near_below(line, total_snapshot):
+            status = "near_below"
+        elif _line_near_above(line, total_snapshot):
+            status = "near_above"
+        rows.append(
+            StudentTargetLineGap(
+                line_id=line.id,
+                line_name=line.name,
+                line_type=line.line_type,
+                threshold_label=_line_threshold_label(line),
+                threshold_score=threshold_score,
+                reached=reached,
+                gap_score=gap_score,
+                gap_rank=gap_rank,
+                status=status,
+            )
+        )
+    return rows
+
+
+def _group_subject_snapshots(subject_snapshots) -> dict[int, list]:
+    grouped: dict[int, list] = defaultdict(list)
+    for item in subject_snapshots:
+        if item.score is not None:
+            grouped[item.subject_id].append(item)
+    return grouped
+
+
+def _build_effective_score_targets_by_subject(
+    subject_groups: dict[int, list],
+    student_subjects,
+    target_lines: list[ScoreTargetLine],
+    total_line_thresholds: dict[int, float],
+) -> dict[int, list[StudentSubjectEffectiveTarget]]:
+    student_subject_ids = [item.subject_id for item in student_subjects if item.score is not None]
+    subject_averages = {
+        subject_id: safe_mean([item.score for item in items if item.score is not None])
+        for subject_id, items in subject_groups.items()
+        if subject_id in student_subject_ids
+    }
+    average_denominator = sum(value for value in subject_averages.values() if value > 0)
+    if average_denominator <= 0:
+        return {}
+
+    student_subject_map = {item.subject_id: item for item in student_subjects}
+    target_line_name_map = {item.id: item.name for item in target_lines}
+    rows: dict[int, list[StudentSubjectEffectiveTarget]] = defaultdict(list)
+    for subject_id, average_score in subject_averages.items():
+        if average_score <= 0:
+            continue
+        student_subject = student_subject_map.get(subject_id)
+        for line_id, threshold in total_line_thresholds.items():
+            target_score = round(threshold * average_score / average_denominator, 2)
+            actual_score = student_subject.score if student_subject and student_subject.score is not None else None
+            rows[subject_id].append(
+                StudentSubjectEffectiveTarget(
+                    line_id=line_id,
+                    line_name=target_line_name_map.get(line_id, f"目标线 {line_id}"),
+                    target_score=target_score,
+                    actual_score=actual_score,
+                    gap_score=round(actual_score - target_score, 2) if actual_score is not None else None,
+                )
+            )
+    return rows
+
+
+def _build_peer_subject_averages(
+    total_snapshots,
+    subject_snapshots,
+    student_grade_rank: int | None,
+) -> tuple[dict[int, float], int, str | None]:
+    if student_grade_rank is None:
+        return {}, 0, "缺少总分校内名次，无法计算同档群体。"
+    total_by_rank = [
+        item for item in total_snapshots if item.grade_rank is not None and item.student_id is not None
+    ]
+    selected = _select_peer_total_snapshots(total_by_rank, student_grade_rank, 10)
+    note = None
+    if len(selected) < 10:
+        selected = _select_peer_total_snapshots(total_by_rank, student_grade_rank, 20)
+    if len(selected) < 10:
+        note = f"同档样本仅 {len(selected)} 人，结论需谨慎。"
+    student_ids = {item.student_id for item in selected}
+    grouped: dict[int, list[float]] = defaultdict(list)
+    for item in subject_snapshots:
+        if item.student_id in student_ids and item.score is not None:
+            grouped[item.subject_id].append(item.score)
+    return {
+        subject_id: safe_mean(values)
+        for subject_id, values in grouped.items()
+        if values
+    }, len(selected), note
+
+
+def _select_peer_total_snapshots(total_snapshots, grade_rank: int, radius: int) -> list:
+    low = max(1, grade_rank - radius)
+    high = grade_rank + radius
+    return [
+        item
+        for item in total_snapshots
+        if item.grade_rank is not None and low <= item.grade_rank <= high
+    ]
+
+
+def _build_student_score_trends(
+    session: Session,
+    student_id: int,
+    current_exam: Exam,
+) -> tuple[list[StudentTotalTrendPoint], dict[int, list[StudentSubjectTrendPoint]]]:
+    exams = [
+        exam
+        for exam in _list_panorama_exams(session)
+        if exam.is_trend_enabled and exam.exam_date <= current_exam.exam_date
+    ][-5:]
+    total_points: list[StudentTotalTrendPoint] = []
+    subject_points: dict[int, list[StudentSubjectTrendPoint]] = defaultdict(list)
+    for exam in exams:
+        total_snapshot = next(
+            (item for item in get_total_snapshots_for_exam(session, exam.id) if item.student_id == student_id),
+            None,
+        )
+        total_points.append(
+            StudentTotalTrendPoint(
+                exam_id=exam.id,
+                exam_name=exam.name,
+                exam_date=exam.exam_date,
+                total_score=total_snapshot.total_score if total_snapshot else None,
+                class_rank=total_snapshot.class_rank if total_snapshot else None,
+                grade_rank=total_snapshot.grade_rank if total_snapshot else None,
+                grade_percentile=total_snapshot.grade_percentile if total_snapshot else None,
+            )
+        )
+        for item in get_subject_snapshots_for_exam(session, exam.id):
+            if item.student_id != student_id:
+                continue
+            subject_points[item.subject_id].append(
+                StudentSubjectTrendPoint(
+                    exam_id=exam.id,
+                    exam_name=exam.name,
+                    exam_date=exam.exam_date,
+                    score=item.score,
+                    grade_rank=item.grade_rank,
+                    grade_percentile=item.grade_percentile,
+                )
+            )
+    return total_points, subject_points
+
+
+def _calculate_z_score(score: float | None, mean_score: float, stddev: float) -> float | None:
+    if score is None or stddev <= 0:
+        return None
+    return round((score - mean_score) / stddev, 2)
+
+
+def _calculate_t_score(z_score: float | None) -> float | None:
+    if z_score is None:
+        return None
+    return round(50 + 10 * z_score, 2)
+
+
+def _rank_stddev(points: list[StudentSubjectTrendPoint]) -> float | None:
+    ranks = [point.grade_rank for point in points if point.grade_rank is not None]
+    if len(ranks) < 3:
+        return None
+    avg = sum(ranks) / len(ranks)
+    return round(math.sqrt(sum((rank - avg) ** 2 for rank in ranks) / len(ranks)), 2)
+
+
+def _build_subject_diagnosis_tags(
+    *,
+    rank_deviation: int | None,
+    rank_sample_count: int,
+    peer_average_delta: float | None,
+    trend_rank_stddev: float | None,
+    trend_exam_count: int,
+    effective_targets: list[StudentSubjectEffectiveTarget],
+) -> list[str]:
+    tags: list[str] = []
+    if rank_deviation is not None:
+        weak_gap = _rank_deviation_weak_threshold(rank_sample_count)
+        severe_gap = _rank_deviation_severe_threshold(rank_sample_count)
+        if rank_deviation <= -severe_gap:
+            tags.append("严重拖后腿")
+        elif rank_deviation <= -weak_gap:
+            tags.append("偏科弱项")
+        elif rank_deviation >= weak_gap:
+            tags.append("优势学科")
+    if peer_average_delta is not None:
+        if peer_average_delta <= -10:
+            tags.append("低于同档")
+        elif peer_average_delta >= 10:
+            tags.append("高于同档")
+    if trend_exam_count < 3:
+        tags.append("趋势样本不足")
+    elif trend_rank_stddev is not None and trend_rank_stddev >= 30:
+        tags.append("波动偏大")
+    if any(item.gap_score is not None and item.gap_score < 0 for item in effective_targets):
+        tags.append("有效分未达")
+    return tags or ["正常"]
+
+
+def _rank_deviation_weak_threshold(sample_count: int) -> int:
+    if sample_count <= 0:
+        return 30
+    return min(30, max(3, math.ceil(sample_count * 0.1)))
+
+
+def _rank_deviation_severe_threshold(sample_count: int) -> int:
+    if sample_count <= 0:
+        return 100
+    return min(100, max(6, math.ceil(sample_count * 0.25)))
+
+
+def _format_subject_diagnosis(tags: list[str]) -> str:
+    if "严重拖后腿" in tags:
+        return "严重拖后腿"
+    if "偏科弱项" in tags or "低于同档" in tags or "有效分未达" in tags:
+        return "重点补弱"
+    if "优势学科" in tags or "高于同档" in tags:
+        return "优势学科"
+    if "波动偏大" in tags:
+        return "稳定性关注"
+    return "正常"
+
+
+def _build_student_action_suggestions(
+    subjects: list[StudentSubjectAnalytics],
+    target_line_gaps: list[StudentTargetLineGap],
+) -> list[StudentActionSuggestion]:
+    suggestions: list[StudentActionSuggestion] = []
+    rank_threshold = _rank_deviation_weak_threshold(
+        max((item.grade_rank or 0 for item in subjects), default=0)
+    )
+    strengths = [
+        item for item in subjects
+        if item.rank_deviation is not None and item.rank_deviation >= rank_threshold and item.trend_rank_stddev is not None and item.trend_rank_stddev < 30
+    ]
+    if not strengths:
+        strengths = [
+            item for item in subjects
+            if item.rank_deviation is not None and item.rank_deviation >= rank_threshold
+        ]
+    if strengths:
+        subject_names = [item.subject_name for item in sorted(strengths, key=lambda item: item.rank_deviation or 0, reverse=True)[:2]]
+        suggestions.append(
+            StudentActionSuggestion(
+                category="keep_strength",
+                title="保优",
+                summary=f"{'、'.join(subject_names)} 当前相对总分位置更靠前，建议保持稳定投入。",
+                subject_names=subject_names,
+                priority=1,
+            )
+        )
+
+    weakness = sorted(
+        [item for item in subjects if item.rank_deviation is not None and item.rank_deviation < 0],
+        key=lambda item: item.rank_deviation or 0,
+    )[:2]
+    if weakness:
+        subject_names = [item.subject_name for item in weakness]
+        suggestions.append(
+            StudentActionSuggestion(
+                category="fix_weakness",
+                title="补弱",
+                summary=f"{'、'.join(subject_names)} 与总分名次差距最大，是当前抢分空间优先方向。",
+                subject_names=subject_names,
+                priority=2,
+            )
+        )
+
+    near_lines = [item for item in target_line_gaps if item.status in {"near_below", "near_above"}]
+    if near_lines:
+        line_names = [item.line_name for item in near_lines[:2]]
+        suggestions.append(
+            StudentActionSuggestion(
+                category="target_warning",
+                title="临界预警",
+                summary=f"总分处在 {'、'.join(line_names)} 附近，建议结合有效分差距优先处理短板科目。",
+                priority=3,
+            )
+        )
+    return suggestions
+
+
+def _build_student_overview_sentence(
+    *,
+    grade_rank_delta: int | None,
+    subjects: list[StudentSubjectAnalytics],
+    target_line_gaps: list[StudentTargetLineGap],
+) -> str:
+    segments: list[str] = []
+    if grade_rank_delta is not None:
+        if grade_rank_delta > 0:
+            segments.append("本次考试总排名上升")
+        elif grade_rank_delta < 0:
+            segments.append("本次考试总排名回落")
+        else:
+            segments.append("本次考试总排名基本稳定")
+    strengths = [item.subject_name for item in subjects if item.diagnosis == "优势学科"]
+    weakness = [item.subject_name for item in subjects if item.diagnosis in {"严重拖后腿", "重点补弱"}]
+    if strengths:
+        segments.append(f"优势学科为{'、'.join(strengths[:2])}")
+    if weakness:
+        segments.append(f"{'、'.join(weakness[:2])}存在明显补弱空间")
+    if any(item.status == "near_below" for item in target_line_gaps):
+        segments.append("目标线临界生特征明显")
+    return "，".join(segments) + "。" if segments else "本次考试画像以校内名次、PR 和学科相对位置为主，暂无明显异常。"
 
 
 def get_class_analytics(session: Session, class_id: int, exam_id: int) -> ClassAnalyticsResponse:
@@ -133,10 +604,11 @@ def get_class_analytics(session: Session, class_id: int, exam_id: int) -> ClassA
     if not school_class:
         raise HTTPException(status_code=404, detail="班级不存在")
 
+    context_map = load_exam_context_map(session, exam_id)
     total_snapshots = [
         item
         for item in get_total_snapshots_for_exam(session, exam_id)
-        if item.student and item.student.current_class_id == class_id
+        if item.student and _snapshot_effective_class_id(item, context_map) == class_id
     ]
     if not total_snapshots:
         raise HTTPException(status_code=404, detail="该班级暂无本次考试总分数据")
@@ -146,13 +618,13 @@ def get_class_analytics(session: Session, class_id: int, exam_id: int) -> ClassA
     grade_total_scores = [
         item.total_score
         for item in get_total_snapshots_for_exam(session, exam_id)
-        if item.student and item.student.current_grade_id == grade_id
+        if item.student and _snapshot_matches_grade(item, exam, grade_id, context_map)
     ]
 
     subject_snapshots = [
         item
         for item in get_subject_snapshots_for_exam(session, exam_id)
-        if item.student and item.student.current_class_id == class_id and item.score is not None
+        if item.student and _snapshot_effective_class_id(item, context_map) == class_id and item.score is not None
     ]
     grouped: dict[int, list] = defaultdict(list)
     for item in subject_snapshots:
@@ -217,9 +689,8 @@ def get_teacher_analytics(session: Session, teacher_id: int, exam_id: int) -> Te
     if not assignments:
         raise HTTPException(status_code=404, detail="该教师在本考试所属学期暂无任教关系")
 
-    score_records = [
-        item for item in get_score_records_for_exam(session, exam_id) if item.score is not None
-    ]
+    score_records = [item for item in get_score_records_for_exam(session, exam_id) if item.score is not None]
+    context_map = load_exam_context_map(session, exam_id)
     subject_meta_map = {item.subject_id: item for item in exam.subjects}
     assignment_breakdown: list[TeacherAssignmentAnalytics] = []
     overall_scores: list[float] = []
@@ -229,7 +700,7 @@ def get_teacher_analytics(session: Session, teacher_id: int, exam_id: int) -> Te
             record
             for record in score_records
             if record.student
-            and record.student.current_class_id == assignment.class_id
+            and effective_class_id(record.student, context_map.get(record.student_id)) == assignment.class_id
             and record.subject_id == assignment.subject_id
             and record.score_status == "normal"
         ]
@@ -318,6 +789,7 @@ def get_teacher_panorama(
             continue
 
         score_records = [item for item in get_score_records_for_exam(session, exam.id) if item.score is not None]
+        context_map = load_exam_context_map(session, exam.id)
         total_snapshot_map = {
             item.student_id: item
             for item in get_total_snapshots_for_exam(session, exam.id)
@@ -335,7 +807,7 @@ def get_teacher_panorama(
                 record
                 for record in score_records
                 if record.student
-                and record.student.current_class_id == class_id
+                and effective_class_id(record.student, context_map.get(record.student_id)) == class_id
                 and record.subject_id == subject_id
                 and record.score_status == "normal"
             ]
@@ -554,7 +1026,8 @@ def _build_panorama_components(
         if academic_year_ids and (not academic_year or academic_year.id not in academic_year_ids):
             continue
 
-        total_snapshots = total_filter(get_total_snapshots_for_exam(session, exam.id), exam, entity_id)
+        context_map = load_exam_context_map(session, exam.id)
+        total_snapshots = total_filter(get_total_snapshots_for_exam(session, exam.id), exam, entity_id, context_map)
         if not total_snapshots:
             continue
         total_scores = [item.total_score for item in total_snapshots]
@@ -581,7 +1054,7 @@ def _build_panorama_components(
             )
         )
 
-        subject_snapshots = subject_filter(get_subject_snapshots_for_exam(session, exam.id), exam, entity_id)
+        subject_snapshots = subject_filter(get_subject_snapshots_for_exam(session, exam.id), exam, entity_id, context_map)
         grouped_subjects: dict[int, list] = defaultdict(list)
         for item in subject_snapshots:
             grouped_subjects[item.subject_id].append(item)
@@ -647,10 +1120,11 @@ def get_grade_analytics(session: Session, grade_id: int, exam_id: int) -> GradeA
     if not grade:
         raise HTTPException(status_code=404, detail="年级不存在")
 
+    context_map = load_exam_context_map(session, exam_id)
     total_snapshots = [
         item
         for item in get_total_snapshots_for_exam(session, exam_id)
-        if item.student and item.student.current_grade_id == grade_id
+        if item.student and _snapshot_matches_grade(item, exam, grade_id, context_map)
     ]
     if not total_snapshots:
         raise HTTPException(status_code=404, detail="该年级暂无本次考试总分数据")
@@ -658,10 +1132,17 @@ def get_grade_analytics(session: Session, grade_id: int, exam_id: int) -> GradeA
     total_scores = [item.total_score for item in total_snapshots]
     total_full_score = sum(item.full_score for item in exam.subjects if item.is_active and item.is_in_total)
     excellent_total_line = _resolve_total_excellent_line(exam)
+    target_lines = list(
+        session.scalars(
+            select(ScoreTargetLine)
+            .where(ScoreTargetLine.exam_id == exam.id, ScoreTargetLine.is_active.is_(True))
+            .order_by(ScoreTargetLine.sort_order.asc(), ScoreTargetLine.id.asc())
+        ).all()
+    )
 
     class_group: dict[int | None, list] = defaultdict(list)
     for item in total_snapshots:
-        class_group[item.student.current_class_id if item.student else None].append(item)
+        class_group[_snapshot_effective_class_id(item, context_map)].append(item)
 
     class_breakdown: list[GradeClassAnalyticsItem] = []
     for class_id, items in class_group.items():
@@ -675,9 +1156,8 @@ def get_grade_analytics(session: Session, grade_id: int, exam_id: int) -> GradeA
             GradeClassAnalyticsItem(
                 class_id=class_id,
                 class_name=(
-                    items[0].student.current_class.name
-                    if items[0].student and items[0].student.current_class
-                    else "未分班"
+                    _snapshot_effective_class_name(items[0], context_map)
+                    or "未分班"
                 ),
                 student_count=len(items),
                 average_score=safe_mean(scores),
@@ -685,6 +1165,14 @@ def get_grade_analytics(session: Session, grade_id: int, exam_id: int) -> GradeA
                 max_score=max(scores) if scores else 0.0,
                 min_score=min(scores) if scores else 0.0,
                 excellent_rate=excellent_rate,
+                target_line_counts={
+                    line.name: sum(1 for snapshot in items if _line_reached(line, snapshot))
+                    for line in target_lines
+                },
+                target_line_rates={
+                    line.name: calculate_rate(sum(1 for snapshot in items if _line_reached(line, snapshot)), len(items))
+                    for line in target_lines
+                },
             )
         )
     class_breakdown.sort(key=lambda item: item.average_score, reverse=True)
@@ -692,7 +1180,7 @@ def get_grade_analytics(session: Session, grade_id: int, exam_id: int) -> GradeA
     subject_snapshots = [
         item
         for item in get_subject_snapshots_for_exam(session, exam_id)
-        if item.student and item.student.current_grade_id == grade_id and item.score is not None
+        if item.student and _snapshot_matches_grade(item, exam, grade_id, context_map) and item.score is not None
     ]
     grouped_subjects: dict[int, list] = defaultdict(list)
     for item in subject_snapshots:
@@ -722,6 +1210,11 @@ def get_grade_analytics(session: Session, grade_id: int, exam_id: int) -> GradeA
         if excellent_total_line is not None
         else None
     )
+    target_line_summaries = _build_target_line_summaries(target_lines, total_snapshots)
+    critical_students = _build_critical_students(target_lines, total_snapshots, context_map)
+    class_contributions = _build_class_contributions(class_group, subject_snapshots, target_lines, context_map)
+    rank_audit_summary = _build_rank_audit_summary(session, exam, len(total_snapshots), context_map)
+
     return GradeAnalyticsResponse(
         exam_id=exam.id,
         exam_name=exam.name,
@@ -738,6 +1231,10 @@ def get_grade_analytics(session: Session, grade_id: int, exam_id: int) -> GradeA
         subject_breakdown=subject_breakdown,
         score_bands=_build_score_bands(total_scores, total_full_score),
         rank_bands=_build_rank_bands(total_snapshots),
+        target_line_summaries=target_line_summaries,
+        critical_students=critical_students,
+        class_contributions=class_contributions,
+        rank_audit_summary=rank_audit_summary,
     )
 
 
@@ -793,41 +1290,234 @@ def _build_rank_bands(total_snapshots) -> list[GradeDistributionItem]:
     return [GradeDistributionItem(label=label, count=count) for label, count in counters.items()]
 
 
-def _filter_grade_total_snapshots(total_snapshots, exam: Exam, grade_id: int):
+def _snapshot_effective_class_id(snapshot, context_map: dict) -> int | None:
+    return effective_class_id(snapshot.student, context_map.get(snapshot.student_id))
+
+
+def _snapshot_effective_class_name(snapshot, context_map: dict) -> str | None:
+    return effective_class_name(snapshot.student, context_map.get(snapshot.student_id))
+
+
+def _snapshot_matches_grade(snapshot, exam: Exam | None, grade_id: int, context_map: dict) -> bool:
+    if exam:
+        scope = exam.grade_scope_json or []
+        if scope and len(scope) == 1 and scope[0] == grade_id:
+            return True
+    context = context_map.get(snapshot.student_id)
+    if context and context.mapped_class:
+        return context.mapped_class.grade_id == grade_id
+    return bool(snapshot.student and snapshot.student.current_grade_id == grade_id)
+
+
+def _build_target_line_summaries(target_lines: list[ScoreTargetLine], total_snapshots) -> list[GradeTargetLineSummary]:
+    summaries: list[GradeTargetLineSummary] = []
+    for line in target_lines:
+        reached = [item for item in total_snapshots if _line_reached(line, item)]
+        near_below = [item for item in total_snapshots if _line_near_below(line, item)]
+        near_above = [item for item in total_snapshots if _line_near_above(line, item)]
+        summaries.append(
+            GradeTargetLineSummary(
+                line_id=line.id,
+                line_name=line.name,
+                line_type=line.line_type,
+                threshold_label=_line_threshold_label(line),
+                reached_count=len(reached),
+                reached_rate=calculate_rate(len(reached), len(total_snapshots)),
+                near_below_count=len(near_below),
+                near_above_count=len(near_above),
+            )
+        )
+    return summaries
+
+
+def _build_critical_students(target_lines: list[ScoreTargetLine], total_snapshots, context_map: dict) -> list[GradeCriticalStudentItem]:
+    rows: list[GradeCriticalStudentItem] = []
+    for line in target_lines:
+        for snapshot in total_snapshots:
+            status = None
+            gap_label = ""
+            if _line_near_below(line, snapshot):
+                status = "near_below"
+                gap_label = _line_gap_label(line, snapshot, below=True)
+            elif _line_near_above(line, snapshot):
+                status = "near_above"
+                gap_label = _line_gap_label(line, snapshot, below=False)
+            if status is None or not snapshot.student:
+                continue
+            rows.append(
+                GradeCriticalStudentItem(
+                    student_id=snapshot.student_id,
+                    student_no=snapshot.student.student_no,
+                    student_name=snapshot.student.name,
+                    class_id=_snapshot_effective_class_id(snapshot, context_map),
+                    class_name=_snapshot_effective_class_name(snapshot, context_map),
+                    total_score=snapshot.total_score,
+                    school_rank=snapshot.grade_rank,
+                    line_name=line.name,
+                    status=status,
+                    gap_label=gap_label,
+                )
+            )
+    rows.sort(key=lambda item: (item.line_name, item.status, abs(float(item.gap_label.split()[0])) if item.gap_label.split() and item.gap_label.split()[0].replace(".", "", 1).lstrip("-").isdigit() else 9999))
+    return rows[:80]
+
+
+def _build_class_contributions(class_group: dict[int | None, list], subject_snapshots, target_lines: list[ScoreTargetLine], context_map: dict) -> list[GradeClassContributionItem]:
+    subjects_by_class: dict[int | None, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+    for item in subject_snapshots:
+        if item.score is None:
+            continue
+        class_id = _snapshot_effective_class_id(item, context_map)
+        subject_name = item.subject.name if item.subject else str(item.subject_id)
+        subjects_by_class[class_id][subject_name].append(item.score)
+
+    rows: list[GradeClassContributionItem] = []
+    for class_id, items in class_group.items():
+        scores = [item.total_score for item in items]
+        target_line_counts = {
+            line.name: sum(1 for item in items if _line_reached(line, item))
+            for line in target_lines
+        }
+        subject_averages = {
+            subject_name: safe_mean(values)
+            for subject_name, values in subjects_by_class.get(class_id, {}).items()
+            if values
+        }
+        strongest = max(subject_averages.items(), key=lambda item: item[1])[0] if subject_averages else None
+        weakest = min(subject_averages.items(), key=lambda item: item[1])[0] if subject_averages else None
+        rows.append(
+            GradeClassContributionItem(
+                class_id=class_id,
+                class_name=_snapshot_effective_class_name(items[0], context_map) or "未分班",
+                student_count=len(items),
+                average_score=safe_mean(scores),
+                top30_count=sum(1 for item in items if item.grade_rank is not None and item.grade_rank <= 30),
+                target_line_counts=target_line_counts,
+                strongest_subject=strongest,
+                weakest_subject=weakest,
+            )
+        )
+    rows.sort(key=lambda item: item.average_score, reverse=True)
+    return rows
+
+
+def _build_rank_audit_summary(session: Session, exam: Exam, snapshot_count: int, context_map: dict) -> GradeRankAuditSummary:
+    context_count = len(context_map)
+    mapped_count = sum(1 for item in context_map.values() if item.mapped_class_id is not None)
+    diff_count = 0
+    snapshot_map = {
+        item.student_id: item
+        for item in get_total_snapshots_for_exam(session, exam.id)
+    }
+    for context in context_map.values():
+        snapshot = snapshot_map.get(context.student_id)
+        if snapshot is None:
+            continue
+        source_school_rank = context.source_school_rank or context.source_grade_rank
+        class_diff = (
+            snapshot.class_rank != context.source_class_rank
+            if snapshot.class_rank is not None and context.source_class_rank is not None
+            else False
+        )
+        school_diff = (
+            snapshot.grade_rank != source_school_rank
+            if snapshot.grade_rank is not None and source_school_rank is not None
+            else False
+        )
+        if class_diff or school_diff:
+            diff_count += 1
+    warnings: list[str] = []
+    if context_count and mapped_count < context_count:
+        warnings.append(f"{context_count - mapped_count} 名学生缺少考试时点班级映射。")
+    if snapshot_count != context_count:
+        warnings.append("总分快照样本数与考试时点归属样本数不一致。")
+    if diff_count:
+        warnings.append(f"{diff_count} 名学生的平台原始名次与系统重算名次不同。")
+    return GradeRankAuditSummary(
+        mapping_rate=round(mapped_count / context_count, 4) if context_count else 0.0,
+        unmapped_context_count=context_count - mapped_count,
+        rank_diff_count=diff_count,
+        warnings=warnings,
+    )
+
+
+def _line_threshold_label(line: ScoreTargetLine) -> str:
+    if line.line_type == "rank":
+        return f"前 {line.rank_value} 名"
+    return f"{line.score_value} 分"
+
+
+def _line_reached(line: ScoreTargetLine, snapshot) -> bool:
+    if line.line_type == "rank":
+        return snapshot.grade_rank is not None and line.rank_value is not None and snapshot.grade_rank <= line.rank_value
+    return line.score_value is not None and snapshot.total_score >= line.score_value
+
+
+def _line_near_below(line: ScoreTargetLine, snapshot) -> bool:
+    if _line_reached(line, snapshot):
+        return False
+    if line.line_type == "rank":
+        margin = line.near_margin_rank if line.near_margin_rank is not None else 20
+        return snapshot.grade_rank is not None and line.rank_value is not None and line.rank_value < snapshot.grade_rank <= line.rank_value + margin
+    margin = line.near_margin_score if line.near_margin_score is not None else 10
+    return line.score_value is not None and line.score_value - margin <= snapshot.total_score < line.score_value
+
+
+def _line_near_above(line: ScoreTargetLine, snapshot) -> bool:
+    if not _line_reached(line, snapshot):
+        return False
+    if line.line_type == "rank":
+        margin = line.near_margin_rank if line.near_margin_rank is not None else 10
+        return snapshot.grade_rank is not None and line.rank_value is not None and max(1, line.rank_value - margin) <= snapshot.grade_rank <= line.rank_value
+    margin = line.near_margin_score if line.near_margin_score is not None else 5
+    return line.score_value is not None and line.score_value <= snapshot.total_score <= line.score_value + margin
+
+
+def _line_gap_label(line: ScoreTargetLine, snapshot, *, below: bool) -> str:
+    if line.line_type == "rank" and snapshot.grade_rank is not None and line.rank_value is not None:
+        gap = snapshot.grade_rank - line.rank_value
+        return f"{gap} 名"
+    if line.score_value is not None:
+        gap = round(snapshot.total_score - line.score_value, 2)
+        return f"{gap} 分"
+    return "暂无"
+
+
+def _filter_grade_total_snapshots(total_snapshots, exam: Exam, grade_id: int, context_map=None):
     scope = exam.grade_scope_json or []
     if scope and len(scope) == 1 and scope[0] == grade_id:
         return [item for item in total_snapshots if item.student_id is not None]
     return [
         item
         for item in total_snapshots
-        if item.student and item.student.current_grade_id == grade_id
+        if item.student and _snapshot_matches_grade(item, exam, grade_id, context_map or {})
     ]
 
 
-def _filter_grade_subject_snapshots(subject_snapshots, exam: Exam | None, grade_id: int):
+def _filter_grade_subject_snapshots(subject_snapshots, exam: Exam | None, grade_id: int, context_map=None):
     scope = exam.grade_scope_json if exam else []
     if scope and len(scope) == 1 and scope[0] == grade_id:
         return [item for item in subject_snapshots if item.score is not None]
     return [
         item
         for item in subject_snapshots
-        if item.student and item.student.current_grade_id == grade_id and item.score is not None
+        if item.student and _snapshot_matches_grade(item, exam, grade_id, context_map or {}) and item.score is not None
     ]
 
 
-def _filter_class_total_snapshots(total_snapshots, exam: Exam, class_id: int):
+def _filter_class_total_snapshots(total_snapshots, exam: Exam, class_id: int, context_map=None):
     return [
         item
         for item in total_snapshots
-        if item.student and item.student.current_class_id == class_id
+        if item.student and _snapshot_effective_class_id(item, context_map or {}) == class_id
     ]
 
 
-def _filter_class_subject_snapshots(subject_snapshots, exam: Exam | None, class_id: int):
+def _filter_class_subject_snapshots(subject_snapshots, exam: Exam | None, class_id: int, context_map=None):
     return [
         item
         for item in subject_snapshots
-        if item.student and item.student.current_class_id == class_id and item.score is not None
+        if item.student and _snapshot_effective_class_id(item, context_map or {}) == class_id and item.score is not None
     ]
 
 

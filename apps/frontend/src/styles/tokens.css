@@ -1,0 +1,53 @@
+:root {
+  color-scheme: light;
+  font-family: "IBM Plex Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", sans-serif;
+
+  --bg-main: #f5f7fa;
+  --bg-layout: #eef2f7;
+  --bg-soft: #ffffff;
+  --bg-panel: #f8fafc;
+  --bg-filter: #f3f6fb;
+  --border-soft: #e5eaf2;
+  --border-strong: #d7deea;
+  --text-main: #17233d;
+  --text-muted: #5f6f89;
+  --text-soft: #8a96aa;
+  --accent-primary: #1677b3;
+  --accent-primary-soft: #e8f3fb;
+  --accent-warm: #d48806;
+  --accent-success: #389e0d;
+  --accent-warning: #d48806;
+  --accent-danger: #cf1322;
+  --accent-info: #096dd9;
+  --shadow-card: 0 6px 18px rgba(22, 34, 61, 0.06);
+  --shadow-float: 0 12px 32px rgba(22, 34, 61, 0.10);
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --content-max: 1480px;
+  --sidebar-width: 256px;
+
+  --print-page-width: 1080px;
+  --print-page-padding: 30px;
+
+  --el-font-size-base: 14px;
+  --el-border-radius-base: 6px;
+  --el-border-radius-small: 4px;
+  --el-border-radius-round: 999px;
+  --el-color-primary: #1677b3;
+  --el-text-color-primary: #17233d;
+  --el-text-color-regular: #526178;
+  --el-text-color-secondary: #7d8aa0;
+  --el-border-color: #dce3ed;
+  --el-border-color-light: #e8edf4;
+  --el-fill-color-light: #f5f7fa;
+  --el-fill-color-blank: #ffffff;
+  background: var(--bg-layout);
+  color: var(--text-main);
+}

@@ -406,10 +406,23 @@ class StudentExamTrendItem(BaseModel):
     exam_name: str
     exam_date: date
     total_score: float
+    score_value_type: str = "original"
+    score_value_label: str = "原始分"
     class_rank: int | None = None
     grade_rank: int | None = None
     class_percentile: float | None = None
     grade_percentile: float | None = None
+    subjects: list["StudentExamSubjectItem"] = Field(default_factory=list)
+
+
+class StudentExamSubjectItem(BaseModel):
+    subject_id: int
+    subject_name: str
+    score: float | None = None
+    score_value_type: str = "original"
+    score_value_label: str = "原始分"
+    class_rank: int | None = None
+    grade_rank: int | None = None
 
 
 class StudentGrowthRecordSummary(BaseModel):
@@ -460,6 +473,8 @@ class StudentPerformanceSummary(BaseModel):
     latest_exam_name: str | None = None
     latest_exam_date: date | None = None
     latest_total_score: float | None = None
+    latest_score_value_type: str | None = None
+    latest_score_value_label: str | None = None
     latest_class_rank: int | None = None
     latest_grade_rank: int | None = None
     exam_count: int = 0

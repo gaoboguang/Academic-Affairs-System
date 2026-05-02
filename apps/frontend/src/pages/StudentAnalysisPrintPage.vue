@@ -35,6 +35,10 @@
             <strong>{{ analytics.grade_rank ?? "-" }}</strong>
           </div>
           <div class="print-summary-item">
+            <span>校内PR</span>
+            <strong>{{ formatPercentValue(analytics.grade_percentile) }}</strong>
+          </div>
+          <div class="print-summary-item">
             <span>总分变化</span>
             <strong>{{ analytics.total_score_delta ?? "-" }}</strong>
           </div>
@@ -45,40 +49,91 @@
         <div class="print-section-head">
           <h2>摘要概览</h2>
         </div>
+        <p class="print-lead">{{ analytics.overview_sentence }}</p>
         <PrintInsightCards :cards="insightCards" />
       </section>
 
       <section class="print-section">
         <div class="print-section-head">
-          <h2>分科表现</h2>
+          <h2>学科雷达与偏科分析</h2>
           <span>{{ analytics.subjects.length }} 科</span>
+        </div>
+        <div class="print-radar">
+          <div v-for="item in radarRows" :key="item.subject" class="print-radar-row">
+            <span>{{ item.subject }}</span>
+            <div><i :style="{ width: `${Math.min(100, Math.max(0, item.value))}%` }" /></div>
+            <strong>{{ item.label }}</strong>
+          </div>
         </div>
         <table class="print-table">
           <thead>
             <tr>
               <th>科目</th>
               <th>分数</th>
-              <th>班级名次</th>
-              <th>年级名次</th>
-              <th>班百分位</th>
-              <th>年百分位</th>
-              <th>分数变化</th>
-              <th>名次变化</th>
+              <th>校内名次</th>
+              <th>PR</th>
+              <th>T分</th>
+              <th>排名离差</th>
+              <th>同档差距</th>
+              <th>有效分差</th>
+              <th>诊断</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="item in analytics.subjects" :key="item.subject_id">
               <td>{{ item.subject_name }}</td>
               <td>{{ item.score ?? "-" }}</td>
-              <td>{{ item.class_rank ?? "-" }}</td>
               <td>{{ item.grade_rank ?? "-" }}</td>
-              <td>{{ item.class_percentile ?? "-" }}</td>
-              <td>{{ item.grade_percentile ?? "-" }}</td>
-              <td>{{ item.score_delta ?? "-" }}</td>
-              <td>{{ item.rank_delta ?? "-" }}</td>
+              <td>{{ formatPercentValue(item.grade_percentile) }}</td>
+              <td>{{ item.t_score ?? "-" }}</td>
+              <td>{{ item.rank_deviation ?? "-" }}</td>
+              <td>{{ formatSignedNumber(item.peer_average_delta, "分") }}</td>
+              <td>{{ formatSignedNumber(item.primary_effective_score_gap, "分") }}</td>
+              <td>{{ item.diagnosis }}</td>
             </tr>
           </tbody>
         </table>
+      </section>
+
+      <section class="print-section">
+        <div class="print-section-head">
+          <h2>进退步轨迹</h2>
+          <span>近 {{ analytics.trend_points?.length ?? 0 }} 次</span>
+        </div>
+        <table class="print-table">
+          <thead>
+            <tr>
+              <th>考试</th>
+              <th>日期</th>
+              <th>总分</th>
+              <th>班级名次</th>
+              <th>校内名次</th>
+              <th>PR</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in analytics.trend_points" :key="item.exam_id">
+              <td>{{ item.exam_name }}</td>
+              <td>{{ item.exam_date }}</td>
+              <td>{{ item.total_score ?? "-" }}</td>
+              <td>{{ item.class_rank ?? "-" }}</td>
+              <td>{{ item.grade_rank ?? "-" }}</td>
+              <td>{{ formatPercentValue(item.grade_percentile) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="print-section">
+        <div class="print-section-head">
+          <h2>行动建议</h2>
+        </div>
+        <div class="print-action-grid">
+          <article v-for="item in analytics.action_suggestions" :key="`${item.category}-${item.title}`">
+            <strong>{{ item.title }}</strong>
+            <p>{{ item.summary }}</p>
+          </article>
+        </div>
       </section>
     </article>
   </div>
@@ -89,6 +144,11 @@ import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 
 import { apiRequest } from "../api/client";
+import {
+  buildStudentRadarRows,
+  formatPercentValue,
+  formatSignedNumber,
+} from "../components/analytics/studentReport";
 import PrintInsightCards from "../components/reports/PrintInsightCards.vue";
 import { buildStudentAnalysisInsightCards } from "../components/reports/reportInsights";
 
@@ -102,6 +162,11 @@ interface StudentSubjectAnalytics {
   grade_percentile: number | null;
   score_delta: number | null;
   rank_delta: number | null;
+  t_score?: number | null;
+  rank_deviation?: number | null;
+  peer_average_delta?: number | null;
+  primary_effective_score_gap?: number | null;
+  diagnosis?: string;
 }
 
 interface StudentAnalyticsResponse {
@@ -112,7 +177,23 @@ interface StudentAnalyticsResponse {
   total_score: number;
   class_rank: number | null;
   grade_rank: number | null;
+  grade_percentile?: number | null;
   total_score_delta: number | null;
+  overview_sentence?: string;
+  trend_points?: Array<{
+    exam_id: number;
+    exam_name: string;
+    exam_date: string;
+    total_score?: number | null;
+    class_rank?: number | null;
+    grade_rank?: number | null;
+    grade_percentile?: number | null;
+  }>;
+  action_suggestions?: Array<{
+    category: string;
+    title: string;
+    summary: string;
+  }>;
   subjects: StudentSubjectAnalytics[];
 }
 
@@ -130,6 +211,7 @@ const errorMessage = ref("");
 const analytics = ref<StudentAnalyticsResponse | null>(null);
 const studentMeta = ref<StudentRead | null>(null);
 const insightCards = computed(() => (analytics.value ? buildStudentAnalysisInsightCards(analytics.value) : []));
+const radarRows = computed(() => (analytics.value ? buildStudentRadarRows(analytics.value.subjects, "pr") : []));
 
 function goBack(): void {
   window.history.back();
@@ -268,10 +350,50 @@ onMounted(async () => {
   font-size: 20px;
 }
 
-
 .print-section-head span {
   color: #6d8194;
   font-size: 13px;
+}
+
+.print-lead {
+  margin: 0 0 14px;
+  color: #52687e;
+  line-height: 1.7;
+}
+
+.print-radar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  margin-bottom: 16px;
+}
+
+.print-radar-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) 48px;
+  align-items: center;
+  gap: 10px;
+  color: #52687e;
+  font-size: 13px;
+}
+
+.print-radar-row div {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e7eef5;
+}
+
+.print-radar-row i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #1f6c98;
+}
+
+.print-radar-row strong {
+  color: #1f3448;
+  text-align: right;
 }
 
 .print-table {
@@ -291,6 +413,25 @@ onMounted(async () => {
 
 .print-table th {
   background: rgba(243, 247, 250, 0.96);
+}
+
+.print-action-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.print-action-grid article {
+  padding: 14px;
+  border-radius: 12px;
+  background: #f4f8fb;
+  border: 1px solid rgba(123, 141, 158, 0.16);
+}
+
+.print-action-grid p {
+  margin: 8px 0 0;
+  color: #52687e;
+  line-height: 1.6;
 }
 
 .print-placeholder {

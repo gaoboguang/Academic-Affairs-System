@@ -58,7 +58,11 @@ test("考试异常提示：错误成绩模板会给出明确失败原因", async
 
   const importDialog = page.locator('[role="dialog"]').filter({ hasText: "导入成绩" });
   await expect(importDialog).toBeVisible();
-  await importDialog.locator('input[type="file"]').setInputFiles(invalidScoresFixture);
+  await importDialog
+    .locator(".el-upload")
+    .filter({ hasText: "按统一模板导入" })
+    .locator('input[type="file"]')
+    .setInputFiles(invalidScoresFixture);
 
   await expectToast(page, "成绩导入模板表头不匹配");
 });

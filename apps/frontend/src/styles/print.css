@@ -1,0 +1,250 @@
+.print-shell {
+  min-height: 100vh;
+  padding: var(--space-lg);
+  background: #eef2f7;
+  color: #17233d;
+}
+
+.print-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+  max-width: var(--print-page-width);
+  margin: 0 auto var(--space-md);
+  padding: 14px 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  box-shadow: var(--shadow-card);
+}
+
+.print-toolbar strong {
+  color: var(--text-main);
+  font-size: 15px;
+}
+
+.print-toolbar p {
+  margin: 5px 0 0;
+  color: var(--text-muted);
+}
+
+.print-page {
+  max-width: var(--print-page-width);
+  margin: 0 auto;
+  padding: var(--print-page-padding);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  box-shadow: var(--shadow-float);
+}
+
+.print-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.print-eyebrow {
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.print-header h1 {
+  margin: 8px 0 0;
+  color: var(--text-main);
+  font-size: 26px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.print-header p,
+.summary-lines p {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  line-height: 1.65;
+}
+
+.print-summary-grid,
+.print-meta-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.print-summary-grid {
+  min-width: 220px;
+}
+
+.print-meta-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.print-summary-item,
+.print-meta-item {
+  padding: 12px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: #f8fafc;
+}
+
+.print-summary-item span,
+.print-meta-item span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.print-summary-item strong,
+.print-meta-item strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-main);
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.print-summary-item p {
+  margin: 6px 0 0;
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.print-section {
+  margin-top: var(--space-lg);
+}
+
+.print-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: 12px;
+}
+
+.print-section-head h2 {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.print-section-head span {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.print-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13px;
+}
+
+.print-table th,
+.print-table td {
+  padding: 9px 10px;
+  border: 1px solid var(--border-soft);
+  text-align: left;
+  vertical-align: top;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.print-table th {
+  background: #f6f8fb;
+  color: var(--text-muted);
+  font-weight: 650;
+}
+
+.print-table.compact td,
+.print-table.compact th {
+  padding: 7px 8px;
+}
+
+.print-note-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.print-empty,
+.print-placeholder {
+  max-width: var(--print-page-width);
+  margin: 0 auto;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+
+.print-placeholder.danger {
+  color: var(--accent-danger);
+}
+
+.two-column-print {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-lg);
+}
+
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  .print-shell {
+    min-height: auto;
+    padding: 0;
+    background: #fff;
+  }
+
+  .print-toolbar {
+    display: none;
+  }
+
+  .print-page {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .print-section,
+  .print-summary-item,
+  .print-meta-item {
+    break-inside: avoid;
+  }
+
+  .print-table {
+    page-break-inside: auto;
+  }
+
+  .print-table tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .print-header,
+  .print-toolbar {
+    flex-direction: column;
+  }
+
+  .print-summary-grid {
+    width: 100%;
+  }
+
+  .two-column-print {
+    grid-template-columns: 1fr;
+  }
+}

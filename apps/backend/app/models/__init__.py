@@ -12,7 +12,18 @@ from app.models.evaluation import (
 from app.models.archive import StudentGrowthAttachment, StudentGrowthRecord
 from app.models.base import Base
 from app.models.base_data import AcademicYear, DictItem, DictType, Grade, SchoolClass, Semester, Subject
-from app.models.exam import Exam, ExamSubject, ScoreImportBatch, ScoreRecord, ScoreSubjectSnapshot, ScoreTotalSnapshot
+from app.models.exam import (
+    Exam,
+    ExamSubject,
+    ScoreClassMapping,
+    ScoreExamStudentContext,
+    ScoreImportBatch,
+    ScoreImportProfile,
+    ScoreRecord,
+    ScoreSubjectSnapshot,
+    ScoreTargetLine,
+    ScoreTotalSnapshot,
+)
 from app.models.gaokao_import import GaokaoImportRun, GaokaoSourceDocument
 from app.models.planning import StudentPlanningGoal, StudentPlanningNote, StudentPlanningTask
 from app.models.recommendation import (
@@ -106,8 +117,12 @@ __all__ = [
     "RecommendationScheme",
     "SchoolClass",
     "ScoreImportBatch",
+    "ScoreClassMapping",
+    "ScoreExamStudentContext",
+    "ScoreImportProfile",
     "ScoreRecord",
     "ScoreSubjectSnapshot",
+    "ScoreTargetLine",
     "ScoreTotalSnapshot",
     "Semester",
     "Student",

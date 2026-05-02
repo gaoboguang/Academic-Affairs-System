@@ -1,24 +1,14 @@
 <template>
-  <div class="page-shell">
-    <header class="page-header">
-      <div>
-        <div class="page-eyebrow">教学分析 / 分析中心</div>
-        <h2 class="page-title">分析中心</h2>
-        <p class="page-subtitle">
-          当前覆盖学生、班级、年级和任课教师分析，依赖考试快照和任教关系，不在前端硬编码计算规则。
-        </p>
-        <div class="page-chip-row">
-          <span class="page-chip"><strong>考试</strong>{{ examOptions.length }}</span>
-          <span class="page-chip"><strong>学生</strong>{{ studentOptions.length }}</span>
-          <span class="page-chip"><strong>教师</strong>{{ teacherOptions.length }}</span>
-          <span class="page-chip"><strong>当前考试</strong>{{ selectedExamName }}</span>
-        </div>
-      </div>
-      <div class="action-row">
+  <AppPage
+    title="分析中心"
+    eyebrow="教学分析 / 分析中心"
+    description="当前覆盖学生、班级、年级和任课教师分析，依赖考试快照和任教关系，不在前端硬编码计算规则。"
+    :meta="analyticsPageMeta"
+  >
+    <template #actions>
         <el-button @click="loadOptions">重载选项</el-button>
         <el-button type="primary" plain @click="resetAnalyticsState">清空结果</el-button>
-      </div>
-    </header>
+    </template>
 
     <section v-if="scoreReadinessMessages.length" class="score-readiness-stack">
       <el-alert
@@ -31,28 +21,12 @@
       />
     </section>
 
-    <section class="analysis-hero-grid">
-      <article class="soft-card overview-panel">
-        <div class="overview-kicker">分析上下文</div>
-        <h3>{{ selectedExamName }}</h3>
-        <p>先锁定同一场考试，再切学生、班级、年级和教师四个维度，避免跨考试横跳导致判断失真。</p>
-      </article>
-      <article v-for="item in analyticsOverviewCards" :key="item.label" class="soft-card overview-card" :class="item.tone">
-        <span>{{ item.label }}</span>
-        <strong>{{ item.value }}</strong>
-        <p>{{ item.help }}</p>
-      </article>
-    </section>
-
-    <section class="soft-card panel-block">
-      <div class="section-head compact">
-        <div>
-          <h3>选择考试</h3>
-          <p>所有分析结果都围绕同一场考试展开，统计口径为已导入成绩快照；筛选条件变更后建议重新查看各个分析维度。</p>
-        </div>
-      </div>
-      <div class="filter-grid">
-        <el-select v-model="selectedExamId" filterable placeholder="请选择考试">
+    <AppFilterBar
+      title="选择考试"
+      description="所有分析结果都围绕同一场考试展开，统计口径为已导入成绩快照。"
+      sticky
+    >
+      <el-select v-model="selectedExamId" filterable placeholder="请选择考试" class="global-exam-select">
           <el-option
             v-for="exam in examOptions"
             :key="exam.id"
@@ -60,10 +34,50 @@
             :value="exam.id"
           />
         </el-select>
-      </div>
+      <template #actions>
+          <el-button :disabled="!selectedExamId" :loading="loadingRankAudit" @click="loadScoreRankAudit">名次口径审计</el-button>
+          <el-button type="primary" plain :disabled="!selectedExamId" :loading="rebuildingSnapshots" @click="rebuildScoreSnapshots">
+            重建成绩快照
+          </el-button>
+      </template>
+    </AppFilterBar>
+
+    <section class="analysis-hero-grid">
+      <article class="soft-card overview-panel">
+        <div class="overview-kicker">分析上下文</div>
+        <h2>{{ selectedExamName }}</h2>
+        <p>先锁定同一场考试，再切学生、班级、年级和教师四个维度，避免跨考试横跳导致判断失真。</p>
+      </article>
+      <AppStatGrid :items="analyticsOverviewCards" :columns="3" />
     </section>
 
-    <el-tabs>
+    <AppSectionCard v-if="rankAudit" title="名次口径审计" description="核对源班级映射、样本量和平台原始名次差异。">
+      <div v-if="rankAudit" class="rank-audit-panel">
+        <AppStatGrid :items="rankAuditCards" :columns="4" />
+        <div v-if="rankAudit.warnings.length" class="dashboard-tip-stack">
+          <el-alert
+            v-for="item in rankAudit.warnings"
+            :key="item"
+            type="warning"
+            show-icon
+            :closable="false"
+            :title="item"
+          />
+        </div>
+        <div class="table-shell table-gap">
+          <el-table :data="rankAudit.class_mappings" stripe>
+            <el-table-column label="源班级" prop="source_class_name" min-width="120" />
+            <el-table-column label="映射班级" min-width="120">
+              <template #default="{ row }">{{ row.mapped_class_name ?? "未映射" }}</template>
+            </el-table-column>
+            <el-table-column label="学生数" prop="student_count" width="90" />
+            <el-table-column label="状态" prop="mapping_status" width="130" />
+          </el-table>
+        </div>
+      </div>
+    </AppSectionCard>
+
+    <el-tabs class="analytics-tabs">
       <el-tab-pane label="班主任驾驶舱">
         <section class="soft-card panel-block">
           <div class="section-head compact">
@@ -159,7 +173,17 @@
                 </template>
               </el-table-column>
               <el-table-column label="主要原因" prop="primary_reason" min-width="220" />
-              <el-table-column label="建议动作" prop="suggested_action" min-width="180" />
+              <el-table-column label="建议动作" min-width="260" fixed="right">
+                <template #default="{ row }">
+                  <div class="risk-action-group">
+                    <el-button size="small" type="primary" plain @click="openRiskStudent(row)">查看学生</el-button>
+                    <el-button size="small" plain @click="openRiskStudentFollowup(row)">跟进包</el-button>
+                    <el-button size="small" plain @click="openRiskStudentReport(row)">报表</el-button>
+                    <span v-if="!row.suggested_action" class="muted-inline">暂无建议</span>
+                    <span v-else class="risk-action-text">{{ row.suggested_action }}</span>
+                  </div>
+                </template>
+              </el-table-column>
             </el-table>
             <el-empty
               v-if="!adviserDashboard.risk_students.length"
@@ -191,7 +215,7 @@
           <el-empty v-if="!studentAnalytics && !scoreRecordTotal" description="当前成绩记录为 0。请先到考试成绩中心导入成绩，再查看学生分析。" />
           <div v-if="studentAnalytics" class="metric-grid analytics-grid">
             <div class="soft-card stat-card">
-              <div class="metric-label">总分</div>
+              <div class="metric-label">总分{{ studentAnalytics.score_value_label ? `（${studentAnalytics.score_value_label}）` : "" }}</div>
               <div class="metric-value">{{ studentAnalytics.total_score }}</div>
             </div>
             <div class="soft-card stat-card">
@@ -199,21 +223,104 @@
               <div class="metric-value">{{ studentAnalytics.class_rank ?? "-" }}</div>
             </div>
             <div class="soft-card stat-card">
-              <div class="metric-label">年级名次</div>
+              <div class="metric-label">校内名次</div>
               <div class="metric-value">{{ studentAnalytics.grade_rank ?? "-" }}</div>
             </div>
+            <div class="soft-card stat-card">
+              <div class="metric-label">校内PR</div>
+              <div class="metric-value">{{ formatPercentValue(studentAnalytics.grade_percentile) }}</div>
+            </div>
+            <div class="soft-card stat-card">
+              <div class="metric-label">目标线差距</div>
+              <div class="metric-value small-value">{{ getTargetGapSummary(studentAnalytics.target_line_gaps) }}</div>
+            </div>
+          </div>
+          <div v-if="studentAnalytics" class="student-report-grid">
+            <article class="soft-card inner-panel student-overview-panel">
+              <h4>本次画像</h4>
+              <p>{{ studentAnalytics.overview_sentence }}</p>
+              <div class="report-chip-row">
+                <el-tag
+                  v-for="item in studentAnalytics.target_line_gaps"
+                  :key="item.line_id"
+                  effect="light"
+                  :type="item.status === 'reached' || item.status === 'near_above' ? 'success' : 'warning'"
+                >
+                  {{ item.line_name }} {{ formatSignedNumber(item.gap_score, "分") }}
+                </el-tag>
+              </div>
+            </article>
+            <article class="soft-card inner-panel radar-panel">
+              <div class="panel-title-row">
+                <h4>相对位置雷达</h4>
+                <el-segmented v-model="studentRadarMetric" :options="studentRadarOptions" size="small" />
+              </div>
+              <div v-if="studentRadarRows.length" class="radar-bars">
+                <div v-for="item in studentRadarRows" :key="item.subject" class="radar-row">
+                  <span>{{ item.subject }}</span>
+                  <div class="radar-track">
+                    <i :style="{ width: `${Math.min(100, Math.max(0, item.value))}%` }" />
+                  </div>
+                  <strong>{{ item.label }}</strong>
+                </div>
+              </div>
+              <el-empty v-else description="暂无可用于雷达展示的 PR 或 T 分。" />
+            </article>
           </div>
           <div v-if="studentAnalytics" class="table-shell table-gap">
             <el-table :data="studentAnalytics.subjects" stripe>
               <el-table-column label="科目" prop="subject_name" min-width="120" />
               <el-table-column label="分数" prop="score" width="90" />
+              <el-table-column label="口径" prop="score_value_label" width="90" />
               <el-table-column label="班名" prop="class_rank" width="90" />
-              <el-table-column label="年名" prop="grade_rank" width="90" />
-              <el-table-column label="班百分位" prop="class_percentile" width="110" />
-              <el-table-column label="年百分位" prop="grade_percentile" width="110" />
+              <el-table-column label="校内名" prop="grade_rank" width="90" />
+              <el-table-column label="PR" width="90">
+                <template #default="{ row }">{{ formatPercentValue(row.grade_percentile) }}</template>
+              </el-table-column>
+              <el-table-column label="T分" prop="t_score" width="80" />
+              <el-table-column label="排名离差" prop="rank_deviation" width="100" />
+              <el-table-column label="同档差距" width="100">
+                <template #default="{ row }">{{ formatSignedNumber(row.peer_average_delta, "分") }}</template>
+              </el-table-column>
+              <el-table-column label="有效分差" width="100">
+                <template #default="{ row }">{{ formatSignedNumber(row.primary_effective_score_gap, "分") }}</template>
+              </el-table-column>
               <el-table-column label="分数变化" prop="score_delta" width="110" />
               <el-table-column label="名次变化" prop="rank_delta" width="110" />
+              <el-table-column label="诊断" min-width="150">
+                <template #default="{ row }">
+                  <el-tag :type="studentDiagnosisTagType(row.diagnosis)" effect="light">{{ row.diagnosis }}</el-tag>
+                  <span class="muted-inline">{{ formatDiagnosisTags(row.diagnosis_tags) }}</span>
+                </template>
+              </el-table-column>
             </el-table>
+          </div>
+          <div v-if="studentAnalytics" class="student-report-grid table-gap">
+            <article class="soft-card inner-panel">
+              <h4>进退步轨迹</h4>
+              <div class="trend-list">
+                <div v-for="item in studentAnalytics.trend_points" :key="item.exam_id" class="trend-row">
+                  <span>{{ item.exam_name }}</span>
+                  <strong>校内第 {{ item.grade_rank ?? "-" }}</strong>
+                  <em>{{ item.total_score ?? "-" }} 分</em>
+                </div>
+              </div>
+            </article>
+            <article class="soft-card inner-panel">
+              <h4>行动建议</h4>
+              <div v-if="studentAnalytics.action_suggestions?.length" class="suggestion-list">
+                <el-alert
+                  v-for="item in studentAnalytics.action_suggestions"
+                  :key="`${item.category}-${item.title}`"
+                  :type="getSuggestionTone(item.category)"
+                  :closable="false"
+                  show-icon
+                  :title="item.title"
+                  :description="item.summary"
+                />
+              </div>
+              <el-empty v-else description="当前暂无自动建议。" />
+            </article>
           </div>
         </section>
       </el-tab-pane>
@@ -286,6 +393,57 @@
             </el-select>
             <el-button type="primary" @click="loadGradeAnalytics">查询</el-button>
           </div>
+          <section v-if="selectedExamId" class="soft-card inner-panel target-line-panel">
+            <div class="inner-head">
+              <h4>年级目标线</h4>
+              <div class="action-row">
+                <el-button size="small" @click="addTargetLineDraft">新增目标线</el-button>
+                <el-button size="small" type="primary" :loading="savingTargetLines" @click="saveTargetLines">保存目标线</el-button>
+              </div>
+            </div>
+            <div class="table-shell">
+              <el-table :data="targetLineDrafts" stripe>
+                <el-table-column label="名称" min-width="140">
+                  <template #default="{ row }">
+                    <el-input v-model="row.name" placeholder="如 本科线" />
+                  </template>
+                </el-table-column>
+                <el-table-column label="类型" width="130">
+                  <template #default="{ row }">
+                    <el-select v-model="row.line_type">
+                      <el-option label="分数线" value="score" />
+                      <el-option label="名次线" value="rank" />
+                    </el-select>
+                  </template>
+                </el-table-column>
+                <el-table-column label="分数" width="130">
+                  <template #default="{ row }">
+                    <el-input-number v-model="row.score_value" :disabled="row.line_type !== 'score'" :min="0" controls-position="right" />
+                  </template>
+                </el-table-column>
+                <el-table-column label="名次" width="130">
+                  <template #default="{ row }">
+                    <el-input-number v-model="row.rank_value" :disabled="row.line_type !== 'rank'" :min="1" controls-position="right" />
+                  </template>
+                </el-table-column>
+                <el-table-column label="临界分" width="130">
+                  <template #default="{ row }">
+                    <el-input-number v-model="row.near_margin_score" :min="0" controls-position="right" />
+                  </template>
+                </el-table-column>
+                <el-table-column label="临界名次" width="130">
+                  <template #default="{ row }">
+                    <el-input-number v-model="row.near_margin_rank" :min="0" controls-position="right" />
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="90">
+                  <template #default="{ $index }">
+                    <el-button link type="danger" @click="removeTargetLineDraft($index)">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+          </section>
           <el-empty v-if="!gradeAnalytics && !scoreRecordTotal" description="当前成绩记录为 0。请先导入成绩，再查看年级分数段、名次段和班级横向对比。" />
           <div v-if="gradeAnalytics" class="metric-grid analytics-grid">
             <div class="soft-card stat-card">
@@ -304,6 +462,38 @@
               <div class="metric-label">学生数</div>
               <div class="metric-value">{{ gradeAnalytics.student_count }}</div>
             </div>
+          </div>
+
+          <div v-if="gradeAnalytics?.rank_audit_summary?.warnings?.length" class="dashboard-tip-stack">
+            <el-alert
+              v-for="item in gradeAnalytics.rank_audit_summary.warnings"
+              :key="item"
+              type="warning"
+              show-icon
+              :closable="false"
+              :title="item"
+            />
+          </div>
+
+          <div v-if="gradeAnalytics?.target_line_summaries?.length" class="distribution-grid">
+            <article class="soft-card distribution-card">
+              <h4>达线率</h4>
+              <div class="distribution-list">
+                <div v-for="item in gradeAnalytics.target_line_summaries" :key="item.line_id" class="distribution-item">
+                  <span>{{ item.line_name }} · {{ item.threshold_label }}</span>
+                  <strong>{{ item.reached_count }} / {{ formatPercent(item.reached_rate) }}</strong>
+                </div>
+              </div>
+            </article>
+            <article class="soft-card distribution-card">
+              <h4>临界样本</h4>
+              <div class="distribution-list">
+                <div v-for="item in gradeAnalytics.target_line_summaries" :key="`${item.line_id}-near`" class="distribution-item">
+                  <span>{{ item.line_name }}</span>
+                  <strong>线下 {{ item.near_below_count }} · 线上 {{ item.near_above_count }}</strong>
+                </div>
+              </div>
+            </article>
           </div>
 
           <div v-if="gradeAnalytics" class="distribution-grid">
@@ -340,6 +530,11 @@
                   <el-table-column label="中位数" prop="median_score" width="90" />
                   <el-table-column label="最高分" prop="max_score" width="90" />
                   <el-table-column label="优秀率" prop="excellent_rate" width="100" />
+                  <el-table-column label="目标达线" min-width="150">
+                    <template #default="{ row }">
+                      {{ formatTargetLineCounts(row.target_line_counts) }}
+                    </template>
+                  </el-table-column>
                 </el-table>
               </div>
             </section>
@@ -354,6 +549,44 @@
                   <el-table-column label="优秀率" prop="excellent_rate" width="100" />
                   <el-table-column label="及格率" prop="pass_rate" width="100" />
                   <el-table-column label="贡献度" prop="contribution_rate" width="100" />
+                </el-table>
+              </div>
+            </section>
+          </div>
+
+          <div v-if="gradeAnalytics?.class_contributions?.length || gradeAnalytics?.critical_students?.length" class="split-grid">
+            <section class="soft-card inner-panel">
+              <div class="inner-head">
+                <h4>班级贡献</h4>
+              </div>
+              <div class="table-shell">
+                <el-table :data="gradeAnalytics.class_contributions" stripe>
+                  <el-table-column label="班级" prop="class_name" min-width="100" />
+                  <el-table-column label="人数" prop="student_count" width="80" />
+                  <el-table-column label="均分" prop="average_score" width="90" />
+                  <el-table-column label="前30" prop="top30_count" width="80" />
+                  <el-table-column label="优势学科" prop="strongest_subject" width="100" />
+                  <el-table-column label="攻坚学科" prop="weakest_subject" width="100" />
+                  <el-table-column label="达线" min-width="150">
+                    <template #default="{ row }">
+                      {{ formatTargetLineCounts(row.target_line_counts) }}
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+            </section>
+            <section class="soft-card inner-panel">
+              <div class="inner-head">
+                <h4>临界学生</h4>
+              </div>
+              <div class="table-shell">
+                <el-table :data="gradeAnalytics.critical_students" stripe>
+                  <el-table-column label="学生" prop="student_name" min-width="100" />
+                  <el-table-column label="班级" prop="class_name" width="100" />
+                  <el-table-column label="总分" prop="total_score" width="80" />
+                  <el-table-column label="校内名次" prop="school_rank" width="100" />
+                  <el-table-column label="目标线" prop="line_name" width="110" />
+                  <el-table-column label="距离" prop="gap_label" width="90" />
                 </el-table>
               </div>
             </section>
@@ -442,11 +675,11 @@
         />
       </el-tab-pane>
     </el-tabs>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import ElMessage from "element-plus/es/components/message/index";
 
@@ -461,12 +694,22 @@ import {
 } from "../components/analytics/adviserDashboard";
 import ClassPanoramaPanel from "../components/analytics/ClassPanoramaPanel.vue";
 import GradePanoramaPanel from "../components/analytics/GradePanoramaPanel.vue";
+import {
+  buildStudentRadarRows,
+  formatDiagnosisTags,
+  formatPercentValue,
+  formatSignedNumber,
+  getSuggestionTone,
+  getTargetGapSummary,
+  type RadarMetric,
+} from "../components/analytics/studentReport";
 import TeacherPanoramaPanel from "../components/analytics/TeacherPanoramaPanel.vue";
 import type {
   ClassPanoramaResponse,
   GradePanoramaResponse,
   TeacherPanoramaResponse,
 } from "../components/analytics/types";
+import { AppFilterBar, AppPage, AppSectionCard, AppStatGrid, type StatCardItem } from "../components/ui";
 import { useReferenceStore } from "../stores/reference";
 import { buildScoreReadinessMessages } from "../utils/scoreReadiness";
 
@@ -484,6 +727,48 @@ interface StudentOption {
 interface TeacherOption {
   id: number;
   name: string;
+}
+
+interface ScoreClassMappingRead {
+  id: number;
+  exam_id: number;
+  source_class_name: string;
+  mapped_class_id?: number | null;
+  mapped_class_name?: string | null;
+  mapping_status: string;
+  note?: string | null;
+  student_count: number;
+}
+
+interface ScoreRankAudit {
+  exam_id: number;
+  exam_name: string;
+  rank_scope_label: string;
+  total_students: number;
+  context_count: number;
+  mapped_context_count: number;
+  unmapped_context_count: number;
+  mapping_rate: number;
+  source_class_count: number;
+  mapped_class_count: number;
+  source_rank_count: number;
+  rank_diff_count: number;
+  warnings: string[];
+  class_mappings: ScoreClassMappingRead[];
+}
+
+interface ScoreTargetLineDraft {
+  id?: number;
+  exam_id?: number;
+  name: string;
+  line_type: "score" | "rank";
+  score_value?: number | null;
+  rank_value?: number | null;
+  near_margin_score?: number | null;
+  near_margin_rank?: number | null;
+  sort_order: number;
+  note?: string | null;
+  is_active: boolean;
 }
 
 const referenceStore = useReferenceStore();
@@ -512,6 +797,16 @@ const adviserClassId = ref<number | null>(null);
 const adviserDateRange = ref<[string, string] | null>(null);
 const adviserDashboard = ref<AdviserDashboardResponse | null>(null);
 const loadingAdviserDashboard = ref(false);
+const rankAudit = ref<ScoreRankAudit | null>(null);
+const loadingRankAudit = ref(false);
+const rebuildingSnapshots = ref(false);
+const targetLineDrafts = ref<ScoreTargetLineDraft[]>([]);
+const savingTargetLines = ref(false);
+const studentRadarMetric = ref<RadarMetric>("pr");
+const studentRadarOptions = [
+  { label: "PR", value: "pr" },
+  { label: "T分", value: "t_score" },
+];
 
 const studentAnalytics = ref<any>(null);
 const classAnalytics = ref<any>(null);
@@ -523,6 +818,12 @@ const teacherPanorama = ref<TeacherPanoramaResponse | null>(null);
 const selectedExamName = computed(
   () => examOptions.value.find((item) => item.id === selectedExamId.value)?.name ?? "未选择考试",
 );
+const analyticsPageMeta = computed(() => [
+  { label: "考试", value: examOptions.value.length },
+  { label: "学生", value: studentOptions.value.length },
+  { label: "教师", value: teacherOptions.value.length },
+  { label: "当前考试", value: selectedExamName.value },
+]);
 const scoreReadinessMessages = computed(() =>
   buildScoreReadinessMessages({
     examCount: examOptions.value.length,
@@ -530,26 +831,51 @@ const scoreReadinessMessages = computed(() =>
     selectedExamName: selectedExamId.value ? selectedExamName.value : null,
   }),
 );
-const analyticsOverviewCards = computed(() => [
+const analyticsOverviewCards = computed<StatCardItem[]>(() => [
+  {
+    label: "考试",
+    value: examOptions.value.length,
+    help: "当前系统可用于切换分析上下文的考试数量。",
+    tone: "primary",
+  },
+  {
+    label: "学生",
+    value: studentOptions.value.length,
+    help: "当前学生选择器可检索的学生样本。",
+    tone: "neutral",
+  },
   {
     label: "学生结果",
     value: studentAnalytics.value ? studentAnalytics.value.subjects?.length ?? 0 : 0,
     help: "当前学生分析里可查看的分科条目。",
-    tone: "tone-blue",
+    tone: "primary",
   },
   {
     label: "班级结果",
     value: classAnalytics.value ? classAnalytics.value.subject_breakdown?.length ?? 0 : 0,
     help: "当前班级分析里的学科拆分数量。",
-    tone: "tone-amber",
+    tone: "warning",
   },
   {
     label: "年级结果",
     value: gradeAnalytics.value ? gradeAnalytics.value.student_count ?? 0 : 0,
     help: "当前年级分析覆盖的学生数。",
-    tone: "tone-slate",
+    tone: "neutral",
   },
 ]);
+const rankAuditCards = computed<StatCardItem[]>(() =>
+  rankAudit.value
+    ? [
+        { label: "名次口径", value: rankAudit.value.rank_scope_label, help: "当前考试快照采用的排名范围。", tone: "primary" },
+        { label: "映射率", value: formatPercent(rankAudit.value.mapping_rate), help: "源班级成功映射到系统班级的比例。", tone: "success" },
+        { label: "样本数", value: rankAudit.value.total_students, help: "参与本地排名重算的有效学生。", tone: "neutral" },
+        { label: "名次差异", value: rankAudit.value.rank_diff_count, help: "平台原始名次与系统样本名次存在差异的记录。", tone: "warning" },
+      ]
+    : [],
+);
+const studentRadarRows = computed(() =>
+  studentAnalytics.value ? buildStudentRadarRows(studentAnalytics.value.subjects ?? [], studentRadarMetric.value) : [],
+);
 const adviserDashboardTips = computed(() => buildAdviserDashboardEmptyTips(adviserDashboard.value));
 
 const adviserOverviewCards = computed(() => {
@@ -598,6 +924,21 @@ async function loadOptions(): Promise<void> {
   examOptions.value = examPayload.items;
   studentOptions.value = studentPayload.items;
   teacherOptions.value = teacherPayload.items;
+  if (!selectedExamId.value && examOptions.value.length) {
+    selectedExamId.value = examOptions.value[0].id;
+  }
+  if (!selectedStudentId.value && studentOptions.value.length) {
+    selectedStudentId.value = studentOptions.value[0].id;
+  }
+  if (!selectedClassId.value && referenceStore.classes.length) {
+    selectedClassId.value = referenceStore.classes[0].id;
+  }
+  if (!selectedGradeId.value && referenceStore.grades.length) {
+    selectedGradeId.value = referenceStore.grades[0].id;
+  }
+  if (!selectedTeacherId.value && teacherOptions.value.length) {
+    selectedTeacherId.value = teacherOptions.value[0].id;
+  }
   if (!selectedPanoramaGradeId.value && referenceStore.grades.length) {
     selectedPanoramaGradeId.value = referenceStore.grades[0].id;
   }
@@ -642,9 +983,120 @@ async function loadTeacherAnalytics(): Promise<void> {
 async function loadGradeAnalytics(): Promise<void> {
   if (!selectedExamId.value || !selectedGradeId.value) return;
   try {
+    if (!targetLineDrafts.value.length) {
+      await loadTargetLines();
+    }
     gradeAnalytics.value = await apiRequest(`/api/analytics/grades/${selectedGradeId.value}?exam_id=${selectedExamId.value}`);
   } catch (error) {
     ElMessage.error((error as Error).message);
+  }
+}
+
+async function loadScoreRankAudit(): Promise<void> {
+  if (!selectedExamId.value) return;
+  try {
+    loadingRankAudit.value = true;
+    rankAudit.value = await apiRequest<ScoreRankAudit>(`/api/exams/${selectedExamId.value}/score-rank-audit`);
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  } finally {
+    loadingRankAudit.value = false;
+  }
+}
+
+async function rebuildScoreSnapshots(): Promise<void> {
+  if (!selectedExamId.value) return;
+  try {
+    rebuildingSnapshots.value = true;
+    const payload = await apiRequest<{ message: string; audit: ScoreRankAudit }>(
+      `/api/exams/${selectedExamId.value}/scores/rebuild-snapshots`,
+      { method: "POST" },
+    );
+    rankAudit.value = payload.audit;
+    ElMessage.success(payload.message);
+    if (selectedGradeId.value) {
+      await loadGradeAnalytics();
+    }
+    if (selectedClassId.value) {
+      await loadClassAnalytics();
+    }
+    if (selectedStudentId.value) {
+      await loadStudentAnalytics();
+    }
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  } finally {
+    rebuildingSnapshots.value = false;
+  }
+}
+
+async function loadTargetLines(): Promise<void> {
+  if (!selectedExamId.value) return;
+  try {
+    const payload = await apiRequest<ScoreTargetLineDraft[]>(`/api/exams/${selectedExamId.value}/score-target-lines`);
+    targetLineDrafts.value = payload.map((item, index) => ({
+      ...item,
+      sort_order: item.sort_order ?? index,
+      is_active: item.is_active ?? true,
+    }));
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  }
+}
+
+function addTargetLineDraft(): void {
+  targetLineDrafts.value.push({
+    name: "",
+    line_type: "score",
+    score_value: null,
+    rank_value: null,
+    near_margin_score: 10,
+    near_margin_rank: 20,
+    sort_order: targetLineDrafts.value.length,
+    note: "",
+    is_active: true,
+  });
+}
+
+function removeTargetLineDraft(index: number): void {
+  targetLineDrafts.value.splice(index, 1);
+  targetLineDrafts.value.forEach((item, itemIndex) => {
+    item.sort_order = itemIndex;
+  });
+}
+
+async function saveTargetLines(): Promise<void> {
+  if (!selectedExamId.value) return;
+  const payload = targetLineDrafts.value
+    .filter((item) => item.name.trim())
+    .map((item, index) => ({
+      name: item.name.trim(),
+      line_type: item.line_type,
+      score_value: item.line_type === "score" ? item.score_value ?? null : null,
+      rank_value: item.line_type === "rank" ? item.rank_value ?? null : null,
+      near_margin_score: item.near_margin_score ?? null,
+      near_margin_rank: item.near_margin_rank ?? null,
+      sort_order: index,
+      note: item.note ?? "",
+      is_active: item.is_active,
+    }));
+  try {
+    savingTargetLines.value = true;
+    targetLineDrafts.value = await apiRequest<ScoreTargetLineDraft[]>(
+      `/api/exams/${selectedExamId.value}/score-target-lines`,
+      {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      },
+    );
+    ElMessage.success("目标线已保存");
+    if (selectedGradeId.value) {
+      await loadGradeAnalytics();
+    }
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  } finally {
+    savingTargetLines.value = false;
   }
 }
 
@@ -668,6 +1120,18 @@ async function loadAdviserDashboard(): Promise<void> {
 
 function openRiskStudent(row: AdviserRiskStudentItem): void {
   router.push(`/students/${row.student_id}`);
+}
+
+function openRiskStudentFollowup(row: AdviserRiskStudentItem): void {
+  const query = new URLSearchParams({ report_type: "student_followup_package", student_id: String(row.student_id) });
+  if (selectedExamId.value) query.set("exam_id", String(selectedExamId.value));
+  router.push(`/reports?${query.toString()}`);
+}
+
+function openRiskStudentReport(row: AdviserRiskStudentItem): void {
+  const query = new URLSearchParams({ report_type: "student_analysis", student_id: String(row.student_id) });
+  if (selectedExamId.value) query.set("exam_id", String(selectedExamId.value));
+  router.push(`/reports?${query.toString()}`);
 }
 
 function openAdviserAction(path?: string | null): void {
@@ -765,11 +1229,46 @@ function resetAnalyticsState(): void {
   classPanorama.value = null;
   teacherPanorama.value = null;
   adviserDashboard.value = null;
+  rankAudit.value = null;
 }
+
+function formatPercent(value?: number | null): string {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return "-";
+  }
+  return `${(value * 100).toFixed(1)}%`;
+}
+
+function studentDiagnosisTagType(value?: string): "success" | "warning" | "info" {
+  if (value === "优势学科") return "success";
+  if (value === "重点补弱" || value === "严重拖后腿" || value === "稳定性关注") return "warning";
+  return "info";
+}
+
+function formatTargetLineCounts(value?: Record<string, number> | null): string {
+  if (!value || !Object.keys(value).length) {
+    return "-";
+  }
+  return Object.entries(value)
+    .map(([name, count]) => `${name} ${count}`)
+    .join(" / ");
+}
+
+watch(selectedExamId, async (examId) => {
+  rankAudit.value = null;
+  gradeAnalytics.value = null;
+  targetLineDrafts.value = [];
+  if (examId) {
+    await loadTargetLines();
+  }
+});
 
 onMounted(async () => {
   try {
     await loadOptions();
+    if (selectedExamId.value) {
+      await loadTargetLines();
+    }
     await Promise.all([
       adviserGradeId.value || adviserClassId.value ? loadAdviserDashboard() : Promise.resolve(),
       selectedPanoramaGradeId.value ? loadGradePanorama() : Promise.resolve(),
@@ -785,8 +1284,9 @@ onMounted(async () => {
 <style scoped>
 .analysis-hero-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) repeat(3, minmax(0, 0.7fr));
+  grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.8fr);
   gap: 16px;
+  align-items: stretch;
 }
 
 .score-readiness-stack {
@@ -796,37 +1296,35 @@ onMounted(async () => {
 
 .overview-panel,
 .overview-card {
-  padding: 24px;
+  padding: 20px;
 }
 
 .overview-panel {
-  background:
-    radial-gradient(circle at top left, rgba(180, 219, 243, 0.32), transparent 28%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.99), rgba(244, 248, 252, 0.94));
+  background: #fff;
 }
 
 .overview-kicker {
   display: inline-flex;
-  padding: 7px 10px;
-  border-radius: 999px;
-  background: rgba(31, 108, 152, 0.1);
-  color: #1f6c98;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: var(--accent-primary-soft);
+  color: var(--accent-primary);
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0;
 }
 
-.overview-panel h3 {
+.overview-panel h2 {
   margin: 14px 0 0;
-  color: #1f3448;
-  font-size: 28px;
+  color: var(--text-main);
+  font-size: 22px;
+  font-weight: 650;
   line-height: 1.25;
 }
 
 .overview-panel p {
   margin: 12px 0 0;
-  color: #62788c;
+  color: var(--text-muted);
   line-height: 1.7;
 }
 
@@ -863,7 +1361,7 @@ onMounted(async () => {
 }
 
 .tone-slate {
-  box-shadow: inset 0 4px 0 rgba(92, 111, 129, 0.74);
+  box-shadow: inset 3px 0 0 rgba(92, 111, 129, 0.74), var(--shadow-card);
 }
 
 .analytics-grid {
@@ -888,6 +1386,19 @@ onMounted(async () => {
   display: grid;
   gap: 10px;
   margin-top: 16px;
+}
+
+.global-exam-select {
+  width: 100%;
+  max-width: 520px;
+}
+
+.analytics-tabs {
+  padding: 18px 18px 0;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  background: var(--bg-soft);
+  box-shadow: var(--shadow-card);
 }
 
 .adviser-overview-grid {
@@ -933,7 +1444,21 @@ onMounted(async () => {
 }
 
 .action-chip strong {
-  color: #1f6c98;
+  color: var(--accent-primary);
+}
+
+.risk-action-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.risk-action-text {
+  width: 100%;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .stat-card {
@@ -942,6 +1467,112 @@ onMounted(async () => {
 
 .table-gap {
   margin-top: 16px;
+}
+
+.student-report-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.student-overview-panel p {
+  margin: 10px 0 0;
+  color: #51677c;
+  line-height: 1.65;
+}
+
+.report-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.panel-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panel-title-row h4,
+.student-report-grid h4 {
+  margin: 0;
+  color: #21384d;
+}
+
+.radar-bars {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.radar-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) 48px;
+  align-items: center;
+  gap: 10px;
+  color: #52687e;
+  font-size: 13px;
+}
+
+.radar-track {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e7eef5;
+}
+
+.radar-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #1f6c98, #58a7bd);
+}
+
+.radar-row strong {
+  color: #1f3448;
+  text-align: right;
+}
+
+.muted-inline {
+  margin-left: 8px;
+  color: #73879b;
+  font-size: 12px;
+}
+
+.trend-list,
+.suggestion-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.trend-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px 70px;
+  gap: 10px;
+  align-items: center;
+  min-height: 34px;
+  color: #52687e;
+  font-size: 13px;
+}
+
+.trend-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trend-row strong {
+  color: #1f3448;
+}
+
+.trend-row em {
+  color: #6d8194;
+  font-style: normal;
+  text-align: right;
 }
 
 .distribution-grid,
@@ -979,8 +1610,8 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   padding: 12px 14px;
-  border-radius: 14px;
-  background: rgba(242, 247, 251, 0.76);
+  border-radius: var(--radius-md);
+  background: var(--bg-panel);
 }
 
 @media (max-width: 1180px) {
@@ -992,6 +1623,7 @@ onMounted(async () => {
 @media (max-width: 960px) {
   .adviser-filter-grid,
   .adviser-summary-grid,
+  .student-report-grid,
   .distribution-grid,
   .split-grid {
     grid-template-columns: 1fr;

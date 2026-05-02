@@ -45,6 +45,7 @@ class ScoreImportBatch(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     __tablename__ = "score_import_batch"
 
     exam_id: Mapped[int] = mapped_column(ForeignKey("exam.id"), nullable=False)
+    profile_id: Mapped[int | None] = mapped_column(ForeignKey("score_import_profile.id"), nullable=True)
     source_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     import_time: Mapped[datetime] = mapped_column(
         DateTime(timezone=False), default=datetime.now, nullable=False
@@ -54,9 +55,27 @@ class ScoreImportBatch(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     failed_rows: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     status: Mapped[str] = mapped_column(String(30), default="processing", nullable=False)
     error_report_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    detection_summary_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     exam = relationship("Exam")
+    profile = relationship("ScoreImportProfile")
     records = relationship("ScoreRecord", back_populates="import_batch")
+
+
+class ScoreImportProfile(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "score_import_profile"
+    __table_args__ = (UniqueConstraint("name", name="uq_score_import_profile_name"),)
+
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    layout_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    sheet_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    header_row: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    field_mapping_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    subject_mapping_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    subject_score_type_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    ignored_columns_json: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    metadata_mapping_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class ScoreRecord(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
@@ -67,6 +86,9 @@ class ScoreRecord(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     student_id: Mapped[int] = mapped_column(ForeignKey("student.id"), nullable=False)
     subject_id: Mapped[int] = mapped_column(ForeignKey("subject.id"), nullable=False)
     score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    original_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    converted_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    score_value_type: Mapped[str] = mapped_column(String(20), default="original", nullable=False)
     score_status: Mapped[str] = mapped_column(String(30), default="normal", nullable=False)
     raw_text: Mapped[str | None] = mapped_column(String(100), nullable=True)
     import_batch_id: Mapped[int | None] = mapped_column(ForeignKey("score_import_batch.id"), nullable=True)
@@ -78,6 +100,61 @@ class ScoreRecord(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     import_batch = relationship("ScoreImportBatch", back_populates="records")
 
 
+class ScoreClassMapping(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "score_class_mapping"
+    __table_args__ = (UniqueConstraint("exam_id", "source_class_name", name="uq_score_class_mapping"),)
+
+    exam_id: Mapped[int] = mapped_column(ForeignKey("exam.id"), nullable=False)
+    source_class_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    mapped_class_id: Mapped[int | None] = mapped_column(ForeignKey("school_class.id"), nullable=True)
+    mapping_status: Mapped[str] = mapped_column(String(30), default="mapped", nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    exam = relationship("Exam")
+    mapped_class = relationship("SchoolClass")
+
+
+class ScoreExamStudentContext(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "score_exam_student_context"
+    __table_args__ = (UniqueConstraint("exam_id", "student_id", name="uq_score_exam_student_context"),)
+
+    exam_id: Mapped[int] = mapped_column(ForeignKey("exam.id"), nullable=False)
+    student_id: Mapped[int] = mapped_column(ForeignKey("student.id"), nullable=False)
+    source_class_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    mapped_class_id: Mapped[int | None] = mapped_column(ForeignKey("school_class.id"), nullable=True)
+    source_student_no: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    source_exam_no: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    source_total_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source_class_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_school_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_grade_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_row_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    mapping_status: Mapped[str] = mapped_column(String(30), default="mapped", nullable=False)
+    raw_meta_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    exam = relationship("Exam")
+    student = relationship("Student")
+    mapped_class = relationship("SchoolClass")
+
+
+class ScoreTargetLine(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "score_target_line"
+    __table_args__ = (UniqueConstraint("exam_id", "name", name="uq_score_target_line_exam_name"),)
+
+    exam_id: Mapped[int] = mapped_column(ForeignKey("exam.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    line_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    score_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rank_value: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    near_margin_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    near_margin_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    exam = relationship("Exam")
+
+
 class ScoreTotalSnapshot(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     __tablename__ = "score_total_snapshot"
     __table_args__ = (UniqueConstraint("exam_id", "student_id", name="uq_score_total_snapshot"),)
@@ -85,6 +162,7 @@ class ScoreTotalSnapshot(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     exam_id: Mapped[int] = mapped_column(ForeignKey("exam.id"), nullable=False)
     student_id: Mapped[int] = mapped_column(ForeignKey("student.id"), nullable=False)
     total_score: Mapped[float] = mapped_column(Float, nullable=False)
+    score_value_type: Mapped[str] = mapped_column(String(20), default="original", nullable=False)
     class_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
     grade_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
     class_percentile: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -108,6 +186,9 @@ class ScoreSubjectSnapshot(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     student_id: Mapped[int] = mapped_column(ForeignKey("student.id"), nullable=False)
     subject_id: Mapped[int] = mapped_column(ForeignKey("subject.id"), nullable=False)
     score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    original_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    converted_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    score_value_type: Mapped[str] = mapped_column(String(20), default="original", nullable=False)
     class_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
     grade_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
     class_percentile: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -118,4 +199,3 @@ class ScoreSubjectSnapshot(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     exam = relationship("Exam")
     student = relationship("Student")
     subject = relationship("Subject")
-

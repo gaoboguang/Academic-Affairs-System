@@ -81,30 +81,30 @@ function handleSelect(path: string): void {
 .layout-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 252px minmax(0, 1fr);
-  gap: 18px;
-  padding: 18px;
-  max-width: 1680px;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  gap: 0;
+  max-width: 1920px;
   margin: 0 auto;
+  background: var(--bg-layout);
 }
 
 .side-panel {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding: 20px 16px;
-  border-radius: 24px;
-  background: linear-gradient(180deg, #1f3548 0%, #233b50 100%);
-  color: #eef4fa;
-  box-shadow: 0 18px 42px rgba(26, 43, 62, 0.16);
+  padding: 18px 14px;
+  border-right: 1px solid #e5eaf2;
+  background: #001529;
+  color: #f0f5ff;
   position: sticky;
-  top: 18px;
-  max-height: calc(100vh - 36px);
+  top: 0;
+  max-height: 100vh;
   overflow: hidden;
 }
 
 .brand-block {
-  padding: 4px 4px 0;
+  padding: 4px 6px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
 }
 
 .brand-row {
@@ -114,26 +114,27 @@ function handleSelect(path: string): void {
 }
 
 .brand-mark {
-  width: 42px;
-  height: 42px;
+  width: 38px;
+  height: 38px;
   display: grid;
   place-items: center;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #f0c58d, #f7e2bf);
-  color: #20364a;
+  border-radius: 8px;
+  background: #1677b3;
+  color: #fff;
   font-size: 18px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .brand-copy h1 {
   margin: 0;
-  font-size: 22px;
-  font-weight: 760;
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 1.25;
 }
 
 .brand-copy p {
   margin: 6px 0 0;
-  color: rgba(224, 233, 241, 0.74);
+  color: rgba(240, 245, 255, 0.62);
   line-height: 1.55;
   font-size: 13px;
 }
@@ -146,10 +147,10 @@ function handleSelect(path: string): void {
 }
 
 .brand-meta span {
-  padding: 6px 10px;
-  border-radius: 999px;
+  padding: 5px 8px;
+  border-radius: 6px;
   background: rgba(255, 255, 255, 0.08);
-  color: rgba(236, 243, 249, 0.86);
+  color: rgba(240, 245, 255, 0.76);
   font-size: 12px;
 }
 
@@ -171,13 +172,13 @@ function handleSelect(path: string): void {
 }
 
 .nav-section-head strong {
-  color: rgba(245, 249, 252, 0.96);
+  color: rgba(240, 245, 255, 0.86);
   font-size: 13px;
 }
 
 .nav-section-head p {
   margin: 6px 0 0;
-  color: rgba(198, 211, 223, 0.64);
+  color: rgba(240, 245, 255, 0.45);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -192,25 +193,23 @@ function handleSelect(path: string): void {
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 11px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(236, 243, 249, 0.86);
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(240, 245, 255, 0.72);
   text-align: left;
   cursor: pointer;
-  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+  transition: background 0.18s ease, color 0.18s ease;
 }
 
 .nav-link:hover {
-  transform: translateY(-1px);
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
 }
 
 .nav-link.active {
-  background: linear-gradient(135deg, rgba(240, 197, 141, 0.18), rgba(255, 255, 255, 0.1));
-  border-color: rgba(240, 197, 141, 0.24);
+  background: #1677b3;
   color: #ffffff;
 }
 
@@ -224,7 +223,7 @@ function handleSelect(path: string): void {
   min-width: 0;
   display: grid;
   align-content: start;
-  gap: 18px;
+  gap: 0;
 }
 
 .content-topbar {
@@ -232,15 +231,16 @@ function handleSelect(path: string): void {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 20px;
-  border-radius: 22px;
-  border: 1px solid rgba(112, 127, 141, 0.12);
-  background: rgba(255, 255, 255, 0.68);
-  box-shadow: 0 10px 24px rgba(35, 56, 81, 0.05);
-  backdrop-filter: blur(8px);
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border-soft);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 2px 8px rgba(22, 34, 61, 0.04);
   width: 100%;
-  max-width: 1480px;
+  max-width: none;
   margin: 0 auto;
+  position: sticky;
+  top: 0;
+  z-index: 9;
 }
 
 .content-topbar-copy {
@@ -249,43 +249,42 @@ function handleSelect(path: string): void {
 }
 
 .content-topbar-label {
-  color: #72859a;
+  color: var(--text-soft);
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 .content-topbar-copy strong {
-  color: #1e3448;
-  font-size: 22px;
+  color: var(--text-main);
+  font-size: 18px;
+  font-weight: 650;
 }
 
 .content-topbar-copy p {
   margin: 0;
-  color: #65798b;
+  color: var(--text-muted);
   line-height: 1.55;
 }
 
 .content-topbar-hint {
   max-width: 320px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: rgba(250, 251, 253, 0.88);
-  border: 1px solid rgba(112, 127, 141, 0.12);
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-soft);
 }
 
 .content-topbar-hint span {
-  color: #7a8c9b;
+  color: var(--text-soft);
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 .content-topbar-hint p {
-  margin: 8px 0 0;
-  color: #617486;
+  margin: 6px 0 0;
+  color: var(--text-muted);
   line-height: 1.55;
   font-size: 13px;
 }
@@ -298,6 +297,7 @@ function handleSelect(path: string): void {
   display: grid;
   align-content: start;
   gap: 18px;
+  padding: 24px;
 }
 
 @media (max-width: 960px) {
@@ -305,8 +305,14 @@ function handleSelect(path: string): void {
     grid-template-columns: 1fr;
   }
 
+  .side-panel {
+    position: static;
+    max-height: none;
+  }
+
   .content-topbar {
     flex-direction: column;
+    position: static;
   }
 
   .content-topbar-hint {
@@ -317,13 +323,11 @@ function handleSelect(path: string): void {
 
 @media (max-width: 640px) {
   .layout-shell {
-    padding: 12px;
     gap: 12px;
   }
 
-  .side-panel,
-  .content-topbar {
-    border-radius: 18px;
+  .content-stage {
+    padding: 14px;
   }
 }
 </style>

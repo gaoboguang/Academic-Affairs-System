@@ -2,6 +2,66 @@
 
 ## 当前状态
 
+- 2026-05-02 已完成全项目企业级中后台 UI 第一轮重构：
+  - 前端新增共享 UI 基础层 `apps/frontend/src/components/ui/`：`AppPage`、`AppFilterBar`、`AppStatGrid`、`AppStatCard`、`AppSectionCard`、`AppTableShell`、`AppPrintLayout` 与共享展示类型
+  - `apps/frontend/src/styles.css` 已拆为 `styles/tokens.css`、`base.css`、`admin.css`、`element-plus.css`、`print.css`，用统一 tokens 收敛颜色、字号、圆角、阴影、表格、Tabs、打印页和历史 `overview/stat` 类
+  - `apps/frontend/src/layouts/AppLayout.vue` 改为更接近 Ant Design Pro 的深色侧边导航 + 顶部上下文栏 + 内容 PageContainer，仍保留本地教务中文语境
+  - `apps/frontend/src/pages/AnalyticsPage.vue` 已重点落地：标题下方 sticky 全局考试筛选、Row/Col 指标卡、Tabs 容器、名次审计卡片、班主任风险 Tag 和建议动作按钮组
+  - `DashboardPage`、`StudentsPage`、`ReportsPage` 已接入 `AppPage` 页面容器；其他页面先通过全局 tokens、Element Plus 覆盖和历史类兼容获得统一后台风格
+  - 打印页已接入统一全局 `print.css`，保留各打印页现有业务模板，统一 A4、标题、摘要卡、表格、分页和打印隐藏规则
+  - 本轮不修改后端 API、数据库、业务计算或路由路径；未写真实 `data/app.db`
+  - 当前已通过：`npm run frontend:lint`、`npm run frontend:test`（38 files / 188 tests）、`npm run frontend:build`、`npm run e2e -- tests/e2e/exams-analytics.spec.ts tests/e2e/adviser-dashboard.spec.ts`（4 passed）、`npm run e2e -- tests/e2e/dashboard.spec.ts tests/e2e/students.spec.ts tests/e2e/reports.spec.ts tests/e2e/recommendations.spec.ts tests/e2e/gaokao-volunteer.spec.ts`（28 passed）
+  - 待最终：按用户要求仍需跑完整 `npm run check:all`
+
+- 2026-05-02 已完成个人成绩分析报告 V1：
+  - `GET /api/analytics/students/{student_id}?exam_id=...` 在原有字段基础上新增目标线差距、总分画像、Z-Score、T-Score、排名离差、同档均分差、历史排名波动、有效分差距、诊断标签、近 5 次趋势和行动建议
+  - 本轮不新增迁移；PR 值继续复用 `score_total_snapshot` / `score_subject_snapshot` 的 `grade_percentile`，标准分、同档群体、有效分和行动建议均按现有快照即时计算
+  - 排名离差统一为 `总分校内名次 - 单科校内名次`，负数为拖后腿，正数为优势；小样本测试场景会按样本量收缩诊断阈值，真实大样本仍按更宽的名次差距判断
+  - 有效分只使用已配置目标线：优先 `score_value`，只有 `rank_value` 时按该名次内最低总分推导；各科拆分按该生实考科目的年级均分贡献比例计算
+  - 分析中心“学生分析”升级为个人报告视图：核心概况、PR/T 分相对位置条、偏科诊断表、趋势轨迹和行动建议；打印页同步升级四段式报告；Excel 学生成绩分析单新增 `核心概况 / 学科诊断 / 趋势轨迹 / 行动建议`
+  - 新增测试：`apps/backend/tests/test_student_analysis_report_v1.py`、`apps/frontend/tests/student-report.test.ts`
+  - 验证：后端相关 `15 passed`；前端全量 `38 files / 188 tests passed`；`frontend:lint`、`frontend:build`、考试/分析 E2E `3 passed` 均通过
+
+- 2026-05-02 已完成成绩赋分前 / 赋分后口径补强与真实库校验：
+  - 新增迁移 `20260502_0025_score_conversion_fields.py`，为 `score_record`、`score_subject_snapshot` 保存 `original_score`、`converted_score`、`score_value_type`，为 `score_total_snapshot` 保存总分口径，并为平台模板保存 `subject_score_type_json`
+  - 成绩智能导入现在能识别同一科目的 `原始分 / 原始成绩 / 卷面分` 与 `赋分 / 等级分 / 等级成绩`，宽表同科多列会合并成一条科目成绩；有赋分时 `score` 用赋分，没有赋分时用原始分
+  - 学生详情和学生分析展示成绩口径；学生详情成绩摘要展开分科时只展示最终分数并标注 `赋分` 或 `原始分`
+  - 标准成绩模板新增可选列 `原始分 / 赋分 / 成绩口径`，旧模板仍兼容
+  - 真实 `data/app.db` 已先备份到 `data/backups/app_before_score_conversion_fields_20260502_103856.db`，再迁移到 `20260502_0025`
+  - 真实数据已回填：一模 `2983` 条、二模 `2988` 条记录标记为 `converted`；高二期末 `1539` 条保持 `original`；2 月期末 `1492` 条为 `converted`、`1467` 条为 `original`，其中总分快照 `507` 个为赋分口径、`1` 个为原始分口径
+  - 数据校验：4 场考试 `score_record` 与 `score_subject_snapshot` 数量一致，单科快照字段与原始成绩记录一致，总分快照与计入总分科目求和一致，班级名次边界无异常，2 月期末源总赋分与系统总分 `0` 差异，SQLite 完整性 `ok`
+  - 验证：新增后端赋分导入测试后相关后端 `16 passed`；前端映射单测 `3 passed`；`frontend:lint`、`frontend:build`、考试/分析 E2E `3 passed`、临时空库迁移、`git diff --check` 均通过
+
+- 2026-05-02 已完成成绩分析增强与名次口径修正：
+  - 新增考试时点归属数据域 `score_exam_student_context`、源班级映射表 `score_class_mapping`、目标线表 `score_target_line`，迁移为 `20260502_0024_score_rank_context.py`
+  - 成绩快照重建已改为优先按考试源班级 / 映射班级计算班级名次；学生当前班级只作为没有考试归属时的兜底
+  - 成绩导入识别现在保留平台原始总分、班级名次、学校/年级名次、源学籍号和考号，系统仍按本次有效导入样本重算本地名次
+  - 新增接口：`GET /api/exams/{exam_id}/score-rank-audit`、`PUT /api/exams/{exam_id}/score-class-mappings`、`POST /api/exams/{exam_id}/scores/rebuild-snapshots`、`GET/PUT /api/exams/{exam_id}/score-target-lines`
+  - 年级分析新增目标线、达线率、临界学生、班级贡献、学科攻坚和排名可信度摘要；前端分析中心新增名次口径审计和按考试时点重建快照按钮
+  - 真实 `data/app.db` 已在备份 `data/backups/app_before_score_rank_context_20260502_100615.db` 后迁移到 `20260502_0024`，并重建 4 场真实考试快照：一模 506、二模 501、高二期末 171、2 月期末 508；4 场映射率均为 100%，主库完整性 `ok`
+  - 验证：后端新增/相关定向 `15 passed`；智能导入单测 `5 passed`；前端映射单测 `3 passed`；考试/分析 E2E `3 passed`；`frontend:lint`、`frontend:build`、临时空库迁移、`git diff --check` 均通过
+  - 边界：本轮未做小题、知识点、错题本；未匹配学生仍需后续先建立平台编号到系统学号的人工映射后再补导；“校内名次”只代表本次导入有效样本，不等同平台完整省市排名
+
+- 2026-05-01 已完成成绩单智能识别与导入适配首版：
+  - 后端新增 `score_import_profile` 平台模板表与迁移 `20260501_0023_score_import_profiles.py`，`score_import_batch` 记录 `profile_id` 和 `detection_summary_json`；真实 `data/app.db` 已在备份后迁移到 `20260501_0023`
+  - 新增 `apps/backend/app/importers/score_layouts.py`，支持 Excel/CSV 自动识别表头行、工作表、宽表/长表、学号/姓名/班级/科目/分数列，并把平台成绩单规范化为现有标准成绩行
+  - 标准模板导入保持兼容；新接口 `POST /api/exams/{exam_id}/scores/import/preview` 只预览不写库，`POST /api/exams/{exam_id}/scores/import` 支持 `mapping_json/profile_id/save_profile_name`，`GET /api/exams/score-import-profiles` 列出已保存模板
+  - 前端考试成绩中心的“导入成绩”弹窗改为“上传识别 / 确认映射 / 导入结果”三步，支持选择平台模板、人工调整字段和科目映射、保存模板；保留“按统一模板导入”
+  - 已用真实二模文件 `/Users/gao/Desktop/等级分_[冠县洪范高中高三]学生总成绩报表.xls` 试跑：识别为宽表、表头第 4 行、置信度 0.97；因平台学籍号/考生号与系统学号不一致，本次仅导入唯一姓名匹配的 501 名学生，写入 `202604高三二模`（exam_id=2）成绩 2,988 条，重建总分快照 501 条、单科快照 2,988 条
+  - 导入前备份：`data/backups/app_before_202604_second_mock_score_import_20260501_224304_post_migrate.db`；生成标准化导入表 `data/imports/scores/202604_second_mock_standardized_20260501_2243_01.xlsx`，未匹配名单 `data/logs/202604_second_mock_unresolved_students_20260501_2243_01.xlsx`，导入摘要 `data/logs/202604_second_mock_import_summary_20260501_2243_01.json`
+  - 已用真实一模文件 `/Users/gao/Desktop/202603高三一模一键分析报表/等级分_[冠县洪范高中高三]学生总成绩报表.xls` 导入既有一模考试：考试改名为 `202603高三一模`（exam_id=1），日期保留 `2026-03-08`，识别为宽表、表头第 4 行、置信度 0.97；唯一姓名匹配 506 名学生，写入成绩 2,983 条，重建总分快照 506 条、单科快照 2,983 条
+  - 一模导入前备份：`data/backups/app_before_202603_first_mock_score_import_20260501_232521.db`；生成标准化导入表 `data/imports/scores/202603_first_mock_standardized_20260501_232521.xlsx`，未匹配名单 `data/logs/202603_first_mock_unresolved_students_20260501_232521.xlsx`，导入摘要 `data/logs/202603_first_mock_import_summary_20260501_232521.json`
+  - 已导入同一批学生高二期末历史成绩文件 `/Users/gao/Library/Containers/com.tencent.xinWeChat/Data/Documents/xwechat_files/wxid_68te2g4tpzft22_2f57/temp/drag/2024-2025学年第一学期高二期末考试-校级报告-学生成绩-1.综合成绩表.xlsx`：新增 `2024-2025` 学年上学期和考试 `2024-2025学年第一学期高二期末考试`（exam_id=3），文件未提供具体考试日，按上学期期末默认使用 `2025-01-20`；因这是当前高三 cohort 的历史成绩，`grade_scope_json=[3]`
+  - 高二期末导入唯一姓名匹配 171 名学生，写入成绩 1,539 条，其中缺考 533 条、跳过未选科 171 格；重建总分快照 171 条、单科快照 1,539 条；未匹配 7 行需后续人工映射
+  - 高二期末导入前备份：`data/backups/app_before_202501_h2_final_score_import_20260501_233548.db`；生成标准化导入表 `data/imports/scores/202501_h2_final_standardized_20260501_233548.xlsx`，未匹配名单 `data/logs/202501_h2_final_unresolved_students_20260501_233548.xlsx`，导入摘要 `data/logs/202501_h2_final_import_summary_20260501_233548.json`
+  - 已导入 2026 年 2 月高三期末成绩：源文件采用 `/Users/gao/Desktop/综合成绩表-总分-聊城洪范高级中学-高三期末考试（成绩导入）-山东新高考“33”赋分报告.xlsx`，新增考试 `2026年2月高三期末考试`（exam_id=4，日期 `2026-02-28`，状态 `published`）；源文件未提供具体考试日，按用户说明“2026 年 2 月份”记录
+  - 2 月期末按赋分报告口径导入：语文/数学/英语/日语取原始分，物理/化学/生物/政治/历史/地理取赋分；唯一姓名匹配 508 名学生，写入成绩 2,959 条，重建总分快照 508 条、单科快照 2,959 条；未匹配 14 行需后续人工映射（系统无同名主档 12 行、系统同名不唯一 2 行）
+  - 2 月期末导入前备份：`data/backups/app_before_202602_final_score_import_20260501_235143.db`；生成标准化导入表 `data/imports/scores/202602_final_standardized_20260501_235355.xlsx`，未匹配名单 `data/logs/202602_final_unresolved_students_20260501_235355.xlsx`，导入摘要 `data/logs/202602_final_import_summary_20260501_235355.json`
+  - 已按同一二模表完成高三当前班级重分配：`2301`-`2313` 映射为 `202301`-`202313`，新建/复用高三 `未分班` 班；803 名高三在籍学生全部有当前班级，其中 501 人按表入班、302 人入 `未分班`；按用户要求未写 `student_class_transfer_*` 和 `student_class_history` 调班历史
+  - 分班备份：`data/backups/app_before_class_reassign_20260501_230900.db`；分班明细 `data/logs/class_reassign_202604_second_mock_20260501_230900.xlsx`，摘要 `data/logs/class_reassign_202604_second_mock_20260501_230900.json`
+  - 已验证：新增后端智能导入 `3 passed`、原考试工作流 `8 passed`、成绩分析/导入中心相关 `3 passed`、合并后端定向 `11 passed`、前端映射单测 `3 passed`、`frontend:lint`、`frontend:build`、临时空库 `alembic upgrade head`、`git diff --check`；2 月期末导入后真实主库完整性仍为 `ok`，年级分析冒烟可读，合并后端定向 `11 passed`
+  - 边界：首版只支持 Excel/CSV；PDF、图片、OCR 不做；缺学号/考号列会阻断导入，避免按姓名误匹配；本次未匹配/同名学生需后续人工补系统学号映射后再补导；2026-05-02 起总分/名次列已保留为核对元数据，历史班级分析已改按考试时点班级口径
+
 - 2026-04-28 已按用户“高考志愿界面重设计计划”完成 `/recommendations` 第一轮重设计：
   - 首屏标题和导航改为“高考志愿工作台”，默认进入“学生志愿工作台”，页面顶层收成 `工作台 / 历史方案 / 数据与规则 / 数据健康` 四个分区，不再把院校库、专业库、计划库、录取库、规则字典等维护能力铺满首屏
   - 工作台首屏新增紧凑条件栏和三块核心状态：学生画像与偏好、候选池/冲稳保、志愿草稿篮；旧推荐生成、策略、山东普通类推荐仍保留为工作台内二级入口

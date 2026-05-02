@@ -1,25 +1,14 @@
 <template>
-  <div class="page-shell">
-    <header class="page-header">
-      <div>
-        <div class="page-eyebrow">输出中心 / 报表工作流</div>
-        <h2 class="page-title">输出中心</h2>
-        <p class="page-subtitle">
-          按业务域选择交付物，生成前先看用途、必要参数、数据来源、导出格式和风险标签。
-        </p>
-        <div class="page-chip-row">
-          <span class="page-chip"><strong>报表类型</strong>{{ reportTypeOptions.length }}</span>
-          <span class="page-chip"><strong>当前类型</strong>{{ currentReportTypeLabel }}</span>
-          <span class="page-chip"><strong>导出记录</strong>{{ exportRecords.length }}</span>
-          <span class="page-chip"><strong>推荐方案</strong>{{ recommendationOptions.length }}</span>
-          <span class="page-chip"><strong>志愿草稿</strong>{{ volunteerDraftOptions.length }}</span>
-        </div>
-      </div>
-      <div class="action-row">
+  <AppPage
+    title="输出中心"
+    eyebrow="输出中心 / 报表工作流"
+    description="按业务域选择交付物，生成前先看用途、必要参数、数据来源、导出格式和风险标签。"
+    :meta="reportsPageMeta"
+  >
+    <template #actions>
         <el-button :loading="optionsLoading" @click="loadOptions">刷新选项</el-button>
         <el-button type="primary" plain :loading="recordsLoading" @click="loadExportRecords">刷新记录</el-button>
-      </div>
-    </header>
+    </template>
 
     <el-alert
       v-if="pageLoadError"
@@ -273,7 +262,7 @@
         description="暂无导出记录。请先在上方选择报表类型并补齐参数，再点击“生成报表”。"
       />
     </section>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
@@ -283,6 +272,7 @@ import ElMessage from "element-plus/es/components/message/index";
 
 import { apiRequest, openFile } from "../api/client";
 import ReportInsightPanel from "../components/reports/ReportInsightPanel.vue";
+import { AppPage } from "../components/ui";
 import {
   createEmptyReportInsightDataState,
   fetchReportInsightData,
@@ -435,6 +425,13 @@ const currentRuleOptions = computed(() =>
 const printPreviewPath = computed(() => getReportPrintPreviewPath(form));
 const supportsPrintPreview = computed(() => Boolean(printPreviewPath.value));
 const currentReportTypeLabel = computed(() => getReportTypeLabel(form.report_type));
+const reportsPageMeta = computed(() => [
+  { label: "报表类型", value: reportTypeOptions.length },
+  { label: "当前类型", value: currentReportTypeLabel.value },
+  { label: "导出记录", value: exportRecords.value.length },
+  { label: "推荐方案", value: recommendationOptions.value.length },
+  { label: "志愿草稿", value: volunteerDraftOptions.value.length },
+]);
 const missingRequiredFields = computed(() => getMissingRequiredReportFields(form));
 const missingRequiredFieldsMessage = computed(() => getMissingRequiredReportFieldsMessage(form));
 const scoreReportGuardMessages = computed(() =>

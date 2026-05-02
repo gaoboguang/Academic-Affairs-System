@@ -1,0 +1,144 @@
+.el-button {
+  min-height: 34px;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+}
+
+.el-button.is-link {
+  min-height: auto;
+  padding: 0;
+}
+
+.el-input__wrapper,
+.el-select__wrapper,
+.el-textarea__inner,
+.el-date-editor.el-input__wrapper,
+.el-date-editor.el-range-editor.el-input__wrapper {
+  border-radius: var(--radius-sm);
+}
+
+.el-input__wrapper,
+.el-select__wrapper,
+.el-date-editor.el-input__wrapper,
+.el-date-editor.el-range-editor.el-input__wrapper {
+  min-height: 36px;
+  padding: 0 11px;
+  box-shadow: 0 0 0 1px var(--border-soft) inset;
+}
+
+.el-input-number {
+  width: 100%;
+}
+
+.el-input-number .el-input__wrapper {
+  min-height: 36px;
+}
+
+.el-icon,
+.el-input__icon,
+.el-select__caret,
+.el-radio__inner,
+.el-checkbox__inner,
+.el-collapse-item__arrow {
+  width: 1em;
+  height: 1em;
+  font-size: 14px;
+}
+
+.el-alert {
+  border-radius: var(--radius-md);
+}
+
+.el-tabs__header {
+  margin: 0 0 var(--space-md);
+}
+
+.el-tabs__nav-wrap::after {
+  height: 1px;
+  background: var(--border-soft);
+}
+
+.el-tabs__nav-scroll {
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+.el-tabs__nav {
+  gap: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.el-tabs__item {
+  height: 42px;
+  padding: 0 18px !important;
+  border-radius: 0;
+  color: var(--text-muted);
+  transition: color 0.2s ease;
+}
+
+.el-tabs__item.is-active {
+  color: var(--accent-primary) !important;
+  background: transparent;
+  box-shadow: none;
+}
+
+.el-tabs__active-bar {
+  display: block;
+  height: 2px;
+  background: var(--accent-primary);
+}
+
+.el-upload {
+  display: inline-flex;
+}
+
+.el-table {
+  --el-table-border-color: var(--border-soft);
+  --el-table-header-bg-color: #f7f9fc;
+  --el-table-row-hover-bg-color: #f5f9fc;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+
+.el-table th.el-table__cell {
+  color: var(--text-muted);
+  font-weight: 650;
+}
+
+.el-table .cell {
+  line-height: 1.5;
+}
+
+.el-tag {
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+}
+
+.el-card {
+  border-radius: var(--radius-lg);
+}
+
+.el-dialog {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.el-form-item {
+  margin-bottom: 18px;
+}
+
+.el-dialog__header {
+  margin-right: 0;
+  padding: 20px 24px 8px;
+}
+
+.el-dialog__body {
+  padding: 18px 24px 8px;
+}
+
+.el-dialog__footer {
+  padding: 8px 24px 24px;
+}

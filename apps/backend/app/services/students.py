@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections import defaultdict
 from datetime import date, datetime
 from zipfile import BadZipFile
 
@@ -66,6 +67,7 @@ from app.schemas.student import (
     StudentClassTransferPreviewItem,
     StudentClassTransferPreviewRequest,
     StudentClassTransferPreviewResponse,
+    StudentExamSubjectItem,
     StudentExamTrendItem,
     StudentGuardianPayload,
     StudentGuardianRead,
@@ -1482,6 +1484,10 @@ def _serialize_class_histories(
     ]
 
 
+def _score_value_label(score_value_type: str | None) -> str:
+    return "赋分" if score_value_type == "converted" else "原始分"
+
+
 def _load_student_exam_trends(session: Session, student_id: int, *, limit: int) -> list[StudentExamTrendItem]:
     rows = session.execute(
         select(ScoreTotalSnapshot, Exam)
@@ -1490,16 +1496,42 @@ def _load_student_exam_trends(session: Session, student_id: int, *, limit: int) 
         .order_by(Exam.exam_date.desc(), Exam.id.desc())
         .limit(limit)
     ).all()
+    exam_ids = [exam.id for _, exam in rows]
+    subject_rows = session.execute(
+        select(ScoreSubjectSnapshot, Subject)
+        .join(Subject, Subject.id == ScoreSubjectSnapshot.subject_id)
+        .where(
+            ScoreSubjectSnapshot.student_id == student_id,
+            ScoreSubjectSnapshot.exam_id.in_(exam_ids),
+        )
+        .order_by(ScoreSubjectSnapshot.exam_id, ScoreSubjectSnapshot.subject_id)
+    ).all() if exam_ids else []
+    subjects_by_exam: dict[int, list[StudentExamSubjectItem]] = defaultdict(list)
+    for snapshot, subject in subject_rows:
+        subjects_by_exam[snapshot.exam_id].append(
+            StudentExamSubjectItem(
+                subject_id=snapshot.subject_id,
+                subject_name=subject.name if subject else str(snapshot.subject_id),
+                score=snapshot.score,
+                score_value_type=snapshot.score_value_type,
+                score_value_label=_score_value_label(snapshot.score_value_type),
+                class_rank=snapshot.class_rank,
+                grade_rank=snapshot.grade_rank,
+            )
+        )
     return [
         StudentExamTrendItem(
             exam_id=exam.id,
             exam_name=exam.name,
             exam_date=exam.exam_date,
             total_score=snapshot.total_score,
+            score_value_type=snapshot.score_value_type,
+            score_value_label=_score_value_label(snapshot.score_value_type),
             class_rank=snapshot.class_rank,
             grade_rank=snapshot.grade_rank,
             class_percentile=snapshot.class_percentile,
             grade_percentile=snapshot.grade_percentile,
+            subjects=subjects_by_exam.get(exam.id, []),
         )
         for snapshot, exam in rows
     ]
@@ -1524,6 +1556,8 @@ def _build_performance_summary(
         latest_exam_name=latest.exam_name if latest else None,
         latest_exam_date=latest.exam_date if latest else None,
         latest_total_score=latest.total_score if latest else None,
+        latest_score_value_type=latest.score_value_type if latest else None,
+        latest_score_value_label=latest.score_value_label if latest else None,
         latest_class_rank=latest.class_rank if latest else None,
         latest_grade_rank=latest.grade_rank if latest else None,
         exam_count=exam_count,

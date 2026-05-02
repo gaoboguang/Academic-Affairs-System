@@ -2,6 +2,8 @@ import type { App, Component } from "vue";
 import ElAlert from "element-plus/es/components/alert/index";
 import ElAutocomplete from "element-plus/es/components/autocomplete/index";
 import ElButton from "element-plus/es/components/button/index";
+import ElCard from "element-plus/es/components/card/index";
+import ElCol from "element-plus/es/components/col/index";
 import ElDatePicker from "element-plus/es/components/date-picker/index";
 import ElDialog from "element-plus/es/components/dialog/index";
 import ElDrawer from "element-plus/es/components/drawer/index";
@@ -12,6 +14,8 @@ import ElInputNumber from "element-plus/es/components/input-number/index";
 import { ElMenu, ElMenuItem } from "element-plus/es/components/menu/index";
 import ElPagination from "element-plus/es/components/pagination/index";
 import { ElRadioButton, ElRadioGroup } from "element-plus/es/components/radio/index";
+import ElRow from "element-plus/es/components/row/index";
+import ElSegmented from "element-plus/es/components/segmented/index";
 import { ElOption, ElSelect } from "element-plus/es/components/select/index";
 import ElSwitch from "element-plus/es/components/switch/index";
 import { ElTabPane, ElTabs } from "element-plus/es/components/tabs/index";
@@ -23,6 +27,8 @@ const components: Component[] = [
   ElAlert,
   ElAutocomplete,
   ElButton,
+  ElCard,
+  ElCol,
   ElDatePicker,
   ElDialog,
   ElDrawer,
@@ -37,6 +43,8 @@ const components: Component[] = [
   ElPagination,
   ElRadioButton,
   ElRadioGroup,
+  ElRow,
+  ElSegmented,
   ElSelect,
   ElSwitch,
   ElTabPane,

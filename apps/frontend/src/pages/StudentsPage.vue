@@ -1,26 +1,15 @@
 <template>
-  <div class="page-shell">
-    <header class="page-header">
-      <div>
-        <div class="page-eyebrow">基础台账 / 学生中心</div>
-        <h2 class="page-title">学生中心</h2>
-        <p class="page-subtitle">
-          当前支持学生列表、详情页、模板下载、批量导入和 Excel 导出。学生状态、类别、艺体方向和生源地会一起沉到学生主档。
-        </p>
-        <div class="page-chip-row">
-          <span class="page-chip"><strong>学生总数</strong>{{ students.total }}</span>
-          <span class="page-chip"><strong>当前页记录</strong>{{ students.items.length }}</span>
-          <span class="page-chip"><strong>已选学生</strong>{{ selectedRows.length }}</span>
-          <span class="page-chip"><strong>启用筛选</strong>{{ activeFilterCount }}</span>
-          <span class="page-chip"><strong>导入策略</strong>{{ importStrategyLabel }}</span>
-        </div>
-      </div>
-      <div class="action-row">
+  <AppPage
+    title="学生中心"
+    eyebrow="基础台账 / 学生中心"
+    description="当前支持学生列表、详情页、模板下载、批量导入和 Excel 导出。学生状态、类别、艺体方向和生源地会一起沉到学生主档。"
+    :meta="studentPageMeta"
+  >
+    <template #actions>
         <el-button @click="openFile('/api/students/template')">模板下载</el-button>
         <el-button @click="openFile('/api/students/export')">导出列表</el-button>
         <el-button type="primary" @click="openCreate">新增学生</el-button>
-      </div>
-    </header>
+    </template>
 
     <section class="overview-grid">
       <article class="soft-card overview-panel">
@@ -290,7 +279,7 @@
       :class-options="referenceStore.classes"
       @completed="handleClassTransferCompleted"
     />
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
@@ -304,6 +293,7 @@ import { apiRequest, openFile, uploadFile } from "../api/client";
 import ImportFeedbackPanel from "../components/common/ImportFeedbackPanel.vue";
 import StudentBulkDeleteDialog from "../components/students/StudentBulkDeleteDialog.vue";
 import StudentClassTransferDialog from "../components/students/StudentClassTransferDialog.vue";
+import { AppPage } from "../components/ui";
 import { useReferenceStore } from "../stores/reference";
 import type { ImportFeedbackResult } from "../utils/importFeedback";
 
@@ -392,6 +382,13 @@ const importStrategyLabel = computed(() => {
   };
   return mapping[importStrategy.value] ?? importStrategy.value;
 });
+const studentPageMeta = computed(() => [
+  { label: "学生总数", value: students.total },
+  { label: "当前页记录", value: students.items.length },
+  { label: "已选学生", value: selectedRows.value.length },
+  { label: "启用筛选", value: activeFilterCount.value },
+  { label: "导入策略", value: importStrategyLabel.value },
+]);
 const selectedStudentIds = computed(() => selectedRows.value.map((student) => student.id));
 const overviewCards = computed(() => [
   {

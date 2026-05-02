@@ -6,6 +6,59 @@
 - 后端与前端基础功能已覆盖多个业务域，README 中已记录到 M0-M6 的实现范围。
 - 后端测试与前端构建在此前环境中已验证通过。
 
+## 2026-05-02 新增
+
+- 已完成个人成绩分析报告 V1：
+  - 学生分析接口新增相对评价指标和诊断输出：总分画像、目标线差距、Z/T 分、排名离差、同档均分差、历史波动、有效分差距、诊断标签、近 5 次趋势和行动建议
+  - 有效分按“年级均分贡献”拆目标线，不新增数据库表；目标线继续复用 `score_target_line`，PR 值继续复用既有快照百分位
+  - 分析中心学生页签升级为个人报告视图，展示核心概况、PR/T 分相对位置条、偏科诊断表、趋势轨迹和行动建议
+  - 学生成绩分析单打印页同步升级为四段式报告；Excel 导出新增 `核心概况 / 学科诊断 / 趋势轨迹 / 行动建议` 工作表并保留原有 `学生分析 / 学科明细 / 摘要概览`
+  - 新增后端测试 `apps/backend/tests/test_student_analysis_report_v1.py` 和前端 helper 测试 `apps/frontend/tests/student-report.test.ts`
+  - 验证：`npm run backend:test -- apps/backend/tests/test_exam_workflow.py apps/backend/tests/test_score_smart_import.py apps/backend/tests/test_student_analysis_report_v1.py -q` 为 `15 passed`；`npm run frontend:test` 为 `38 files / 188 tests passed`；`npm run frontend:lint`、`npm run frontend:build`、`npm run e2e -- tests/e2e/exams-analytics.spec.ts` 均通过
+
+- 已完成成绩赋分前 / 赋分后口径补强：
+  - 新增 Alembic 迁移 `20260502_0025_score_conversion_fields.py`，在原始成绩记录、单科快照和总分快照中保存原始分、赋分和展示 / 计算口径
+  - 成绩导入识别支持 `原始分 / 原始成绩 / 卷面分` 与 `赋分 / 等级分 / 等级成绩`；宽表同一科多个分数列会合并为一条成绩记录，并按“有赋分用赋分、无赋分用原始分”参与总分和名次
+  - 考试成绩中心映射表可人工选择每个科目列的成绩口径；标准成绩模板新增可选列 `原始分 / 赋分 / 成绩口径`
+  - 学生详情和分析中心学生分析已显示成绩口径；学生详情分科展开只展示最终分数并标注 `赋分` 或 `原始分`
+  - 真实主库已备份到 `data/backups/app_before_score_conversion_fields_20260502_103856.db` 并迁移到 `20260502_0025`；一模、二模、2 月期末已从源文件回填原始分 / 赋分字段，高二期末因源表未拆分保持原始分口径
+  - 真实库校验通过：4 场考试快照数与成绩记录数一致，单科快照与成绩记录字段一致，总分快照与科目求和一致，班级名次边界无异常，2 月期末源总赋分与系统总分无差异，SQLite `integrity_check=ok`
+  - 验证：`py_compile` 通过；`test_score_smart_import.py` 单跑 `6 passed`；相关后端合并 `16 passed`；前端映射单测 `3 passed`；`frontend:lint`、`frontend:build`、`tests/e2e/exams-analytics.spec.ts` `3 passed`、临时空库迁移、`git diff --check` 均通过
+
+- 已完成成绩分析增强与名次口径修正：
+  - 新增 Alembic 迁移 `20260502_0024_score_rank_context.py`，落地 `score_class_mapping`、`score_exam_student_context`、`score_target_line`，并为 `score_import_profile` 增加 `metadata_mapping_json`
+  - 新增 `apps/backend/app/analytics/score_contexts.py`，统一解析 `ScoreRecord.note` 与导入元数据，保存考试源班级、映射班级、平台源学籍号/考号、源总分和平台原始名次
+  - `rebuild_exam_snapshots` 已按考试时点班级重算班级名次；班级、教师、年级和全景分析已读取考试时点归属，不再被学生当前分班误导
+  - 成绩导入智能识别保留平台原始总分、班级名次、学校/年级名次、源学籍号和考号；导入时不再因源班级与当前班级不同而失败
+  - 新增名次口径审计、源班级映射保存、按考试时点重建快照、目标线维护接口；年级分析返回达线统计、临界学生、班级贡献和排名可信度摘要
+  - 分析中心页面新增名次口径审计卡、重建成绩快照按钮、目标线配置、达线率、临界样本、班级贡献和临界学生视图；E2E helper 已适配“上传并识别 / 按统一模板导入”双上传入口
+  - 真实主库已备份到 `data/backups/app_before_score_rank_context_20260502_100615.db`，迁移到 `20260502_0024`，并重建 exam_id `1/2/3/4` 快照：`506/501/171/508` 条；4 场考试上下文与总分快照样本一致，映射率均为 `1.0`
+  - 新增/更新测试覆盖平台元数据保留、考试源班级排名、目标线与年级决策分析；验证包括后端定向 `15 passed`、前端映射单测 `3 passed`、考试/分析 E2E `3 passed`、`frontend:lint`、`frontend:build`、临时空库迁移、真实主库完整性 `ok`、`git diff --check`
+
+## 2026-05-01 新增
+
+- 已完成成绩单智能识别与导入适配首版：
+  - 新增平台模板数据域 `score_import_profile`，并让 `score_import_batch` 记录本次使用模板和识别摘要；迁移为 `20260501_0023_score_import_profiles.py`
+  - 新增成绩单识别适配器，支持 Excel/CSV、宽表、长表、非首行表头、科目列识别、总分/名次列核对元数据识别和缺学号阻断
+  - 新增成绩导入预览接口、平台模板列表接口，并扩展成绩导入接口支持 `mapping_json/profile_id/save_profile_name`
+  - 考试成绩中心导入弹窗升级为三步式“上传识别、确认映射、导入结果”，支持平台模板复用和继续按统一模板直接导入
+  - 新增后端测试 `apps/backend/tests/test_score_smart_import.py` 与前端测试 `apps/frontend/tests/score-import-mapping.test.ts`
+  - 真实 `data/app.db` 已备份并迁移到 `20260501_0023`，随后导入真实二模成绩文件 `/Users/gao/Desktop/等级分_[冠县洪范高中高三]学生总成绩报表.xls`
+  - 本次真实导入创建/更新考试 `202604高三二模`（exam_id=2，日期 `2026-04-30`）：原始表识别为宽表、表头第 4 行、置信度 0.97；因平台编号与系统学号不一致，仅导入唯一姓名匹配的 501 名学生，成绩 2,988 条，未导入 17 行学生留待人工映射
+  - 导入后已重建快照：总分快照 501 条、单科快照 2,988 条；标准化导入表、未匹配名单和摘要已保存到 `data/imports/scores/` 与 `data/logs/`
+  - 已按二模表完成高三当前班级重分配：新建/复用 `未分班`，501 名学生按表内新班级调整，302 名表外/同名不确定学生进入 `未分班`；高三总数保持 803，所有高三在籍学生都有当前班级；本次按用户选择不写调班历史
+  - 分班产物：备份 `data/backups/app_before_class_reassign_20260501_230900.db`，明细 `data/logs/class_reassign_202604_second_mock_20260501_230900.xlsx`，摘要 `data/logs/class_reassign_202604_second_mock_20260501_230900.json`
+  - 已补导真实一模成绩文件 `/Users/gao/Desktop/202603高三一模一键分析报表/等级分_[冠县洪范高中高三]学生总成绩报表.xls`：考试现为 `202603高三一模`（exam_id=1，日期 `2026-03-08`），原始表识别为宽表、表头第 4 行、置信度 0.97；唯一姓名匹配 506 名学生，导入成绩 2,983 条，未导入 11 行学生留待人工映射
+  - 一模导入后已重建快照：总分快照 506 条、单科快照 2,983 条；备份 `data/backups/app_before_202603_first_mock_score_import_20260501_232521.db`，标准化导入表 `data/imports/scores/202603_first_mock_standardized_20260501_232521.xlsx`，未匹配名单 `data/logs/202603_first_mock_unresolved_students_20260501_232521.xlsx`，摘要 `data/logs/202603_first_mock_import_summary_20260501_232521.json`
+  - 已导入同一批学生高二期末历史成绩：新增 `2024-2025` 学年上学期和考试 `2024-2025学年第一学期高二期末考试`（exam_id=3，日期 `2025-01-20`）；唯一姓名匹配 171 名学生，导入成绩 1,539 条，其中缺考 533 条、未选科跳过 171 格，未导入 7 行学生留待人工映射
+  - 高二期末导入后已重建快照：总分快照 171 条、单科快照 1,539 条；备份 `data/backups/app_before_202501_h2_final_score_import_20260501_233548.db`，标准化导入表 `data/imports/scores/202501_h2_final_standardized_20260501_233548.xlsx`，未匹配名单 `data/logs/202501_h2_final_unresolved_students_20260501_233548.xlsx`，摘要 `data/logs/202501_h2_final_import_summary_20260501_233548.json`
+  - 已导入 2026 年 2 月高三期末成绩：源文件采用桌面上的 `/Users/gao/Desktop/综合成绩表-总分-聊城洪范高级中学-高三期末考试（成绩导入）-山东新高考“33”赋分报告.xlsx`，新增考试 `2026年2月高三期末考试`（exam_id=4，日期 `2026-02-28`，状态 `published`）；源文件未提供具体考试日，按用户说明“2026 年 2 月份”记录
+  - 2 月期末按赋分报告口径导入：语文/数学/英语/日语取原始分，物理/化学/生物/政治/历史/地理取赋分；唯一姓名匹配 508 名学生，写入成绩 2,959 条，未匹配 14 行（系统无同名主档 12 行、系统同名不唯一 2 行）
+  - 2 月期末快照已重建：总分快照 508 条、单科快照 2,959 条；备份 `data/backups/app_before_202602_final_score_import_20260501_235143.db`，标准化导入表 `data/imports/scores/202602_final_standardized_20260501_235355.xlsx`，未匹配名单 `data/logs/202602_final_unresolved_students_20260501_235355.xlsx`，摘要 `data/logs/202602_final_import_summary_20260501_235355.json`
+  - 验证：智能导入后端 `3 passed`；原考试工作流 `8 passed`；成绩分析/导入中心相关 `3 passed`；智能导入+原工作流合并 `11 passed`；前端映射单测 `3 passed`；`frontend:lint`、`frontend:build`、临时空库迁移、`git diff --check` 均通过
+  - 本轮补充验证：真实主库完整性 `ok`；学生/班级/年级分析服务冒烟可读；分班后班级人数与学生实际班级一致；`student_class_transfer_*` 仍为 0；`npm run backend:test -- apps/backend/tests/test_score_smart_import.py -q` 为 `3 passed`；`npm run backend:test -- apps/backend/tests/test_exam_workflow.py -q` 为 `8 passed`；2 月期末导入后合并执行 `npm run backend:test -- apps/backend/tests/test_score_smart_import.py apps/backend/tests/test_exam_workflow.py -q` 为 `11 passed`，`git diff --check` 通过
+  - 首版不支持 PDF、图片或 OCR；后续补导未匹配学生时应先建立平台编号到系统学号的人工确认映射；2026-05-02 已补考试时点班级快照，历史班级分析不再按当前班级聚合
+
 ## 2026-04-28 新增
 
 - 已完成高考志愿工作台第一轮界面重设计：
@@ -1506,3 +1559,10 @@
   - 新增 `docs/round3-special-early-art-sports-pathways.md` 并接入 `docs/README.md`
   - 真实 `data/app.db` 已执行 `npm run backend:bootstrap-pathways -- --target-year 2026 --json`，备份为 `data/backups/app_before_pathway_bootstrap_2026_20260425_03.db`，新增规则 `23` 条，已有规则 `62` 条跳过/更新
   - 验证：D7 定向后端 `6 passed`，D7 定向前端 `12 passed`，后端全量 `93 passed`，前端全量 `146 passed`，`frontend:build` 和 `git diff --check` 通过
+- 2026-05-02 已完成全项目企业级中后台 UI 第一轮重构：
+  - 新增 `apps/frontend/src/components/ui/` 公共 UI 组件层和共享展示类型
+  - 新增 `apps/frontend/src/styles/` 分层样式 tokens，统一后台页面、Element Plus 组件和打印页视觉规则
+  - 重构 `AppLayout.vue` 为 Ant Design Pro 式深色侧边导航 + 顶部上下文栏 + 内容容器
+  - 重点重构 `AnalyticsPage.vue`，完成 sticky 全局考试筛选、指标卡、Tabs、风险 Tag 和建议动作按钮组
+  - `DashboardPage.vue`、`StudentsPage.vue`、`ReportsPage.vue` 接入 `AppPage`
+  - 验证已通过前端 lint、前端单测、前端构建，以及分析/班主任/工作台/学生/报表/推荐/志愿相关 E2E 共 32 条

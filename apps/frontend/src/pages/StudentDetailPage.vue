@@ -73,11 +73,11 @@
           <strong>{{ currentClassLabel }}</strong>
         </article>
         <article class="soft-card stat-card">
-          <span>最近考试总分</span>
+          <span>最近考试总分{{ profile.performance_summary.latest_score_value_label ? `（${profile.performance_summary.latest_score_value_label}）` : "" }}</span>
           <strong>{{ profile.performance_summary.latest_total_score ?? "-" }}</strong>
         </article>
         <article class="soft-card stat-card">
-          <span>最近年级名次</span>
+          <span>最近校内名次</span>
           <strong>{{ profile.performance_summary.latest_grade_rank ?? "-" }}</strong>
         </article>
         <article class="soft-card stat-card">
@@ -263,13 +263,30 @@
             </div>
             <div class="table-shell">
               <el-table :data="profile.exam_trends" stripe>
+                <el-table-column type="expand" width="46">
+                  <template #default="{ row }">
+                    <div class="subject-score-panel">
+                      <span
+                        v-for="subject in row.subjects"
+                        :key="`${row.exam_id}-${subject.subject_id}`"
+                        class="subject-score-pill"
+                      >
+                        <strong>{{ subject.subject_name }}</strong>
+                        <em>{{ subject.score ?? "-" }}</em>
+                        <small>{{ subject.score_value_label }}</small>
+                      </span>
+                      <span v-if="!row.subjects?.length" class="muted-copy">暂无分科成绩</span>
+                    </div>
+                  </template>
+                </el-table-column>
                 <el-table-column label="考试" prop="exam_name" min-width="190" />
                 <el-table-column label="时间" prop="exam_date" width="120" />
                 <el-table-column label="总分" prop="total_score" width="100" />
+                <el-table-column label="口径" prop="score_value_label" width="90" />
                 <el-table-column label="班名" prop="class_rank" width="90" />
-                <el-table-column label="年名" prop="grade_rank" width="90" />
+                <el-table-column label="校内名" prop="grade_rank" width="90" />
                 <el-table-column label="班百分位" prop="class_percentile" width="110" />
-                <el-table-column label="年百分位" prop="grade_percentile" width="110" />
+                <el-table-column label="校内百分位" prop="grade_percentile" width="120" />
               </el-table>
             </div>
             <el-empty v-if="!profile.exam_trends.length" description="暂无考试趋势数据" />
@@ -440,14 +457,28 @@ interface ClassHistoryItem {
   reason?: string | null;
 }
 
+interface ExamSubjectScoreItem {
+  subject_id: number;
+  subject_name?: string | null;
+  score?: number | null;
+  score_value_type?: string | null;
+  score_value_label?: string | null;
+  class_rank?: number | null;
+  grade_rank?: number | null;
+}
+
 interface ExamTrendItem {
+  exam_id?: number | null;
   exam_name?: string | null;
   exam_date?: string | null;
   total_score?: number | null;
+  score_value_type?: string | null;
+  score_value_label?: string | null;
   class_rank?: number | null;
   grade_rank?: number | null;
   class_percentile?: number | null;
   grade_percentile?: number | null;
+  subjects?: ExamSubjectScoreItem[];
 }
 
 interface GrowthRecordItem {
@@ -485,6 +516,8 @@ interface StudentProfile {
   performance_summary: {
     latest_exam_id?: number | null;
     latest_total_score?: number | null;
+    latest_score_value_type?: string | null;
+    latest_score_value_label?: string | null;
     latest_grade_rank?: number | null;
     latest_exam_name?: string | null;
     exam_count: number;
@@ -553,7 +586,7 @@ const weaknessSummary = computed(() => {
 const studentNarrative = computed(() => {
   if (!profile.value) return "暂无学生画像";
   const rank = profile.value.performance_summary.latest_grade_rank ?? "未出名次";
-  return `${currentClassLabel.value}，已累计 ${profile.value.performance_summary.exam_count} 次考试记录，最近一次年级名次为 ${rank}。`;
+  return `${currentClassLabel.value}，已累计 ${profile.value.performance_summary.exam_count} 次考试记录，最近一次校内名次为 ${rank}。`;
 });
 
 const studentHeroCards = computed(() => {
@@ -1063,6 +1096,34 @@ onMounted(loadDetail);
 .muted-copy {
   color: #6e8295;
   font-size: 13px;
+}
+
+.subject-score-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 8px;
+}
+
+.subject-score-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(243, 247, 251, 0.92);
+  color: #355067;
+}
+
+.subject-score-pill em {
+  color: #111827;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.subject-score-pill small {
+  color: #6e8295;
 }
 
 .attachment-toolbar {

@@ -199,7 +199,11 @@ async function ensureExamWithScores(page: Page): Promise<void> {
   await examRow.getByRole("button", { name: "导入成绩" }).click();
   const importDialog = page.locator('[role="dialog"]').filter({ hasText: "导入成绩" });
   await expect(importDialog).toBeVisible();
-  await importDialog.locator('input[type="file"]').setInputFiles(scoresFixture);
+  await importDialog
+    .locator(".el-upload")
+    .filter({ hasText: "按统一模板导入" })
+    .locator('input[type="file"]')
+    .setInputFiles(scoresFixture);
   await expect(importDialog.locator(".el-alert").getByText("成绩导入完成", { exact: false })).toBeVisible();
   await expect(importDialog.locator(".el-table__row").first()).toBeVisible();
 }
