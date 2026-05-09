@@ -7,6 +7,7 @@ from pathlib import Path
 from openpyxl import Workbook, load_workbook
 
 from app.core.config import Settings
+from app.exporters.pathway_profiles import export_pathway_profile_template
 
 
 @dataclass(frozen=True)
@@ -246,4 +247,5 @@ def generate_import_templates(settings: Settings, *, force: bool = False) -> lis
         workbook.save(path)
         generated_paths.append(path)
 
+    generated_paths.append(settings.project_root / export_pathway_profile_template(settings))
     return generated_paths

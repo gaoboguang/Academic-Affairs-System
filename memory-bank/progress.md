@@ -6,6 +6,26 @@
 - 后端与前端基础功能已覆盖多个业务域，README 中已记录到 M0-M6 的实现范围。
 - 后端测试与前端构建在此前环境中已验证通过。
 
+## 2026-05-09 新增
+
+- 已完成升学画像批量导入导出：
+  - 后端新增升学画像模板下载、Excel 导入和当前画像数据导出接口，导入结果沿用 `ImportResult`，支持成功 / 失败 / 新增 / 更新计数、错误报告路径和错误预览
+  - 新增 `apps/backend/app/importers/pathway_profiles.py` 与 `apps/backend/app/exporters/pathway_profiles.py`，模板和导出文件都使用一致中文列名，便于“下载后修改再上传”
+  - 导入规则：以学号匹配学生，姓名辅助核对；空白单元格不覆盖原值；只含“学号 + 选科组合”的文件可用于批量补选科；非法枚举、非法布尔值、学生不存在和姓名不一致写入错误报告
+  - 前端学生中心新增“升学画像批量维护”区，提供升学画像模板、下载画像数据和上传画像入口，并复用导入结果反馈面板；导入中心新增“升学画像导入”模板入口，指向学生中心
+  - 本轮复用 `student_pathway_profile`，不新增数据库迁移；导入不会自动刷新路径评估
+
+- 已完成项目安全体检修复与备份清理：
+  - 从 `main...origin/main [ahead 9]` 创建并切换到 `codex/security-remediation-20260509`
+  - 备份清理严格限定 `data/backups/*.db` 与 `data/backups/*.zip`：删除旧 P0 包和 4 月中间备份 56 个，释放约 13.9 GiB；保留 2026-05-01 以来主库备份、高考并库关键备份和最新 P0 基线；清单写入 `.tmp/backup-cleanup-manifest-20260509.json` 与 `.tmp/backup-cleanup-after-20260509.json`
+  - 清理后 `backend:p0-check -- --json` 通过并新增 `data/backups/p0_delivery_backup_20260509_085323.zip`；当前备份目录约 `13G`，主库仍为 Alembic `20260508_0031` 且 SQLite 完整性 / 外键检查通过
+  - 修复分析中心多学年全景：切到年级 / 班级 / 教师全景页签时自动首次加载数据，并防止 loading 中重复请求，恢复 `覆盖学年`、学年行、考试趋势和学科优先级显示
+  - 修复推荐对比 E2E 的 Element Plus 多选下拉稳定性，改用已有 `selectDropdownOption` helper
+  - Node 依赖安全：`vite` 升到 `6.4.2`，`postcss` 升到并固定为 `8.5.14`，`electron-builder` 升到 `26.8.1`
+  - Python 依赖安全：`mako` 下限升到 `1.3.12`，`python-multipart` 下限升到 `0.0.27`，`pytest` 开发依赖升到 `9.0.3` 线，虚拟环境 `pip` 升到 `26.1.1` 并安装 `pip-audit 2.10.0`
+  - 验证通过：`npm run e2e -- tests/e2e/exams-analytics.spec.ts -g "多学年全景"`、`npm run e2e -- tests/e2e/recommendations.spec.ts -g "推荐对比"`、`npm run check:e2e`（46 passed）、`npm run backend:test`（142 passed）、`npm run frontend:lint`、`npm run frontend:test`（39 files / 199 tests）、`npm run frontend:build`、`npm run desktop:prepare`、`npm run desktop:dist:mac`、`npm run check`
+  - 审计结果：`npm audit --omit=dev --json` 为 0 漏洞，`pip-audit` 为 No known vulnerabilities；全量 `npm audit --json` 只剩 Electron 37.3.1 high 风险，需后续单独做 Electron 42.x 桌面兼容升级
+
 ## 2026-05-08 新增
 
 - 已完成高考志愿 scraper 本地数据包并库与院校/专业详情页：

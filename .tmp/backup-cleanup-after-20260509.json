@@ -1,0 +1,524 @@
+{
+  "generated_at": "2026-05-09T00:52:05.026Z",
+  "manifest_path": ".tmp/backup-cleanup-manifest-20260509.json",
+  "deleted_count": 56,
+  "deleted_bytes": 14928372365,
+  "remaining_count": 20,
+  "remaining_bytes": 13510086895,
+  "deleted": [
+    {
+      "name": "app_before_b1_gaokao_import_20260425_123830.db",
+      "path": "data/backups/app_before_b1_gaokao_import_20260425_123830.db",
+      "bytes": 517423104,
+      "mtime": "2026-04-25T04:38:31.455Z",
+      "actual_bytes": 517423104
+    },
+    {
+      "name": "app_before_b1_official_import_20260425_125418.db",
+      "path": "data/backups/app_before_b1_official_import_20260425_125418.db",
+      "bytes": 517423104,
+      "mtime": "2026-04-25T04:54:23.750Z",
+      "actual_bytes": 517423104
+    },
+    {
+      "name": "app_before_b1_shandong_core_import_20260425_1338.db",
+      "path": "data/backups/app_before_b1_shandong_core_import_20260425_1338.db",
+      "bytes": 517423104,
+      "mtime": "2026-04-25T05:32:18.102Z",
+      "actual_bytes": 517423104
+    },
+    {
+      "name": "app_before_c3_round2_integration_migrate_20260425_1700.db",
+      "path": "data/backups/app_before_c3_round2_integration_migrate_20260425_1700.db",
+      "bytes": 529694720,
+      "mtime": "2026-04-25T09:00:53.885Z",
+      "actual_bytes": 529694720
+    },
+    {
+      "name": "app_before_d1_pathway_schema_migrate_20260425_2030.db",
+      "path": "data/backups/app_before_d1_pathway_schema_migrate_20260425_2030.db",
+      "bytes": 529694720,
+      "mtime": "2026-04-25T10:31:59.090Z",
+      "actual_bytes": 529694720
+    },
+    {
+      "name": "app_before_e6_data_completion_import_20260426_135630.db",
+      "path": "data/backups/app_before_e6_data_completion_import_20260426_135630.db",
+      "bytes": 529694720,
+      "mtime": "2026-04-26T05:56:47.785Z",
+      "actual_bytes": 529694720
+    },
+    {
+      "name": "app_before_gaokao_handoff_merge_20260422_152953.db",
+      "path": "data/backups/app_before_gaokao_handoff_merge_20260422_152953.db",
+      "bytes": 659456,
+      "mtime": "2026-04-22T07:29:53.212Z",
+      "actual_bytes": 659456
+    },
+    {
+      "name": "app_before_gaokao_materialize_20260422_155205.db",
+      "path": "data/backups/app_before_gaokao_materialize_20260422_155205.db",
+      "bytes": 420225024,
+      "mtime": "2026-04-22T07:52:07.086Z",
+      "actual_bytes": 420225024
+    },
+    {
+      "name": "app_before_gaokao_materialize_20260422_160858.db",
+      "path": "data/backups/app_before_gaokao_materialize_20260422_160858.db",
+      "bytes": 512258048,
+      "mtime": "2026-04-22T08:09:01.522Z",
+      "actual_bytes": 512258048
+    },
+    {
+      "name": "app_before_pathway_bootstrap_2026_20260425_01.db",
+      "path": "data/backups/app_before_pathway_bootstrap_2026_20260425_01.db",
+      "bytes": 529747968,
+      "mtime": "2026-04-25T11:54:00.483Z",
+      "actual_bytes": 529747968
+    },
+    {
+      "name": "app_before_pathway_bootstrap_2026_20260425_02.db",
+      "path": "data/backups/app_before_pathway_bootstrap_2026_20260425_02.db",
+      "bytes": 529776640,
+      "mtime": "2026-04-25T12:53:34.592Z",
+      "actual_bytes": 529776640
+    },
+    {
+      "name": "app_before_pathway_bootstrap_2026_20260425_03.db",
+      "path": "data/backups/app_before_pathway_bootstrap_2026_20260425_03.db",
+      "bytes": 529780736,
+      "mtime": "2026-04-25T13:23:46.310Z",
+      "actual_bytes": 529780736
+    },
+    {
+      "name": "app_before_round5_admission_round_source_link_20260426_2115.db",
+      "path": "data/backups/app_before_round5_admission_round_source_link_20260426_2115.db",
+      "bytes": 537624576,
+      "mtime": "2026-04-26T13:17:04.698Z",
+      "actual_bytes": 537624576
+    },
+    {
+      "name": "app_before_round5_chapter_machine_preaudit_20260427_085136.db",
+      "path": "data/backups/app_before_round5_chapter_machine_preaudit_20260427_085136.db",
+      "bytes": 545255424,
+      "mtime": "2026-04-27T00:51:38.523Z",
+      "actual_bytes": 545255424
+    },
+    {
+      "name": "app_before_round5_chapter_machine_preaudit_20260427_085200.db",
+      "path": "data/backups/app_before_round5_chapter_machine_preaudit_20260427_085200.db",
+      "bytes": 545255424,
+      "mtime": "2026-04-27T00:52:02.967Z",
+      "actual_bytes": 545255424
+    },
+    {
+      "name": "app_before_round5_chapter_machine_preaudit_20260427_090600.db",
+      "path": "data/backups/app_before_round5_chapter_machine_preaudit_20260427_090600.db",
+      "bytes": 545259520,
+      "mtime": "2026-04-27T01:06:02.859Z",
+      "actual_bytes": 545259520
+    },
+    {
+      "name": "app_before_round5_import_run_dedupe_20260426_230931.db",
+      "path": "data/backups/app_before_round5_import_run_dedupe_20260426_230931.db",
+      "bytes": 539754496,
+      "mtime": "2026-04-26T15:09:32.211Z",
+      "actual_bytes": 539754496
+    },
+    {
+      "name": "app_before_round5_import_run_dedupe_20260427_083928.db",
+      "path": "data/backups/app_before_round5_import_run_dedupe_20260427_083928.db",
+      "bytes": 545255424,
+      "mtime": "2026-04-27T00:39:28.595Z",
+      "actual_bytes": 545255424
+    },
+    {
+      "name": "app_before_round5_plan_supplement_register_20260427_084348.db",
+      "path": "data/backups/app_before_round5_plan_supplement_register_20260427_084348.db",
+      "bytes": 545255424,
+      "mtime": "2026-04-27T00:43:50.736Z",
+      "actual_bytes": 545255424
+    },
+    {
+      "name": "app_before_round5_plan_supplement_register_20260427_084559.db",
+      "path": "data/backups/app_before_round5_plan_supplement_register_20260427_084559.db",
+      "bytes": 545255424,
+      "mtime": "2026-04-27T00:46:01.562Z",
+      "actual_bytes": 545255424
+    },
+    {
+      "name": "app_before_round5_policy_reference_import_20260426_231412.db",
+      "path": "data/backups/app_before_round5_policy_reference_import_20260426_231412.db",
+      "bytes": 539754496,
+      "mtime": "2026-04-26T15:14:14.511Z",
+      "actual_bytes": 539754496
+    },
+    {
+      "name": "app_before_round5_special_admission_import_20260426_233139.db",
+      "path": "data/backups/app_before_round5_special_admission_import_20260426_233139.db",
+      "bytes": 539758592,
+      "mtime": "2026-04-26T15:31:41.378Z",
+      "actual_bytes": 539758592
+    },
+    {
+      "name": "app_before_round5_special_admission_import_20260426_233322.db",
+      "path": "data/backups/app_before_round5_special_admission_import_20260426_233322.db",
+      "bytes": 539758592,
+      "mtime": "2026-04-26T15:33:24.815Z",
+      "actual_bytes": 539758592
+    },
+    {
+      "name": "app_before_upgrade_and_gaokao_merge_20260422_152932.db",
+      "path": "data/backups/app_before_upgrade_and_gaokao_merge_20260422_152932.db",
+      "bytes": 643072,
+      "mtime": "2026-04-22T07:29:32.940Z",
+      "actual_bytes": 643072
+    },
+    {
+      "name": "app_before_user_gaokao_local_import_20260428_141651.db",
+      "path": "data/backups/app_before_user_gaokao_local_import_20260428_141651.db",
+      "bytes": 545300480,
+      "mtime": "2026-04-28T06:16:54.015Z",
+      "actual_bytes": 545300480
+    },
+    {
+      "name": "p0_delivery_backup_20260424_101700.zip",
+      "path": "data/backups/p0_delivery_backup_20260424_101700.zip",
+      "bytes": 75267392,
+      "mtime": "2026-04-24T02:17:26.662Z",
+      "actual_bytes": 75267392
+    },
+    {
+      "name": "p0_delivery_backup_20260424_101755.zip",
+      "path": "data/backups/p0_delivery_backup_20260424_101755.zip",
+      "bytes": 75267392,
+      "mtime": "2026-04-24T02:18:20.422Z",
+      "actual_bytes": 75267392
+    },
+    {
+      "name": "p0_delivery_backup_20260424_102218.zip",
+      "path": "data/backups/p0_delivery_backup_20260424_102218.zip",
+      "bytes": 75267391,
+      "mtime": "2026-04-24T02:22:43.684Z",
+      "actual_bytes": 75267391
+    },
+    {
+      "name": "p0_delivery_backup_20260424_103604.zip",
+      "path": "data/backups/p0_delivery_backup_20260424_103604.zip",
+      "bytes": 75267391,
+      "mtime": "2026-04-24T02:36:18.993Z",
+      "actual_bytes": 75267391
+    },
+    {
+      "name": "p0_delivery_backup_20260424_111319.zip",
+      "path": "data/backups/p0_delivery_backup_20260424_111319.zip",
+      "bytes": 75278602,
+      "mtime": "2026-04-24T03:13:44.663Z",
+      "actual_bytes": 75278602
+    },
+    {
+      "name": "p0_delivery_backup_20260424_123541.zip",
+      "path": "data/backups/p0_delivery_backup_20260424_123541.zip",
+      "bytes": 75278602,
+      "mtime": "2026-04-24T04:36:05.579Z",
+      "actual_bytes": 75278602
+    },
+    {
+      "name": "p0_delivery_backup_20260424_153049.zip",
+      "path": "data/backups/p0_delivery_backup_20260424_153049.zip",
+      "bytes": 75278602,
+      "mtime": "2026-04-24T07:31:17.489Z",
+      "actual_bytes": 75278602
+    },
+    {
+      "name": "p0_delivery_backup_20260424_155211.zip",
+      "path": "data/backups/p0_delivery_backup_20260424_155211.zip",
+      "bytes": 75278601,
+      "mtime": "2026-04-24T07:52:35.130Z",
+      "actual_bytes": 75278601
+    },
+    {
+      "name": "p0_delivery_backup_20260424_173236.zip",
+      "path": "data/backups/p0_delivery_backup_20260424_173236.zip",
+      "bytes": 75278602,
+      "mtime": "2026-04-24T09:33:11.366Z",
+      "actual_bytes": 75278602
+    },
+    {
+      "name": "p0_delivery_backup_20260425_084455.zip",
+      "path": "data/backups/p0_delivery_backup_20260425_084455.zip",
+      "bytes": 75278602,
+      "mtime": "2026-04-25T00:45:22.792Z",
+      "actual_bytes": 75278602
+    },
+    {
+      "name": "p0_delivery_backup_20260425_091725.zip",
+      "path": "data/backups/p0_delivery_backup_20260425_091725.zip",
+      "bytes": 75278602,
+      "mtime": "2026-04-25T01:17:44.755Z",
+      "actual_bytes": 75278602
+    },
+    {
+      "name": "p0_delivery_backup_20260425_092923.zip",
+      "path": "data/backups/p0_delivery_backup_20260425_092923.zip",
+      "bytes": 75278602,
+      "mtime": "2026-04-25T01:29:48.388Z",
+      "actual_bytes": 75278602
+    },
+    {
+      "name": "p0_delivery_backup_20260425_104947.zip",
+      "path": "data/backups/p0_delivery_backup_20260425_104947.zip",
+      "bytes": 75278602,
+      "mtime": "2026-04-25T02:50:11.330Z",
+      "actual_bytes": 75278602
+    },
+    {
+      "name": "p0_delivery_backup_20260425_133451.zip",
+      "path": "data/backups/p0_delivery_backup_20260425_133451.zip",
+      "bytes": 80369878,
+      "mtime": "2026-04-25T05:35:18.079Z",
+      "actual_bytes": 80369878
+    },
+    {
+      "name": "p0_delivery_backup_20260425_165955.zip",
+      "path": "data/backups/p0_delivery_backup_20260425_165955.zip",
+      "bytes": 80370074,
+      "mtime": "2026-04-25T09:00:22.219Z",
+      "actual_bytes": 80370074
+    },
+    {
+      "name": "p0_delivery_backup_20260425_170902.zip",
+      "path": "data/backups/p0_delivery_backup_20260425_170902.zip",
+      "bytes": 80371045,
+      "mtime": "2026-04-25T09:09:27.987Z",
+      "actual_bytes": 80371045
+    },
+    {
+      "name": "p0_delivery_backup_20260425_214113.zip",
+      "path": "data/backups/p0_delivery_backup_20260425_214113.zip",
+      "bytes": 80387808,
+      "mtime": "2026-04-25T13:41:39.736Z",
+      "actual_bytes": 80387808
+    },
+    {
+      "name": "p0_delivery_backup_20260426_140156.zip",
+      "path": "data/backups/p0_delivery_backup_20260426_140156.zip",
+      "bytes": 82147438,
+      "mtime": "2026-04-26T06:02:29.850Z",
+      "actual_bytes": 82147438
+    },
+    {
+      "name": "p0_delivery_backup_20260426_175940.zip",
+      "path": "data/backups/p0_delivery_backup_20260426_175940.zip",
+      "bytes": 82147439,
+      "mtime": "2026-04-26T10:00:06.569Z",
+      "actual_bytes": 82147439
+    },
+    {
+      "name": "p0_delivery_backup_20260426_210758.zip",
+      "path": "data/backups/p0_delivery_backup_20260426_210758.zip",
+      "bytes": 82147395,
+      "mtime": "2026-04-26T13:08:29.631Z",
+      "actual_bytes": 82147395
+    },
+    {
+      "name": "p0_delivery_backup_20260427_090758.zip",
+      "path": "data/backups/p0_delivery_backup_20260427_090758.zip",
+      "bytes": 83274528,
+      "mtime": "2026-04-27T01:08:24.712Z",
+      "actual_bytes": 83274528
+    },
+    {
+      "name": "p0_delivery_backup_20260427_113704.zip",
+      "path": "data/backups/p0_delivery_backup_20260427_113704.zip",
+      "bytes": 83274528,
+      "mtime": "2026-04-27T03:37:30.821Z",
+      "actual_bytes": 83274528
+    },
+    {
+      "name": "p0_delivery_backup_20260427_153736.zip",
+      "path": "data/backups/p0_delivery_backup_20260427_153736.zip",
+      "bytes": 83274528,
+      "mtime": "2026-04-27T07:38:09.182Z",
+      "actual_bytes": 83274528
+    },
+    {
+      "name": "p0_delivery_backup_20260428_141806.zip",
+      "path": "data/backups/p0_delivery_backup_20260428_141806.zip",
+      "bytes": 101863115,
+      "mtime": "2026-04-28T06:18:50.400Z",
+      "actual_bytes": 101863115
+    },
+    {
+      "name": "p0_delivery_backup_20260503_103249.zip",
+      "path": "data/backups/p0_delivery_backup_20260503_103249.zip",
+      "bytes": 105692390,
+      "mtime": "2026-05-03T02:33:29.600Z",
+      "actual_bytes": 105692390
+    },
+    {
+      "name": "p0_delivery_backup_20260503_211838.zip",
+      "path": "data/backups/p0_delivery_backup_20260503_211838.zip",
+      "bytes": 105692391,
+      "mtime": "2026-05-03T13:19:25.923Z",
+      "actual_bytes": 105692391
+    },
+    {
+      "name": "p0_delivery_backup_20260508_104816.zip",
+      "path": "data/backups/p0_delivery_backup_20260508_104816.zip",
+      "bytes": 105825852,
+      "mtime": "2026-05-08T02:49:16.357Z",
+      "actual_bytes": 105825852
+    },
+    {
+      "name": "p0_delivery_backup_20260508_195143.zip",
+      "path": "data/backups/p0_delivery_backup_20260508_195143.zip",
+      "bytes": 133757224,
+      "mtime": "2026-05-08T11:52:36.586Z",
+      "actual_bytes": 133757224
+    },
+    {
+      "name": "p0_delivery_backup_20260508_200218.zip",
+      "path": "data/backups/p0_delivery_backup_20260508_200218.zip",
+      "bytes": 133757223,
+      "mtime": "2026-05-08T12:03:14.978Z",
+      "actual_bytes": 133757223
+    },
+    {
+      "name": "p0_delivery_backup_20260508_203220.zip",
+      "path": "data/backups/p0_delivery_backup_20260508_203220.zip",
+      "bytes": 133755119,
+      "mtime": "2026-05-08T12:33:18.986Z",
+      "actual_bytes": 133755119
+    },
+    {
+      "name": "p0_delivery_backup_20260508_204238.zip",
+      "path": "data/backups/p0_delivery_backup_20260508_204238.zip",
+      "bytes": 133755119,
+      "mtime": "2026-05-08T12:43:38.300Z",
+      "actual_bytes": 133755119
+    }
+  ],
+  "remaining": [
+    {
+      "name": "app_after_remove_attendance_behavior_20260502_223204.db",
+      "path": "data/backups/app_after_remove_attendance_behavior_20260502_223204.db",
+      "bytes": 698392576,
+      "mtime": "2026-05-02T14:32:10.821Z"
+    },
+    {
+      "name": "app_before_202501_h2_final_score_import_20260501_233548.db",
+      "path": "data/backups/app_before_202501_h2_final_score_import_20260501_233548.db",
+      "bytes": 682434560,
+      "mtime": "2026-05-01T15:35:52.243Z"
+    },
+    {
+      "name": "app_before_202602_final_score_import_20260501_235143.db",
+      "path": "data/backups/app_before_202602_final_score_import_20260501_235143.db",
+      "bytes": 684347392,
+      "mtime": "2026-05-01T15:51:46.959Z"
+    },
+    {
+      "name": "app_before_202603_first_mock_score_import_20260501_232521.db",
+      "path": "data/backups/app_before_202603_first_mock_score_import_20260501_232521.db",
+      "bytes": 681553920,
+      "mtime": "2026-05-01T15:25:25.614Z"
+    },
+    {
+      "name": "app_before_202604_second_mock_score_import_20260501_223800.db",
+      "path": "data/backups/app_before_202604_second_mock_score_import_20260501_223800.db",
+      "bytes": 693149696,
+      "mtime": "2026-05-01T14:38:07.252Z"
+    },
+    {
+      "name": "app_before_202604_second_mock_score_import_20260501_224304_post_migrate.db",
+      "path": "data/backups/app_before_202604_second_mock_score_import_20260501_224304_post_migrate.db",
+      "bytes": 682151936,
+      "mtime": "2026-05-01T14:43:07.608Z"
+    },
+    {
+      "name": "app_before_class_profile_migrate_20260502_213457.db",
+      "path": "data/backups/app_before_class_profile_migrate_20260502_213457.db",
+      "bytes": 698253312,
+      "mtime": "2026-05-02T13:34:58.388Z"
+    },
+    {
+      "name": "app_before_class_reassign_20260501_230900.db",
+      "path": "data/backups/app_before_class_reassign_20260501_230900.db",
+      "bytes": 681553920,
+      "mtime": "2026-05-01T15:09:16.248Z"
+    },
+    {
+      "name": "app_before_gaokao_profile_migrate_20260508_192533.db",
+      "path": "data/backups/app_before_gaokao_profile_migrate_20260508_192533.db",
+      "bytes": 706535424,
+      "mtime": "2026-05-08T11:25:36.933Z"
+    },
+    {
+      "name": "app_before_gaokao_safety_fk_cleanup_20260508_202350.db",
+      "path": "data/backups/app_before_gaokao_safety_fk_cleanup_20260508_202350.db",
+      "bytes": 850276352,
+      "mtime": "2026-05-08T12:24:56.533Z"
+    },
+    {
+      "name": "app_before_gaokao_scraper_bundle_20260508_194932.db",
+      "path": "data/backups/app_before_gaokao_scraper_bundle_20260508_194932.db",
+      "bytes": 706613248,
+      "mtime": "2026-05-08T11:49:35.841Z"
+    },
+    {
+      "name": "app_before_pathway_bootstrap_2026_20260504_01.db",
+      "path": "data/backups/app_before_pathway_bootstrap_2026_20260504_01.db",
+      "bytes": 705671168,
+      "mtime": "2026-05-04T02:10:38.575Z"
+    },
+    {
+      "name": "app_before_remove_attendance_behavior_20260502_222948.db",
+      "path": "data/backups/app_before_remove_attendance_behavior_20260502_222948.db",
+      "bytes": 698253312,
+      "mtime": "2026-05-02T14:29:49.075Z"
+    },
+    {
+      "name": "app_before_round5_chapter_machine_preaudit_20260504_102527.db",
+      "path": "data/backups/app_before_round5_chapter_machine_preaudit_20260504_102527.db",
+      "bytes": 705671168,
+      "mtime": "2026-05-04T02:25:29.968Z"
+    },
+    {
+      "name": "app_before_round6_chapter_machine_content_review_20260504_111910.db",
+      "path": "data/backups/app_before_round6_chapter_machine_content_review_20260504_111910.db",
+      "bytes": 705671168,
+      "mtime": "2026-05-03T02:31:26.486Z"
+    },
+    {
+      "name": "app_before_score_conversion_fields_20260502_103856.db",
+      "path": "data/backups/app_before_score_conversion_fields_20260502_103856.db",
+      "bytes": 697778176,
+      "mtime": "2026-05-02T02:38:56.505Z"
+    },
+    {
+      "name": "app_before_score_rank_context_20260502_100615.db",
+      "path": "data/backups/app_before_score_rank_context_20260502_100615.db",
+      "bytes": 693960704,
+      "mtime": "2026-05-02T02:06:16.403Z"
+    },
+    {
+      "name": "app_before_sdzk_2025_hotspot_import_20260503_103100.db",
+      "path": "data/backups/app_before_sdzk_2025_hotspot_import_20260503_103100.db",
+      "bytes": 698392576,
+      "mtime": "2026-05-03T02:31:04.298Z"
+    },
+    {
+      "name": "app_before_special_type_bootstrap_20260504_01.db",
+      "path": "data/backups/app_before_special_type_bootstrap_20260504_01.db",
+      "bytes": 705671168,
+      "mtime": "2026-05-04T02:10:30.927Z"
+    },
+    {
+      "name": "p0_delivery_backup_20260508_204539.zip",
+      "path": "data/backups/p0_delivery_backup_20260508_204539.zip",
+      "bytes": 133755119,
+      "mtime": "2026-05-08T12:46:44.313Z"
+    }
+  ]
+}

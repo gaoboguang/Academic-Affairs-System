@@ -242,6 +242,10 @@ def test_import_center_lists_batches_and_details(client, app) -> None:
     assert payload["summary"]["total_batches"] >= 1
     assert payload["summary"]["partial_batches"] >= 1
     assert payload["latest_backup"]["backup_name"] == "trial_run_backup.zip"
+    template_by_type = {item["job_type"]: item for item in payload["templates"]}
+    assert template_by_type["pathway_profiles"]["job_type_label"] == "升学画像导入"
+    assert template_by_type["pathway_profiles"]["file_name"] == "student_pathway_profiles_import_template.xlsx"
+    assert template_by_type["pathway_profiles"]["business_path"] == "/students"
     score_rows = [item for item in payload["batches"] if item["job_type"] == "scores"]
     assert len([item for item in score_rows if item["source_filename"] == "scores.xlsx"]) == 1
     assert score_rows[0]["status"] == "partially_failed"

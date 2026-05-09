@@ -89,4 +89,18 @@ describe("import center helpers", () => {
       "8. 导出报表",
     ]);
   });
+
+  it("models the pathway profile template as a student-center upload entry", () => {
+    const pathwayProfileBatch: ImportCenterBatch = {
+      ...baseBatch,
+      job_type: "pathway_profiles",
+      job_type_label: "升学画像导入",
+      business_path: "/students",
+      template_download_url: "/api/system/files?path=data%2Ftemplates%2Fstudent_pathway_profiles_import_template.xlsx",
+    };
+
+    expect(pathwayProfileBatch.job_type_label).toBe("升学画像导入");
+    expect(pathwayProfileBatch.business_path).toBe("/students");
+    expect(pathwayProfileBatch.template_download_url).toContain("student_pathway_profiles_import_template.xlsx");
+  });
 });

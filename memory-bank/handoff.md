@@ -1,5 +1,84 @@
 # 交接说明
 
+## 当前主线状态（2026-05-09）
+
+- 本轮已修正高考数据总览“覆盖率”容易误解的问题：
+  - 用户截图中的“招生网覆盖 1813 / 54.22%”“章程链接覆盖 420 / 12.56%”并不是说昨天补的招生计划 / 录取结果没进来，而是只统计高校主档和章程证据链里的链接字段覆盖
+  - 当前真实库关键计数：应用侧招生计划 `63561`、应用侧录取结果 `189077`、raw 招生计划 `66584`、raw 录取结果 `282260`、院校画像 `2983`、专业画像 `4979`、学校-专业画像 `32186`、来源证据 `224`
+  - 前端新增 / 修改：`apps/frontend/src/utils/gaokaoOverview.ts` 增加 `buildGaokaoOverviewHelpText()`，`apps/frontend/src/pages/GaokaoDataPage.vue` 的总览卡片说明改为明确区分“应用侧数据已入库”和“官网 / 章程链接证据链还需补齐”
+  - 测试：`apps/frontend/tests/gaokao-overview.test.ts` 新增口径说明覆盖
+
+- 本轮已完成用户要求的“升学画像批量导入导出”：
+  - 当前分支仍为：`codex/security-remediation-20260509`
+  - 复用既有 `student_pathway_profile` 表，不新增 Alembic 迁移，不新建画像导入表；本轮未直接写真实 `data/app.db`
+  - 新增后端接口：
+    - `GET /api/gaokao/pathway-profiles/template`
+    - `POST /api/gaokao/pathway-profiles/import`
+    - `GET /api/gaokao/pathway-profiles/export`
+  - 新增后端文件：`apps/backend/app/importers/pathway_profiles.py`、`apps/backend/app/exporters/pathway_profiles.py`
+  - 修改后端文件：`apps/backend/app/api/routes/gaokao.py`、`apps/backend/app/exporters/templates.py`、`apps/backend/app/services/gaokao_pathways.py`、`apps/backend/app/services/system.py`
+  - 新增前端 helper / 测试：`apps/frontend/src/components/students/pathwayProfileBulk.ts`、`apps/frontend/tests/student-pathway-profile-bulk.test.ts`
+  - 修改前端入口：`apps/frontend/src/pages/StudentsPage.vue` 在学生中心新增“升学画像批量维护”，含“升学画像模板 / 下载画像数据 / 上传画像”和导入反馈；`apps/frontend/tests/import-center.test.ts` 覆盖导入中心模板入口
+- 导入导出规则：
+  - 模板 / 导出中文列名一致，支持下载后修改再上传
+  - 以“学号”匹配学生，“姓名”只辅助核对；学生不存在、姓名不一致、枚举值非法、布尔值非法进入错误报告
+  - 空白单元格不覆盖原值；精简表只含“学号 + 选科组合”也能批量补选科，并保留原考生类型、材料、体检限制和备注
+  - 导入只维护升学画像事实，不自动刷新或生成路径评估
+- 本轮新增 / 扩展测试：
+  - `apps/backend/tests/test_gaokao_pathways.py` 覆盖模板表头、精简选科导入保留原值、完整画像创建/更新、错误报告、导出含未维护画像学生
+  - `apps/backend/tests/test_archive_and_system.py` 覆盖导入中心模板列表出现“升学画像导入”
+  - `apps/frontend/tests/student-pathway-profile-bulk.test.ts` 覆盖学生中心批量入口 helper
+  - `apps/frontend/tests/import-center.test.ts` 覆盖导入中心模板入口模型
+- 后续注意：
+  - 若后续新增画像字段，要同时扩展 `PATHWAY_PROFILE_TEMPLATE_HEADERS`、导出列和导入映射
+  - 不要把批量画像导入和路径评估刷新混在一起；评估仍由学生详情或升学方案中心显式刷新
+  - 当前工作区还有安全体检 / 依赖升级 / E2E 稳定性等既有改动，提交前需要按主题分清范围
+
+- 本轮已完成用户要求的“项目安全体检修复与备份清理计划”：
+  - 当前分支：`codex/security-remediation-20260509`
+  - 备份清理清单：`.tmp/backup-cleanup-manifest-20260509.json`
+  - 清理后结果：`.tmp/backup-cleanup-after-20260509.json`
+  - 原 `data/backups` 中 `.db/.zip` 备份 76 个，保留 20 个、删除 56 个，释放 14,928,372,365 bytes（约 13.9 GiB）
+  - 清理后运行 `backend:p0-check` 生成了新 P0 包 `data/backups/p0_delivery_backup_20260509_085323.zip`，所以当前 `data/backups` 下 `.db/.zip` 为 21 个
+  - 当前目录体积：`data/backups` 约 `13G`，`data/app.db` 约 `811M`，`data/` 约 `14G`
+- 当前主库状态：
+  - `data/app.db` 未删除、未直接改结构
+  - Alembic 版本：`20260508_0031`
+  - `PRAGMA integrity_check`：`ok`
+  - `PRAGMA foreign_key_check`：无输出
+  - `backend:p0-check -- --json`：`ok: true`
+  - 数据健康仍有已知 warning：单招 / 综评缺专门录取结果，只能初筛，不可包装成录取把握
+- 本轮代码修复：
+  - `apps/frontend/src/pages/AnalyticsPage.vue`：切到 `grade-panorama`、`class-panorama`、`teacher-panorama` 页签时自动首次加载全景数据；loading 中不重复请求；保留手动查询 / 重置
+  - `tests/e2e/recommendations.spec.ts`：推荐对比多选历史方案改用稳定的 `selectDropdownOption` helper，避免 Element Plus 弹层过渡导致偶发点击失败
+- 本轮依赖安全：
+  - `apps/frontend/package.json`：`vite` 升到 `^6.4.2`，新增 `postcss ^8.5.14`
+  - 根 `package.json`：新增 `overrides.postcss=8.5.14`
+  - `apps/desktop/package.json`：`electron-builder` 升到 `26.8.1`，Electron 保持 `37.3.1`
+  - `apps/backend/pyproject.toml`：新增 `mako>=1.3.12,<2.0`，`python-multipart>=0.0.27,<1.0`，`pytest>=9.0.3,<10.0`
+  - 当前虚拟环境已安装 `pip-audit 2.10.0`，并把 `pip` 升到 `26.1.1`
+- 已验证：
+  - `du -sh data/backups data/app.db data`：`13G / 811M / 14G`
+  - `sqlite3 data/app.db "SELECT version_num FROM alembic_version; PRAGMA integrity_check; PRAGMA foreign_key_check;"`：`20260508_0031`、`ok`、外键无输出
+  - `npm run --silent backend:p0-check -- --json`：`ok: true`，新备份 `p0_delivery_backup_20260509_085323.zip`
+  - `npm run e2e -- tests/e2e/exams-analytics.spec.ts -g "多学年全景"`：1 passed
+  - `npm run e2e -- tests/e2e/recommendations.spec.ts -g "推荐对比"`：1 passed
+  - `npm run check:e2e`：46 passed
+  - `npm audit --omit=dev --json`：0 vulnerabilities
+  - `npm audit --json`：仅剩 Electron 37.3.1 high，fixAvailable 为 Electron 42.0.1（semver major），本轮按计划不升级
+  - `./.venv/bin/python -m pip_audit`：No known vulnerabilities；本地 editable 包 `local-edu-backend` 被跳过
+  - `npm run backend:test`：142 passed
+  - `npm run frontend:lint`：通过
+  - `npm run frontend:test`：39 files / 199 tests passed
+  - `npm run frontend:build`：通过
+  - `npm run desktop:prepare`：通过
+  - `npm run desktop:dist:mac`：通过，electron-builder 26.8.1 可打包；仍使用默认图标且未签名，属于既有桌面边界
+  - `npm run check`：通过
+- 后续最重要风险：
+  - Electron 37.3.1 的 high 漏洞需要单独开桌面兼容任务升级到 42.x，并覆盖 mac/Windows 打包与启动冒烟
+  - 2026 普通类正式计划、一分一段、省控线仍待官方发布；单招 / 综评缺专门录取结果仍不能伪造或用普通类结果关闭缺口
+  - 本轮没有提交；工作区包含 `.tmp` 两个清理审计文件和 package lock 大幅收敛，提交前注意确认是否要把 `.tmp/backup-cleanup-*.json` 纳入版本控制
+
 ## 当前主线状态（2026-05-08）
 
 - 本轮已完成用户要求的“高考志愿数据并库与院校/专业详情页”：

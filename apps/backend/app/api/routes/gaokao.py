@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_session, get_gaokao_db_session, get_settings
@@ -25,6 +28,7 @@ from app.schemas.gaokao_pathway import (
 )
 from app.services import gaokao as service
 from app.services import gaokao_pathways as pathway_service
+from app.utils.files import resolve_allowed_file_path
 from app.utils.data_health import build_data_health_report
 
 router = APIRouter(prefix="/gaokao", tags=["gaokao"])
@@ -99,6 +103,46 @@ def upsert_student_pathway_profile(
     session: Session = Depends(get_db_session),
 ) -> StudentPathwayProfileRead:
     return pathway_service.upsert_student_pathway_profile(session, student_id, payload)
+
+
+@router.get("/pathway-profiles/template")
+def download_pathway_profile_template(settings: Settings = Depends(get_settings)) -> FileResponse:
+    result = pathway_service.export_student_pathway_profile_template(settings)
+    path = resolve_allowed_file_path(
+        result["file_path"],
+        allowed_roots=[settings.templates_dir],
+        project_root=settings.project_root,
+    )
+    return FileResponse(path, filename=Path(path).name)
+
+
+@router.post("/pathway-profiles/import")
+async def import_pathway_profiles(
+    file: UploadFile = File(...),
+    session: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    content = await file.read()
+    return pathway_service.import_student_pathway_profiles(
+        session,
+        settings,
+        filename=file.filename,
+        content=content,
+    )
+
+
+@router.get("/pathway-profiles/export")
+def export_pathway_profiles(
+    session: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+) -> FileResponse:
+    result = pathway_service.export_student_pathway_profiles(session, settings)
+    path = resolve_allowed_file_path(
+        result["file_path"],
+        allowed_roots=[settings.exports_dir],
+        project_root=settings.project_root,
+    )
+    return FileResponse(path, filename=Path(path).name)
 
 
 @router.post("/students/{student_id}/pathway-evaluations/preview", response_model=StudentPathwayEvaluationResponse)

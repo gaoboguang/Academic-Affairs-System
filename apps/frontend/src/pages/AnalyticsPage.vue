@@ -1698,7 +1698,7 @@ function openAdviserAction(path?: string | null): void {
 }
 
 async function loadGradePanorama(): Promise<void> {
-  if (!selectedPanoramaGradeId.value) return;
+  if (!selectedPanoramaGradeId.value || loadingGradePanorama.value) return;
   try {
     loadingGradePanorama.value = true;
     const query = new URLSearchParams();
@@ -1717,7 +1717,7 @@ async function loadGradePanorama(): Promise<void> {
 }
 
 async function loadClassPanorama(): Promise<void> {
-  if (!selectedPanoramaClassId.value) return;
+  if (!selectedPanoramaClassId.value || loadingClassPanorama.value) return;
   try {
     loadingClassPanorama.value = true;
     const query = new URLSearchParams();
@@ -1736,7 +1736,7 @@ async function loadClassPanorama(): Promise<void> {
 }
 
 async function loadTeacherPanorama(): Promise<void> {
-  if (!selectedPanoramaTeacherId.value) return;
+  if (!selectedPanoramaTeacherId.value || loadingTeacherPanorama.value) return;
   try {
     loadingTeacherPanorama.value = true;
     const query = new URLSearchParams();
@@ -1797,6 +1797,16 @@ function resetAnalyticsState(): void {
   rankAudit.value = null;
 }
 
+async function loadActivePanoramaIfNeeded(): Promise<void> {
+  if (activeAnalyticsTab.value === "grade-panorama" && !gradePanorama.value) {
+    await loadGradePanorama();
+  } else if (activeAnalyticsTab.value === "class-panorama" && !classPanorama.value) {
+    await loadClassPanorama();
+  } else if (activeAnalyticsTab.value === "teacher-panorama" && !teacherPanorama.value) {
+    await loadTeacherPanorama();
+  }
+}
+
 function formatPercent(value?: number | null): string {
   if (value === null || value === undefined || Number.isNaN(value)) {
     return "-";
@@ -1844,12 +1854,17 @@ watch(selectedExamId, async (examId) => {
   }
 });
 
+watch(activeAnalyticsTab, () => {
+  void loadActivePanoramaIfNeeded();
+});
+
 onMounted(async () => {
   try {
     await loadOptions();
     if (selectedExamId.value) {
       await loadTargetLines();
     }
+    await loadActivePanoramaIfNeeded();
   } catch (error) {
     ElMessage.error((error as Error).message);
   }

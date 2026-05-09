@@ -72,6 +72,27 @@
       <ImportFeedbackPanel :result="importResult" />
     </section>
 
+    <section class="soft-card panel-block pathway-profile-bulk-panel">
+      <div class="section-head compact">
+        <div>
+          <h3>升学画像批量维护</h3>
+          <p>批量补充选科组合、考生类型、身份意向和材料状态。空白单元格会保留系统已有值。</p>
+        </div>
+      </div>
+      <div class="action-row import-row">
+        <el-button @click="openFile(pathwayProfileBulkEndpoints.template)">升学画像模板</el-button>
+        <el-button @click="openFile(pathwayProfileBulkEndpoints.export)">下载画像数据</el-button>
+        <el-upload
+          :show-file-list="false"
+          :auto-upload="false"
+          :on-change="handlePathwayProfileImport"
+        >
+          <el-button type="primary">上传画像</el-button>
+        </el-upload>
+      </div>
+      <ImportFeedbackPanel :result="pathwayProfileImportResult" />
+    </section>
+
     <section class="soft-card panel-block">
       <div class="section-head compact">
         <div>
@@ -293,6 +314,7 @@ import { apiRequest, openFile, uploadFile } from "../api/client";
 import ImportFeedbackPanel from "../components/common/ImportFeedbackPanel.vue";
 import StudentBulkDeleteDialog from "../components/students/StudentBulkDeleteDialog.vue";
 import StudentClassTransferDialog from "../components/students/StudentClassTransferDialog.vue";
+import { pathwayProfileBulkEndpoints } from "../components/students/pathwayProfileBulk";
 import { AppPage } from "../components/ui";
 import { useReferenceStore } from "../stores/reference";
 import type { ImportFeedbackResult } from "../utils/importFeedback";
@@ -328,6 +350,7 @@ const dialogVisible = ref(false);
 const editingId = ref<number | null>(null);
 const submitting = ref(false);
 const importResult = ref<ImportFeedbackResult | null>(null);
+const pathwayProfileImportResult = ref<ImportFeedbackResult | null>(null);
 const selectedRows = ref<StudentItem[]>([]);
 const studentTableRef = ref<{ clearSelection: () => void } | null>(null);
 const bulkDeleteDialogVisible = ref(false);
@@ -579,6 +602,25 @@ async function handleImport(uploadFileItem: UploadFile): Promise<void> {
       message: importResult.value.message,
     });
     await Promise.all([referenceStore.loadCore(), loadStudents()]);
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  }
+}
+
+async function handlePathwayProfileImport(uploadFileItem: UploadFile): Promise<void> {
+  if (!uploadFileItem.raw) {
+    return;
+  }
+  try {
+    pathwayProfileImportResult.value = null;
+    pathwayProfileImportResult.value = await uploadFile<ImportFeedbackResult>(
+      pathwayProfileBulkEndpoints.import,
+      uploadFileItem.raw,
+    );
+    ElMessage({
+      type: pathwayProfileImportResult.value.failed_rows ? "warning" : "success",
+      message: pathwayProfileImportResult.value.message,
+    });
   } catch (error) {
     ElMessage.error((error as Error).message);
   }

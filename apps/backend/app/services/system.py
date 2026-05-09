@@ -77,6 +77,13 @@ IMPORT_CENTER_TYPES = {
         "guidance": "先下载学生模板，按学号或学籍号维护唯一身份，再回到学生中心上传。",
         "rollback": "学生导入当前没有逐行回滚记录；需要撤销时优先恢复导入前备份，或按学号重新导入正确台账覆盖修正。",
     },
+    "pathway_profiles": {
+        "label": "升学画像导入",
+        "business_path": "/students",
+        "template": "student_pathway_profiles_import_template.xlsx",
+        "guidance": "先下载升学画像模板，按学号批量补充选科、考生类型、身份意向和材料状态，再回到学生中心上传。",
+        "rollback": "升学画像导入当前没有逐行回滚记录；需要撤销时优先恢复导入前备份，或下载画像数据后重新导入正确内容覆盖修正。",
+    },
     "teachers": {
         "label": "教师信息导入",
         "business_path": "/teachers",
@@ -123,6 +130,7 @@ IMPORT_CENTER_TYPES = {
 
 IMPORT_JOB_TYPE_ALIASES = {
     "student_import": "students",
+    "pathway_profile_import": "pathway_profiles",
     "teacher_import": "teachers",
     "exam_score_import": "scores",
     "score_import": "scores",

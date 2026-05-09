@@ -155,9 +155,8 @@ test("推荐对比：可生成多版方案并查看单方案和批量差异", as
   await expect(resultPanel.locator(".comparison-column").filter({ hasText: "新增" })).toContainText("湾区信息大学");
   await expect(resultPanel.locator(".comparison-column").filter({ hasText: "新增" })).toContainText("南方应用大学");
 
-  await comparisonSelects.nth(1).click();
-  await page.locator(".el-select-dropdown:visible .el-select-dropdown__item").filter({ hasText: "E2E-推荐对比-软件方案" }).first().click();
-  await page.locator(".el-select-dropdown:visible .el-select-dropdown__item").filter({ hasText: "E2E-推荐对比-信息方案" }).first().click();
+  await selectDropdownOption(page, comparisonSelects.nth(1), "E2E-推荐对比-软件方案");
+  await selectDropdownOption(page, comparisonSelects.nth(1), "E2E-推荐对比-信息方案");
   await page.keyboard.press("Escape");
 
   await expect(resultPanel.locator(".el-table__row").filter({ hasText: "E2E-推荐对比-软件方案" }).first()).toBeVisible();

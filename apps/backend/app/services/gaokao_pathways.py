@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
+from zipfile import BadZipFile
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy.orm import Session
+from openpyxl.utils.exceptions import InvalidFileException
+from sqlalchemy import select
+from sqlalchemy.orm import Session, joinedload
 
+from app.core.config import Settings
+from app.exporters.pathway_profiles import export_pathway_profile_template, export_pathway_profiles
+from app.importers.pathway_profiles import StudentPathwayProfileImporter
 from app.models import GaokaoPathway, GaokaoPathwayRule, Student, StudentPathwayEvaluation, StudentPathwayProfile
 from app.repositories.gaokao_pathways import (
     get_pathway,
@@ -17,7 +23,7 @@ from app.repositories.gaokao_pathways import (
     list_pathway_rules as repo_list_pathway_rules,
     list_pathways as repo_list_pathways,
 )
-from app.repositories.system import write_audit_log
+from app.repositories.system import create_import_job, write_audit_log
 from app.schemas.gaokao_pathway import (
     GaokaoPathwayBootstrapResponse,
     GaokaoPathwayRead,
@@ -1577,6 +1583,95 @@ def upsert_student_pathway_profile(
     )
     session.refresh(item)
     return _serialize_profile(item, student)
+
+
+def export_student_pathway_profile_template(settings: Settings) -> dict[str, str]:
+    file_path = export_pathway_profile_template(settings)
+    return {"file_path": file_path}
+
+
+def import_student_pathway_profiles(
+    session: Session,
+    settings: Settings,
+    *,
+    filename: str | None,
+    content: bytes,
+) -> dict:
+    job = create_import_job(session, "pathway_profiles", filename)
+    job.started_at = datetime.now()
+    importer = StudentPathwayProfileImporter(session, settings)
+    try:
+        result = importer.execute(filename=filename, content=content)
+    except (ValueError, InvalidFileException, BadZipFile) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    job.finished_at = datetime.now()
+    job.status = result.status
+    job.result_json = result.model_dump()
+    write_audit_log(
+        session,
+        module="gaokao_pathways",
+        action="import_student_pathway_profiles",
+        target_type="import_job",
+        target_id=str(job.id),
+        detail_json=result.model_dump(),
+    )
+    return {"job_id": job.id, **result.model_dump()}
+
+
+def export_student_pathway_profiles(session: Session, settings: Settings) -> dict[str, str]:
+    rows = []
+    students = session.scalars(
+        select(Student)
+        .options(joinedload(Student.current_grade), joinedload(Student.current_class))
+        .where(Student.is_active.is_(True))
+        .order_by(Student.student_no)
+    ).unique().all()
+    if not students:
+        return {"file_path": export_pathway_profiles(settings, [])}
+
+    student_ids = [student.id for student in students]
+    profiles = session.scalars(
+        select(StudentPathwayProfile).where(
+            StudentPathwayProfile.student_id.in_(student_ids),
+            StudentPathwayProfile.is_active.is_(True),
+        )
+    ).all()
+    profile_by_student_id: dict[int, StudentPathwayProfile] = {}
+    for profile in profiles:
+        if profile.student_id not in profile_by_student_id or profile.province == DEFAULT_PROVINCE:
+            profile_by_student_id[profile.student_id] = profile
+
+    for student in students:
+        profile = profile_by_student_id.get(student.id)
+        rows.append(
+            {
+                "student_no": student.student_no,
+                "name": student.name,
+                "province": profile.province if profile else student.origin_province,
+                "candidate_type": profile.candidate_type if profile else None,
+                "exam_type": profile.exam_type if profile else None,
+                "subject_combination": profile.subject_combination if profile else None,
+                "spring_exam_category": profile.spring_exam_category if profile else None,
+                "art_track": profile.art_track if profile else student.art_track,
+                "sports_track": profile.sports_track if profile else None,
+                "has_gaokao_registration": profile.has_gaokao_registration if profile else None,
+                "is_fresh_graduate": profile.is_fresh_graduate if profile else None,
+                "is_vocational_student": profile.is_vocational_student if profile else None,
+                "is_social_candidate": profile.is_social_candidate if profile else None,
+                "has_high_school_equivalent": profile.has_high_school_equivalent if profile else None,
+                "accept_junior_college": profile.accept_junior_college if profile else None,
+                "accept_private_college": profile.accept_private_college if profile else None,
+                "accept_sino_foreign": profile.accept_sino_foreign if profile else None,
+                "accept_outside_province": profile.accept_outside_province if profile else None,
+                "accept_early_batch": profile.accept_early_batch if profile else None,
+                "accept_service_commitment": profile.accept_service_commitment if profile else None,
+                "accept_interview_or_physical_test": profile.accept_interview_or_physical_test if profile else None,
+                "materials_json": profile.materials_json if profile else {},
+                "known_body_limitations_json": profile.known_body_limitations_json if profile else {},
+                "note": profile.note if profile else None,
+            }
+        )
+    return {"file_path": export_pathway_profiles(settings, rows)}
 
 
 def preview_student_pathway_evaluations(

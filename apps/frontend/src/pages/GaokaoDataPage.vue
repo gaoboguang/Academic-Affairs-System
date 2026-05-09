@@ -1448,6 +1448,7 @@ import {
 } from "../utils/gaokaoEvidence";
 import {
   buildGaokaoOverviewGapCards,
+  buildGaokaoOverviewHelpText,
   type GaokaoOverviewGapCard,
 } from "../utils/gaokaoOverview";
 import { gaokaoDataCoveragePrintPreviewPath } from "../utils/print";
@@ -1542,6 +1543,7 @@ const activeReviewQuickFilter = computed(() => {
 const overviewGapCards = computed<GaokaoOverviewGapCard[]>(() =>
   buildGaokaoOverviewGapCards(overview.core_tables),
 );
+const overviewHelpText = computed(() => buildGaokaoOverviewHelpText(overview.core_tables));
 const dataHealthSummary = computed(() => {
   return dataHealth.tables.reduce(
     (summary, item) => {
@@ -1570,7 +1572,7 @@ const overviewStatCards = computed<StatCardItem[]>(() => [
   {
     label: "学校总数",
     value: overview.school_total || 0,
-    help: "当前高考高校主档总量。",
+    help: overviewHelpText.value.overallHelp,
     tone: "primary",
   },
   {
@@ -1579,7 +1581,7 @@ const overviewStatCards = computed<StatCardItem[]>(() => [
       overview.recruit_site_covered,
       overview.recruit_site_coverage_rate,
     ),
-    help: "已确认 recruit_site 的学校数与覆盖率。",
+    help: overviewHelpText.value.recruitSiteHelp,
     tone: "success",
   },
   {
@@ -1588,13 +1590,13 @@ const overviewStatCards = computed<StatCardItem[]>(() => [
       overview.chapter_url_covered,
       overview.chapter_url_coverage_rate,
     ),
-    help: "已确认 chapter_url 的学校数与覆盖率。",
+    help: overviewHelpText.value.chapterUrlHelp,
     tone: "info",
   },
   {
     label: "备用链接覆盖",
     value: overview.fallback_url_covered || 0,
-    help: "没有正式章程入口时可用于只读兜底的链接数。",
+    help: overviewHelpText.value.fallbackUrlHelp,
     tone: "neutral",
   },
   {

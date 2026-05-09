@@ -2,6 +2,34 @@
 
 ## 当前状态
 
+- 2026-05-09 已修正高考数据总览口径文案：
+  - 用户看到“招生网覆盖 54.22% / 章程链接覆盖 12.56%”后误以为昨天补的数据仍不完整；实际这些卡片统计的是 `gaokao_college` 和 `gaokao_college_chapter_rule` 的官网 / 章程链接证据链覆盖，不是招生计划或录取结果完整度
+  - 当前真实主库应用侧数据已入库：`enrollment_plan=63561`、`admission_record=189077`；raw 层为 `gaokao_admission_plan=66584`、`gaokao_admission_result=282260`
+  - 前端 `GaokaoDataPage.vue` 已改用 `buildGaokaoOverviewHelpText()`，在已有应用侧计划 / 录取记录时直接提示“应用侧数据已入库：招生计划 X 条，录取结果 Y 条；上方覆盖率只表示官网 / 章程链接证据链还需继续补齐”
+  - 新增 `gaokao-overview` 单测覆盖此口径，避免后续把链接覆盖率重新解释成录取数据缺口
+
+- 2026-05-09 已完成“升学画像批量导入导出”：
+  - 复用既有 `student_pathway_profile` 表和单人画像逻辑，不新增迁移或新表；本轮未直接写真实 `data/app.db`
+  - 后端新增 `/api/gaokao/pathway-profiles/template`、`/api/gaokao/pathway-profiles/import`、`/api/gaokao/pathway-profiles/export`
+  - Excel 模板 / 导出列统一为中文字段：学号、姓名、生源地、考生类型、考试类型、选科组合、春考专业类别、艺术类别、体育类别、身份确认项、意向接受项、常用材料勾选、体检限制、备注
+  - 导入以学号匹配学生，姓名只做辅助核对；学生不存在、姓名不一致、考生类型 / 考试类型 / 布尔值不合法都会进入错误报告
+  - 空白单元格导入时保留原画像字段，不清空既有值；只含“学号 + 选科组合”的精简文件可以批量补选科
+  - 导入只维护画像本身，不自动生成或刷新路径评估；老师仍需在学生详情或升学方案中心刷新评估
+  - 学生中心新增“升学画像批量维护”区，包含模板下载、画像数据下载、上传画像和导入结果反馈；导入中心模板列表新增“升学画像导入”，业务入口指向 `/students`
+
+- 2026-05-09 已完成项目安全体检修复与备份清理：
+  - 当前分支：`codex/security-remediation-20260509`
+  - 按积极清理策略处理 `data/backups` 中旧 `.db/.zip` 备份：清理前生成 `.tmp/backup-cleanup-manifest-20260509.json`，原有 76 个备份保留 20 个、删除 56 个，实际删除 14,928,372,365 bytes（约 13.9 GiB）；清理后生成 `.tmp/backup-cleanup-after-20260509.json`
+  - 清理后 P0 复核新增最新备份 `data/backups/p0_delivery_backup_20260509_085323.zip`，因此当前 `data/backups` 有 21 个 `.db/.zip` 备份；不要误删 `data/app.db`、上传、导出、模板和 2026-05-01 以来主库备份
+  - 备份目录从约 `27G` 降到 `13G`，`data/app.db` 仍约 `811M`，`data/` 约 `14G`
+  - SQLite 复核：真实主库 Alembic `20260508_0031`，`PRAGMA integrity_check=ok`，`PRAGMA foreign_key_check` 无输出
+  - `backend:p0-check -- --json` 为 `ok: true`，数据健康仍为已知 `warning`：单招 / 综评仍缺专门录取结果，只能初筛
+  - 修复分析中心全景对比 E2E：`AnalyticsPage.vue` 在切到 `grade-panorama`、`class-panorama`、`teacher-panorama` 页签时首次自动加载数据，loading 中不重复请求，手动“查询 / 重置”仍保留；`tests/e2e/recommendations.spec.ts` 同步用稳定下拉 helper 修复 Element Plus 多选弹层偶发不稳定
+  - 依赖安全：前端 `vite` 升到 `^6.4.2`、`postcss` 显式升到 `^8.5.14` 并用根 `overrides.postcss=8.5.14` 固定；桌面打包链 `electron-builder` 升到 `26.8.1`；后端依赖下限补 `mako>=1.3.12`、`python-multipart>=0.0.27`，dev 依赖 `pytest>=9.0.3,<10.0`，虚拟环境 `pip` 升到 `26.1.1`
+  - 审计结果：`npm audit --omit=dev --json` 为 0 漏洞；`npm audit --json` 仅剩 Electron 37.3.1 high 风险，修复需要升 Electron 42.x，已按计划留到后续桌面兼容任务；`pip-audit` 为 No known vulnerabilities，跳过本地 editable 包 `local-edu-backend`
+  - 验证：目标 E2E `多学年全景` 通过；完整 `npm run check:e2e` 为 `46 passed`；`npm run backend:test` 为 `142 passed`；`npm run frontend:lint`、`npm run frontend:test`（39 files / 199 tests）、`npm run frontend:build` 通过；`npm run desktop:prepare` 与 `npm run desktop:dist:mac` 通过；最终 `npm run check` 通过
+  - 打包边界：`desktop:dist:mac` 仍提示默认 Electron 图标和未签名，这是既有桌面交付边界；PyInstaller 的 `pysqlite2/MySQLdb/psycopg2` hidden import 警告与项目 SQLite 使用无冲突
+
 - 2026-05-08 已完成 `/Users/gao/Desktop/高考志愿/gaokao-scraper` 本地数据包并库、院校/专业详情页和数据库安全复查：
   - 新增迁移 `20260508_0030_gaokao_profile_detail.py`，新增院校画像、院校年度汇总、专业画像、学校-专业画像四张表
   - 新增安全迁移 `20260508_0031_gaokao_legacy_fk_safety.py`，真实主库已升级到 Alembic `20260508_0031`；补回遗留 raw 层缺失的 `data_import_batch` 空父表，清空旧 `data_import_error_log`，并清理指向缺失 raw 院校的 `gaokao_college_tag`
