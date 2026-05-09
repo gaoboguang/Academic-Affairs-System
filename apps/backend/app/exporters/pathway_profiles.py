@@ -48,6 +48,7 @@ def export_pathway_profiles(settings: Settings, rows: list[dict[str, object]]) -
             [
                 row.get("student_no"),
                 row.get("name"),
+                row.get("class_name"),
                 row.get("province"),
                 format_candidate_type(row.get("candidate_type") if isinstance(row.get("candidate_type"), str) else None),
                 format_exam_type(row.get("exam_type") if isinstance(row.get("exam_type"), str) else None),

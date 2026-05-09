@@ -17,6 +17,7 @@ def _build_pathway_profile_workbook(rows: list[list[object]], headers: list[str]
         or [
             "学号",
             "姓名",
+            "班级",
             "生源地",
             "考生类型",
             "考试类型",
@@ -265,8 +266,8 @@ def test_pathway_profile_template_endpoint_contains_expected_headers(client) -> 
     assert response.status_code == 200
     workbook = load_workbook(BytesIO(response.content), read_only=True)
     sheet = workbook["数据"]
-    headers = [sheet.cell(row=1, column=index).value for index in range(1, 27)]
-    assert headers[:6] == ["学号", "姓名", "生源地", "考生类型", "考试类型", "选科组合"]
+    headers = [sheet.cell(row=1, column=index).value for index in range(1, 28)]
+    assert headers[:7] == ["学号", "姓名", "班级", "生源地", "考生类型", "考试类型", "选科组合"]
     assert "高考报名确认材料" in headers
     assert "体检限制" in headers
     workbook.close()
@@ -294,11 +295,12 @@ def test_pathway_profile_import_updates_subjects_without_clearing_existing_value
             "file": (
                 "pathway.xlsx",
                 _build_pathway_profile_workbook(
-                    headers=["学号", "姓名", "选科组合"],
+                    headers=["学号", "姓名", "班级", "选科组合"],
                     rows=[
                         [
                             "2026001",
                             "张三",
+                            "1班",
                             "物理,化学,政治",
                         ]
                     ]
@@ -336,6 +338,7 @@ def test_pathway_profile_import_creates_profile_and_reports_bad_rows(client, app
                         [
                             "2026002",
                             "李四",
+                            "1班",
                             "山东",
                             "普通类",
                             "夏季高考",
@@ -361,10 +364,10 @@ def test_pathway_profile_import_creates_profile_and_reports_bad_rows(client, app
                             "无",
                             "批量导入",
                         ],
-                        ["2026003", "错误姓名", "山东", "普通类", "夏季高考", "物理,化学,生物", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-                        ["999999", "不存在", "山东", "普通类", "夏季高考", "物理,化学,生物", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-                        ["2026001", "张三", "山东", "普通类", "夏季高考", "物理,化学,生物", "", "", "", "也许", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-                        ["2026001", "张三", "山东", "火星类", "夏季高考", "物理,化学,生物", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+                        ["2026003", "错误姓名", "1班", "山东", "普通类", "夏季高考", "物理,化学,生物", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+                        ["999999", "不存在", "1班", "山东", "普通类", "夏季高考", "物理,化学,生物", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+                        ["2026001", "张三", "1班", "山东", "普通类", "夏季高考", "物理,化学,生物", "", "", "", "也许", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+                        ["2026001", "张三", "1班", "山东", "火星类", "夏季高考", "物理,化学,生物", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
                     ]
                 ),
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -431,15 +434,17 @@ def test_pathway_profile_export_includes_students_with_and_without_profiles(clie
     assert response.status_code == 200
     workbook = load_workbook(BytesIO(response.content), read_only=True)
     sheet = workbook["数据"]
-    headers = [sheet.cell(row=1, column=index).value for index in range(1, 27)]
-    assert headers[:6] == ["学号", "姓名", "生源地", "考生类型", "考试类型", "选科组合"]
+    headers = [sheet.cell(row=1, column=index).value for index in range(1, 28)]
+    assert headers[:7] == ["学号", "姓名", "班级", "生源地", "考生类型", "考试类型", "选科组合"]
     rows = list(sheet.iter_rows(min_row=2, values_only=True))
     row_by_no = {str(row[0]): row for row in rows}
-    assert row_by_no["2026001"][5] == "物理,化学,生物"
-    assert row_by_no["2026001"][9] == "是"
-    assert row_by_no["2026001"][21] == "是"
-    assert row_by_no["2026001"][24] == "无"
-    assert row_by_no["2026002"][5] is None
+    assert row_by_no["2026001"][2] == "1班"
+    assert row_by_no["2026001"][6] == "物理,化学,生物"
+    assert row_by_no["2026001"][10] == "是"
+    assert row_by_no["2026001"][22] == "是"
+    assert row_by_no["2026001"][25] == "无"
+    assert row_by_no["2026002"][2] == "1班"
+    assert row_by_no["2026002"][6] is None
     workbook.close()
 
 

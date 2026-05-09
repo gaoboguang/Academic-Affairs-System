@@ -22,6 +22,7 @@ from app.utils.parsers import clean_text
 PATHWAY_PROFILE_TEMPLATE_HEADERS = [
     "学号",
     "姓名",
+    "班级",
     "生源地",
     "考生类型",
     "考试类型",
@@ -51,6 +52,7 @@ PATHWAY_PROFILE_TEMPLATE_HEADERS = [
 PATHWAY_PROFILE_SAMPLE_ROW = [
     "2026001",
     "张三",
+    "1班",
     "山东",
     "普通类",
     "夏季高考",

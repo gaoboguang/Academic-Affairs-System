@@ -20,7 +20,7 @@
   - 新增前端 helper / 测试：`apps/frontend/src/components/students/pathwayProfileBulk.ts`、`apps/frontend/tests/student-pathway-profile-bulk.test.ts`
   - 修改前端入口：`apps/frontend/src/pages/StudentsPage.vue` 在学生中心新增“升学画像批量维护”，含“升学画像模板 / 下载画像数据 / 上传画像”和导入反馈；`apps/frontend/tests/import-center.test.ts` 覆盖导入中心模板入口
 - 导入导出规则：
-  - 模板 / 导出中文列名一致，支持下载后修改再上传
+  - 模板 / 导出中文列名一致，支持下载后修改再上传；“班级”位于“姓名”后，用于老师定位学生，导入时不参与匹配、不改学生班级
   - 以“学号”匹配学生，“姓名”只辅助核对；学生不存在、姓名不一致、枚举值非法、布尔值非法进入错误报告
   - 空白单元格不覆盖原值；精简表只含“学号 + 选科组合”也能批量补选科，并保留原考生类型、材料、体检限制和备注
   - 导入只维护升学画像事实，不自动刷新或生成路径评估

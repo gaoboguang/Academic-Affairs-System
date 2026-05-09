@@ -1647,6 +1647,7 @@ def export_student_pathway_profiles(session: Session, settings: Settings) -> dic
             {
                 "student_no": student.student_no,
                 "name": student.name,
+                "class_name": student.current_class.name if student.current_class else None,
                 "province": profile.province if profile else student.origin_province,
                 "candidate_type": profile.candidate_type if profile else None,
                 "exam_type": profile.exam_type if profile else None,
