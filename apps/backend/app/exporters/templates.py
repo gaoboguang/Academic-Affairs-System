@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 
 from app.core.config import Settings
 
@@ -188,11 +189,32 @@ TEMPLATE_SPECS = [
 ]
 
 
+def _template_signature(spec: TemplateSpec) -> str:
+    payload = repr((spec.filename, spec.title, spec.headers, spec.sample_rows, spec.instructions))
+    return sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _template_is_current(path: Path, spec: TemplateSpec) -> bool:
+    if not path.exists():
+        return False
+    try:
+        workbook = load_workbook(path, read_only=True, data_only=True)
+        sheet = workbook["说明"]
+        return sheet["B1"].value == _template_signature(spec)
+    except Exception:
+        return False
+    finally:
+        try:
+            workbook.close()
+        except Exception:
+            pass
+
+
 def _build_workbook(spec: TemplateSpec) -> Workbook:
     workbook = Workbook()
     intro_sheet = workbook.active
     intro_sheet.title = "说明"
-    intro_sheet.append([spec.title])
+    intro_sheet.append([spec.title, _template_signature(spec)])
     for instruction in spec.instructions:
         intro_sheet.append([instruction])
 
@@ -211,12 +233,15 @@ def _build_workbook(spec: TemplateSpec) -> Workbook:
     return workbook
 
 
-def generate_import_templates(settings: Settings) -> list[Path]:
+def generate_import_templates(settings: Settings, *, force: bool = False) -> list[Path]:
     generated_paths: list[Path] = []
     settings.templates_dir.mkdir(parents=True, exist_ok=True)
 
     for spec in TEMPLATE_SPECS:
         path = settings.templates_dir / spec.filename
+        if _template_is_current(path, spec) and not force:
+            generated_paths.append(path)
+            continue
         workbook = _build_workbook(spec)
         workbook.save(path)
         generated_paths.append(path)

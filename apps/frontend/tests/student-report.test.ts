@@ -20,6 +20,14 @@ import {
   knowledgeDisplayName,
   pickExamStudentSelection,
 } from "../src/components/analytics/studentReport";
+import {
+  buildExamScoreReportQuery,
+  buildVisibleSubjectIds,
+  formatPercentCell,
+  formatScoreCell,
+  getSubjectScore,
+  normalizeExamScoreReportRows,
+} from "../src/components/analytics/scoreReport";
 
 describe("student report helpers", () => {
   it("builds radar rows from PR and T score metrics", () => {
@@ -174,5 +182,55 @@ describe("student report helpers", () => {
     expect(getBriefingPriorityTone("低")).toBe("info");
     expect(formatTaskPreviewSummary(2, 1)).toBe("可生成 2 项，已存在 1 项");
     expect(formatTaskPreviewSummary(0, 0)).toBe("暂无可生成任务");
+  });
+
+  it("builds exam score report query and visible subject columns", () => {
+    expect(buildExamScoreReportQuery({
+      classId: 1,
+      keyword: " 张三 ",
+      sortBy: "total_score",
+      sortOrder: "desc",
+      page: 2,
+      pageSize: 100,
+    }))
+      .toBe("?class_id=1&keyword=%E5%BC%A0%E4%B8%89&sort_by=total_score&sort_order=desc&page=2&page_size=100");
+    expect(buildExamScoreReportQuery({ keyword: "   " })).toBe("");
+
+    const subjects = [
+      { subject_id: 1, subject_name: "语文", sort_order: 1, is_in_total: true },
+      { subject_id: 2, subject_name: "数学", sort_order: 2, is_in_total: true },
+    ];
+    expect(buildVisibleSubjectIds(subjects, [])).toEqual([1, 2]);
+    expect(buildVisibleSubjectIds(subjects, [2])).toEqual([2]);
+  });
+
+  it("formats exam score report cells and resolves subject scores", () => {
+    const row = {
+      student_id: 1,
+      student_no: "2026001",
+      student_name: "张三",
+      score_value_type: "original",
+      score_value_label: "原始分",
+      subject_scores: [
+        {
+          subject_id: 2,
+          subject_name: "数学",
+          score: 125.5,
+          score_value_type: "original",
+          score_value_label: "原始分",
+          excellent_flag: true,
+          pass_flag: true,
+        },
+      ],
+    };
+
+    const [normalizedRow] = normalizeExamScoreReportRows([row]);
+
+    expect(getSubjectScore(normalizedRow, 2)?.score).toBe(125.5);
+    expect(getSubjectScore(normalizedRow, 1)).toBeNull();
+    expect(formatScoreCell(125.5)).toBe("125.5");
+    expect(formatScoreCell(null)).toBe("-");
+    expect(formatPercentCell(0.856)).toBe("85.6%");
+    expect(formatPercentCell(undefined)).toBe("-");
   });
 });

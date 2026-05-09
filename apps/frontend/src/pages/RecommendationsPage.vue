@@ -401,6 +401,7 @@
             @page-size-change="handleCollegePageSizeChange"
             @create="openCreateCollege"
             @edit="openEditCollege"
+            @open-detail="openCollegeDetail"
           />
         </el-tab-pane>
 
@@ -415,6 +416,7 @@
             @page-size-change="handleMajorPageSizeChange"
             @create="openCreateMajor"
             @edit="openEditMajor"
+            @open-detail="openMajorDetail"
           />
         </el-tab-pane>
 
@@ -697,6 +699,7 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
+import { useRouter } from "vue-router";
 
 import RecommendationAdmissionsPanel from "../components/recommendations/RecommendationAdmissionsPanel.vue";
 import RecommendationCollegeDialog from "../components/recommendations/RecommendationCollegeDialog.vue";
@@ -732,6 +735,7 @@ import type {
 } from "../components/ui/types";
 
 const recommendationGlobalRiskNotices = RECOMMENDATION_GLOBAL_RISK_NOTICES;
+const router = useRouter();
 
 const {
   activeTab,
@@ -1068,6 +1072,14 @@ function switchPrimarySection(section: PrimarySectionKey): void {
     "data-health": "data-health",
   };
   activeTab.value = targetTab[section];
+}
+
+function openCollegeDetail(collegeId: number): void {
+  void router.push(`/colleges/${collegeId}`);
+}
+
+function openMajorDetail(majorId: number): void {
+  void router.push(`/majors/${majorId}`);
 }
 </script>
 

@@ -75,6 +75,119 @@ class MajorPageRead(BaseModel):
     page_size: int
 
 
+class CollegeProfileDetailRead(ORMModel):
+    id: int
+    college_id: int
+    enrollment_code: str | None = None
+    authority_department: str | None = None
+    education_level: str | None = None
+    is_985: bool
+    is_211: bool
+    is_dual_class: bool
+    ruanke_rank: int | None = None
+    eol_rank: int | None = None
+    area: str | None = None
+    master_program_count: int | None = None
+    doctor_program_count: int | None = None
+    official_website: str | None = None
+    admission_website: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    address: str | None = None
+    summary: str | None = None
+    source_path: str | None = None
+    source_sha256: str | None = None
+    is_active: bool
+
+
+class CollegeYearSummaryRead(ORMModel):
+    id: int
+    college_id: int
+    province: str
+    year: int
+    total_plan_count: int | None = None
+    specialty_count: int | None = None
+    min_rank: int | None = None
+    estimated_min_score: float | None = None
+    source_note: str | None = None
+    source_path: str | None = None
+    source_sha256: str | None = None
+    is_active: bool
+
+
+class MajorProfileDetailRead(ORMModel):
+    id: int
+    major_id: int
+    major_code: str | None = None
+    education_level: str | None = None
+    schooling_years: str | None = None
+    direction: str | None = None
+    tags_json: list[str] = Field(default_factory=list)
+    summary: str | None = None
+    source_path: str | None = None
+    source_sha256: str | None = None
+    is_active: bool
+
+
+class CollegeMajorProfileRead(ORMModel):
+    id: int
+    college_id: int
+    college_name: str | None = None
+    major_id: int
+    major_name: str | None = None
+    school_major_feature: str | None = None
+    is_national_feature: bool
+    is_provincial_feature: bool
+    is_key_major: bool
+    schooling_years: str | None = None
+    education_level: str | None = None
+    source_path: str | None = None
+    source_sha256: str | None = None
+    is_active: bool
+
+
+class GaokaoProfileSourceRead(BaseModel):
+    source_path: str | None = None
+    source_sha256: str | None = None
+    source_type: str
+    title: str | None = None
+
+
+class CollegeDetailRead(BaseModel):
+    college: CollegeRead
+    profile: CollegeProfileDetailRead | None = None
+    year_summaries: list[CollegeYearSummaryRead] = Field(default_factory=list)
+    major_profiles: list[CollegeMajorProfileRead] = Field(default_factory=list)
+    recent_admissions: list["AdmissionRecordRead"] = Field(default_factory=list)
+    recent_plans: list["EnrollmentPlanRead"] = Field(default_factory=list)
+    source_documents: list[GaokaoProfileSourceRead] = Field(default_factory=list)
+
+
+class CollegeAdmissionHistoryRead(BaseModel):
+    college_id: int
+    college_name: str
+    admissions: list["AdmissionRecordRead"] = Field(default_factory=list)
+    plans: list["EnrollmentPlanRead"] = Field(default_factory=list)
+
+
+class MajorDetailRead(BaseModel):
+    major: MajorRead
+    profile: MajorProfileDetailRead | None = None
+    college_profiles: list[CollegeMajorProfileRead] = Field(default_factory=list)
+    employment_mappings: list["MajorEmploymentMappingRead"] = Field(default_factory=list)
+    recent_admissions: list["AdmissionRecordRead"] = Field(default_factory=list)
+    recent_plans: list["EnrollmentPlanRead"] = Field(default_factory=list)
+    subject_requirement_samples: list[str] = Field(default_factory=list)
+    source_documents: list[GaokaoProfileSourceRead] = Field(default_factory=list)
+
+
+class MajorAdmissionHistoryRead(BaseModel):
+    major_id: int
+    major_name: str
+    admissions: list["AdmissionRecordRead"] = Field(default_factory=list)
+    plans: list["EnrollmentPlanRead"] = Field(default_factory=list)
+
+
 class EmploymentDirectionPayload(BaseModel):
     name: str
     category: str | None = None

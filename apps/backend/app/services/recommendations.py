@@ -20,6 +20,12 @@ from ._recommendations_drafts import (
     list_volunteer_drafts,
     update_volunteer_draft,
 )
+from ._recommendations_details import (
+    get_college_admission_history,
+    get_college_detail,
+    get_major_admission_history,
+    get_major_detail,
+)
 from ._recommendations_employment import (
     bootstrap_employment_directions,
     bootstrap_major_employment_mappings,
@@ -101,6 +107,10 @@ __all__ = [
     "delete_volunteer_draft",
     "generate_recommendations",
     "get_gaokao_score_projection",
+    "get_college_admission_history",
+    "get_college_detail",
+    "get_major_admission_history",
+    "get_major_detail",
     "get_recommendation_settings",
     "get_volunteer_draft_detail",
     "import_admissions",

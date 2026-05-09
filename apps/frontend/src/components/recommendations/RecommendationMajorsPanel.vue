@@ -29,7 +29,7 @@
       <el-table-column label="专业" min-width="220">
         <template #default="{ row }">
           <div class="name-stack">
-            <strong>{{ row.name }}</strong>
+            <el-button link type="primary" class="name-link" @click="emit('open-detail', row.id)">{{ row.name }}</el-button>
             <span v-if="row.major_code">{{ row.major_code }}</span>
           </div>
         </template>
@@ -94,6 +94,7 @@ const emit = defineEmits<{
   "page-size-change": [value: number];
   create: [];
   edit: [value: MajorItem];
+  "open-detail": [majorId: number];
 }>();
 </script>
 
@@ -116,7 +117,11 @@ const emit = defineEmits<{
   gap: 4px;
 }
 
-.name-stack strong {
+.name-stack .name-link {
+  justify-content: flex-start;
+  padding: 0;
+  height: auto;
+  font-weight: 650;
   color: #203449;
 }
 

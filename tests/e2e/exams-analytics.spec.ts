@@ -52,6 +52,29 @@ test("分析中心：导入题分明细后展示学生知识点诊断", async ({
   await expect(studentPanel.getByText("知识点清单")).toBeVisible();
 });
 
+test("分析中心：成绩报表展示本次考试学生单科和综合成绩", async ({ page }) => {
+  await ensureExamWithScores(page);
+  await page.goto("/analytics");
+  await expect(page.getByRole("heading", { name: "分析中心" })).toBeVisible();
+
+  const examSelect = page.locator(".panel-block").filter({ hasText: "选择考试" }).locator(".el-select").first();
+  await selectDropdownOption(page, examSelect, e2eExamName);
+
+  await page.getByRole("tab", { name: "成绩报表" }).click();
+  const reportPanel = page.locator(".score-report-panel");
+  await expect(reportPanel.getByRole("heading", { name: "成绩报表" })).toBeVisible();
+  await reportPanel.getByRole("button", { name: "加载成绩报表" }).click();
+
+  await expect(reportPanel.getByText("校内名次（本次有效导入样本）")).toBeVisible();
+  const firstRow = reportPanel.locator(".el-table__row").filter({ hasText: "张三" }).first();
+  await expect(firstRow).toBeVisible();
+  await expect(firstRow).toContainText("2026001");
+  await expect(firstRow).toContainText("118");
+  await expect(firstRow).toContainText("125");
+  await expect(firstRow).toContainText("243");
+  await expect(reportPanel.getByText("学生数", { exact: true })).toBeVisible();
+});
+
 test("分析中心：多次题分明细可展示连续知识点趋势", async ({ page }) => {
   await ensureExamWithScores(page);
   const trendExamOneId = await ensureExamWithSubjectsByApi(page, e2eKnowledgeTrendExamOneName, "2026-02-10");

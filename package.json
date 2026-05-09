@@ -20,6 +20,7 @@
     "backend:gaokao-sources": "node ./scripts/backend-cli.cjs gaokao-sources",
     "backend:gaokao-import-official": "node ./scripts/backend-cli.cjs gaokao-import-official",
     "backend:gaokao-import-shandong-core": "node ./scripts/backend-cli.cjs gaokao-import-shandong-core",
+    "backend:gaokao-import-scraper-bundle": "node ./scripts/backend-cli.cjs gaokao-import-scraper-bundle",
     "backend:data-health": "node ./scripts/backend-cli.cjs data-health",
     "backend:p0-check": "node ./scripts/backend-cli.cjs p0-check",
     "backend:init-demo": "node ./scripts/backend-cli.cjs init-demo",

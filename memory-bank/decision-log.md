@@ -1,5 +1,23 @@
 # 决策日志
 
+## 2026-05-08：gaokao-scraper 本地包采用积极覆盖，文档文件只作证据登记
+
+- 决定：`/Users/gao/Desktop/高考志愿/gaokao-scraper` 全目录进入处理流程；结构化 JSON/CSV 写入 raw 表、应用表和画像表，xls/xlsx/docx/pdf/html 全部登记为 `gaokao_source_document` 来源证据。对山东 2023-2025 已导入范围内的活跃招生计划、投档/录取记录按本地 scraper 当前口径覆盖更新，但 raw 事实不硬删。
+- 原因：用户明确选择“积极覆盖、独立详情页、全部一次处理”。scraper 目录内既有可直接消费的汇总 JSON，也有官方网页/附件证据；把不可稳定结构化的文档强行抽字段会增加误读风险，登记路径与 SHA256 更适合后续人工追溯。
+- 约束：普通类第 1 次常规批在应用表仍归并为 `常规批`，第 2/3 次保留 `常规批第2次/常规批第3次` 以避免覆盖冲突；位次换算分数时必须在 `source_note` 标明“按一分一段估算”；无效计划、缺专业名或计划数为 0 的记录只能进入 raw/证据，不得用来覆盖应用侧有效计划；单招/综评缺专门录取结果时仍只能初筛。
+
+## 2026-05-08：院校/专业详情独立成页，推荐链路只跳转不展开大表
+
+- 决定：新增 `/colleges/:collegeId` 与 `/majors/:majorId` 独立详情页，并提供 `GET /api/colleges/{id}/detail`、`GET /api/colleges/{id}/admission-history`、`GET /api/majors/{id}/detail`、`GET /api/majors/{id}/admission-history`；推荐结果、志愿候选、院校库和专业库只把名称变成跳转入口，不在列表内展开完整详情。
+- 原因：院校画像、专业画像、近年录取样本和来源证据信息量较大，放在推荐列表内会破坏扫描效率并重新放大大表渲染风险。独立页能让老师从推荐结果自然钻取，同时保持志愿工作台首屏轻。
+- 约束：详情页读取已有分页/详情数据，不把核心推荐规则硬编码在前端；来源证据显示本地路径和 SHA256，不直接存附件内容；就业映射和选科要求样例只作为辅助信息，不能替代正式填报前的章程/选科人工复核。
+
+## 2026-05-08：高考 raw 遗留外键以最小安全迁移修复，不改业务口径
+
+- 决定：新增 `20260508_0031_gaokao_legacy_fk_safety.py`，补回遗留 raw 层 `data_import_batch` 空父表，清空旧 `data_import_error_log`，并删除指向缺失 `gaokao_college` 的 `gaokao_college_tag`。该迁移不改变应用侧推荐、录取、计划或画像口径。
+- 原因：真实主库 `PRAGMA integrity_check` 正常，但 `foreign_key_check` 暴露 62 条历史/raw 层悬挂引用；其中 `data_import_error_log` 的父表在当前主库中不存在，单纯清数据仍会让后续外键操作踩同一结构坑。补空父表和清孤立子行是最小、可回滚、对业务表无侵入的修复。
+- 约束：这类遗留 raw 审计表只作历史来源，不作为当前导入审计主链路；正式推荐仍以应用侧 `admission_record`、`enrollment_plan`、画像表和 `gaokao_source_document` 为准。清理前必须保留 `data/app.db` 备份，清理后必须复跑 `integrity_check`、`foreign_key_check`、数据健康和 P0 检查。
+
 ## 2026-05-02：知识点分析 V2.2 采用“知识库 + 建议任务 + 专门报告”闭环
 
 - 决定：在 V1/V2 的题分和快照底座上继续演进，不另起错题本或任务系统；知识点采用同科单父级树和别名精确归一，错因标签独立维护，补弱任务写入既有 `student_planning_task`，学生和班级各做专门打印报告。

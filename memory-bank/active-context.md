@@ -2,6 +2,25 @@
 
 ## 当前状态
 
+- 2026-05-08 已完成 `/Users/gao/Desktop/高考志愿/gaokao-scraper` 本地数据包并库、院校/专业详情页和数据库安全复查：
+  - 新增迁移 `20260508_0030_gaokao_profile_detail.py`，新增院校画像、院校年度汇总、专业画像、学校-专业画像四张表
+  - 新增安全迁移 `20260508_0031_gaokao_legacy_fk_safety.py`，真实主库已升级到 Alembic `20260508_0031`；补回遗留 raw 层缺失的 `data_import_batch` 空父表，清空旧 `data_import_error_log`，并清理指向缺失 raw 院校的 `gaokao_college_tag`
+  - 正式导入前保留备份：`data/backups/app_before_gaokao_profile_migrate_20260508_192533.db`、`data/backups/app_before_gaokao_scraper_bundle_20260508_194932.db`
+  - 安全修复前保留备份：`data/backups/app_before_gaokao_safety_fk_cleanup_20260508_202350.db`
+  - `scripts/import_gaokao_scraper_bundle.py` 已处理全部 scraper 目录：结构化 JSON/CSV 入库，xls/xlsx/docx/pdf/html 登记为 `gaokao_source_document` 来源证据；普通类第 1 次常规批应用表归并为 `常规批`，第 2/3 次保留独立批次
+  - 真实库当前关键计数：`college_profile_detail=2983`、`major_profile_detail=4979`、`college_major_profile=32186`、`college_year_summary=6531`；scraper 来源证据文件 `112` 个，raw 投档/录取 `92141` 条，raw 计划 `529` 条，应用侧 scraper 录取 `65542` 条，应用侧计划 `0` 条
+  - 安全复查清理：`PRAGMA foreign_key_check` 原有 62 条遗留问题已归零，其中 `gaokao_college_tag` 悬挂 raw 院校标签 58 条、`data_import_error_log` 指向缺失 `data_import_batch` 的旧日志 4 条；应用侧 `admission_record`、`enrollment_plan`、画像表与院校/专业主表均无缺失引用
+  - 新增详情接口和页面：`GET /api/colleges/{college_id}/detail`、`GET /api/colleges/{college_id}/admission-history`、`GET /api/majors/{major_id}/detail`、`GET /api/majors/{major_id}/admission-history`；前端 `/colleges/:collegeId`、`/majors/:majorId` 已接入推荐页、院校库、专业库、推荐方案、山东普通类推荐和志愿候选/草稿跳转
+  - `backend:data-health` 仍为 `warning`，P0 缺口剩 1 条：单招 / 综评仍缺专门录取结果，只能做初筛；2026 普通类正式计划、一分一段和省控线仍待官方发布
+  - 验证：SQLite `integrity_check=ok` 且 `foreign_key_check` 无输出；后端 gaokao 安全/详情/导入专项 `5 passed`，详情专项复跑 `2 passed`；`backend:data-health -- --json` 通过但保持 `warning`；`backend:p0-check -- --json` 为 `ok: true`（新 P0 备份 `data/backups/p0_delivery_backup_20260508_203220.zip`）；`frontend:lint`、`frontend:build`、推荐跳转前端单测 `51 passed`、navigation 单测 `6 passed`、推荐/志愿 E2E `20 passed`、详情接口 4 个真实库冒烟、浏览器院校/专业详情页冒烟、`git diff --check` 均通过
+
+- 2026-05-06 已完成“分析中心 / 成绩报表”首版：
+  - 新增只读接口 `GET /api/analytics/exams/{exam_id}/score-report`，支持 `class_id`、`keyword`、`sort_by`、`sort_order`，返回考试科目、摘要和一行一学生的宽表成绩数据
+  - 数据口径复用 `score_total_snapshot` 与 `score_subject_snapshot`；班级优先走考试时点 `score_exam_student_context`，只有单科快照、没有总分快照时仍展示学生行
+  - 分析中心新增“成绩报表”页签，支持班级筛选、姓名/学号检索、排序、科目显示开关，展示单科成绩、总分、班名次、校内名次、PR 和总分口径；科目列按当前筛选结果中至少有一名学生存在有效分的科目返回，避免班级筛选后显示本班无人选考的空科目
+  - 本轮不新增数据库迁移，不接输出中心、打印或 Excel 导出；仅做页面查看
+  - 验证：后端 `test_student_analysis_report_v1.py` 为 `13 passed`；前端 `student-report.test.ts` 为 `8 passed`；`frontend:lint`、`frontend:build`、考试分析 E2E `6 passed` 均通过；真实接口冒烟确认 `202604高三二模 / 202312` 从 11 科收窄为语文、数学、日语、政治、历史、地理 6 科
+
 - 2026-05-02 已完成“成绩知识点分析 V2.2：知识体系、错因、讲评与任务闭环”：
   - 新增迁移 `20260502_0029_knowledge_v22_schema.py`，扩展 `knowledge_point` 支持单父级知识树，新增 `knowledge_point_alias`、`error_reason_tag`，并为题分记录、题目知识点映射和知识点快照补错因与归一来源字段
   - 题分明细导入支持 `错因标签`、`错因备注` 可选列；知识点列按“标准点精确匹配 → 别名归一 → 路径建树 → 未归类扁平点”处理，错因按 `、 , ; |` 分隔，未知错因自动创建

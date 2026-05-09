@@ -1,5 +1,69 @@
 # 交接说明
 
+## 当前主线状态（2026-05-08）
+
+- 本轮已完成用户要求的“高考志愿数据并库与院校/专业详情页”：
+  - 当前分支：`codex/gaokao-scraper-integration`
+  - 数据源：`/Users/gao/Desktop/高考志愿/gaokao-scraper`
+  - 真实主库 `data/app.db` 已迁移到 Alembic `20260508_0031`，SQLite `integrity_check=ok`，`PRAGMA foreign_key_check` 无输出
+  - 迁移前备份：`data/backups/app_before_gaokao_profile_migrate_20260508_192533.db`
+  - 导入前备份：`data/backups/app_before_gaokao_scraper_bundle_20260508_194932.db`
+  - 安全修复前备份：`data/backups/app_before_gaokao_safety_fk_cleanup_20260508_202350.db`
+  - P0 备份包：`data/backups/p0_delivery_backup_20260508_203220.zip`
+- 新增数据结构：
+  - `college_profile_detail`：院校画像，当前 2983 条
+  - `college_year_summary`：山东年度汇总，当前 6531 条
+  - `major_profile_detail`：专业画像，当前 4979 条
+  - `college_major_profile`：学校-专业画像，当前 32186 条
+  - `20260508_0031_gaokao_legacy_fk_safety.py` 补回遗留 raw 表 `data_import_batch`，并清理旧 `data_import_error_log` 与悬挂 `gaokao_college_tag`
+- 导入结果：
+  - `gaokao_source_document` 中 scraper 本地证据文件 112 个
+  - scraper raw 投档/录取 92141 条，raw 计划 529 条
+  - 应用侧 scraper 录取当前有效 65542 条
+  - 应用侧 scraper 计划 0 条；本批计划多为注册入学、缺专业名或计划数无效，已按规则只保留 raw/证据，避免覆盖现有有效计划
+  - `gaokao_import_run` 中本轮 run 为 69/70/71；其中 `failed_rows=801`、`skipped_rows=6`，主要是无效计划或标题/空记录
+- 新增/变更入口：
+  - 脚本：`scripts/import_gaokao_scraper_bundle.py`
+  - 命令：`npm run backend:gaokao-import-scraper-bundle -- --source-dir /Users/gao/Desktop/高考志愿/gaokao-scraper --apply --json`
+  - 后端接口：`GET /api/colleges/{college_id}/detail`、`GET /api/colleges/{college_id}/admission-history`、`GET /api/majors/{major_id}/detail`、`GET /api/majors/{major_id}/admission-history`
+  - 前端页面：`/colleges/:collegeId`、`/majors/:majorId`
+  - 推荐工作台、院校库、专业库、推荐方案、山东普通类推荐、候选池和志愿草稿里的院校/专业名称已支持点击跳转
+- 本轮额外修复：
+  - `apps/frontend/src/stores/reference.ts` 的异步缓存从自引用 `promise` 改为显式 deferred promise，修复 `vue-tsc` 的 “Variable 'promise' is used before being assigned” 构建错误
+  - 数据库安全复查发现 62 条历史/raw 层外键悬挂：`gaokao_college_tag` 58 条、`data_import_error_log` 4 条；已在保留备份后清理，并用 `20260508_0031` 迁移防止缺失 `data_import_batch` 的遗留库继续触发外键错误
+- 已验证：
+  - `PRAGMA integrity_check`：`ok`
+  - `PRAGMA foreign_key_check`：无输出
+  - `npm run backend:test -- apps/backend/tests/test_gaokao_profile_details.py apps/backend/tests/test_gaokao_scraper_bundle_import.py -q`：4 passed
+  - `npm run backend:test -- apps/backend/tests/test_gaokao_legacy_fk_safety.py apps/backend/tests/test_gaokao_profile_details.py apps/backend/tests/test_gaokao_scraper_bundle_import.py -q`：5 passed
+  - `npm run backend:test -- apps/backend/tests/test_gaokao_profile_details.py -q`：2 passed
+  - `npm run backend:data-health -- --json`：通过，状态 `warning`，P0 缺口 1 条
+  - `npm run backend:p0-check -- --json`：`ok: true`
+  - `npm run frontend:lint`：通过
+  - `npm run frontend:build`：通过
+  - `npm run frontend:test -- tests/navigation.test.ts tests/volunteer-workbench.test.ts tests/recommendation-comparison.test.ts tests/shandong-recommendation-workbench.test.ts`：51 passed
+  - `npm run frontend:test -- tests/navigation.test.ts`：6 passed
+  - `npm run e2e -- tests/e2e/recommendations.spec.ts tests/e2e/gaokao-volunteer.spec.ts`：20 passed
+  - 真实库接口冒烟：`/api/colleges/1/detail`、`/api/colleges/1/admission-history`、`/api/majors/1/detail`、`/api/majors/1/admission-history` 均返回 200
+  - 浏览器冒烟：`http://127.0.0.1:5173/colleges/1` 可见“院校概览 / 联系方式 / 来源证据”；`http://127.0.0.1:5173/majors/1` 可见“专业概览 / 开设院校 / 来源证据”
+  - `git diff --check`：通过
+- 仍需注意：
+  - `backend:data-health` 的警告不是本轮回归，而是单招 / 综评仍缺专门录取结果；页面和导出仍只能按初筛/fallback 风险提示
+  - 2026 普通类正式招生计划、一分一段、省控线仍待官方发布，不能提前伪造或用单招/综评计划替代
+  - 工作区仍有大量非本轮文件处于修改状态，包括成绩分析、桌面、BaseData、memory-bank 等；不要随手回滚用户或其它窗口改动
+
+## 当前主线状态（2026-05-06）
+
+- 本轮已完成用户要求的“分析中心 / 成绩报表”首版：
+  - 后端新增 `GET /api/analytics/exams/{exam_id}/score-report`，查询参数为 `class_id`、`keyword`、`sort_by`、`sort_order`
+  - 返回结构新增在 `apps/backend/app/schemas/exam.py`：`ExamScoreReportResponse`、`ExamScoreReportSubject`、`ExamScoreReportRow`、`ExamScoreReportSubjectScore`、`ExamScoreReportSummary`
+  - 数据读取只复用 `score_total_snapshot`、`score_subject_snapshot` 和 `score_exam_student_context`；班级过滤按考试时点归属，缺总分快照但有单科快照也会展示学生行
+  - 科目列按当前筛选后的学生结果二次过滤：只有当前结果中至少有一名学生存在有效分的科目会返回；例如真实库 `202604高三二模 / 202312` 现在只展示语文、数学、日语、政治、历史、地理 6 科，不再展示英语、俄语、物理、化学、生物空列
+  - 前端新增 `apps/frontend/src/components/analytics/scoreReport.ts` helper；`AnalyticsPage.vue` 增加“成绩报表”页签，支持班级筛选、姓名/学号检索、排序、科目显示开关和宽表展示
+  - 本轮不新增 Alembic 迁移、不写真实 `data/app.db`、不接输出中心/打印/Excel 导出
+  - 验证：`npm run backend:test -- apps/backend/tests/test_student_analysis_report_v1.py -q` 为 `13 passed`；`npm run frontend:test -- tests/student-report.test.ts` 为 `8 passed`；`npm run frontend:lint`、`npm run frontend:build`、`npm run e2e -- tests/e2e/exams-analytics.spec.ts` 为 `6 passed`；真实接口冒烟通过；本地服务已重启到 `http://127.0.0.1:5173`
+  - 注意：工作区存在未跟踪 `.claude/`，本轮未修改；后续不要误纳入提交，除非用户明确要求
+
 ## 当前主线状态（2026-05-02）
 
 - 本轮已完成用户要求的“成绩知识点分析 V2.2：知识体系、错因、讲评与任务闭环”：

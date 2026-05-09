@@ -6,7 +6,7 @@ from io import BytesIO
 from openpyxl import Workbook, load_workbook
 from sqlalchemy import select
 
-from app.models import Exam, ScoreSubjectSnapshot, ScoreTotalSnapshot, Semester, Student
+from app.models import Exam, ExamSubject, ScoreExamStudentContext, ScoreSubjectSnapshot, ScoreTotalSnapshot, Semester, Student
 
 
 def _build_score_workbook(exam_name: str, rows: list[list[object]]) -> bytes:
@@ -242,6 +242,176 @@ def test_exam_analyzable_students_returns_empty_for_exam_without_scores(client) 
     students_response = client.get(f"/api/analytics/exams/{exam_id}/students")
     assert students_response.status_code == 200
     assert students_response.json() == {"exam_id": exam_id, "total": 0, "items": []}
+
+
+def test_exam_score_report_returns_wide_student_rows_and_filters_by_exam_class(client, app) -> None:
+    _create_student(client, 1)
+    _create_student(client, 2)
+    _create_student(client, 7)
+    _create_student(client, 8)
+    exam_id = _create_exam(
+        client,
+        "成绩宽表测试",
+        "2026-05-10",
+        _rows_for_exam(
+            {1: 125, 2: 110, 7: 90, 8: 80},
+            {1: 118, 2: 120, 7: 105, 8: 100},
+        ),
+    )
+    with app.state.db.session_scope() as session:
+        student = session.scalar(select(Student).where(Student.student_no == "20261007"))
+        class_two_student = session.scalar(select(Student).where(Student.student_no == "20261008"))
+        assert student is not None
+        assert class_two_student is not None
+        exam = session.get(Exam, exam_id)
+        assert exam is not None
+        session.add(
+            ExamSubject(
+                exam_id=exam_id,
+                subject_id=3,
+                full_score=150,
+                is_in_total=True,
+                sort_order=3,
+                is_active=True,
+            )
+        )
+        session.add(
+            ScoreSubjectSnapshot(
+                exam_id=exam_id,
+                student_id=class_two_student.id,
+                subject_id=3,
+                score=99,
+                class_rank=1,
+                grade_rank=1,
+                grade_percentile=1,
+            )
+        )
+        context = session.scalar(
+            select(ScoreExamStudentContext).where(
+                ScoreExamStudentContext.exam_id == exam_id,
+                ScoreExamStudentContext.student_id == student.id,
+            )
+        )
+        assert context is not None
+        context.mapped_class_id = 1
+        context.source_class_name = "历史1班"
+
+    response = client.get(f"/api/analytics/exams/{exam_id}/score-report")
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert payload["exam_id"] == exam_id
+    assert payload["summary"]["student_count"] == 4
+    assert payload["summary"]["subject_count"] == 3
+    assert payload["summary"]["total_average"] == 212
+    assert [item["subject_name"] for item in payload["subjects"]] == ["语文", "数学", "英语"]
+    first = payload["rows"][0]
+    assert first["student_no"] == "20261001"
+    assert first["total_score"] == 243
+    assert first["grade_rank"] == 1
+    assert first["score_value_label"] == "原始分"
+    assert payload["total"] == 4
+    assert payload["page"] == 1
+    assert payload["page_size"] == 50
+    assert {item["subject_name"]: item["score"] for item in first["subject_scores"]} == {"语文": 118, "数学": 125}
+
+    paged_response = client.get(f"/api/analytics/exams/{exam_id}/score-report?page=2&page_size=2")
+    assert paged_response.status_code == 200
+    paged_payload = paged_response.json()
+    assert paged_payload["total"] == 4
+    assert [item["student_no"] for item in paged_payload["rows"]] == ["20261007", "20261008"]
+
+    class_response = client.get(f"/api/analytics/exams/{exam_id}/score-report?class_id=1")
+    assert class_response.status_code == 200
+    class_payload = class_response.json()
+    assert class_payload["summary"]["student_count"] == 3
+    assert class_payload["summary"]["subject_count"] == 2
+    assert [item["subject_name"] for item in class_payload["subjects"]] == ["语文", "数学"]
+    moved_row = next(item for item in class_payload["rows"] if item["student_no"] == "20261007")
+    assert moved_row["class_id"] == 1
+    assert moved_row["class_name"] == "1班"
+
+    class_two_response = client.get(f"/api/analytics/exams/{exam_id}/score-report?class_id=2")
+    assert class_two_response.status_code == 200
+    class_two_payload = class_two_response.json()
+    assert class_two_payload["summary"]["student_count"] == 1
+    assert class_two_payload["summary"]["subject_count"] == 3
+    assert [item["subject_name"] for item in class_two_payload["subjects"]] == ["语文", "数学", "英语"]
+
+    keyword_response = client.get(f"/api/analytics/exams/{exam_id}/score-report?keyword=测试生7")
+    assert keyword_response.status_code == 200
+    keyword_payload = keyword_response.json()
+    assert [item["student_no"] for item in keyword_payload["rows"]] == ["20261007"]
+    assert [item["subject_name"] for item in keyword_payload["subjects"]] == ["语文", "数学"]
+
+
+def test_exam_score_report_sorting_and_subject_only_rows(client, app) -> None:
+    with app.state.db.session_scope() as session:
+        semester = session.scalar(select(Semester).where(Semester.is_current.is_(True)))
+        assert semester is not None
+        exam = Exam(
+            name="成绩宽表仅分科测试",
+            exam_type="阶段测试",
+            exam_date=date(2026, 5, 11),
+            semester_id=semester.id,
+            grade_scope_json=[1],
+            status="published",
+        )
+        student_a = Student(
+            student_no="REPORTONLY002",
+            name="仅分科乙",
+            current_grade_id=1,
+            current_class_id=1,
+            status="active",
+        )
+        student_b = Student(
+            student_no="REPORTONLY001",
+            name="仅分科甲",
+            current_grade_id=1,
+            current_class_id=1,
+            status="active",
+        )
+        session.add_all([exam, student_a, student_b])
+        session.flush()
+        session.add_all(
+            [
+                ScoreSubjectSnapshot(
+                    exam_id=exam.id,
+                    student_id=student_a.id,
+                    subject_id=1,
+                    score=88,
+                    class_rank=2,
+                    grade_rank=9,
+                    grade_percentile=0.4,
+                ),
+                ScoreSubjectSnapshot(
+                    exam_id=exam.id,
+                    student_id=student_b.id,
+                    subject_id=1,
+                    score=99,
+                    class_rank=1,
+                    grade_rank=4,
+                    grade_percentile=0.7,
+                ),
+            ]
+        )
+        exam_id = exam.id
+
+    response = client.get(f"/api/analytics/exams/{exam_id}/score-report?sort_by=student_no&sort_order=asc")
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert payload["summary"]["student_count"] == 2
+    assert payload["summary"]["subject_count"] == 1
+    assert payload["summary"]["total_average"] is None
+    assert [item["subject_name"] for item in payload["subjects"]] == ["语文"]
+    assert [item["student_no"] for item in payload["rows"]] == ["REPORTONLY001", "REPORTONLY002"]
+    assert payload["rows"][0]["total_score"] is None
+    assert payload["rows"][0]["subject_scores"][0]["score"] == 99
+
+    class_rank_response = client.get(f"/api/analytics/exams/{exam_id}/score-report?sort_by=class_rank&sort_order=asc")
+    assert class_rank_response.status_code == 200
+    assert [item["student_no"] for item in class_rank_response.json()["rows"]] == ["REPORTONLY001", "REPORTONLY002"]
 
 
 def test_student_knowledge_import_builds_learning_plan(client) -> None:

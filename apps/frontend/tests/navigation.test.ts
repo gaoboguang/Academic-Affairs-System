@@ -33,6 +33,18 @@ describe("navigation", () => {
     expect(pathwayItem.label).toBe("升学方案");
   });
 
+  it("keeps college and major detail pages under the recommendation workbench", () => {
+    const collegeItem = resolveNavItem("/colleges/1");
+    const majorItem = resolveNavItem("/majors/2");
+
+    expect(collegeItem.path).toBe("/recommendations");
+    expect(collegeItem.sectionId).toBe("decision");
+    expect(collegeItem.label).toBe("高考志愿工作台");
+    expect(majorItem.path).toBe("/recommendations");
+    expect(majorItem.sectionId).toBe("decision");
+    expect(majorItem.label).toBe("高考志愿工作台");
+  });
+
   it("falls back to dashboard for unknown paths", () => {
     expect(resolveNavItem("/unknown").path).toBe("/");
   });

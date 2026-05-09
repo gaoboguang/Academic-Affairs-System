@@ -450,8 +450,24 @@
             <el-table-column label="院校 / 专业" min-width="220">
               <template #default="{ row }">
                 <div class="candidate-title">
-                  <strong>{{ row.college_name }}</strong>
-                  <span>{{ row.major_name || row.major_group_code || "院校级计划" }}</span>
+                  <el-button
+                    link
+                    type="primary"
+                    class="entity-link"
+                    @click="openCollegeDetail(row.college_id)"
+                  >
+                    {{ row.college_name || `院校 ${row.college_id}` }}
+                  </el-button>
+                  <el-button
+                    v-if="row.major_id"
+                    link
+                    type="primary"
+                    class="entity-link muted"
+                    @click="openMajorDetail(row.major_id)"
+                  >
+                    {{ row.major_name || `专业 ${row.major_id}` }}
+                  </el-button>
+                  <span v-else>{{ row.major_name || row.major_group_code || "院校级计划" }}</span>
                   <small v-if="buildCodeMeta(row)">{{ buildCodeMeta(row) }}</small>
                 </div>
               </template>
@@ -666,8 +682,24 @@
             <el-table-column label="志愿" min-width="220">
               <template #default="{ row }">
                 <div class="candidate-title">
-                  <strong>{{ row.candidate.college_name }}</strong>
-                  <span>{{ row.candidate.major_name || row.candidate.major_group_code || "院校级计划" }}</span>
+                  <el-button
+                    link
+                    type="primary"
+                    class="entity-link"
+                    @click="openCollegeDetail(row.candidate.college_id)"
+                  >
+                    {{ row.candidate.college_name || `院校 ${row.candidate.college_id}` }}
+                  </el-button>
+                  <el-button
+                    v-if="row.candidate.major_id"
+                    link
+                    type="primary"
+                    class="entity-link muted"
+                    @click="openMajorDetail(row.candidate.major_id)"
+                  >
+                    {{ row.candidate.major_name || `专业 ${row.candidate.major_id}` }}
+                  </el-button>
+                  <span v-else>{{ row.candidate.major_name || row.candidate.major_group_code || "院校级计划" }}</span>
                   <small v-if="buildCodeMeta(row.candidate)">{{ buildCodeMeta(row.candidate) }}</small>
                 </div>
               </template>
@@ -760,8 +792,24 @@
                 <el-table-column label="志愿" min-width="220">
                   <template #default="{ row }">
                     <div class="candidate-title">
-                      <strong>{{ row.candidate.college_name }}</strong>
-                      <span>{{ row.candidate.major_name || row.candidate.major_group_code || "院校级计划" }}</span>
+                      <el-button
+                        link
+                        type="primary"
+                        class="entity-link"
+                        @click="openCollegeDetail(row.candidate.college_id)"
+                      >
+                        {{ row.candidate.college_name || `院校 ${row.candidate.college_id}` }}
+                      </el-button>
+                      <el-button
+                        v-if="row.candidate.major_id"
+                        link
+                        type="primary"
+                        class="entity-link muted"
+                        @click="openMajorDetail(row.candidate.major_id)"
+                      >
+                        {{ row.candidate.major_name || `专业 ${row.candidate.major_id}` }}
+                      </el-button>
+                      <span v-else>{{ row.candidate.major_name || row.candidate.major_group_code || "院校级计划" }}</span>
                       <small v-if="buildCodeMeta(row.candidate)">{{ buildCodeMeta(row.candidate) }}</small>
                     </div>
                   </template>
@@ -1000,6 +1048,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { useRouter } from "vue-router";
 
 import {
   careerPriorityFocusOptions,
@@ -1077,6 +1126,8 @@ const props = defineProps<{
   volunteerLimit?: number;
   remainingSlots: number | null;
 }>();
+
+const router = useRouter();
 
 const emit = defineEmits<{
   "load-preview": [];
@@ -1156,6 +1207,14 @@ const employmentColumnOptions: Array<{ key: VolunteerEmploymentColumnKey; label:
   { key: "needs_certificate", label: "需资格证" },
   { key: "summary", label: "说明摘要" },
 ];
+
+function openCollegeDetail(collegeId: number): void {
+  void router.push(`/colleges/${collegeId}`);
+}
+
+function openMajorDetail(majorId: number): void {
+  void router.push(`/majors/${majorId}`);
+}
 const employmentColumnSet = computed(() => new Set(selectedEmploymentColumns.value));
 const careerPreferenceStatusCopy = computed(() => {
   if (!props.form.student_id) {
@@ -1702,13 +1761,26 @@ function alertLevelLabel(value: VolunteerWorkbenchRuleAlert["level"]): string {
   gap: 4px;
 }
 
-.candidate-title strong {
-  color: #20364b;
-}
-
 .candidate-title span {
   color: #6a8094;
   font-size: 13px;
+}
+
+.entity-link {
+  justify-content: flex-start;
+  height: auto;
+  padding: 0;
+  color: #1f5f8f;
+  font-weight: 700;
+  white-space: normal;
+  text-align: left;
+  line-height: 1.45;
+}
+
+.entity-link.muted {
+  color: #506a82;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .candidate-title small {

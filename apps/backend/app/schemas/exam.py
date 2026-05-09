@@ -222,6 +222,64 @@ class ExamAnalyzableStudentListResponse(BaseModel):
     items: list[ExamAnalyzableStudentItem] = Field(default_factory=list)
 
 
+class ExamScoreReportSubject(BaseModel):
+    subject_id: int
+    subject_name: str
+    full_score: float | None = None
+    sort_order: int = 0
+    is_in_total: bool = True
+
+
+class ExamScoreReportSubjectScore(BaseModel):
+    subject_id: int
+    subject_name: str
+    score: float | None = None
+    original_score: float | None = None
+    converted_score: float | None = None
+    score_value_type: str = "original"
+    score_value_label: str = "原始分"
+    class_rank: int | None = None
+    grade_rank: int | None = None
+    grade_percentile: float | None = None
+    excellent_flag: bool = False
+    pass_flag: bool = False
+
+
+class ExamScoreReportRow(BaseModel):
+    student_id: int
+    student_no: str
+    student_name: str
+    class_id: int | None = None
+    class_name: str | None = None
+    total_score: float | None = None
+    score_value_type: str = "original"
+    score_value_label: str = "原始分"
+    class_rank: int | None = None
+    grade_rank: int | None = None
+    grade_percentile: float | None = None
+    subject_scores: list[ExamScoreReportSubjectScore] = Field(default_factory=list)
+
+
+class ExamScoreReportSummary(BaseModel):
+    student_count: int = 0
+    subject_count: int = 0
+    total_average: float | None = None
+    total_max: float | None = None
+    total_min: float | None = None
+
+
+class ExamScoreReportResponse(BaseModel):
+    exam_id: int
+    exam_name: str
+    rank_scope_label: str = "校内名次（本次有效导入样本）"
+    subjects: list[ExamScoreReportSubject] = Field(default_factory=list)
+    summary: ExamScoreReportSummary = Field(default_factory=ExamScoreReportSummary)
+    rows: list[ExamScoreReportRow] = Field(default_factory=list)
+    total: int = 0
+    page: int = 1
+    page_size: int = 50
+
+
 class StudentTargetLineGap(BaseModel):
     line_id: int
     line_name: str

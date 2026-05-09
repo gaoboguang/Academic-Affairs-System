@@ -30,7 +30,10 @@ from app.repositories.exams import (
     get_exam,
     get_previous_trend_exam,
     get_score_records_for_exam,
+    get_subject_ids_for_exam_students,
+    get_subject_snapshot_students_for_exam,
     get_subject_snapshots_for_exam,
+    get_subject_snapshots_for_exam_students,
     get_total_snapshots_for_exam,
 )
 from app.services.knowledge_base import build_knowledge_paths
@@ -38,6 +41,11 @@ from app.schemas.exam import (
     ClassAnalyticsResponse,
     ExamAnalyzableStudentItem,
     ExamAnalyzableStudentListResponse,
+    ExamScoreReportResponse,
+    ExamScoreReportRow,
+    ExamScoreReportSubject,
+    ExamScoreReportSubjectScore,
+    ExamScoreReportSummary,
     ClassPanoramaResponse,
     GradeAnalyticsResponse,
     GradeClassAnalyticsItem,
@@ -132,6 +140,284 @@ def list_exam_analyzable_students(session: Session, exam_id: int) -> ExamAnalyza
     )
     items = [_build_exam_analyzable_student_item(student, None) for student in fallback_rows]
     return ExamAnalyzableStudentListResponse(exam_id=exam.id, total=len(items), items=items)
+
+
+def get_exam_score_report(
+    session: Session,
+    exam_id: int,
+    class_id: int | None = None,
+    keyword: str | None = None,
+    sort_by: str = "grade_rank",
+    sort_order: str = "asc",
+    page: int = 1,
+    page_size: int = 50,
+) -> ExamScoreReportResponse:
+    exam = get_exam(session, exam_id)
+    if not exam:
+        raise HTTPException(status_code=404, detail="考试不存在")
+
+    total_snapshots = list(get_total_snapshots_for_exam(session, exam_id))
+    context_map = load_exam_context_map(session, exam_id)
+    subject_meta = _build_exam_score_report_subjects(exam, [])
+    subject_name_map = {item.subject_id: item.subject_name for item in subject_meta}
+    total_by_student = {item.student_id: item for item in total_snapshots if item.student}
+    subject_students = {
+        student.id: student
+        for student in get_subject_snapshot_students_for_exam(session, exam_id)
+        if student.is_active
+    }
+    students_by_id = {
+        **subject_students,
+        **{
+            snapshot.student_id: snapshot.student
+            for snapshot in total_snapshots
+            if snapshot.student and snapshot.student.is_active
+        },
+    }
+
+    shell_rows = [
+        _build_exam_score_report_row(
+            student,
+            total_by_student.get(student_id),
+            [],
+            context_map,
+            subject_name_map,
+        )
+        for student_id, student in students_by_id.items()
+    ]
+
+    normalized_keyword = (keyword or "").strip().lower()
+    if normalized_keyword:
+        shell_rows = [
+            row
+            for row in shell_rows
+            if normalized_keyword in row.student_name.lower()
+            or normalized_keyword in row.student_no.lower()
+        ]
+
+    if class_id is not None:
+        shell_rows = [row for row in shell_rows if row.class_id == class_id]
+
+    rows = _sort_exam_score_report_rows(shell_rows, sort_by=sort_by, sort_order=sort_order)
+    total = len(rows)
+    total_scores = [row.total_score for row in rows if row.total_score is not None]
+    filtered_student_ids = [row.student_id for row in rows]
+    visible_subject_ids = set(get_subject_ids_for_exam_students(session, exam_id, filtered_student_ids))
+    if visible_subject_ids:
+        subject_meta = [item for item in subject_meta if item.subject_id in visible_subject_ids]
+        existing_subject_ids = {item.subject_id for item in subject_meta}
+        missing_subject_ids = visible_subject_ids - existing_subject_ids
+        if missing_subject_ids:
+            fallback_subjects = {
+                subject.id: subject
+                for subject in session.scalars(select(Subject).where(Subject.id.in_(missing_subject_ids))).all()
+            }
+            subject_meta.extend(
+                ExamScoreReportSubject(
+                    subject_id=subject_id,
+                    subject_name=fallback_subjects[subject_id].name if subject_id in fallback_subjects else str(subject_id),
+                    full_score=None,
+                    sort_order=len(subject_meta) + index,
+                    is_in_total=True,
+                )
+                for index, subject_id in enumerate(sorted(missing_subject_ids))
+            )
+    else:
+        subject_meta = []
+    subject_name_map = {item.subject_id: item.subject_name for item in subject_meta}
+    start = (page - 1) * page_size
+    page_shell_rows = rows[start:start + page_size]
+    page_student_ids = [row.student_id for row in page_shell_rows]
+    page_subject_snapshots = list(get_subject_snapshots_for_exam_students(session, exam_id, page_student_ids))
+    subjects_by_student: dict[int, list[ScoreSubjectSnapshot]] = defaultdict(list)
+    for snapshot in page_subject_snapshots:
+        if snapshot.student:
+            subjects_by_student[snapshot.student_id].append(snapshot)
+    page_rows = [
+        _build_exam_score_report_row(
+            students_by_id[row.student_id],
+            total_by_student.get(row.student_id),
+            subjects_by_student.get(row.student_id, []),
+            context_map,
+            subject_name_map,
+        )
+        for row in page_shell_rows
+    ]
+    page_rows = [
+        row.model_copy(
+            update={
+                "subject_scores": [
+                    subject_score
+                    for subject_score in row.subject_scores
+                    if subject_score.subject_id in visible_subject_ids
+                ]
+            }
+        )
+        for row in page_rows
+    ]
+
+    return ExamScoreReportResponse(
+        exam_id=exam.id,
+        exam_name=exam.name,
+        subjects=subject_meta,
+        summary=ExamScoreReportSummary(
+            student_count=total,
+            subject_count=len(subject_meta),
+            total_average=safe_mean(total_scores) if total_scores else None,
+            total_max=max(total_scores) if total_scores else None,
+            total_min=min(total_scores) if total_scores else None,
+        ),
+        rows=page_rows,
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+def _filter_empty_exam_score_report_subjects(
+    subjects: list[ExamScoreReportSubject],
+    rows: list[ExamScoreReportRow],
+) -> tuple[list[ExamScoreReportSubject], list[ExamScoreReportRow]]:
+    visible_subject_ids = {
+        subject_score.subject_id
+        for row in rows
+        for subject_score in row.subject_scores
+        if subject_score.score is not None
+    }
+    if not visible_subject_ids:
+        return [], [row.model_copy(update={"subject_scores": []}) for row in rows]
+    filtered_subjects = [item for item in subjects if item.subject_id in visible_subject_ids]
+    filtered_rows = [
+        row.model_copy(
+            update={
+                "subject_scores": [
+                    subject_score
+                    for subject_score in row.subject_scores
+                    if subject_score.subject_id in visible_subject_ids
+                ]
+            }
+        )
+        for row in rows
+    ]
+    return filtered_subjects, filtered_rows
+
+
+def _build_exam_score_report_subjects(
+    exam: Exam,
+    subject_snapshots: list[ScoreSubjectSnapshot],
+) -> list[ExamScoreReportSubject]:
+    subjects: list[ExamScoreReportSubject] = []
+    seen_subject_ids: set[int] = set()
+    for item in sorted(exam.subjects, key=lambda subject: (subject.sort_order, subject.id)):
+        seen_subject_ids.add(item.subject_id)
+        subjects.append(
+            ExamScoreReportSubject(
+                subject_id=item.subject_id,
+                subject_name=item.subject.name if item.subject else str(item.subject_id),
+                full_score=item.full_score,
+                sort_order=item.sort_order,
+                is_in_total=item.is_in_total,
+            )
+        )
+    fallback: dict[int, ScoreSubjectSnapshot] = {}
+    for snapshot in subject_snapshots:
+        fallback.setdefault(snapshot.subject_id, snapshot)
+    for subject_id, snapshot in sorted(fallback.items(), key=lambda pair: pair[0]):
+        if subject_id in seen_subject_ids:
+            continue
+        subjects.append(
+            ExamScoreReportSubject(
+                subject_id=subject_id,
+                subject_name=snapshot.subject.name if snapshot.subject else str(subject_id),
+                full_score=None,
+                sort_order=len(subjects),
+                is_in_total=True,
+            )
+        )
+    return subjects
+
+
+def _build_exam_score_report_row(
+    student: Student,
+    total_snapshot: ScoreTotalSnapshot | None,
+    subject_snapshots: list[ScoreSubjectSnapshot],
+    context_map: dict,
+    subject_name_map: dict[int, str],
+) -> ExamScoreReportRow:
+    subject_scores = [
+        ExamScoreReportSubjectScore(
+            subject_id=snapshot.subject_id,
+            subject_name=subject_name_map.get(
+                snapshot.subject_id,
+                snapshot.subject.name if snapshot.subject else str(snapshot.subject_id),
+            ),
+            score=snapshot.score,
+            original_score=snapshot.original_score,
+            converted_score=snapshot.converted_score,
+            score_value_type=snapshot.score_value_type,
+            score_value_label=_score_value_label(snapshot.score_value_type),
+            class_rank=snapshot.class_rank,
+            grade_rank=snapshot.grade_rank,
+            grade_percentile=snapshot.grade_percentile,
+            excellent_flag=snapshot.excellent_flag,
+            pass_flag=snapshot.pass_flag,
+        )
+        for snapshot in sorted(subject_snapshots, key=lambda item: (item.subject_id, item.id))
+    ]
+    return ExamScoreReportRow(
+        student_id=student.id,
+        student_no=student.student_no,
+        student_name=student.name,
+        class_id=effective_class_id(student, context_map.get(student.id)),
+        class_name=effective_class_name(student, context_map.get(student.id)),
+        total_score=total_snapshot.total_score if total_snapshot else None,
+        score_value_type=total_snapshot.score_value_type if total_snapshot else "original",
+        score_value_label=_score_value_label(total_snapshot.score_value_type if total_snapshot else None),
+        class_rank=total_snapshot.class_rank if total_snapshot else None,
+        grade_rank=total_snapshot.grade_rank if total_snapshot else None,
+        grade_percentile=total_snapshot.grade_percentile if total_snapshot else None,
+        subject_scores=subject_scores,
+    )
+
+
+def _sort_exam_score_report_rows(
+    rows: list[ExamScoreReportRow],
+    sort_by: str,
+    sort_order: str,
+) -> list[ExamScoreReportRow]:
+    reverse = sort_order == "desc"
+    if sort_by == "total_score":
+        key = lambda row: (
+            row.total_score is None,
+            -(row.total_score or 0) if reverse else row.total_score or 0,
+            row.grade_rank is None,
+            row.grade_rank or 0,
+            row.student_no,
+            row.student_id,
+        )
+        return sorted(rows, key=key)
+    if sort_by == "class_rank":
+        key = lambda row: (
+            row.class_rank is None,
+            -(row.class_rank or 0) if reverse else row.class_rank or 0,
+            row.grade_rank is None,
+            row.grade_rank or 0,
+            row.student_no,
+            row.student_id,
+        )
+        return sorted(rows, key=key)
+    if sort_by == "student_no":
+        key = lambda row: (row.student_no, row.student_id)
+        return sorted(rows, key=key, reverse=reverse)
+
+    key = lambda row: (
+        row.grade_rank is None,
+        -(row.grade_rank or 0) if reverse else row.grade_rank or 0,
+        -(row.total_score or 0),
+        row.student_no,
+        row.student_id,
+    )
+    return sorted(rows, key=key)
 
 
 def _build_exam_analyzable_student_item(

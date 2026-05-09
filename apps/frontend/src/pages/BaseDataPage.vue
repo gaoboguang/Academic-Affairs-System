@@ -47,6 +47,7 @@
             { label: '当前学年', prop: 'is_current' },
           ]"
           :fields="academicYearFields"
+          @saved="reloadAll"
         />
       </el-tab-pane>
       <el-tab-pane label="学期">
@@ -62,6 +63,7 @@
             { label: '周数', prop: 'week_count' },
           ]"
           :fields="semesterFields"
+          @saved="reloadAll"
         />
       </el-tab-pane>
       <el-tab-pane label="年级">
@@ -75,6 +77,7 @@
             { label: '启用', prop: 'is_active' },
           ]"
           :fields="gradeFields"
+          @saved="reloadAll"
         />
       </el-tab-pane>
       <el-tab-pane label="班级">
@@ -90,6 +93,7 @@
             { label: '班额', prop: 'student_count' },
           ]"
           :fields="classFields"
+          @saved="reloadAll"
         />
       </el-tab-pane>
       <el-tab-pane label="学科">
@@ -104,6 +108,7 @@
             { label: '排序', prop: 'sort_order' },
           ]"
           :fields="subjectFields"
+          @saved="reloadAll"
         />
       </el-tab-pane>
       <el-tab-pane label="字典">
@@ -118,6 +123,7 @@
               { label: '启用', prop: 'is_active' },
             ]"
             :fields="dictTypeFields"
+            @saved="reloadAll"
           />
           <section class="soft-card dict-side">
             <div class="dict-side-head">
@@ -151,6 +157,7 @@
                 { label: '启用', prop: 'is_active' },
               ]"
               :fields="dictItemFields"
+              @saved="reloadAll"
             />
             <el-empty v-else description="请选择字典类型" />
           </section>
@@ -288,7 +295,7 @@ async function loadTeachers(): Promise<void> {
 
 async function reloadAll(): Promise<void> {
   try {
-    await Promise.all([referenceStore.loadAll(), loadDictTypes(), loadTeachers()]);
+    await Promise.all([referenceStore.loadAll({ force: true }), loadDictTypes(), loadTeachers()]);
   } catch (error) {
     ElMessage.error((error as Error).message);
   }

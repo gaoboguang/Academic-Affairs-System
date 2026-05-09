@@ -22,6 +22,8 @@ const TimetableWorkloadPage = () => import("../pages/TimetableWorkloadPage.vue")
 const EvaluationQuantPage = () => import("../pages/EvaluationQuantPage.vue");
 const ReportsPage = () => import("../pages/ReportsPage.vue");
 const RecommendationsPage = () => import("../pages/RecommendationsPage.vue");
+const CollegeDetailPage = () => import("../pages/CollegeDetailPage.vue");
+const MajorDetailPage = () => import("../pages/MajorDetailPage.vue");
 const SystemToolsPage = () => import("../pages/SystemToolsPage.vue");
 const RecommendationPrintPage = () => import("../pages/RecommendationPrintPage.vue");
 const ShandongRecommendationPrintPage = () => import("../pages/ShandongRecommendationPrintPage.vue");
@@ -238,6 +240,16 @@ const router = createRouter({
           path: "recommendations",
           name: "recommendations",
           component: RecommendationsPage,
+        },
+        {
+          path: "colleges/:collegeId",
+          name: "college-detail",
+          component: CollegeDetailPage,
+        },
+        {
+          path: "majors/:majorId",
+          name: "major-detail",
+          component: MajorDetailPage,
         },
         {
           path: "system-tools",

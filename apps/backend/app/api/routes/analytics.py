@@ -10,6 +10,7 @@ from app.schemas.exam import (
     ClassAnalyticsResponse,
     ClassPanoramaResponse,
     ExamAnalyzableStudentListResponse,
+    ExamScoreReportResponse,
     GradeAnalyticsResponse,
     GradePanoramaResponse,
     StudentAnalyticsResponse,
@@ -66,6 +67,29 @@ def list_exam_analyzable_students(
     session: Session = Depends(get_db_session),
 ) -> ExamAnalyzableStudentListResponse:
     return service.list_exam_analyzable_students(session, exam_id)
+
+
+@router.get("/exams/{exam_id}/score-report", response_model=ExamScoreReportResponse)
+def get_exam_score_report(
+    exam_id: int,
+    class_id: int | None = Query(default=None, ge=1),
+    keyword: str | None = Query(default=None, max_length=64),
+    sort_by: str = Query(default="grade_rank", pattern="^(grade_rank|class_rank|total_score|student_no)$"),
+    sort_order: str = Query(default="asc", pattern="^(asc|desc)$"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    session: Session = Depends(get_db_session),
+) -> ExamScoreReportResponse:
+    return service.get_exam_score_report(
+        session,
+        exam_id,
+        class_id=class_id,
+        keyword=keyword,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get("/students/{student_id}", response_model=StudentAnalyticsResponse)

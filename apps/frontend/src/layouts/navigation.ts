@@ -188,6 +188,7 @@ export const navSections: AppNavSection[] = [
         helper: "院校库、专业库、招生计划、录取库和规则字典已收进页面内的数据与规则中心。",
         icon: School,
         tags: ["候选池", "草稿篮", "风险复核"],
+        matchPrefixes: ["/colleges/", "/majors/"],
       },
       {
         path: "/reports",

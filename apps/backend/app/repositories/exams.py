@@ -99,6 +99,53 @@ def get_subject_snapshots_for_exam(session: Session, exam_id: int) -> Sequence[S
     return session.scalars(stmt).all()
 
 
+def get_subject_snapshot_students_for_exam(session: Session, exam_id: int) -> Sequence[Student]:
+    stmt = (
+        select(Student)
+        .join(ScoreSubjectSnapshot, ScoreSubjectSnapshot.student_id == Student.id)
+        .where(ScoreSubjectSnapshot.exam_id == exam_id)
+        .distinct()
+    )
+    return session.scalars(stmt).all()
+
+
+def get_subject_ids_for_exam_students(
+    session: Session,
+    exam_id: int,
+    student_ids: Sequence[int],
+) -> Sequence[int]:
+    if not student_ids:
+        return []
+    stmt = (
+        select(ScoreSubjectSnapshot.subject_id)
+        .where(
+            ScoreSubjectSnapshot.exam_id == exam_id,
+            ScoreSubjectSnapshot.student_id.in_(student_ids),
+            ScoreSubjectSnapshot.score.is_not(None),
+        )
+        .distinct()
+    )
+    return session.scalars(stmt).all()
+
+
+def get_subject_snapshots_for_exam_students(
+    session: Session,
+    exam_id: int,
+    student_ids: Sequence[int],
+) -> Sequence[ScoreSubjectSnapshot]:
+    if not student_ids:
+        return []
+    stmt = (
+        select(ScoreSubjectSnapshot)
+        .options(joinedload(ScoreSubjectSnapshot.student), joinedload(ScoreSubjectSnapshot.subject))
+        .where(
+            ScoreSubjectSnapshot.exam_id == exam_id,
+            ScoreSubjectSnapshot.student_id.in_(student_ids),
+        )
+    )
+    return session.scalars(stmt).all()
+
+
 def list_score_batches(session: Session, exam_id: int) -> Sequence[ScoreImportBatch]:
     stmt = (
         select(ScoreImportBatch)

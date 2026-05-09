@@ -139,6 +139,10 @@ const props = withDefaults(
   },
 );
 
+const emit = defineEmits<{
+  saved: [];
+}>();
+
 const items = ref<Record<string, unknown>[]>([]);
 const dialogVisible = ref(false);
 const editingId = ref<number | null>(null);
@@ -207,6 +211,7 @@ async function submitForm(): Promise<void> {
     ElMessage.success("保存成功");
     dialogVisible.value = false;
     await loadData();
+    emit("saved");
   } catch (error) {
     ElMessage.error((error as Error).message);
   } finally {

@@ -34,6 +34,12 @@ from app.models.exam import (
     ScoreTotalSnapshot,
 )
 from app.models.gaokao_import import GaokaoImportRun, GaokaoSourceDocument
+from app.models.gaokao_profile import (
+    CollegeMajorProfile,
+    CollegeProfileDetail,
+    CollegeYearSummary,
+    MajorProfileDetail,
+)
 from app.models.planning import StudentPlanningGoal, StudentPlanningNote, StudentPlanningTask
 from app.models.recommendation import (
     AdmissionRecord,
@@ -97,6 +103,9 @@ __all__ = [
     "College",
     "CollegeAlias",
     "CollegeMajor",
+    "CollegeMajorProfile",
+    "CollegeProfileDetail",
+    "CollegeYearSummary",
     "ClassAdviserAssignment",
     "ClassHonor",
     "ConfigItem",
@@ -121,6 +130,7 @@ __all__ = [
     "KnowledgePoint",
     "KnowledgePointAlias",
     "Major",
+    "MajorProfileDetail",
     "MajorEmploymentMapping",
     "ReportExportRecord",
     "RecommendationResult",

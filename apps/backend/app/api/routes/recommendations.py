@@ -10,6 +10,8 @@ from app.schemas.recommendation import (
     AdmissionRecordPageRead,
     AdmissionRecordRead,
     CollegePayload,
+    CollegeAdmissionHistoryRead,
+    CollegeDetailRead,
     CollegePageRead,
     CollegeRead,
     EmploymentDirectionPayload,
@@ -19,6 +21,8 @@ from app.schemas.recommendation import (
     EnrollmentPlanPageRead,
     EnrollmentPlanRead,
     MajorPageRead,
+    MajorAdmissionHistoryRead,
+    MajorDetailRead,
     MajorPayload,
     MajorRead,
     MajorEmploymentMappingPayload,
@@ -107,6 +111,22 @@ def update_college(
     return service.update_college(session, college_id, payload)
 
 
+@router.get("/colleges/{college_id}/detail", response_model=CollegeDetailRead)
+def get_college_detail(
+    college_id: int,
+    session: Session = Depends(get_db_session),
+) -> CollegeDetailRead:
+    return service.get_college_detail(session, college_id)
+
+
+@router.get("/colleges/{college_id}/admission-history", response_model=CollegeAdmissionHistoryRead)
+def get_college_admission_history(
+    college_id: int,
+    session: Session = Depends(get_db_session),
+) -> CollegeAdmissionHistoryRead:
+    return service.get_college_admission_history(session, college_id)
+
+
 @router.get("/majors", response_model=list[MajorRead])
 def list_majors(
     keyword: str | None = Query(default=None),
@@ -148,6 +168,22 @@ def update_major(
     session: Session = Depends(get_db_session),
 ) -> MajorRead:
     return service.update_major(session, major_id, payload)
+
+
+@router.get("/majors/{major_id}/detail", response_model=MajorDetailRead)
+def get_major_detail(
+    major_id: int,
+    session: Session = Depends(get_db_session),
+) -> MajorDetailRead:
+    return service.get_major_detail(session, major_id)
+
+
+@router.get("/majors/{major_id}/admission-history", response_model=MajorAdmissionHistoryRead)
+def get_major_admission_history(
+    major_id: int,
+    session: Session = Depends(get_db_session),
+) -> MajorAdmissionHistoryRead:
+    return service.get_major_admission_history(session, major_id)
 
 
 @router.get("/employment-directions", response_model=list[EmploymentDirectionRead])

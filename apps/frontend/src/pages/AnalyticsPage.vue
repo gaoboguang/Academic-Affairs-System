@@ -77,8 +77,8 @@
       </div>
     </AppSectionCard>
 
-    <el-tabs class="analytics-tabs">
-      <el-tab-pane label="班主任驾驶舱">
+    <el-tabs v-model="activeAnalyticsTab" class="analytics-tabs">
+      <el-tab-pane label="班主任驾驶舱" name="adviser" lazy>
         <section class="soft-card panel-block">
           <div class="section-head compact">
             <div>
@@ -193,7 +193,104 @@
         </section>
       </el-tab-pane>
 
-      <el-tab-pane label="学生分析">
+      <el-tab-pane label="成绩报表" name="score-report" lazy>
+        <section class="soft-card panel-block score-report-panel">
+          <div class="section-head compact">
+            <div>
+              <h3>成绩报表</h3>
+              <p>按本次考试查看学生单科成绩和综合成绩宽表，班级口径优先采用考试时点归属。</p>
+            </div>
+          </div>
+          <div class="filter-grid score-report-filter-grid">
+            <el-select v-model="scoreReportClassId" clearable filterable placeholder="全部班级">
+              <el-option
+                v-for="schoolClass in referenceStore.classes"
+                :key="schoolClass.id"
+                :label="schoolClass.name"
+                :value="schoolClass.id"
+              />
+            </el-select>
+            <el-input v-model="scoreReportKeyword" clearable placeholder="姓名 / 学号" />
+            <el-select v-model="scoreReportSortMode" placeholder="排序">
+              <el-option label="校内名次升序" value="grade_rank:asc" />
+              <el-option label="总分降序" value="total_score:desc" />
+              <el-option label="班级名次升序" value="class_rank:asc" />
+              <el-option label="学号升序" value="student_no:asc" />
+            </el-select>
+            <el-button type="primary" :disabled="!selectedExamId" :loading="loadingScoreReport" @click="reloadScoreReportFromFirstPage">
+              加载成绩报表
+            </el-button>
+          </div>
+
+          <div v-if="scoreReport" class="score-report-toolbar">
+            <el-select
+              v-model="selectedScoreReportSubjectIds"
+              multiple
+              collapse-tags
+              collapse-tags-tooltip
+              clearable
+              placeholder="显示全部科目"
+            >
+              <el-option
+                v-for="subject in scoreReport.subjects"
+                :key="subject.subject_id"
+                :label="subject.subject_name"
+                :value="subject.subject_id"
+              />
+            </el-select>
+            <el-alert type="info" show-icon :closable="false" :title="scoreReport.rank_scope_label" />
+          </div>
+
+          <AppStatGrid v-if="scoreReport" :items="scoreReportCards" :columns="5" class="table-gap" />
+          <el-empty v-else-if="selectedExamId && !scoreRecordTotal" description="当前成绩记录为 0。请先导入成绩，再查看本次考试成绩报表。" />
+
+          <div v-if="scoreReport" class="table-shell table-gap score-report-table-shell">
+            <el-table :data="scoreReportTableRows" stripe height="620">
+              <el-table-column label="学号" prop="student_no" fixed min-width="120" />
+              <el-table-column label="姓名" prop="student_name" fixed min-width="100" />
+              <el-table-column label="考试班级" min-width="110">
+                <template #default="{ row }">{{ row.class_name ?? "-" }}</template>
+              </el-table-column>
+              <el-table-column
+                v-for="subject in visibleScoreReportSubjects"
+                :key="subject.subject_id"
+                :label="subject.subject_name"
+                min-width="92"
+                align="right"
+              >
+                <template #default="{ row }">
+                  {{ formatScoreCell(getSubjectScore(row, subject.subject_id)?.score) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="总分" min-width="90" align="right">
+                <template #default="{ row }">{{ formatScoreCell(row.total_score) }}</template>
+              </el-table-column>
+              <el-table-column label="班名次" min-width="90" align="right">
+                <template #default="{ row }">{{ row.class_rank ?? "-" }}</template>
+              </el-table-column>
+              <el-table-column label="校内名次" min-width="100" align="right">
+                <template #default="{ row }">{{ row.grade_rank ?? "-" }}</template>
+              </el-table-column>
+              <el-table-column label="PR" min-width="90" align="right">
+                <template #default="{ row }">{{ formatPercentCell(row.grade_percentile) }}</template>
+              </el-table-column>
+              <el-table-column label="总分口径" prop="score_value_label" min-width="95" />
+            </el-table>
+            <el-pagination
+              v-model:current-page="scoreReportPage"
+              v-model:page-size="scoreReportPageSize"
+              :total="scoreReport.total"
+              :page-sizes="[20, 50, 100, 200]"
+              layout="total, sizes, prev, pager, next"
+              class="score-report-pagination"
+              @current-change="loadScoreReport"
+              @size-change="handleScoreReportPageSizeChange"
+            />
+          </div>
+        </section>
+      </el-tab-pane>
+
+      <el-tab-pane label="学生分析" name="student" lazy>
         <section class="soft-card panel-block">
           <div class="section-head compact">
             <div>
@@ -447,7 +544,7 @@
         </section>
       </el-tab-pane>
 
-      <el-tab-pane label="班级分析">
+      <el-tab-pane label="班级分析" name="class" lazy>
         <section class="soft-card panel-block">
           <div class="section-head compact">
             <div>
@@ -552,7 +649,7 @@
         </section>
       </el-tab-pane>
 
-      <el-tab-pane label="年级分析">
+      <el-tab-pane label="年级分析" name="grade" lazy>
         <section class="soft-card panel-block">
           <div class="section-head compact">
             <div>
@@ -772,7 +869,7 @@
         </section>
       </el-tab-pane>
 
-      <el-tab-pane label="教师分析">
+      <el-tab-pane label="教师分析" name="teacher" lazy>
         <section class="soft-card panel-block">
           <div class="section-head compact">
             <div>
@@ -814,7 +911,7 @@
         </section>
       </el-tab-pane>
 
-      <el-tab-pane label="全景对比">
+      <el-tab-pane label="全景对比" name="grade-panorama" lazy>
         <GradePanoramaPanel
           v-model:selected-grade-id="selectedPanoramaGradeId"
           v-model:selected-academic-year-ids="selectedPanoramaAcademicYearIds"
@@ -827,7 +924,7 @@
         />
       </el-tab-pane>
 
-      <el-tab-pane label="班级全景">
+      <el-tab-pane label="班级全景" name="class-panorama" lazy>
         <ClassPanoramaPanel
           v-model:selected-class-id="selectedPanoramaClassId"
           v-model:selected-academic-year-ids="selectedClassPanoramaAcademicYearIds"
@@ -840,7 +937,7 @@
         />
       </el-tab-pane>
 
-      <el-tab-pane label="教师全景">
+      <el-tab-pane label="教师全景" name="teacher-panorama" lazy>
         <TeacherPanoramaPanel
           v-model:selected-teacher-id="selectedPanoramaTeacherId"
           v-model:selected-academic-year-ids="selectedTeacherPanoramaAcademicYearIds"
@@ -895,6 +992,15 @@ import {
   pickExamStudentSelection,
   type RadarMetric,
 } from "../components/analytics/studentReport";
+import {
+  buildExamScoreReportQuery,
+  buildVisibleSubjectIds,
+  formatPercentCell,
+  formatScoreCell,
+  getSubjectScore,
+  normalizeExamScoreReportRows,
+  type ExamScoreReportResponse,
+} from "../components/analytics/scoreReport";
 import type { ImportFeedbackResult } from "../utils/importFeedback";
 import TeacherPanoramaPanel from "../components/analytics/TeacherPanoramaPanel.vue";
 import type {
@@ -974,6 +1080,7 @@ const examOptions = ref<ExamOption[]>([]);
 const studentOptions = ref<StudentOption[]>([]);
 const teacherOptions = ref<TeacherOption[]>([]);
 
+const activeAnalyticsTab = ref("adviser");
 const selectedExamId = ref<number | null>(null);
 const selectedStudentId = ref<number | null>(null);
 const selectedClassId = ref<number | null>(null);
@@ -994,6 +1101,14 @@ const adviserClassId = ref<number | null>(null);
 const adviserDateRange = ref<[string, string] | null>(null);
 const adviserDashboard = ref<AdviserDashboardResponse | null>(null);
 const loadingAdviserDashboard = ref(false);
+const scoreReport = ref<ExamScoreReportResponse | null>(null);
+const loadingScoreReport = ref(false);
+const scoreReportClassId = ref<number | null>(null);
+const scoreReportKeyword = ref("");
+const scoreReportSortMode = ref("grade_rank:asc");
+const scoreReportPage = ref(1);
+const scoreReportPageSize = ref(50);
+const selectedScoreReportSubjectIds = ref<number[]>([]);
 const rankAudit = ref<ScoreRankAudit | null>(null);
 const loadingRankAudit = ref(false);
 const rebuildingSnapshots = ref(false);
@@ -1073,6 +1188,47 @@ const analyticsOverviewCards = computed<StatCardItem[]>(() => [
     tone: "neutral",
   },
 ]);
+const scoreReportCards = computed<StatCardItem[]>(() => {
+  const summary = scoreReport.value?.summary;
+  return [
+    {
+      label: "学生数",
+      value: summary?.student_count ?? 0,
+      help: "当前筛选下进入本次考试成绩报表的学生数。",
+      tone: "primary",
+    },
+    {
+      label: "科目数",
+      value: summary?.subject_count ?? 0,
+      help: "本次考试可展示的单科成绩列。",
+      tone: "neutral",
+    },
+    {
+      label: "总分均分",
+      value: formatScoreCell(summary?.total_average),
+      help: "当前筛选结果中有总分快照学生的平均分。",
+      tone: "success",
+    },
+    {
+      label: "最高分",
+      value: formatScoreCell(summary?.total_max),
+      help: "当前筛选结果中的总分最高值。",
+      tone: "primary",
+    },
+    {
+      label: "最低分",
+      value: formatScoreCell(summary?.total_min),
+      help: "当前筛选结果中的总分最低值。",
+      tone: "warning",
+    },
+  ];
+});
+const scoreReportTableRows = computed(() => normalizeExamScoreReportRows(scoreReport.value?.rows ?? []));
+const visibleScoreReportSubjects = computed(() => {
+  if (!scoreReport.value) return [];
+  const visibleIds = new Set(buildVisibleSubjectIds(scoreReport.value.subjects, selectedScoreReportSubjectIds.value));
+  return scoreReport.value.subjects.filter((item) => visibleIds.has(item.subject_id));
+});
 const rankAuditCards = computed<StatCardItem[]>(() =>
   rankAudit.value
     ? [
@@ -1483,6 +1639,43 @@ async function loadAdviserDashboard(): Promise<void> {
   }
 }
 
+async function loadScoreReport(): Promise<void> {
+  if (!selectedExamId.value) return;
+  const [sortBy, sortOrder] = scoreReportSortMode.value.split(":");
+  try {
+    loadingScoreReport.value = true;
+    const query = buildExamScoreReportQuery({
+      classId: scoreReportClassId.value,
+      keyword: scoreReportKeyword.value,
+      sortBy,
+      sortOrder,
+      page: scoreReportPage.value,
+      pageSize: scoreReportPageSize.value,
+    });
+    scoreReport.value = await apiRequest<ExamScoreReportResponse>(
+      `/api/analytics/exams/${selectedExamId.value}/score-report${query}`,
+    );
+    const selectedSubjectIds = new Set(selectedScoreReportSubjectIds.value);
+    selectedScoreReportSubjectIds.value = scoreReport.value.subjects
+      .filter((subject) => selectedSubjectIds.has(subject.subject_id))
+      .map((subject) => subject.subject_id);
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  } finally {
+    loadingScoreReport.value = false;
+  }
+}
+
+async function reloadScoreReportFromFirstPage(): Promise<void> {
+  scoreReportPage.value = 1;
+  await loadScoreReport();
+}
+
+async function handleScoreReportPageSizeChange(): Promise<void> {
+  scoreReportPage.value = 1;
+  await loadScoreReport();
+}
+
 function openRiskStudent(row: AdviserRiskStudentItem): void {
   router.push(`/students/${row.student_id}`);
 }
@@ -1587,6 +1780,8 @@ function resetTeacherPanoramaFilters(): void {
 
 function resetAnalyticsState(): void {
   studentAnalytics.value = null;
+  scoreReport.value = null;
+  selectedScoreReportSubjectIds.value = [];
   knowledgeSubjectFilter.value = null;
   classAnalytics.value = null;
   classKnowledgeBriefing.value = null;
@@ -1626,6 +1821,8 @@ function formatTargetLineCounts(value?: Record<string, number> | null): string {
 
 watch(selectedExamId, async (examId) => {
   rankAudit.value = null;
+  scoreReport.value = null;
+  selectedScoreReportSubjectIds.value = [];
   gradeAnalytics.value = null;
   studentAnalytics.value = null;
   knowledgeSubjectFilter.value = null;
@@ -1653,12 +1850,6 @@ onMounted(async () => {
     if (selectedExamId.value) {
       await loadTargetLines();
     }
-    await Promise.all([
-      adviserGradeId.value || adviserClassId.value ? loadAdviserDashboard() : Promise.resolve(),
-      selectedPanoramaGradeId.value ? loadGradePanorama() : Promise.resolve(),
-      selectedPanoramaClassId.value ? loadClassPanorama() : Promise.resolve(),
-      selectedPanoramaTeacherId.value ? loadTeacherPanorama() : Promise.resolve(),
-    ]);
   } catch (error) {
     ElMessage.error((error as Error).message);
   }
@@ -1759,6 +1950,32 @@ onMounted(async () => {
 .inline-import-result {
   flex: 1;
   min-width: 260px;
+}
+
+.score-report-filter-grid {
+  grid-template-columns: minmax(150px, 0.9fr) minmax(180px, 1fr) minmax(180px, 0.9fr) minmax(130px, 0.6fr);
+  align-items: center;
+}
+
+.score-report-filter-grid .el-button {
+  width: 100%;
+}
+
+.score-report-toolbar {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.7fr) minmax(0, 1.3fr);
+  gap: 12px;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.score-report-table-shell {
+  overflow: auto;
+}
+
+.score-report-pagination {
+  justify-content: flex-end;
+  margin-top: 14px;
 }
 
 .knowledge-panel p {
@@ -2032,6 +2249,8 @@ onMounted(async () => {
 
 @media (max-width: 960px) {
   .adviser-filter-grid,
+  .score-report-filter-grid,
+  .score-report-toolbar,
   .adviser-summary-grid,
   .student-report-grid,
   .distribution-grid,

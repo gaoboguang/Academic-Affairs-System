@@ -264,7 +264,25 @@
               <div class="candidate-detail">
                 <el-descriptions :column="2" border>
                   <el-descriptions-item label="专业（专业类）+ 学校">
-                    {{ row.major_name || "院校级计划" }} / {{ row.college_name }}
+                    <el-button
+                      v-if="row.major_id"
+                      link
+                      type="primary"
+                      class="entity-link"
+                      @click="openMajorDetail(row.major_id)"
+                    >
+                      {{ row.major_name || `专业 ${row.major_id}` }}
+                    </el-button>
+                    <span v-else>{{ row.major_name || "院校级计划" }}</span>
+                    /
+                    <el-button
+                      link
+                      type="primary"
+                      class="entity-link"
+                      @click="openCollegeDetail(row.college_id)"
+                    >
+                      {{ row.college_name || `院校 ${row.college_id}` }}
+                    </el-button>
                   </el-descriptions-item>
                   <el-descriptions-item label="位次差距">
                     {{ formatNullableNumber(row.rank_margin) }} 位，边际 {{ formatPercent(row.rank_margin_ratio) }}
@@ -306,8 +324,26 @@
           </el-table-column>
           <el-table-column label="学校 / 专业" min-width="260">
             <template #default="{ row }">
-              <div class="table-strong">{{ row.college_name }}</div>
-              <div class="table-muted">{{ row.major_name || "院校级计划" }}</div>
+              <el-button
+                link
+                type="primary"
+                class="entity-link table-entity-link"
+                @click="openCollegeDetail(row.college_id)"
+              >
+                {{ row.college_name || `院校 ${row.college_id}` }}
+              </el-button>
+              <div>
+                <el-button
+                  v-if="row.major_id"
+                  link
+                  type="primary"
+                  class="entity-link muted"
+                  @click="openMajorDetail(row.major_id)"
+                >
+                  {{ row.major_name || `专业 ${row.major_id}` }}
+                </el-button>
+                <span v-else class="table-muted">{{ row.major_name || "院校级计划" }}</span>
+              </div>
             </template>
           </el-table-column>
           <el-table-column label="分层" width="90">
@@ -353,6 +389,7 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
+import { useRouter } from "vue-router";
 
 import {
   SHANDONG_2026_DATA_NOTICE,
@@ -413,9 +450,19 @@ const emit = defineEmits<{
   "export-report": [];
 }>();
 
+const router = useRouter();
+
 const currentSourceModeHelp = computed(() => {
   return shandongSourceModeOptions.find((item) => item.value === props.form.source_mode)?.help ?? "";
 });
+
+function openCollegeDetail(collegeId: number): void {
+  void router.push(`/colleges/${collegeId}`);
+}
+
+function openMajorDetail(majorId: number): void {
+  void router.push(`/majors/${majorId}`);
+}
 </script>
 
 <style scoped>
@@ -586,6 +633,27 @@ const currentSourceModeHelp = computed(() => {
 .table-strong {
   color: #24384d;
   font-weight: 700;
+}
+
+.entity-link {
+  justify-content: flex-start;
+  height: auto;
+  padding: 0;
+  color: #1f5f8f;
+  font-weight: 700;
+  white-space: normal;
+  text-align: left;
+  line-height: 1.45;
+}
+
+.entity-link.muted {
+  color: #506a82;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.table-entity-link {
+  display: flex;
 }
 
 .risk-tag-row {
