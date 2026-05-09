@@ -30,6 +30,24 @@ import {
   validateVolunteerDraftName,
   validateVolunteerWorkbenchForm,
 } from "../src/components/recommendations/volunteerWorkbench";
+import {
+  alertLevelLabel,
+  alertTagType,
+  buildCodeMeta,
+  employmentHintTagType,
+  employmentMatchTagType,
+  emptyResultGroupCopy,
+  formatComparisonOrderChange,
+  formatComparisonType,
+  formatComparisonTypeChange,
+  formatDateTime,
+  formatEmploymentHintStatus,
+  formatEmploymentMatchStrength,
+  formatStudentType,
+  normalizeAlertLevel,
+  resultTagType,
+  resultTypeLabel,
+} from "../src/components/recommendations/volunteerWorkbenchPresentation";
 import type {
   ProvinceVolunteerRule,
   VolunteerDraftItem,
@@ -195,6 +213,34 @@ function buildPreview(overrides: Partial<VolunteerWorkbenchPreviewResponse> = {}
 }
 
 describe("volunteer workbench helpers", () => {
+  it("formats volunteer workbench presentation copy", () => {
+    expect(resultTypeLabel("challenge")).toBe("冲刺");
+    expect(resultTypeLabel("custom")).toBe("custom");
+    expect(resultTagType("safe")).toBe("success");
+    expect(resultTagType("custom")).toBe("info");
+    expect(formatStudentType("repeat")).toBe("复读生");
+    expect(formatStudentType(null)).toBe("-");
+    expect(emptyResultGroupCopy("稳妥志愿")).toBe("当前草稿里还没有稳妥志愿。");
+    expect(buildCodeMeta(buildCandidate(1))).toBe("院校代码 C001 / 专业代码 M001 / 专业组 1");
+    expect(formatComparisonType("safe")).toBe("保底");
+    expect(formatComparisonType()).toBe("-");
+    expect(formatComparisonOrderChange({ key: "1", currentOrder: 2, compareOrder: 4 })).toBe(
+      "当前第 2 位，对比稿第 4 位",
+    );
+    expect(formatComparisonTypeChange({ key: "1", currentType: "safe", compareType: "steady" })).toBe(
+      "保底 / 对比稿 稳妥",
+    );
+    expect(formatEmploymentMatchStrength("high")).toBe("强相关");
+    expect(employmentMatchTagType("transferable")).toBe("warning");
+    expect(formatEmploymentHintStatus("not_explicit")).toBe("未见明确提示");
+    expect(employmentHintTagType("yes")).toBe("warning");
+    expect(formatDateTime("not-a-date")).toBe("not-a-date");
+    expect(normalizeAlertLevel("danger")).toBe("info");
+    expect(alertTagType("warning")).toBe("warning");
+    expect(alertLevelLabel("warning")).toBe("需人工复核");
+    expect(alertLevelLabel("info")).toBe("已自动回退");
+  });
+
   it("validates required fields and builds normalized preview payload", () => {
     expect(validateVolunteerWorkbenchForm(buildForm({ student_id: undefined }))).toBe(
       "学生志愿工作台至少需要选择学生和参考考试",

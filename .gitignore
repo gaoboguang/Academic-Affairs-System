@@ -22,6 +22,8 @@ handoffs/*
 playwright-report/
 test-results/
 .specstory/
+.tmp/
+.claude/worktrees/
 apps/desktop/.dist/
 data/app.db
 data/*.db
