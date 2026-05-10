@@ -33,6 +33,7 @@ export function useRecommendationsPage() {
     planYearOptions: planning.planYearOptions,
     batchOptions: planning.batchOptions,
     examModeOptions: planning.examModeOptions,
+    examOptions: workflow.examOptions,
     employmentDirections: career.employmentDirections,
   });
   const shandongWorkbench = useShandongRecommendationWorkbench({

@@ -61,10 +61,10 @@ export const gaokaoCandidateTypeOptions = [
 ];
 
 export const scoreInputModeOptions = [
-  { value: "actual_rank", label: "正式位次" },
+  { value: "actual_rank", label: "正式位次（高考省位次）" },
   { value: "actual_score", label: "正式分数" },
   { value: "estimated_score", label: "预估分数" },
-  { value: "estimated_score_and_rank", label: "预估分 + 预估位次" },
+  { value: "estimated_score_and_rank", label: "预估分 + 预估位次（本次考试/模拟推荐）" },
   { value: "score_range", label: "分数区间" },
   { value: "rank_range", label: "位次区间" },
 ] as const;

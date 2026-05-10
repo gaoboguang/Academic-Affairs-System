@@ -61,11 +61,11 @@
       </el-select>
       <el-input v-model="form.name" placeholder="方案名称，可选" />
       <el-input v-model="form.subject_combination" placeholder="选科组合，可选" />
-      <el-select v-if="!isBatchMode" v-model="form.score_input_mode" placeholder="分数模式">
-        <el-option label="正式位次" value="actual_rank" />
+      <el-select v-if="!isBatchMode" v-model="form.score_input_mode" placeholder="成绩/位次来源">
+        <el-option label="正式位次（高考省位次）" value="actual_rank" />
         <el-option label="正式分数" value="actual_score" />
         <el-option label="预估分数" value="estimated_score" />
-        <el-option label="预估分 + 预估位次" value="estimated_score_and_rank" />
+        <el-option label="预估分 + 预估位次（本次考试/模拟推荐）" value="estimated_score_and_rank" />
         <el-option label="分数区间" value="score_range" />
         <el-option label="位次区间" value="rank_range" />
       </el-select>

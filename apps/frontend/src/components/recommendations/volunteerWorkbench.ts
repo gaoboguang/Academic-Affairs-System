@@ -90,13 +90,37 @@ const careerPriorityFocusLabels: Record<string, string> = {
 };
 
 const scoreInputModeLabels: Record<string, string> = {
-  actual_rank: "正式位次",
+  actual_rank: "正式位次（高考省位次）",
   actual_score: "正式分数",
   estimated_score: "预估分数",
-  estimated_score_and_rank: "预估分 + 预估位次",
+  estimated_score_and_rank: "预估分 + 预估位次（本次考试/模拟推荐）",
   score_range: "分数区间",
   rank_range: "位次区间",
 };
+
+export interface VolunteerExamScoreAutofillSource {
+  student_id: number;
+  exam_id: number;
+  exam_name: string;
+  total_score?: number | null;
+  grade_rank?: number | null;
+}
+
+export type VolunteerExamScoreAutofillStatus =
+  | "idle"
+  | "applied"
+  | "needs_rank"
+  | "manual_override"
+  | "missing_score"
+  | "not_found"
+  | "load_error";
+
+export interface VolunteerExamScoreAutofillNotice {
+  title: string;
+  detail: string;
+  tone: "success" | "warning" | "info";
+  canApply: boolean;
+}
 
 const candidateTypeLabels: Record<string, string> = {
   general: "普通类",
@@ -161,6 +185,112 @@ export function createVolunteerWorkbenchForm(): VolunteerWorkbenchFormState {
     culture_score: undefined,
     note: "",
   };
+}
+
+function sameOptionalNumber(left?: number, right?: number | null): boolean {
+  return left === (right ?? undefined);
+}
+
+function isVolunteerExamScoreAutofillStillCurrent(
+  form: VolunteerWorkbenchFormState,
+  source: VolunteerExamScoreAutofillSource,
+): boolean {
+  return (
+    form.score_input_mode === "estimated_score_and_rank"
+    && sameOptionalNumber(form.comprehensive_score, source.total_score)
+    && sameOptionalNumber(form.student_rank_override, source.grade_rank)
+    && form.reference_exam_name === source.exam_name
+  );
+}
+
+export function shouldApplyVolunteerExamScoreAutofill(
+  form: VolunteerWorkbenchFormState,
+  previousSource?: VolunteerExamScoreAutofillSource | null,
+): boolean {
+  if (previousSource) {
+    return isVolunteerExamScoreAutofillStillCurrent(form, previousSource);
+  }
+  return (
+    form.score_input_mode === "actual_rank"
+    && form.comprehensive_score === undefined
+    && form.student_rank_override === undefined
+    && !normalizeOptionalString(form.reference_exam_name)
+  );
+}
+
+export function applyVolunteerExamScoreAutofill(
+  form: VolunteerWorkbenchFormState,
+  source: VolunteerExamScoreAutofillSource,
+): void {
+  form.score_input_mode = "estimated_score_and_rank";
+  form.comprehensive_score = source.total_score ?? undefined;
+  form.student_rank_override = source.grade_rank ?? undefined;
+  form.reference_exam_name = source.exam_name;
+}
+
+function formatExamAutofillScore(source: VolunteerExamScoreAutofillSource): string {
+  const score = source.total_score ?? "暂无";
+  const rank = source.grade_rank ?? "暂无";
+  return `${source.exam_name}：总分 ${score}，校内名次 ${rank}`;
+}
+
+export function buildVolunteerExamScoreAutofillNotice(
+  status: VolunteerExamScoreAutofillStatus,
+  source?: VolunteerExamScoreAutofillSource | null,
+): VolunteerExamScoreAutofillNotice | null {
+  if (status === "idle") return null;
+  const basis = source ? formatExamAutofillScore(source) : "";
+  const localScopeNote = "校内考试口径，仅作模拟参考，不是山东省正式位次；高考出分后请切换为正式位次（高考省位次）。";
+
+  if (status === "applied" && source) {
+    return {
+      title: "考试成绩已带入",
+      detail: `${basis}，已作为预估分和预估位次使用。${localScopeNote}`,
+      tone: "success",
+      canApply: false,
+    };
+  }
+  if (status === "needs_rank" && source) {
+    return {
+      title: "考试成绩已带入",
+      detail: `${source.exam_name} 已读取总分 ${source.total_score ?? "暂无"}，但没有校内名次；已先作为预估分，仍需补位次，或在成绩/位次来源切换其他模式。${localScopeNote}`,
+      tone: "warning",
+      canApply: false,
+    };
+  }
+  if (status === "manual_override" && source) {
+    return {
+      title: "已读取本次考试成绩",
+      detail: `${basis}。当前分数、位次或成绩/位次来源已手动调整，不会覆盖；可一键使用本次考试成绩。${localScopeNote}`,
+      tone: "info",
+      canApply: true,
+    };
+  }
+  if (status === "missing_score") {
+    return {
+      title: "未读取到可用总分",
+      detail: "当前学生在这次考试中没有可用总分，需要手动填写成绩/位次后再生成智能筛选。",
+      tone: "warning",
+      canApply: false,
+    };
+  }
+  if (status === "not_found") {
+    return {
+      title: "本次考试没有该生成绩",
+      detail: "没有在参考考试的可分析学生名单中找到当前学生，可继续选择其它条件，但需要手动填写成绩/位次。",
+      tone: "warning",
+      canApply: false,
+    };
+  }
+  if (status === "load_error") {
+    return {
+      title: "考试成绩读取失败",
+      detail: "暂时无法读取本次考试成绩，请手动填写成绩/位次，或稍后重新选择学生和考试。",
+      tone: "warning",
+      canApply: false,
+    };
+  }
+  return null;
 }
 
 export function validateVolunteerWorkbenchForm(form: VolunteerWorkbenchFormState): string | null {
@@ -711,7 +841,7 @@ export function buildVolunteerWorkbenchExplanation(
   if (normalizeOptionalString(form.candidate_type)) {
     items.push({ label: "类别", value: candidateTypeLabels[form.candidate_type.trim()] ?? form.candidate_type.trim() });
   }
-  items.push({ label: "分数模式", value: scoreInputModeLabels[form.score_input_mode] ?? form.score_input_mode });
+  items.push({ label: "成绩/位次来源", value: scoreInputModeLabels[form.score_input_mode] ?? form.score_input_mode });
 
   const targetRegions = uniqueStrings(form.target_regions_json);
   if (targetRegions.length) {
@@ -789,7 +919,7 @@ export function buildVolunteerWorkbenchExplanation(
   const batchLabel = normalizeOptionalString(form.batch) ?? "全部批次";
   const examModeLabel = normalizeOptionalString(form.exam_mode) ?? "全部模式";
   const notes = [`先按 ${form.province} / ${form.target_year ?? new Date().getFullYear()} / ${batchLabel} / ${examModeLabel} 限定招生计划范围。`];
-  notes.push(`当前分数输入模式为“${scoreInputModeLabels[form.score_input_mode] ?? form.score_input_mode}”。`);
+  notes.push(`当前成绩/位次来源为“${scoreInputModeLabels[form.score_input_mode] ?? form.score_input_mode}”。`);
   if (form.use_historical_mapping) {
     notes.push("已开启历年映射估算提示，正式出分后建议重新核算。");
   }

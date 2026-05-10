@@ -71,7 +71,7 @@ test("Stage B 主链路：生源地回退的模拟推荐可同步到工作台并
 
   await workbenchPanel.getByRole("button", { name: "生成智能筛选" }).click();
   await expectToast(page, "智能筛选已生成");
-  await expect(workbenchPanel.getByText("当前分数输入模式为“预估分 + 预估位次”。")).toBeVisible();
+  await expect(workbenchPanel.getByText("当前成绩/位次来源为“预估分 + 预估位次（本次考试/模拟推荐）”。")).toBeVisible();
   await expect(workbenchPanel.getByText("先按 广东 / 2026 / 本科批 / 物理类 限定招生计划范围。")).toBeVisible();
 
   const candidatePanel = workbenchPanel.locator(".nested-panel").first();
@@ -89,6 +89,7 @@ test("Stage B 主链路：生源地回退的模拟推荐可同步到工作台并
 test("高考志愿主流程：可生成智能筛选、保存草稿并打印导出志愿表", async ({ page }) => {
   test.setTimeout(60000);
   const { workbenchPanel, draftPanel, draftName } = await createVolunteerDraft(page);
+  await expect(workbenchPanel.getByText("校内考试口径，仅作模拟参考").first()).toBeVisible();
   await expect(workbenchPanel.getByRole("heading", { name: "筛选解释" })).toBeVisible();
   await expect(workbenchPanel.getByRole("heading", { name: "风险校验" })).toBeVisible();
   await expect(workbenchPanel.getByText("当前草稿已纳入 2 条志愿")).toBeVisible();

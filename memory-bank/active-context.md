@@ -2,6 +2,16 @@
 
 ## 当前状态
 
+- 2026-05-10 已完成“志愿向导自动带入考试成绩”体验修正：
+  - 当前分支仍为 `codex/gaokao-volunteer-guide-20260510`
+  - 志愿推荐向导选择学生和参考考试后，会复用既有 `GET /api/analytics/exams/{exam_id}/students` 自动读取该学生总分与校内名次
+  - 有总分和校内名次时自动切到 `预估分 + 预估位次（本次考试/模拟推荐）`，填入 `comprehensive_score`、`student_rank_override` 和 `reference_exam_name`；只有总分无名次时只填总分并提示补位次；无成绩或读取失败时只提示手填，不阻塞其它条件
+  - 若老师已经手动改过分数、位次或成绩/位次来源，系统不覆盖，只显示“一键使用本次考试成绩”
+  - 页面文案从“分数模式”调整为“成绩/位次来源”，并明确提示“校内考试口径，仅作模拟参考，不是山东省正式位次；高考出分后切换为正式位次（高考省位次）”
+  - 新增 `apps/frontend/tests/volunteer-workspace-autofill.test.ts`，并扩展 `volunteer-workbench.test.ts` 覆盖自动带入、手动覆盖保护、切换考试和缺名次提示
+  - 本轮不新增后端接口、不新增数据库迁移、不改推荐算法
+  - 验证：`frontend:lint` 通过；`frontend:test -- tests/volunteer-guide.test.ts tests/volunteer-workbench.test.ts tests/volunteer-workspace-autofill.test.ts tests/navigation.test.ts` 为 53 passed；`frontend:build` 通过；`e2e -- tests/e2e/gaokao-volunteer.spec.ts` 为 11 passed；`check:e2e` 为 46 passed；`backend:data-health -- --json` 仍为已知 warning（单招 / 综评缺专门录取结果）
+
 - 2026-05-10 已完成“高考志愿板块阳光志愿式修整”：
   - 当前分支：`codex/gaokao-volunteer-guide-20260510`
   - `/recommendations` 默认入口已改为“高考志愿推荐向导”，首屏按“考生条件 → 意向偏好 → 智能筛选 → 志愿草稿”组织；推荐中心和山东普通类推荐保留为工作台内高级/历史工具，数据与规则维护入口不删除

@@ -66,6 +66,7 @@ interface VolunteerWorkbenchContextOptions {
   majorKeyword?: string;
   subjectCombination?: string;
   studentRankOverride?: string;
+  fillRankOverride?: boolean;
 }
 
 async function expectToast(page: Page, text: string): Promise<void> {
@@ -410,6 +411,7 @@ async function fillVolunteerWorkbenchContext(
     majorKeyword: "",
     subjectCombination: "物理+化学",
     studentRankOverride: "31000",
+    fillRankOverride: false,
     ...options,
   };
 
@@ -420,9 +422,12 @@ async function fillVolunteerWorkbenchContext(
   await selectDropdownOption(page, filterSelects.nth(3), config.targetYear);
   await selectDropdownOption(page, filterSelects.nth(4), config.batch);
   await selectDropdownOption(page, filterSelects.nth(5), config.examMode);
+  await expect(workbenchPanel.getByText("校内考试口径，仅作模拟参考").first()).toBeVisible();
   await workbenchPanel.getByPlaceholder("专业方向关键词，可选").fill(config.majorKeyword);
   await workbenchPanel.getByPlaceholder("选科组合，可选").fill(config.subjectCombination);
-  await workbenchPanel.getByPlaceholder("位次覆盖").fill(config.studentRankOverride);
+  if (config.fillRankOverride) {
+    await workbenchPanel.getByPlaceholder("预估位次").fill(config.studentRankOverride);
+  }
 }
 
 async function openRecommendationCenter(

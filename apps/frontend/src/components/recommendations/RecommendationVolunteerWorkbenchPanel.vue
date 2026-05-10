@@ -109,7 +109,7 @@
         <el-option label="按学生档案判断" value="" />
         <el-option v-for="item in gaokaoCandidateTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
       </el-select>
-      <el-select v-model="form.score_input_mode" placeholder="分数模式">
+      <el-select v-model="form.score_input_mode" placeholder="成绩/位次来源">
         <el-option v-for="item in scoreInputModeOptions" :key="item.value" :label="item.label" :value="item.value" />
       </el-select>
       <el-select
@@ -198,6 +198,21 @@
         <span class="inline-switch-label">历年映射估算</span>
         <el-switch v-model="form.use_historical_mapping" inline-prompt active-text="开启" inactive-text="关闭" />
       </div>
+    </div>
+
+    <div v-if="examScoreAutofillNotice || loadingExamScoreAutofill" class="exam-score-autofill-bar">
+      <div class="exam-score-autofill-copy">
+        <strong>{{ loadingExamScoreAutofill ? "正在读取考试成绩" : examScoreAutofillNotice?.title }}</strong>
+        <p>{{ loadingExamScoreAutofill ? "选择学生和参考考试后，系统会尝试读取本次总分与校内名次。" : examScoreAutofillNotice?.detail }}</p>
+      </div>
+      <el-button
+        v-if="examScoreAutofillNotice?.canApply"
+        type="primary"
+        link
+        @click="emit('apply-exam-score-autofill')"
+      >
+        一键使用本次考试成绩
+      </el-button>
     </div>
 
     <section class="career-preference-card">
@@ -1110,6 +1125,9 @@ import {
   buildVolunteerEmploymentProfile,
   buildVolunteerRuleInsightCards,
 } from "./volunteerWorkbench";
+import type {
+  VolunteerExamScoreAutofillNotice,
+} from "./volunteerWorkbench";
 import { getRecommendationRiskFlagText } from "./recommendationCopy";
 import {
   alertLevelLabel,
@@ -1189,6 +1207,8 @@ const props = defineProps<{
   draftChecks: VolunteerDraftCheckItem[];
   volunteerLimit?: number;
   remainingSlots: number | null;
+  examScoreAutofillNotice: VolunteerExamScoreAutofillNotice | null;
+  loadingExamScoreAutofill: boolean;
 }>();
 
 const router = useRouter();
@@ -1208,6 +1228,7 @@ const emit = defineEmits<{
   "delete-draft": [draftId: number];
   "apply-student-career-preference": [];
   "save-student-career-preference": [];
+  "apply-exam-score-autofill": [];
   "add-candidate": [value: VolunteerWorkbenchCandidate];
   "remove-candidate": [planId: number];
   "move-candidate": [planId: number, direction: "up" | "down"];
@@ -1355,6 +1376,30 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
   border-radius: 22px;
   background: rgba(244, 248, 251, 0.96);
   border: 1px solid rgba(126, 143, 158, 0.14);
+}
+
+.exam-score-autofill-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(59, 130, 246, 0.18);
+  background: #f4f8ff;
+}
+
+.exam-score-autofill-copy strong {
+  display: block;
+  color: #20364b;
+  font-size: 14px;
+}
+
+.exam-score-autofill-copy p {
+  margin: 4px 0 0;
+  color: #5f7487;
+  line-height: 1.55;
 }
 
 .guide-group-grid,

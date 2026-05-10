@@ -125,7 +125,7 @@
             v-model="volunteerWorkbenchForm.exam_mode"
             clearable
             filterable
-            placeholder="考试/分数模式"
+            placeholder="科类/模式"
           >
             <el-option
               v-for="mode in workbenchExamModeOptions"
@@ -136,7 +136,7 @@
           </el-select>
           <el-select
             v-model="volunteerWorkbenchForm.score_input_mode"
-            placeholder="分数输入"
+            placeholder="成绩/位次来源"
           >
             <el-option
               v-for="item in scoreInputModeOptions"
@@ -234,9 +234,12 @@
             :guide-groups="volunteerGuideGroups"
             :volunteer-limit="volunteerLimit"
             :remaining-slots="remainingVolunteerSlots"
+            :exam-score-autofill-notice="examScoreAutofillNotice"
+            :loading-exam-score-autofill="loadingExamScoreAutofill"
             @load-preview="loadVolunteerWorkbenchPreview"
             @reset="resetVolunteerWorkbench"
             @sync-from-recommendation="syncVolunteerWorkbenchFromRecommendation"
+            @apply-exam-score-autofill="applyCurrentExamScoreToWorkbench"
             @save-draft="saveVolunteerDraft"
             @save-draft-as="saveVolunteerDraftAsNew"
             @print-draft="openVolunteerDraftPrintPreview"
@@ -746,6 +749,7 @@ const {
   admissionPagination,
   admissionYearOptions,
   admissions,
+  applyCurrentExamScoreToWorkbench,
   applyStrategyPresetWithConfirm,
   batchOptions,
   bootstrapProvinceScoreTransformRules,
@@ -784,6 +788,7 @@ const {
   enrollmentPlanImportResult,
   enrollmentPlanPagination,
   enrollmentPlans,
+  examScoreAutofillNotice,
   exportShandongRecommendationReport,
   exportVolunteerDraft,
   exportScheme,
@@ -839,6 +844,7 @@ const {
   loadVolunteerDraftComparison,
   loadVolunteerDraftDetail,
   loadVolunteerDrafts,
+  loadingExamScoreAutofill,
   loadingVolunteerDrafts,
   loadingStudentCareerPreference,
   loadingHistory,

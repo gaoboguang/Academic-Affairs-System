@@ -16,7 +16,9 @@ import {
 import {
   applyStudentCareerPreferenceToForm,
   appendVolunteerDraftItem,
+  applyVolunteerExamScoreAutofill,
   buildStudentCareerPreferencePayload,
+  buildVolunteerExamScoreAutofillNotice,
   buildVolunteerDraftComparison,
   buildVolunteerDraftChecks,
   buildVolunteerDraftPayload,
@@ -31,11 +33,18 @@ import {
   moveVolunteerDraftItem,
   reorderVolunteerDraftItem,
   removeVolunteerDraftItem,
+  shouldApplyVolunteerExamScoreAutofill,
   validateVolunteerDraftName,
   validateVolunteerWorkbenchForm,
 } from "./volunteerWorkbench";
 import type {
+  VolunteerExamScoreAutofillNotice,
+  VolunteerExamScoreAutofillSource,
+  VolunteerExamScoreAutofillStatus,
+} from "./volunteerWorkbench";
+import type {
   EmploymentDirectionItem,
+  ExamOption,
   ProvinceVolunteerRule,
   RecommendationFormState,
   ExportRecord,
@@ -53,7 +62,22 @@ interface VolunteerWorkspaceOptions {
   planYearOptions: Ref<number[]>;
   batchOptions: Ref<string[]>;
   examModeOptions: Ref<string[]>;
+  examOptions: Ref<ExamOption[]>;
   employmentDirections: Ref<EmploymentDirectionItem[]>;
+}
+
+interface ExamAnalyzableStudentItem {
+  id: number;
+  student_no: string;
+  name: string;
+  total_score?: number | null;
+  grade_rank?: number | null;
+}
+
+interface ExamAnalyzableStudentListResponse {
+  exam_id: number;
+  total: number;
+  items: ExamAnalyzableStudentItem[];
 }
 
 function reportError(error: unknown): void {
@@ -97,6 +121,13 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
   const studentCareerPreference = ref<StudentCareerPreference | null>(null);
   const loadingStudentCareerPreference = ref(false);
   const savingStudentCareerPreference = ref(false);
+  const loadingExamScoreAutofill = ref(false);
+  const currentExamScoreAutofillSource = ref<VolunteerExamScoreAutofillSource | null>(null);
+  const lastAppliedExamScoreAutofillSource = ref<VolunteerExamScoreAutofillSource | null>(null);
+  const examScoreAutofillStatus = ref<VolunteerExamScoreAutofillStatus>("idle");
+  const examScoreAutofillNotice = computed<VolunteerExamScoreAutofillNotice | null>(() =>
+    buildVolunteerExamScoreAutofillNotice(examScoreAutofillStatus.value, currentExamScoreAutofillSource.value),
+  );
 
   const workbenchYearOptions = computed(() =>
     Array.from(new Set([...(options.planYearOptions.value || []), volunteerWorkbenchForm.target_year].filter(Boolean) as number[])).sort(
@@ -181,8 +212,21 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
     () => {
       clearVolunteerDraftComparison();
       void loadVolunteerDrafts();
+      void loadCurrentExamScoreForWorkbench();
     },
     { immediate: true },
+  );
+
+  watch(
+    () => [
+      volunteerWorkbenchForm.score_input_mode,
+      volunteerWorkbenchForm.comprehensive_score,
+      volunteerWorkbenchForm.student_rank_override,
+      volunteerWorkbenchForm.reference_exam_name,
+    ] as const,
+    () => {
+      syncExamScoreAutofillStatusWithForm();
+    },
   );
 
   watch(
@@ -229,7 +273,7 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
     );
     if (shouldConfirm) {
       const confirmed = await confirmWarningAction(
-        "会用推荐中心当前条件覆盖向导里的学生、考试、分数模式和筛选项。当前智能筛选结果和志愿草稿不会立即清空，但重新生成后会按新条件解释。是否继续？",
+        "会用推荐中心当前条件覆盖向导里的学生、考试、成绩/位次来源和筛选项。当前智能筛选结果和志愿草稿不会立即清空，但重新生成后会按新条件解释。是否继续？",
         "沿用推荐条件",
         "继续覆盖",
       );
@@ -253,6 +297,9 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
     currentVolunteerDraftId.value = undefined;
     persistedVolunteerRule.value = null;
     studentCareerPreference.value = null;
+    currentExamScoreAutofillSource.value = null;
+    lastAppliedExamScoreAutofillSource.value = null;
+    examScoreAutofillStatus.value = "idle";
     clearVolunteerDraftComparison();
   }
 
@@ -516,6 +563,104 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
     }
   }
 
+  function resolveExamName(examId: number): string {
+    return options.examOptions.value.find((item) => item.id === examId)?.name ?? `考试 ${examId}`;
+  }
+
+  function setExamScoreAutofillSource(
+    source: VolunteerExamScoreAutofillSource,
+    forceApply = false,
+  ): void {
+    currentExamScoreAutofillSource.value = source;
+    if (!forceApply && !shouldApplyVolunteerExamScoreAutofill(volunteerWorkbenchForm, lastAppliedExamScoreAutofillSource.value)) {
+      examScoreAutofillStatus.value = "manual_override";
+      return;
+    }
+    applyVolunteerExamScoreAutofill(volunteerWorkbenchForm, source);
+    lastAppliedExamScoreAutofillSource.value = source;
+    examScoreAutofillStatus.value = source.grade_rank === undefined || source.grade_rank === null ? "needs_rank" : "applied";
+  }
+
+  function clearPreviousExamScoreAutofillIfCurrent(): void {
+    const previousSource = lastAppliedExamScoreAutofillSource.value;
+    if (!previousSource || !shouldApplyVolunteerExamScoreAutofill(volunteerWorkbenchForm, previousSource)) {
+      return;
+    }
+    volunteerWorkbenchForm.score_input_mode = "actual_rank";
+    volunteerWorkbenchForm.comprehensive_score = undefined;
+    volunteerWorkbenchForm.student_rank_override = undefined;
+    volunteerWorkbenchForm.reference_exam_name = "";
+    lastAppliedExamScoreAutofillSource.value = null;
+  }
+
+  async function loadCurrentExamScoreForWorkbench(): Promise<void> {
+    const studentId = volunteerWorkbenchForm.student_id;
+    const examId = volunteerWorkbenchForm.exam_id;
+    if (!studentId || !examId) {
+      currentExamScoreAutofillSource.value = null;
+      examScoreAutofillStatus.value = "idle";
+      return;
+    }
+
+    try {
+      loadingExamScoreAutofill.value = true;
+      const payload = await apiRequest<ExamAnalyzableStudentListResponse>(`/api/analytics/exams/${examId}/students`);
+      if (volunteerWorkbenchForm.student_id !== studentId || volunteerWorkbenchForm.exam_id !== examId) {
+        return;
+      }
+      const examStudent = payload.items.find((item) => item.id === studentId);
+      if (!examStudent) {
+        clearPreviousExamScoreAutofillIfCurrent();
+        currentExamScoreAutofillSource.value = null;
+        examScoreAutofillStatus.value = "not_found";
+        return;
+      }
+      const source: VolunteerExamScoreAutofillSource = {
+        student_id: studentId,
+        exam_id: examId,
+        exam_name: resolveExamName(examId),
+        total_score: examStudent.total_score ?? null,
+        grade_rank: examStudent.grade_rank ?? null,
+      };
+      if (source.total_score === undefined || source.total_score === null) {
+        clearPreviousExamScoreAutofillIfCurrent();
+        currentExamScoreAutofillSource.value = source;
+        examScoreAutofillStatus.value = "missing_score";
+        return;
+      }
+      setExamScoreAutofillSource(source);
+    } catch {
+      if (volunteerWorkbenchForm.student_id === studentId && volunteerWorkbenchForm.exam_id === examId) {
+        currentExamScoreAutofillSource.value = null;
+        examScoreAutofillStatus.value = "load_error";
+      }
+    } finally {
+      loadingExamScoreAutofill.value = false;
+    }
+  }
+
+  function syncExamScoreAutofillStatusWithForm(): void {
+    const source = currentExamScoreAutofillSource.value;
+    if (!source || !["applied", "needs_rank", "manual_override"].includes(examScoreAutofillStatus.value)) {
+      return;
+    }
+    const stillCurrent = shouldApplyVolunteerExamScoreAutofill(volunteerWorkbenchForm, source);
+    if (!stillCurrent) {
+      examScoreAutofillStatus.value = "manual_override";
+      return;
+    }
+    examScoreAutofillStatus.value = source.grade_rank === undefined || source.grade_rank === null ? "needs_rank" : "applied";
+  }
+
+  function applyCurrentExamScoreToWorkbench(): void {
+    if (!currentExamScoreAutofillSource.value || currentExamScoreAutofillSource.value.total_score === undefined || currentExamScoreAutofillSource.value.total_score === null) {
+      ElMessage.warning("当前考试没有可用总分，需要手动填写成绩/位次");
+      return;
+    }
+    setExamScoreAutofillSource(currentExamScoreAutofillSource.value, true);
+    ElMessage.success("已使用本次考试成绩");
+  }
+
   async function applyStudentCareerPreference(): Promise<void> {
     if (!studentCareerPreference.value) {
       ElMessage.info("当前学生还没有已保存的职业意向");
@@ -670,6 +815,7 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
 
   return {
     addVolunteerCandidate,
+    applyCurrentExamScoreToWorkbench,
     applyStudentCareerPreference,
     compareVolunteerDraftId,
     compareVolunteerDraftLoading,
@@ -679,11 +825,13 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
     deletingVolunteerDraftId,
     exportVolunteerDraft,
     exportingVolunteerDraftId,
+    examScoreAutofillNotice,
     loadVolunteerWorkbenchPreview,
     loadVolunteerDraftDetail,
     loadVolunteerDrafts,
     loadVolunteerDraftComparison,
     loadingVolunteerDrafts,
+    loadingExamScoreAutofill,
     loadingStudentCareerPreference,
     moveVolunteerCandidate,
     openVolunteerDraftPrintPreview,
