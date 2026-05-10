@@ -66,6 +66,7 @@ interface VolunteerWorkbenchContextOptions {
   majorKeyword?: string;
   subjectCombination?: string;
   studentRankOverride?: string;
+  fillRankOverride?: boolean;
 }
 
 async function expectToast(page: Page, text: string): Promise<void> {
@@ -189,33 +190,42 @@ async function importQuestionDetailsByApi(page: Page, examId: number, fixturePat
 }
 
 async function selectDropdownOption(page: Page, select: Locator, optionText: string): Promise<void> {
-  await select.click();
-  const option = page.locator(".el-select-dropdown:visible .el-select-dropdown__item").filter({ hasText: optionText }).first();
-  if (!(await option.isVisible({ timeout: 1000 }).catch(() => false))) {
-    const filterInput = select.locator("input").first();
-    const canFill =
-      (await filterInput.count()) > 0
-      && (await filterInput
-        .evaluate((element) => {
-          const input = element as HTMLInputElement;
-          return !input.readOnly && !input.disabled;
-        })
-        .catch(() => false));
-    if (canFill) {
-      await filterInput.fill(optionText, { timeout: 1000 }).catch(async () => {
-        await page.keyboard.type(optionText);
-      });
-    } else {
-      const matchingOption = page.locator(".el-select-dropdown__item").filter({ hasText: optionText }).last();
-      if ((await matchingOption.count()) > 0) {
-        await matchingOption.evaluate((element) => element.scrollIntoView({ block: "center" })).catch(() => undefined);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await select.click();
+    const option = page.locator(".el-select-dropdown:visible .el-select-dropdown__item").filter({ hasText: optionText }).first();
+    if (!(await option.isVisible({ timeout: 1000 }).catch(() => false))) {
+      const filterInput = select.locator("input").first();
+      const canFill =
+        (await filterInput.count()) > 0
+        && (await filterInput
+          .evaluate((element) => {
+            const input = element as HTMLInputElement;
+            return !input.readOnly && !input.disabled;
+          })
+          .catch(() => false));
+      if (canFill) {
+        await filterInput.fill(optionText, { timeout: 1000 }).catch(async () => {
+          await page.keyboard.type(optionText);
+        });
       } else {
-        await page.keyboard.type(optionText);
+        const matchingOption = page.locator(".el-select-dropdown__item").filter({ hasText: optionText }).last();
+        if ((await matchingOption.count()) > 0) {
+          await matchingOption.evaluate((element) => element.scrollIntoView({ block: "center" })).catch(() => undefined);
+        } else {
+          await page.keyboard.type(optionText);
+        }
       }
     }
+    await expect(option).toBeVisible();
+    try {
+      await option.click({ timeout: 1500 });
+      return;
+    } catch (error) {
+      if (attempt === 2) throw error;
+      await page.keyboard.press("Escape").catch(() => undefined);
+      await page.waitForTimeout(100);
+    }
   }
-  await expect(option).toBeVisible();
-  await option.click();
 }
 
 interface RecommendationFormE2EFields {
@@ -401,6 +411,7 @@ async function fillVolunteerWorkbenchContext(
     majorKeyword: "",
     subjectCombination: "物理+化学",
     studentRankOverride: "31000",
+    fillRankOverride: false,
     ...options,
   };
 
@@ -411,9 +422,12 @@ async function fillVolunteerWorkbenchContext(
   await selectDropdownOption(page, filterSelects.nth(3), config.targetYear);
   await selectDropdownOption(page, filterSelects.nth(4), config.batch);
   await selectDropdownOption(page, filterSelects.nth(5), config.examMode);
+  await expect(workbenchPanel.getByText("校内考试口径，仅作模拟参考").first()).toBeVisible();
   await workbenchPanel.getByPlaceholder("专业方向关键词，可选").fill(config.majorKeyword);
   await workbenchPanel.getByPlaceholder("选科组合，可选").fill(config.subjectCombination);
-  await workbenchPanel.getByPlaceholder("位次覆盖").fill(config.studentRankOverride);
+  if (config.fillRankOverride) {
+    await workbenchPanel.getByPlaceholder("预估位次").fill(config.studentRankOverride);
+  }
 }
 
 async function openRecommendationCenter(
@@ -429,7 +443,7 @@ async function openRecommendationCenter(
   await expect(page.getByRole("heading", { name: "高考志愿" })).toBeVisible();
 
   await ensureAdmissionsImported(page);
-  await page.getByRole("tab", { name: "推荐中心" }).click();
+  await openAdvancedTool(page, "推荐中心");
 
   return page.locator(".panel-block").filter({ hasText: "生成推荐方案" }).first();
 }
@@ -454,6 +468,23 @@ async function generateRecommendationScheme(
   await confirmDialogIfVisible(page, "生成前复核", "继续生成");
 }
 
+async function openAdvancedTool(page: Page, name: string): Promise<void> {
+  await page.getByTestId("recommendation-advanced-tools-button").click();
+  const item = page.locator(".recommendation-advanced-menu .el-dropdown-menu__item").filter({ hasText: name }).first();
+  await expect(item).toBeVisible();
+  await item.click();
+}
+
+async function returnToVolunteerGuide(page: Page): Promise<Locator> {
+  const button = page.getByRole("button", { name: "回到推荐向导" });
+  if (await button.isVisible().catch(() => false)) {
+    await button.click();
+  }
+  const workbenchPanel = page.locator(".panel-block").filter({ hasText: "志愿推荐向导" }).first();
+  await expect(workbenchPanel.getByRole("heading", { name: "志愿推荐向导" })).toBeVisible();
+  return workbenchPanel;
+}
+
 async function openVolunteerWorkbench(page: Page): Promise<Locator> {
   await ensureExamWithScores(page);
   await page.goto("/recommendations");
@@ -465,10 +496,7 @@ async function openVolunteerWorkbench(page: Page): Promise<Locator> {
 
   await ensureVolunteerRuleConfigured(page);
 
-  await page.getByRole("tab", { name: "学生志愿工作台" }).click();
-  const workbenchPanel = page.locator(".panel-block").filter({ hasText: "学生志愿工作台" }).first();
-  await expect(workbenchPanel.getByRole("heading", { name: "学生志愿工作台" })).toBeVisible();
-  return workbenchPanel;
+  return returnToVolunteerGuide(page);
 }
 
 async function createVolunteerDraft(page: Page): Promise<{
@@ -483,8 +511,8 @@ async function createVolunteerDraft(page: Page): Promise<{
   const draftName = `E2E-志愿草稿-张三-${Date.now()}`;
 
   await fillVolunteerWorkbenchContext(page, workbenchPanel);
-  await workbenchPanel.getByRole("button", { name: "刷新候选池" }).click();
-  await expectToast(page, "候选池已刷新");
+  await workbenchPanel.getByRole("button", { name: "生成智能筛选" }).click();
+  await expectToast(page, "智能筛选已生成");
   await expect(workbenchPanel.getByText("张三 · 普通生 · 2026届高一4月月考")).toBeVisible();
   await expect(candidatePanel.locator(".el-table__row").filter({ hasText: "岭南科技大学" }).first()).toBeVisible();
 
@@ -578,8 +606,10 @@ export {
   scoreQuestionTrendFixtureOne,
   scoreQuestionTrendFixtureTwo,
   scoreQuestionDetailsFixture,
+  openAdvancedTool,
   openRecommendationCenter,
   openVolunteerWorkbench,
+  returnToVolunteerGuide,
   scoresFixture,
   selectDropdownOption,
   setRecommendationFormForE2E,

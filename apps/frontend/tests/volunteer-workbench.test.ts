@@ -12,6 +12,8 @@ import {
   buildVolunteerCandidateLayeringCopy,
   buildVolunteerCandidateReferenceCopy,
   buildVolunteerCandidateRuleCopy,
+  applyVolunteerExamScoreAutofill,
+  buildVolunteerExamScoreAutofillNotice,
   buildVolunteerEmploymentProfile,
   buildVolunteerDraftPayload,
   buildVolunteerRuleInsightCards,
@@ -24,6 +26,7 @@ import {
   formatVolunteerDraftSummaryLabel,
   hasVolunteerCareerPreferenceContent,
   hasVolunteerWorkbenchPendingChanges,
+  shouldApplyVolunteerExamScoreAutofill,
   isSameVolunteerCareerPreference,
   moveVolunteerDraftItem,
   reorderVolunteerDraftItem,
@@ -243,7 +246,7 @@ describe("volunteer workbench helpers", () => {
 
   it("validates required fields and builds normalized preview payload", () => {
     expect(validateVolunteerWorkbenchForm(buildForm({ student_id: undefined }))).toBe(
-      "学生志愿工作台至少需要选择学生和参考考试",
+      "志愿推荐向导至少需要选择学生和参考考试",
     );
     expect(
       validateVolunteerWorkbenchForm(buildForm({ score_input_mode: "score_range", score_range_min: 580, score_range_max: undefined })),
@@ -285,6 +288,88 @@ describe("volunteer workbench helpers", () => {
       culture_score: 340,
       note: "优先留在省内",
     });
+  });
+
+  it("auto-fills volunteer workbench score context from selected exam results", () => {
+    const form = createVolunteerWorkbenchForm();
+    const source = {
+      student_id: 1,
+      exam_id: 2,
+      exam_name: "202604高三二模",
+      total_score: 582,
+      grade_rank: 123,
+    };
+
+    expect(shouldApplyVolunteerExamScoreAutofill(form)).toBe(true);
+
+    applyVolunteerExamScoreAutofill(form, source);
+
+    expect(form.score_input_mode).toBe("estimated_score_and_rank");
+    expect(form.comprehensive_score).toBe(582);
+    expect(form.student_rank_override).toBe(123);
+    expect(form.reference_exam_name).toBe("202604高三二模");
+
+    const notice = buildVolunteerExamScoreAutofillNotice("applied", source);
+    expect(notice?.title).toBe("考试成绩已带入");
+    expect(notice?.detail).toContain("校内考试口径，仅作模拟参考");
+    expect(notice?.detail).toContain("不是山东省正式位次");
+  });
+
+  it("keeps manual score edits unless the user chooses to reuse exam results", () => {
+    const form = buildForm({
+      score_input_mode: "estimated_score_and_rank",
+      comprehensive_score: 590,
+      student_rank_override: 120,
+      reference_exam_name: "手动调整",
+    });
+    const previousSource = {
+      student_id: 1,
+      exam_id: 2,
+      exam_name: "202604高三二模",
+      total_score: 582,
+      grade_rank: 123,
+    };
+
+    expect(shouldApplyVolunteerExamScoreAutofill(form, previousSource)).toBe(false);
+
+    const notice = buildVolunteerExamScoreAutofillNotice("manual_override", previousSource);
+    expect(notice?.canApply).toBe(true);
+    expect(notice?.detail).toContain("不会覆盖");
+
+    applyVolunteerExamScoreAutofill(form, previousSource);
+    expect(form.comprehensive_score).toBe(582);
+    expect(form.student_rank_override).toBe(123);
+    expect(form.reference_exam_name).toBe("202604高三二模");
+  });
+
+  it("updates auto-filled values when switching to another exam and prompts when rank is missing", () => {
+    const form = createVolunteerWorkbenchForm();
+    const firstSource = {
+      student_id: 1,
+      exam_id: 2,
+      exam_name: "202604高三二模",
+      total_score: 582,
+      grade_rank: 123,
+    };
+    const nextSource = {
+      student_id: 1,
+      exam_id: 3,
+      exam_name: "202605高三三模",
+      total_score: 601,
+      grade_rank: null,
+    };
+
+    applyVolunteerExamScoreAutofill(form, firstSource);
+    expect(shouldApplyVolunteerExamScoreAutofill(form, firstSource)).toBe(true);
+
+    applyVolunteerExamScoreAutofill(form, nextSource);
+    expect(form.comprehensive_score).toBe(601);
+    expect(form.student_rank_override).toBeUndefined();
+    expect(form.reference_exam_name).toBe("202605高三三模");
+
+    const notice = buildVolunteerExamScoreAutofillNotice("needs_rank", nextSource);
+    expect(notice?.detail).toContain("仍需补位次");
+    expect(notice?.detail).toContain("成绩/位次来源");
   });
 
   it("adds candidates into draft and enforces limit", () => {
@@ -1231,7 +1316,7 @@ describe("volunteer workbench helpers", () => {
         { label: "批次", value: "本科批" },
         { label: "模式", value: "物理类" },
         { label: "类别", value: "普通类" },
-        { label: "分数模式", value: "预估分 + 预估位次" },
+        { label: "成绩/位次来源", value: "预估分 + 预估位次（本次考试/模拟推荐）" },
         { label: "专业", value: "软件工程" },
         { label: "选科", value: "物理+化学" },
         { label: "参考考试", value: "2026届一模" },
@@ -1241,7 +1326,7 @@ describe("volunteer workbench helpers", () => {
       ]),
     );
     expect(explanation.notes.some((item) => item.includes("本次附加筛选包含 选科组合、目标地区、院校层级、专业关键词"))).toBe(true);
-    expect(explanation.notes.some((item) => item.includes("当前分数输入模式为“预估分 + 预估位次”"))).toBe(true);
+    expect(explanation.notes.some((item) => item.includes("当前成绩/位次来源为“预估分 + 预估位次（本次考试/模拟推荐）”"))).toBe(true);
     expect(explanation.notes.some((item) => item.includes("历年映射估算提示"))).toBe(true);
     expect(explanation.notes.some((item) => item.includes("当前命中 广东 2026 物理类 本科批 规则"))).toBe(true);
     expect(explanation.notes.some((item) => item.includes("当前职业意向已记录到工作台和草稿中"))).toBe(true);

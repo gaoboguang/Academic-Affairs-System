@@ -83,7 +83,7 @@ export function buildRecommendationSimulationNote(context: RecommendationInsight
     return "当前按正式成绩/位次生成";
   }
   if (context.score_confidence === "score_only") {
-    return "当前按分数模式估算";
+    return "当前按成绩/位次来源估算";
   }
   if (context.score_confidence === "estimated" || context.score_confidence === "range_estimated") {
     return "当前结果为模拟测算";

@@ -93,7 +93,7 @@ export function useRecommendationSubmissionManager(options: SubmissionManagerOpt
     if (hasRecommendationFormPendingChanges(recommendationForm)) {
       try {
         await ElMessageBox.confirm(
-          "会清空当前推荐中心里的学生、考试、分数模式、筛选条件和补充说明。刚生成但还没回看的结果提示也会一起清空。是否继续？",
+          "会清空当前推荐中心里的学生、考试、成绩/位次来源、筛选条件和补充说明。刚生成但还没回看的结果提示也会一起清空。是否继续？",
           "重置推荐参数",
           {
             type: "warning",

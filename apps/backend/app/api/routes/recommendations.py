@@ -57,6 +57,7 @@ from app.schemas.recommendation import (
     VolunteerDraftPayload,
     VolunteerDraftRead,
     VolunteerDraftSummaryRead,
+    VolunteerGuidePreviewResponse,
     VolunteerWorkbenchPreviewPayload,
     VolunteerWorkbenchPreviewResponse,
 )
@@ -601,6 +602,14 @@ def preview_volunteer_workbench(
     session: Session = Depends(get_db_session),
 ) -> VolunteerWorkbenchPreviewResponse:
     return service.preview_volunteer_workbench(session, payload)
+
+
+@router.post("/recommendations/volunteer-guide/preview", response_model=VolunteerGuidePreviewResponse)
+def preview_volunteer_guide(
+    payload: VolunteerWorkbenchPreviewPayload,
+    session: Session = Depends(get_db_session),
+) -> VolunteerGuidePreviewResponse:
+    return service.preview_volunteer_guide(session, payload)
 
 
 @router.get("/recommendations/volunteer-drafts", response_model=list[VolunteerDraftSummaryRead])

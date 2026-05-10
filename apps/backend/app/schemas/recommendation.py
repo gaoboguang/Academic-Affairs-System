@@ -754,6 +754,84 @@ class VolunteerWorkbenchPreviewResponse(BaseModel):
     candidates: list[VolunteerWorkbenchCandidateRead] = Field(default_factory=list)
 
 
+class VolunteerGuideReadinessItemRead(BaseModel):
+    code: str
+    level: str
+    title: str
+    detail: str
+
+
+class VolunteerGuideReadinessRead(BaseModel):
+    status: str
+    blocking_count: int = 0
+    warning_count: int = 0
+    info_count: int = 0
+    items: list[VolunteerGuideReadinessItemRead] = Field(default_factory=list)
+
+
+class VolunteerGuideSourcePreviewRead(BaseModel):
+    candidate_count: int = 0
+    returned_candidate_count: int = 0
+    applicable_rule_count: int = 0
+    is_candidate_truncated: bool = False
+    score_input_mode: str = "actual_rank"
+    score_input_label: str
+    score_confidence: str
+    effective_rank: int | None = None
+    total_score: float | None = None
+
+
+class VolunteerGuideEvidenceRead(BaseModel):
+    strength: str
+    strength_label: str
+    summary: str
+    rank_margin: int | None = None
+    rank_margin_label: str | None = None
+    reference_years: list[int] = Field(default_factory=list)
+    reference_scope: str | None = None
+    risk_flags: list[str] = Field(default_factory=list)
+    source_notes: list[str] = Field(default_factory=list)
+
+
+class VolunteerGuideCandidateRead(BaseModel):
+    candidate: VolunteerWorkbenchCandidateRead
+    evidence: VolunteerGuideEvidenceRead
+
+
+class VolunteerGuideCandidateGroupRead(BaseModel):
+    key: str
+    label: str
+    count: int = 0
+    candidates: list[VolunteerGuideCandidateRead] = Field(default_factory=list)
+
+
+class VolunteerGuideNextActionRead(BaseModel):
+    code: str
+    level: str
+    title: str
+    detail: str
+
+
+class VolunteerGuidePreviewResponse(BaseModel):
+    student_id: int
+    student_name: str
+    exam_id: int
+    exam_name: str
+    province: str
+    target_year: int
+    student_type: str
+    candidate_type: str
+    score_input_mode: str = "actual_rank"
+    input_notes: list[str] = Field(default_factory=list)
+    rule_alerts: list[VolunteerWorkbenchRuleAlertRead] = Field(default_factory=list)
+    applicable_rule_count: int = 0
+    applicable_rules: list[ProvinceVolunteerRuleRead] = Field(default_factory=list)
+    readiness: VolunteerGuideReadinessRead
+    source_preview: VolunteerGuideSourcePreviewRead
+    groups: dict[str, VolunteerGuideCandidateGroupRead]
+    next_actions: list[VolunteerGuideNextActionRead] = Field(default_factory=list)
+
+
 class VolunteerDraftItemPayload(BaseModel):
     order: int
     plan_id: int | None = None

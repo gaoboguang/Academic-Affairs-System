@@ -34,7 +34,7 @@ def resolve_score_input_context(
         if student_rank_override:
             notes.append(f"当前按手工位次 {student_rank_override} 覆盖考试位次。")
         else:
-            notes.append("当前按考试正式位次刷新候选池。")
+            notes.append("当前按考试正式位次生成智能筛选。")
         if normalized_reference_exam_name:
             notes.append(f"参考考试：{normalized_reference_exam_name}。")
         return {

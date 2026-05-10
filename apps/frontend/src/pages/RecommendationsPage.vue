@@ -1,8 +1,8 @@
 <template>
   <AppPage
-    eyebrow="高考志愿 / 教师工作台"
-    title="高考志愿工作台"
-    description="围绕教师的一次志愿辅导流程组织：选学生、刷候选、排草稿、查风险、保存或导出。"
+    eyebrow="高考志愿 / 智能推荐向导"
+    title="高考志愿推荐向导"
+    description="按考生条件、意向偏好、智能筛选和志愿草稿复核组织一次完整辅导；结果只作本地参考，正式填报仍以省级志愿系统为准。"
     :meta="pageMeta"
   >
     <template #actions>
@@ -10,250 +10,133 @@
         <el-button @click="$router.push('/gaokao-pathways')"
           >升学方案中心</el-button
         >
-        <el-button @click="activeTab = 'data-health'">数据健康</el-button>
-        <el-button @click="activeTab = 'colleges'">打开数据与规则</el-button>
-        <el-button type="primary" @click="activeTab = 'volunteer-workbench'"
-          >回到工作台</el-button
+        <el-dropdown
+          trigger="click"
+          popper-class="recommendation-advanced-menu"
+          :teleported="false"
+          @command="handleAdvancedToolCommand"
+        >
+          <el-button data-testid="recommendation-advanced-tools-button">高级工具</el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="recommendations">推荐中心</el-dropdown-item>
+              <el-dropdown-item command="shandong-workbench">山东普通类推荐</el-dropdown-item>
+              <el-dropdown-item command="history">历史方案</el-dropdown-item>
+              <el-dropdown-item command="colleges">数据与规则</el-dropdown-item>
+              <el-dropdown-item command="data-health">数据健康</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <el-button
+          v-if="activeTab !== 'volunteer-workbench'"
+          type="primary"
+          @click="activeTab = 'volunteer-workbench'"
+          >回到推荐向导</el-button
         >
       </div>
     </template>
-
-    <AppStatGrid :items="pageStatCards" :columns="4" />
-
-    <el-collapse class="risk-review-collapse">
-      <el-collapse-item name="risk-review">
-        <template #title>
-          <span class="risk-review-title">数据风险与人工复核</span>
-          <span class="risk-review-count"
-            >{{ recommendationGlobalRiskNotices.length }} 条</span
-          >
-        </template>
-        <ul class="risk-review-list">
-          <li v-for="notice in recommendationGlobalRiskNotices" :key="notice">
-            {{ notice }}
-          </li>
-        </ul>
-      </el-collapse-item>
-    </el-collapse>
-
-    <nav class="recommendation-section-nav" aria-label="高考志愿工作台分区">
-      <button
-        v-for="section in primarySections"
-        :key="section.key"
-        type="button"
-        class="section-nav-button"
-        :class="{ active: activePrimarySection === section.key }"
-        @click="switchPrimarySection(section.key)"
-      >
-        <span>{{ section.label }}</span>
-        <strong>{{ section.value }}</strong>
-      </button>
-    </nav>
 
     <section
       v-if="activePrimarySection === 'workbench'"
       class="recommendation-section-stack"
     >
-      <AppFilterBar
-        title="当前辅导条件"
-        description="先选学生和考试，再刷新候选池；草稿保存后可打印或导出。"
-        sticky
-      >
-        <div class="command-fields">
-          <el-select
-            v-model="volunteerWorkbenchForm.student_id"
-            filterable
-            placeholder="学生"
-          >
-            <el-option
-              v-for="student in studentOptions"
-              :key="student.id"
-              :label="`${student.student_no} - ${student.name}`"
-              :value="student.id"
-            />
-          </el-select>
-          <el-select
-            v-model="volunteerWorkbenchForm.exam_id"
-            filterable
-            placeholder="参考考试"
-          >
-            <el-option
-              v-for="exam in examOptions"
-              :key="exam.id"
-              :label="exam.name"
-              :value="exam.id"
-            />
-          </el-select>
-          <el-select
-            v-model="volunteerWorkbenchForm.province"
-            filterable
-            placeholder="省份"
-          >
-            <el-option
-              v-for="province in provinceOptions"
-              :key="province"
-              :label="province"
-              :value="province"
-            />
-          </el-select>
-          <el-select
-            v-model="volunteerWorkbenchForm.target_year"
-            filterable
-            placeholder="年份"
-          >
-            <el-option
-              v-for="year in workbenchYearOptions"
-              :key="year"
-              :label="String(year)"
-              :value="year"
-            />
-          </el-select>
-          <el-select
-            v-model="volunteerWorkbenchForm.batch"
-            clearable
-            filterable
-            placeholder="批次"
-          >
-            <el-option
-              v-for="batch in workbenchBatchOptions"
-              :key="batch"
-              :label="batch"
-              :value="batch"
-            />
-          </el-select>
-          <el-select
-            v-model="volunteerWorkbenchForm.exam_mode"
-            clearable
-            filterable
-            placeholder="考试/分数模式"
-          >
-            <el-option
-              v-for="mode in workbenchExamModeOptions"
-              :key="mode"
-              :label="mode"
-              :value="mode"
-            />
-          </el-select>
-          <el-select
-            v-model="volunteerWorkbenchForm.score_input_mode"
-            placeholder="分数输入"
-          >
-            <el-option
-              v-for="item in scoreInputModeOptions"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </el-select>
-          <el-button
-            type="primary"
-            :loading="workbenchLoading"
-            @click="loadVolunteerWorkbenchPreview"
-            >刷新候选池</el-button
-          >
-        </div>
-      </AppFilterBar>
-
-      <div class="workbench-priority-grid">
-        <article class="soft-card priority-card">
-          <span>学生画像与偏好</span>
-          <strong>{{
-            workbenchExplanation.items[0]?.value || "未选择学生"
-          }}</strong>
-          <p>
-            {{
-              studentCareerPreference
-                ? "已读取学生职业意向"
-                : "可在工作台内补充职业方向、行业和岗位偏好"
-            }}
-          </p>
+      <div class="guide-status-strip">
+        <article v-for="item in guideStatusItems" :key="item.label">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
         </article>
-        <article class="soft-card priority-card">
-          <span>候选池 / 冲稳保</span>
-          <strong>{{
-            workbenchPreview
-              ? `${workbenchPreview.returned_candidate_count ?? workbenchPreview.candidates.length} / ${workbenchPreview.candidate_count}`
-              : "待刷新"
-          }}</strong>
-          <p>
-            {{
-              workbenchPreview?.is_candidate_truncated
-                ? "结果已截断，请继续缩小条件"
-                : "刷新后展示冲刺、稳妥和保底候选"
-            }}
-          </p>
-        </article>
-        <article class="soft-card priority-card">
-          <span>志愿草稿篮</span>
-          <strong>{{ volunteerDraft.length }} 条</strong>
-          <p>
-            {{
-              remainingVolunteerSlots === null
-                ? "等待命中省份规则"
-                : `剩余 ${remainingVolunteerSlots} 个志愿位`
-            }}
-          </p>
-        </article>
+        <button type="button" class="risk-summary-button" @click="activeTab = 'data-health'">
+          数据风险 {{ shandongDataHealth?.gaps?.length ?? 0 }} 条
+        </button>
       </div>
 
-      <el-tabs v-model="activeTab" class="secondary-tabs">
-        <el-tab-pane label="学生志愿工作台" name="volunteer-workbench">
-          <RecommendationVolunteerWorkbenchPanel
-            :form="volunteerWorkbenchForm"
-            :student-options="studentOptions"
-            :exam-options="examOptions"
-            :year-options="workbenchYearOptions"
-            :batch-options="workbenchBatchOptions"
-            :exam-mode-options="workbenchExamModeOptions"
-            :employment-directions="employmentDirections"
-            :career-industry-options="workbenchCareerIndustryOptions"
-            :career-job-type-options="workbenchCareerJobTypeOptions"
-            :student-career-preference="studentCareerPreference"
-            :loading-student-career-preference="loadingStudentCareerPreference"
-            :saving-student-career-preference="savingStudentCareerPreference"
-            :province-options="provinceOptions"
-            :target-region-options="targetRegionOptions"
-            :school-level-options="schoolLevelOptions"
-            :preview="workbenchPreview"
-            :draft="volunteerDraft"
-            v-model:draft-name="volunteerDraftName"
-            :loading="workbenchLoading"
-            :saving-draft="savingVolunteerDraft"
-            :exporting-draft-id="exportingVolunteerDraftId"
-            :loading-saved-drafts="loadingVolunteerDrafts"
-            :deleting-draft-id="deletingVolunteerDraftId"
-            :current-draft-id="currentVolunteerDraftId"
-            :saved-drafts="savedVolunteerDrafts"
-            :compare-draft-id="compareVolunteerDraftId"
-            :compare-draft-loading="compareVolunteerDraftLoading"
-            :draft-comparison="volunteerDraftComparison"
-            :selected-plan-ids="selectedDraftPlanIds"
-            :selected-rule="selectedVolunteerRule"
-            :workbench-explanation="workbenchExplanation"
-            :draft-checks="volunteerDraftChecks"
-            :volunteer-limit="volunteerLimit"
-            :remaining-slots="remainingVolunteerSlots"
-            @load-preview="loadVolunteerWorkbenchPreview"
-            @reset="resetVolunteerWorkbench"
-            @sync-from-recommendation="syncVolunteerWorkbenchFromRecommendation"
-            @save-draft="saveVolunteerDraft"
-            @save-draft-as="saveVolunteerDraftAsNew"
-            @print-draft="openVolunteerDraftPrintPreview"
-            @export-draft="exportVolunteerDraft"
-            @reload-drafts="loadVolunteerDrafts"
-            @compare-draft-change="loadVolunteerDraftComparison"
-            @load-draft="loadVolunteerDraftDetail"
-            @delete-draft="deleteVolunteerDraft"
-            @apply-student-career-preference="applyStudentCareerPreference"
-            @save-student-career-preference="saveStudentCareerPreference"
-            @add-candidate="addVolunteerCandidate"
-            @remove-candidate="removeVolunteerCandidate"
-            @move-candidate="moveVolunteerCandidate"
-            @reorder-candidate="reorderVolunteerCandidate"
-          />
-        </el-tab-pane>
+      <el-collapse class="risk-review-collapse compact-risk">
+        <el-collapse-item name="risk-review">
+          <template #title>
+            <span class="risk-review-title">人工复核提醒</span>
+            <span class="risk-review-count">{{ recommendationGlobalRiskNotices.length }} 条</span>
+          </template>
+          <ul class="risk-review-list">
+            <li v-for="notice in recommendationGlobalRiskNotices" :key="notice">
+              {{ notice }}
+            </li>
+          </ul>
+        </el-collapse-item>
+      </el-collapse>
 
-        <el-tab-pane label="推荐中心" name="recommendations">
+      <RecommendationVolunteerWorkbenchPanel
+        :form="volunteerWorkbenchForm"
+        :student-options="studentOptions"
+        :exam-options="examOptions"
+        :year-options="workbenchYearOptions"
+        :batch-options="workbenchBatchOptions"
+        :exam-mode-options="workbenchExamModeOptions"
+        :employment-directions="employmentDirections"
+        :career-industry-options="workbenchCareerIndustryOptions"
+        :career-job-type-options="workbenchCareerJobTypeOptions"
+        :student-career-preference="studentCareerPreference"
+        :loading-student-career-preference="loadingStudentCareerPreference"
+        :saving-student-career-preference="savingStudentCareerPreference"
+        :province-options="provinceOptions"
+        :target-region-options="targetRegionOptions"
+        :school-level-options="schoolLevelOptions"
+        :volunteer-rules="provinceVolunteerRules"
+        :preview="workbenchPreview"
+        :draft="volunteerDraft"
+        v-model:draft-name="volunteerDraftName"
+        :loading="workbenchLoading"
+        :saving-draft="savingVolunteerDraft"
+        :exporting-draft-id="exportingVolunteerDraftId"
+        :loading-saved-drafts="loadingVolunteerDrafts"
+        :deleting-draft-id="deletingVolunteerDraftId"
+        :current-draft-id="currentVolunteerDraftId"
+        :saved-drafts="savedVolunteerDrafts"
+        :compare-draft-id="compareVolunteerDraftId"
+        :compare-draft-loading="compareVolunteerDraftLoading"
+        :draft-comparison="volunteerDraftComparison"
+        :selected-plan-ids="selectedDraftPlanIds"
+        :selected-rule="selectedVolunteerRule"
+        :workbench-explanation="workbenchExplanation"
+        :draft-checks="volunteerDraftChecks"
+        :guide-preview="volunteerGuidePreview"
+        :guide-groups="volunteerGuideGroups"
+        :volunteer-limit="volunteerLimit"
+        :remaining-slots="remainingVolunteerSlots"
+        :exam-score-autofill-notice="examScoreAutofillNotice"
+        :loading-exam-score-autofill="loadingExamScoreAutofill"
+        @load-preview="loadVolunteerWorkbenchPreview"
+        @reset="resetVolunteerWorkbench"
+        @sync-from-recommendation="syncVolunteerWorkbenchFromRecommendation"
+        @apply-exam-score-autofill="applyCurrentExamScoreToWorkbench"
+        @save-draft="saveVolunteerDraft"
+        @save-draft-as="saveVolunteerDraftAsNew"
+        @print-draft="openVolunteerDraftPrintPreview"
+        @export-draft="exportVolunteerDraft"
+        @reload-drafts="loadVolunteerDrafts"
+        @compare-draft-change="loadVolunteerDraftComparison"
+        @load-draft="loadVolunteerDraftDetail"
+        @delete-draft="deleteVolunteerDraft"
+        @apply-student-career-preference="applyStudentCareerPreference"
+        @save-student-career-preference="saveStudentCareerPreference"
+        @add-candidate="addVolunteerCandidate"
+        @remove-candidate="removeVolunteerCandidate"
+        @move-candidate="moveVolunteerCandidate"
+        @reorder-candidate="reorderVolunteerCandidate"
+      />
+    </section>
+
+    <section
+      v-else-if="activePrimarySection === 'legacy-recommendations'"
+      class="recommendation-section-stack"
+    >
+      <div class="advanced-section-head">
+        <div>
+          <h3>推荐中心</h3>
+          <p>保留旧推荐方案和策略能力；日常志愿辅导建议优先回到分步向导。</p>
+        </div>
+        <el-button type="primary" @click="activeTab = 'volunteer-workbench'">回到推荐向导</el-button>
+      </div>
+
           <div class="recommend-layout">
             <RecommendationGeneratePanel
               v-model:generation-mode="generationMode"
@@ -313,9 +196,19 @@
             @print-preview="openRecommendationPrintPreview"
             @reload-scheme="reloadSelectedScheme"
           />
-        </el-tab-pane>
+    </section>
 
-        <el-tab-pane label="山东普通类推荐" name="shandong-workbench">
+    <section
+      v-else-if="activePrimarySection === 'shandong-workbench'"
+      class="recommendation-section-stack"
+    >
+      <div class="advanced-section-head">
+        <div>
+          <h3>山东普通类推荐</h3>
+          <p>保留山东普通类专项工作台；分步向导会继续复用同一批本地数据。</p>
+        </div>
+        <el-button type="primary" @click="activeTab = 'volunteer-workbench'">回到推荐向导</el-button>
+      </div>
           <RecommendationShandongWorkbenchPanel
             :form="shandongRecommendationForm"
             :student-options="studentOptions"
@@ -341,8 +234,6 @@
             @print-report="openShandongRecommendationPrintPreview"
             @export-report="exportShandongRecommendationReport"
           />
-        </el-tab-pane>
-      </el-tabs>
     </section>
 
     <section
@@ -722,17 +613,10 @@ import RecommendationSubjectRequirementDictsPanel from "../components/recommenda
 import RecommendationVolunteerRuleDialog from "../components/recommendations/RecommendationVolunteerRuleDialog.vue";
 import RecommendationVolunteerRulesPanel from "../components/recommendations/RecommendationVolunteerRulesPanel.vue";
 import RecommendationVolunteerWorkbenchPanel from "../components/recommendations/RecommendationVolunteerWorkbenchPanel.vue";
-import { scoreInputModeOptions } from "../components/recommendations/helpers";
 import { RECOMMENDATION_GLOBAL_RISK_NOTICES } from "../components/recommendations/recommendationCopy";
 import { useRecommendationsPage } from "../components/recommendations/useRecommendationsPage";
-import AppFilterBar from "../components/ui/AppFilterBar.vue";
 import AppPage from "../components/ui/AppPage.vue";
-import AppStatGrid from "../components/ui/AppStatGrid.vue";
-import type {
-  PageMetaItem,
-  StatCardItem,
-  UiTone,
-} from "../components/ui/types";
+import type { PageMetaItem } from "../components/ui/types";
 
 const recommendationGlobalRiskNotices = RECOMMENDATION_GLOBAL_RISK_NOTICES;
 const router = useRouter();
@@ -745,6 +629,7 @@ const {
   admissionPagination,
   admissionYearOptions,
   admissions,
+  applyCurrentExamScoreToWorkbench,
   applyStrategyPresetWithConfirm,
   batchOptions,
   bootstrapProvinceScoreTransformRules,
@@ -783,6 +668,7 @@ const {
   enrollmentPlanImportResult,
   enrollmentPlanPagination,
   enrollmentPlans,
+  examScoreAutofillNotice,
   exportShandongRecommendationReport,
   exportVolunteerDraft,
   exportScheme,
@@ -838,6 +724,7 @@ const {
   loadVolunteerDraftComparison,
   loadVolunteerDraftDetail,
   loadVolunteerDrafts,
+  loadingExamScoreAutofill,
   loadingVolunteerDrafts,
   loadingStudentCareerPreference,
   loadingHistory,
@@ -965,6 +852,8 @@ const {
   volunteerDraft,
   volunteerDraftComparison,
   volunteerDraftChecks,
+  volunteerGuideGroups,
+  volunteerGuidePreview,
   volunteerDraftName,
   volunteerLimit,
   volunteerWorkbenchForm,
@@ -983,13 +872,19 @@ const {
   examOptions,
 } = useRecommendationsPage();
 
-type PrimarySectionKey = "workbench" | "history" | "data-rules" | "data-health";
+type PrimarySectionKey =
+  | "workbench"
+  | "legacy-recommendations"
+  | "shandong-workbench"
+  | "history"
+  | "data-rules"
+  | "data-health";
 
-const workbenchTabs = new Set([
-  "volunteer-workbench",
-  "recommendations",
-  "shandong-workbench",
-]);
+interface GuideStatusItem {
+  label: string;
+  value: string;
+}
+
 const dataRuleTabs = new Set([
   "colleges",
   "majors",
@@ -1003,43 +898,6 @@ const dataRuleTabs = new Set([
   "subject-requirements",
 ]);
 
-const primarySections = computed(() => [
-  {
-    key: "workbench" as const,
-    label: "工作台",
-    value: volunteerDraft.value.length
-      ? `${volunteerDraft.value.length} 条草稿`
-      : "默认入口",
-  },
-  {
-    key: "history" as const,
-    label: "历史方案",
-    value: historyItems.value.length
-      ? `${historyItems.value.length} 份`
-      : "待生成",
-  },
-  {
-    key: "data-rules" as const,
-    label: "数据与规则",
-    value: `${collegePagination.total || colleges.value.length} 所院校`,
-  },
-  {
-    key: "data-health" as const,
-    label: "数据健康",
-    value: shandongDataHealth.value
-      ? `${shandongDataHealth.value.gaps.length} 条缺口`
-      : "待刷新",
-  },
-]);
-
-function normalizeTone(tone?: string): UiTone {
-  if (!tone) return "neutral";
-  if (tone.includes("green") || tone.includes("teal")) return "success";
-  if (tone.includes("amber")) return "warning";
-  if (tone.includes("blue") || tone.includes("indigo")) return "primary";
-  return "neutral";
-}
-
 const pageMeta = computed<PageMetaItem[]>(() =>
   summaryCards.value.slice(0, 4).map((item) => ({
     label: item.label,
@@ -1047,31 +905,38 @@ const pageMeta = computed<PageMetaItem[]>(() =>
   })),
 );
 
-const pageStatCards = computed<StatCardItem[]>(() =>
-  summaryCards.value.map((item) => ({
-    label: item.label,
-    value: item.value,
-    help: item.help,
-    tone: normalizeTone(item.tone),
-  })),
-);
-
 const activePrimarySection = computed<PrimarySectionKey>(() => {
   if (activeTab.value === "history") return "history";
   if (activeTab.value === "data-health") return "data-health";
   if (dataRuleTabs.has(activeTab.value)) return "data-rules";
-  if (workbenchTabs.has(activeTab.value)) return "workbench";
+  if (activeTab.value === "recommendations") return "legacy-recommendations";
+  if (activeTab.value === "shandong-workbench") return "shandong-workbench";
   return "workbench";
 });
 
-function switchPrimarySection(section: PrimarySectionKey): void {
-  const targetTab: Record<PrimarySectionKey, string> = {
-    workbench: "volunteer-workbench",
-    history: "history",
-    "data-rules": "colleges",
-    "data-health": "data-health",
-  };
-  activeTab.value = targetTab[section];
+const selectedStudentName = computed(() => {
+  const student = studentOptions.value.find((item) => item.id === volunteerWorkbenchForm.student_id);
+  return volunteerGuidePreview.value?.student_name || student?.name || "未选择";
+});
+
+const selectedExamName = computed(() => {
+  const exam = examOptions.value.find((item) => item.id === volunteerWorkbenchForm.exam_id);
+  return volunteerGuidePreview.value?.exam_name || exam?.name || "未选择";
+});
+
+const guideStatusItems = computed<GuideStatusItem[]>(() => [
+  { label: "学生", value: selectedStudentName.value },
+  { label: "考试", value: selectedExamName.value },
+  { label: "批次", value: volunteerWorkbenchForm.batch || "未选择" },
+  {
+    label: "候选 / 草稿",
+    value: `${workbenchPreview.value?.candidate_count ?? volunteerGuidePreview.value?.source_preview.candidate_count ?? 0} / ${volunteerDraft.value.length}`,
+  },
+]);
+
+function handleAdvancedToolCommand(command: string | number | object): void {
+  if (typeof command !== "string") return;
+  activeTab.value = command;
 }
 
 function openCollegeDetail(collegeId: number): void {
@@ -1122,49 +987,49 @@ function openMajorDetail(majorId: number): void {
   line-height: 1.7;
 }
 
-.recommendation-section-nav {
+.guide-status-strip {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
 }
 
-.section-nav-button {
-  min-height: 74px;
+.guide-status-strip article,
+.risk-summary-button {
+  min-height: 68px;
   padding: 14px 16px;
   border: 1px solid rgba(124, 142, 158, 0.18);
   border-radius: 8px;
   background: #ffffff;
   color: #25394f;
+}
+
+.risk-summary-button {
   text-align: left;
   cursor: pointer;
   transition:
     border-color 0.16s ease,
-    box-shadow 0.16s ease,
     background 0.16s ease;
 }
 
-.section-nav-button span,
-.priority-card span,
+.guide-status-strip span,
 .data-health-card span {
   display: block;
   color: #667b8e;
   font-size: 13px;
 }
 
-.section-nav-button strong,
-.priority-card strong,
+.guide-status-strip strong,
 .data-health-card strong {
   display: block;
   margin-top: 8px;
   color: #1f3245;
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1.3;
 }
 
-.section-nav-button.active {
-  border-color: rgba(37, 115, 161, 0.45);
-  background: #f2f8fc;
-  box-shadow: inset 0 3px 0 rgba(37, 115, 161, 0.78);
+.risk-summary-button:hover {
+  border-color: rgba(37, 115, 161, 0.36);
+  background: #f5f9fd;
 }
 
 .recommendation-section-stack,
@@ -1173,29 +1038,42 @@ function openMajorDetail(majorId: number): void {
   gap: 16px;
 }
 
-.priority-card p,
 .data-health-card p {
   margin: 7px 0 0;
   color: #6c8194;
   line-height: 1.55;
 }
 
-.command-fields {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(150px, 1fr));
-  gap: 10px;
-}
-
-.workbench-priority-grid,
 .data-health-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
-.priority-card,
 .data-health-card {
   padding: 18px;
+}
+
+.advanced-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid rgba(124, 142, 158, 0.14);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.advanced-section-head h3 {
+  margin: 0;
+  color: #20364b;
+}
+
+.advanced-section-head p {
+  margin: 6px 0 0;
+  color: #667b8e;
+  line-height: 1.55;
 }
 
 .secondary-tabs {
@@ -1256,8 +1134,7 @@ function openMajorDetail(majorId: number): void {
 }
 
 @media (max-width: 1080px) {
-  .recommendation-section-nav,
-  .command-fields,
+  .guide-status-strip,
   .workbench-priority-grid,
   .data-health-grid,
   .health-columns,

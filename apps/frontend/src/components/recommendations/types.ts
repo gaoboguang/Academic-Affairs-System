@@ -868,6 +868,95 @@ export interface VolunteerWorkbenchPreviewResponse {
   candidates: VolunteerWorkbenchCandidate[];
 }
 
+export type VolunteerGuideGroupKey = "challenge" | "steady" | "safe" | "watch";
+export type VolunteerGuideReadinessStatus = "ready" | "warning" | "blocked";
+export type VolunteerGuideReadinessLevel = "blocking" | "warning" | "info";
+
+export interface VolunteerGuideReadinessItem {
+  code: string;
+  level: VolunteerGuideReadinessLevel;
+  title: string;
+  detail: string;
+}
+
+export interface VolunteerGuideReadiness {
+  status: VolunteerGuideReadinessStatus;
+  blocking_count: number;
+  warning_count: number;
+  info_count: number;
+  items: VolunteerGuideReadinessItem[];
+}
+
+export interface VolunteerGuideSourcePreview {
+  candidate_count: number;
+  returned_candidate_count: number;
+  applicable_rule_count: number;
+  is_candidate_truncated: boolean;
+  score_input_mode: ScoreInputMode;
+  score_input_label: string;
+  score_confidence: string;
+  effective_rank?: number | null;
+  total_score?: number | null;
+}
+
+export interface VolunteerGuideEvidence {
+  strength: string;
+  strength_label: string;
+  summary: string;
+  rank_margin?: number | null;
+  rank_margin_label?: string | null;
+  reference_years: number[];
+  reference_scope?: string | null;
+  risk_flags: string[];
+  source_notes: string[];
+}
+
+export interface VolunteerGuideCandidate {
+  candidate: VolunteerWorkbenchCandidate;
+  evidence: VolunteerGuideEvidence;
+}
+
+export interface VolunteerGuideCandidateGroup {
+  key: VolunteerGuideGroupKey;
+  label: string;
+  count: number;
+  candidates: VolunteerGuideCandidate[];
+}
+
+export interface VolunteerGuideNextAction {
+  code: string;
+  level: "warning" | "info";
+  title: string;
+  detail: string;
+}
+
+export interface VolunteerGuidePreviewResponse {
+  student_id: number;
+  student_name: string;
+  exam_id: number;
+  exam_name: string;
+  province: string;
+  target_year: number;
+  student_type: string;
+  candidate_type: string;
+  score_input_mode: ScoreInputMode;
+  input_notes: string[];
+  rule_alerts: VolunteerWorkbenchRuleAlert[];
+  applicable_rule_count: number;
+  applicable_rules: ProvinceVolunteerRule[];
+  readiness: VolunteerGuideReadiness;
+  source_preview: VolunteerGuideSourcePreview;
+  groups: Record<VolunteerGuideGroupKey, VolunteerGuideCandidateGroup>;
+  next_actions: VolunteerGuideNextAction[];
+}
+
+export interface VolunteerGuideStepCard {
+  key: string;
+  title: string;
+  summary: string;
+  status: VolunteerGuideReadinessStatus;
+}
+
 export interface VolunteerWorkbenchExplanationItem {
   label: string;
   value: string;
