@@ -4,10 +4,15 @@ import {
   guideToWorkbenchPreview,
 } from "../src/components/recommendations/useGaokaoVolunteerWorkspace";
 import {
+  buildVolunteerBatchOptionGroups,
+  buildVolunteerGuideActionItems,
+  buildVolunteerGuideProgressSteps,
   buildVolunteerGuideReadiness,
   buildVolunteerGuideStepCards,
   groupVolunteerGuideCandidates,
+  summarizeVolunteerReadinessItems,
 } from "../src/components/recommendations/volunteerGuide";
+import type { ProvinceVolunteerRule } from "../src/components/recommendations/types";
 import type { VolunteerGuidePreviewResponse } from "../src/components/recommendations/types";
 
 function buildGuide(overrides: Partial<VolunteerGuidePreviewResponse> = {}): VolunteerGuidePreviewResponse {
@@ -191,6 +196,134 @@ function buildGuide(overrides: Partial<VolunteerGuidePreviewResponse> = {}): Vol
 }
 
 describe("volunteer guide helpers", () => {
+  it("builds concise progress steps for the redesigned guide", () => {
+    const initial = buildVolunteerGuideProgressSteps(null, 0);
+    expect(initial.map((item) => item.label)).toEqual(["考生条件", "意向偏好", "智能筛选", "志愿草稿"]);
+    expect(initial[0].state).toBe("active");
+    expect(initial[2].summary).toBe("生成后展示冲稳保结果");
+
+    const blocked = buildVolunteerGuideProgressSteps(buildGuide({
+      readiness: {
+        status: "blocked",
+        blocking_count: 1,
+        warning_count: 0,
+        info_count: 0,
+        items: [
+          {
+            code: "missing_rule_batch",
+            level: "blocking",
+            title: "缺少目标批次规则",
+            detail: "当前未找到 山东 2026 年“艺术本科批”批次规则。",
+          },
+        ],
+      },
+      source_preview: {
+        ...buildGuide().source_preview,
+        candidate_count: 0,
+        returned_candidate_count: 0,
+      },
+    }), 0);
+    expect(blocked[0].state).toBe("blocked");
+    expect(blocked[2].state).toBe("blocked");
+
+    const completed = buildVolunteerGuideProgressSteps(buildGuide(), 2);
+    expect(completed[0].state).toBe("done");
+    expect(completed[2].summary).toBe("2 条候选");
+    expect(completed[3].state).toBe("done");
+  });
+
+  it("groups batch options by configured rules and keeps current unmatched value", () => {
+    const rules: ProvinceVolunteerRule[] = [
+      buildGuide().applicable_rules[0],
+      {
+        ...buildGuide().applicable_rules[0],
+        id: 2,
+        batch: "艺术类本科批统考",
+        exam_mode: "3+3",
+      },
+    ];
+
+    const groups = buildVolunteerBatchOptionGroups({
+      batchOptions: ["艺术本科批", "本科批", "专科批"],
+      rules,
+      currentBatch: "艺术本科批",
+    });
+
+    expect(groups.available).toEqual(["本科批", "艺术类本科批统考"]);
+    expect(groups.needsRule).toEqual(["艺术本科批", "专科批"]);
+    expect(groups.currentUnmatched).toBe("艺术本科批");
+    expect(groups.suggestion?.detail).toContain("艺术类本科批统考");
+  });
+
+  it("summarizes readiness blockers into short actionable items", () => {
+    const summary = summarizeVolunteerReadinessItems([
+      {
+        code: "missing_subject_combination",
+        level: "warning",
+        title: "缺少选科组合",
+        detail: "未填写选科组合时，选科要求只能提示人工核对。",
+      },
+      {
+        code: "missing_rule_batch",
+        level: "blocking",
+        title: "缺少目标批次规则",
+        detail: "当前未找到 山东 2026 年“艺术本科批”批次规则；已维护批次：本科批 / 艺术类本科批统考。",
+      },
+      {
+        code: "no_candidates",
+        level: "blocking",
+        title: "暂无可推荐候选",
+        detail: "当前条件没有匹配到可加入志愿表的计划。",
+      },
+      {
+        code: "chapter_pending",
+        level: "warning",
+        title: "章程待核",
+        detail: "部分学校章程未人工复核。",
+      },
+    ]);
+
+    expect(summary).toHaveLength(3);
+    expect(summary[0].title).toBe("先处理批次规则");
+    expect(summary[0].detail).toContain("艺术本科批");
+    expect(summary[1].title).toBe("补充选科组合");
+  });
+
+  it("keeps guide next actions short for the main screen", () => {
+    const actions = buildVolunteerGuideActionItems(buildGuide({
+      readiness: {
+        status: "blocked",
+        blocking_count: 1,
+        warning_count: 0,
+        info_count: 0,
+        items: [
+          {
+            code: "missing_rule_batch",
+            level: "blocking",
+            title: "缺少目标批次规则",
+            detail: "当前未找到 山东 2026 年“艺术本科批”批次规则。",
+          },
+        ],
+      },
+      next_actions: [
+        {
+          code: "fix_blocking_items",
+          level: "warning",
+          title: "先补齐阻断项",
+          detail: "补齐位次、规则或候选数据后再生成志愿草稿。",
+        },
+        {
+          code: "no_candidates",
+          level: "warning",
+          title: "暂无可加入候选",
+          detail: "当前不能直接加入志愿表。",
+        },
+      ],
+    }));
+
+    expect(actions.map((item) => item.title)).toEqual(["先补齐阻断项", "暂无可加入候选"]);
+  });
+
   it("builds four guide steps with readiness state", () => {
     const cards = buildVolunteerGuideStepCards(buildGuide());
 

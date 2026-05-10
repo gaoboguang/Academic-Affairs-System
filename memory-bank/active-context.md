@@ -2,6 +2,16 @@
 
 ## 当前状态
 
+- 2026-05-10 已完成“高考志愿向导界面低风险重做”：
+  - 当前分支仍为 `codex/gaokao-volunteer-guide-20260510`
+  - `/recommendations` 默认首屏已收口为单一“高考志愿推荐向导”，外层重复的条件栏、步骤卡和生成前复核卡已移除；页面顶部只保留“升学方案中心 / 高级工具 / 回到推荐向导”和简洁状态条
+  - `RecommendationVolunteerWorkbenchPanel.vue` 已重排为四步：`1 考生条件`、`2 意向偏好`、`3 智能筛选`、`4 志愿草稿`；详细筛选解释、规则差异和风险校验默认收进“查看依据与复核明细”
+  - “推荐中心”“山东普通类推荐”“历史方案”“数据与规则”“数据健康”已收进右上角“高级工具”，旧能力保留且 E2E 已验证可进入
+  - 新增 / 调整前端 helper：分步状态、批次规则分组、短阻断提示、下一步动作摘要；批次选项优先展示已配置规则批次，无规则批次显示维护提示
+  - 修复本轮暴露的 Element Plus 按需注册漏项：补齐 `ElDropdown/ElDropdownMenu/ElDropdownItem`、`ElCollapse/ElCollapseItem`、`ElCheckbox/ElCheckboxButton/ElCheckboxGroup`，避免高级工具、折叠面板或复选框在真实页面中渲染成原生未知标签
+  - 本轮只改前端展示层、组件注册和测试；未改后端接口、推荐算法、数据库结构，也未写 `data/app.db`
+  - 验证：`frontend:test -- tests/volunteer-guide.test.ts tests/volunteer-workbench.test.ts tests/navigation.test.ts` 为 53 passed；`frontend:lint` 通过；`frontend:build` 通过；`e2e -- tests/e2e/gaokao-volunteer.spec.ts` 为 11 passed；`e2e -- tests/e2e/recommendations.spec.ts` 为 9 passed；`e2e -- tests/e2e/admin-stat-grid-layout.spec.ts` 为 5 passed；`check:e2e` 为 46 passed；`backend:data-health -- --json` 仍为已知 warning（单招 / 综评缺专门录取结果）
+
 - 2026-05-10 已完成“志愿向导自动带入考试成绩”体验修正：
   - 当前分支仍为 `codex/gaokao-volunteer-guide-20260510`
   - 志愿推荐向导选择学生和参考考试后，会复用既有 `GET /api/analytics/exams/{exam_id}/students` 自动读取该学生总分与校内名次

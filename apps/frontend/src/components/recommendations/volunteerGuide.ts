@@ -1,12 +1,41 @@
 import type {
+  ProvinceVolunteerRule,
   VolunteerGuideCandidateGroup,
   VolunteerGuideGroupKey,
+  VolunteerGuideNextAction,
   VolunteerGuidePreviewResponse,
   VolunteerGuideReadiness,
+  VolunteerGuideReadinessItem,
   VolunteerGuideStepCard,
 } from "./types";
 
 const GUIDE_GROUP_ORDER: VolunteerGuideGroupKey[] = ["challenge", "steady", "safe", "watch"];
+const VOLUNTEER_GUIDE_STEP_ORDER: VolunteerGuideProgressStep["key"][] = ["candidate", "preference", "screening", "draft"];
+
+export type VolunteerGuideProgressState = "pending" | "active" | "done" | "warning" | "blocked";
+
+export interface VolunteerGuideProgressStep {
+  key: "candidate" | "preference" | "screening" | "draft";
+  label: string;
+  summary: string;
+  state: VolunteerGuideProgressState;
+}
+
+export interface VolunteerBatchOptionGroups {
+  available: string[];
+  needsRule: string[];
+  currentUnmatched?: string;
+  suggestion?: {
+    title: string;
+    detail: string;
+  };
+}
+
+export interface VolunteerBatchOptionGroupInput {
+  batchOptions: string[];
+  rules: ProvinceVolunteerRule[];
+  currentBatch?: string | null;
+}
 
 export function buildVolunteerGuideReadiness(
   guide: VolunteerGuidePreviewResponse | null,
@@ -49,6 +78,45 @@ export function groupVolunteerGuideCandidates(
   });
 }
 
+export function buildVolunteerGuideProgressSteps(
+  guide: VolunteerGuidePreviewResponse | null,
+  draftCount = 0,
+): VolunteerGuideProgressStep[] {
+  const readiness = buildVolunteerGuideReadiness(guide);
+  const candidateCount = guide?.source_preview.candidate_count ?? 0;
+  const hasGenerated = Boolean(guide);
+  const hasBlocking = readiness.status === "blocked";
+  const steps: Record<VolunteerGuideProgressStep["key"], VolunteerGuideProgressStep> = {
+    candidate: {
+      key: "candidate",
+      label: "考生条件",
+      summary: guide
+        ? `${guide.student_name || "当前学生"} · ${guide.province} · ${guide.target_year}`
+        : "选择学生、考试、批次和成绩/位次",
+      state: hasGenerated ? (hasBlocking ? "blocked" : "done") : "active",
+    },
+    preference: {
+      key: "preference",
+      label: "意向偏好",
+      summary: hasPreferenceSignal(guide) ? "已纳入偏好" : "可选填，影响同层排序",
+      state: hasGenerated ? (hasBlocking ? "warning" : "done") : "pending",
+    },
+    screening: {
+      key: "screening",
+      label: "智能筛选",
+      summary: candidateCount ? `${candidateCount} 条候选` : hasGenerated ? "暂无可加入候选" : "生成后展示冲稳保结果",
+      state: !hasGenerated ? "pending" : hasBlocking ? "blocked" : candidateCount ? "done" : "warning",
+    },
+    draft: {
+      key: "draft",
+      label: "志愿草稿",
+      summary: draftCount ? `已加入 ${draftCount} 条` : "从候选加入后保存、打印、导出",
+      state: draftCount ? "done" : candidateCount ? "active" : "pending",
+    },
+  };
+  return VOLUNTEER_GUIDE_STEP_ORDER.map((key) => steps[key]);
+}
+
 export function buildVolunteerGuideStepCards(
   guide: VolunteerGuidePreviewResponse | null,
   draftCount = 0,
@@ -86,6 +154,57 @@ export function buildVolunteerGuideStepCards(
   ];
 }
 
+export function buildVolunteerBatchOptionGroups(input: VolunteerBatchOptionGroupInput): VolunteerBatchOptionGroups {
+  const ruleBatches = uniqueOrderedStrings(input.rules.map((item) => item.batch));
+  const allBatches = uniqueOrderedStrings([...ruleBatches, ...input.batchOptions, input.currentBatch ?? ""]);
+  const available = allBatches.filter((item) => ruleBatches.includes(item));
+  const needsRule = allBatches.filter((item) => item && !ruleBatches.includes(item));
+  const currentBatch = (input.currentBatch ?? "").trim();
+  const currentUnmatched = currentBatch && !ruleBatches.includes(currentBatch) ? currentBatch : undefined;
+  const suggestionTarget = currentUnmatched ? findSimilarBatch(currentUnmatched, ruleBatches) : undefined;
+  return {
+    available,
+    needsRule,
+    currentUnmatched,
+    suggestion: currentUnmatched
+      ? {
+          title: "当前批次还缺规则",
+          detail: suggestionTarget
+            ? `“${currentUnmatched}”暂未维护规则，可尝试选择已维护的“${suggestionTarget}”，或先到数据与规则补齐批次规则。`
+            : `“${currentUnmatched}”暂未维护规则，请先到数据与规则补齐批次规则，或改选已维护批次。`,
+        }
+      : undefined,
+  };
+}
+
+export function summarizeVolunteerReadinessItems(items: VolunteerGuideReadinessItem[], limit = 3): VolunteerGuideReadinessItem[] {
+  return [...items]
+    .sort((left, right) => readinessPriority(left) - readinessPriority(right))
+    .slice(0, limit)
+    .map((item) => ({
+      ...item,
+      title: readinessActionTitle(item),
+      detail: readinessActionDetail(item),
+    }));
+}
+
+export function buildVolunteerGuideActionItems(
+  guide: VolunteerGuidePreviewResponse | null,
+  limit = 2,
+): VolunteerGuideNextAction[] {
+  if (!guide) {
+    return [
+      {
+        code: "start_from_candidate",
+        level: "info",
+        title: "先确认考生条件",
+        detail: "选择学生和参考考试后，系统会自动带入可用的考试成绩。",
+      },
+    ];
+  }
+  return guide.next_actions.slice(0, limit);
+}
+
 function hasPreferenceSignal(guide: VolunteerGuidePreviewResponse | null): boolean {
   if (!guide) return false;
   return groupVolunteerGuideCandidates(guide).some((group) =>
@@ -101,4 +220,67 @@ function groupLabel(key: VolunteerGuideGroupKey): string {
     watch: "仅关注",
   };
   return labels[key];
+}
+
+function uniqueOrderedStrings(values: Array<string | null | undefined>): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const normalized = (value ?? "").trim();
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    result.push(normalized);
+  }
+  return result;
+}
+
+function findSimilarBatch(current: string, candidates: string[]): string | undefined {
+  const currentTokens = batchTokens(current);
+  let best: { value: string; score: number } | undefined;
+  for (const candidate of candidates) {
+    const candidateTokens = batchTokens(candidate);
+    const overlap = [...currentTokens].filter((token) => candidateTokens.has(token)).length;
+    const score = overlap * 2 + (candidate.includes(current) || current.includes(candidate) ? 1 : 0);
+    if (score <= 0) continue;
+    if (!best || score > best.score) {
+      best = { value: candidate, score };
+    }
+  }
+  return best?.value;
+}
+
+function batchTokens(value: string): Set<string> {
+  const compact = value.replace(/[（）()·\s]/g, "");
+  const tokens = new Set<string>();
+  for (const token of ["艺术", "本科", "专科", "统考", "普通", "常规", "提前", "春季", "高职", "专项"]) {
+    if (compact.includes(token)) tokens.add(token);
+  }
+  return tokens;
+}
+
+function readinessPriority(item: VolunteerGuideReadinessItem): number {
+  if (item.level === "blocking") {
+    if (item.code.includes("rule")) return 0;
+    if (item.code.includes("rank")) return 1;
+    if (item.code.includes("score")) return 1;
+    if (item.code.includes("candidate")) return 4;
+    return 1;
+  }
+  if (item.code.includes("subject")) return 3;
+  return item.level === "warning" ? 5 : 6;
+}
+
+function readinessActionTitle(item: VolunteerGuideReadinessItem): string {
+  if (item.code.includes("rule")) return "先处理批次规则";
+  if (item.code.includes("subject")) return "补充选科组合";
+  if (item.code.includes("candidate")) return "调整条件或补充数据";
+  if (item.code.includes("rank")) return "补充位次";
+  if (item.code.includes("score")) return "补充分数";
+  return item.title;
+}
+
+function readinessActionDetail(item: VolunteerGuideReadinessItem): string {
+  const detail = item.detail.trim();
+  if (detail.length <= 90) return detail;
+  return `${detail.slice(0, 88)}...`;
 }

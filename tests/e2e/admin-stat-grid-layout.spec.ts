@@ -4,7 +4,6 @@ const pagesWithStatGrids = [
   { path: "/exams", heading: "考试成绩中心" },
   { path: "/analytics", heading: "分析中心" },
   { path: "/gaokao-pathways", heading: "山东升学方案中心" },
-  { path: "/recommendations", heading: "高考志愿推荐向导" },
   { path: "/system-tools", heading: "系统设置" },
 ];
 
@@ -38,4 +37,34 @@ test.describe("后台指标卡布局", () => {
       }
     });
   }
+
+  test("高考志愿推荐向导 状态条保持横向栅格", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/recommendations");
+    await expect(page.getByRole("heading", { name: "高考志愿推荐向导" })).toBeVisible();
+
+    const items = page.locator(".guide-status-strip article");
+    await expect(items.first()).toBeVisible();
+    await expect(page.locator(".guide-status-strip .risk-summary-button")).toBeVisible();
+
+    const firstRowItems = await items.evaluateAll((elements) => {
+      const visibleRects = elements
+        .map((element) => element.getBoundingClientRect())
+        .filter((rect) => rect.width > 0 && rect.height > 0);
+      if (!visibleRects.length) return [];
+      const firstTop = Math.min(...visibleRects.map((rect) => rect.top));
+      return visibleRects
+        .filter((rect) => Math.abs(rect.top - firstTop) < 8)
+        .map((rect) => ({
+          width: rect.width,
+          height: rect.height,
+        }));
+    });
+
+    expect(firstRowItems.length).toBeGreaterThanOrEqual(4);
+    for (const rect of firstRowItems) {
+      expect(rect.width).toBeGreaterThanOrEqual(150);
+      expect(rect.height).toBeLessThan(180);
+    }
+  });
 });

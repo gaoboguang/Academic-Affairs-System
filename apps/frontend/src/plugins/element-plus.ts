@@ -3,10 +3,13 @@ import ElAlert from "element-plus/es/components/alert/index";
 import ElAutocomplete from "element-plus/es/components/autocomplete/index";
 import ElButton from "element-plus/es/components/button/index";
 import ElCard from "element-plus/es/components/card/index";
+import { ElCheckbox, ElCheckboxButton, ElCheckboxGroup } from "element-plus/es/components/checkbox/index";
 import ElCol from "element-plus/es/components/col/index";
+import { ElCollapse, ElCollapseItem } from "element-plus/es/components/collapse/index";
 import ElDatePicker from "element-plus/es/components/date-picker/index";
 import ElDialog from "element-plus/es/components/dialog/index";
 import ElDrawer from "element-plus/es/components/drawer/index";
+import { ElDropdown, ElDropdownItem, ElDropdownMenu } from "element-plus/es/components/dropdown/index";
 import ElEmpty from "element-plus/es/components/empty/index";
 import { ElForm, ElFormItem } from "element-plus/es/components/form/index";
 import ElInput from "element-plus/es/components/input/index";
@@ -28,9 +31,17 @@ const components: Component[] = [
   ElAutocomplete,
   ElButton,
   ElCard,
+  ElCheckbox,
+  ElCheckboxButton,
+  ElCheckboxGroup,
   ElCol,
+  ElCollapse,
+  ElCollapseItem,
   ElDatePicker,
   ElDialog,
+  ElDropdown,
+  ElDropdownItem,
+  ElDropdownMenu,
   ElDrawer,
   ElEmpty,
   ElForm,

@@ -2,6 +2,25 @@
 
 ## 当前主线状态（2026-05-10）
 
+- 本轮已完成用户要求的“高考志愿向导界面低风险重做”：
+  - 当前分支：`codex/gaokao-volunteer-guide-20260510`
+  - 目标：降低 `/recommendations` 页面重复、过载和上下文跳转；不改后端接口、不改推荐算法、不改数据库
+  - `apps/frontend/src/pages/RecommendationsPage.vue`：默认只展示主向导；顶部动作变为“升学方案中心 / 高级工具 / 回到推荐向导”；新增状态条展示学生、考试、批次、候选 / 草稿、数据风险；旧推荐中心、山东普通类推荐、历史方案、数据与规则、数据健康收进高级工具
+  - `apps/frontend/src/components/recommendations/RecommendationVolunteerWorkbenchPanel.vue`：模板改为四步结构，考生条件区保留考试成绩自动带入提示；意向偏好区折叠高级项；智能筛选区只展示分组、短提示和关键阻断；筛选解释、规则差异、边界概览、风险校验收进“查看依据与复核明细”；草稿保存 / 打印 / 导出集中到志愿草稿区
+  - `apps/frontend/src/components/recommendations/volunteerGuide.ts`：新增 / 调整分步状态、批次选项分组、readiness 短摘要和 next actions 展示 helper
+  - `apps/frontend/src/plugins/element-plus.ts`：补齐 `ElDropdown*`、`ElCollapse*`、`ElCheckbox*` 注册；这是关键稳定性修复，否则高级工具菜单和折叠区会以未知标签渲染
+  - E2E 同步：`tests/e2e/helpers/localEduE2e.ts` 新增/稳定 `openAdvancedTool()`；`gaokao-volunteer.spec.ts`、`recommendations.spec.ts` 通过高级工具进入旧入口；`admin-stat-grid-layout.spec.ts` 对推荐向导改查状态条布局
+  - 已验证：
+    - `npm run frontend:test -- tests/volunteer-guide.test.ts tests/volunteer-workbench.test.ts tests/navigation.test.ts`：53 passed
+    - `npm run frontend:lint`：通过
+    - `npm run frontend:build`：通过
+    - `npm run e2e -- tests/e2e/gaokao-volunteer.spec.ts`：11 passed
+    - `npm run e2e -- tests/e2e/recommendations.spec.ts`：9 passed
+    - `npm run e2e -- tests/e2e/admin-stat-grid-layout.spec.ts`：5 passed
+    - `npm run check:e2e`：46 passed
+    - `npm run backend:data-health -- --json`：运行成功，仍为已知 warning（单招 / 综评缺专门录取结果，只能初筛）
+  - 后续注意：如果继续优化此页，优先保持四步主流程和高级工具收纳；不要把旧维护表重新铺到首屏，也不要绕开现有选科硬过滤、省份规则和特殊类型初筛边界
+
 - 本轮已完成用户要求的“志愿向导自动带入考试成绩”：
   - 当前分支：`codex/gaokao-volunteer-guide-20260510`
   - 前端 `useGaokaoVolunteerWorkspace.ts` 现在在学生 / 考试变化后调用 `GET /api/analytics/exams/{exam_id}/students`，匹配当前学生并读取 `total_score`、`grade_rank`

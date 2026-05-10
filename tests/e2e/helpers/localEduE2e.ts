@@ -443,7 +443,7 @@ async function openRecommendationCenter(
   await expect(page.getByRole("heading", { name: "高考志愿" })).toBeVisible();
 
   await ensureAdmissionsImported(page);
-  await page.getByRole("tab", { name: "推荐中心" }).click();
+  await openAdvancedTool(page, "推荐中心");
 
   return page.locator(".panel-block").filter({ hasText: "生成推荐方案" }).first();
 }
@@ -468,6 +468,23 @@ async function generateRecommendationScheme(
   await confirmDialogIfVisible(page, "生成前复核", "继续生成");
 }
 
+async function openAdvancedTool(page: Page, name: string): Promise<void> {
+  await page.getByTestId("recommendation-advanced-tools-button").click();
+  const item = page.locator(".recommendation-advanced-menu .el-dropdown-menu__item").filter({ hasText: name }).first();
+  await expect(item).toBeVisible();
+  await item.click();
+}
+
+async function returnToVolunteerGuide(page: Page): Promise<Locator> {
+  const button = page.getByRole("button", { name: "回到推荐向导" });
+  if (await button.isVisible().catch(() => false)) {
+    await button.click();
+  }
+  const workbenchPanel = page.locator(".panel-block").filter({ hasText: "志愿推荐向导" }).first();
+  await expect(workbenchPanel.getByRole("heading", { name: "志愿推荐向导" })).toBeVisible();
+  return workbenchPanel;
+}
+
 async function openVolunteerWorkbench(page: Page): Promise<Locator> {
   await ensureExamWithScores(page);
   await page.goto("/recommendations");
@@ -479,10 +496,7 @@ async function openVolunteerWorkbench(page: Page): Promise<Locator> {
 
   await ensureVolunteerRuleConfigured(page);
 
-  await page.getByRole("tab", { name: "志愿推荐向导" }).click();
-  const workbenchPanel = page.locator(".panel-block").filter({ hasText: "志愿推荐向导" }).first();
-  await expect(workbenchPanel.getByRole("heading", { name: "志愿推荐向导" })).toBeVisible();
-  return workbenchPanel;
+  return returnToVolunteerGuide(page);
 }
 
 async function createVolunteerDraft(page: Page): Promise<{
@@ -592,8 +606,10 @@ export {
   scoreQuestionTrendFixtureOne,
   scoreQuestionTrendFixtureTwo,
   scoreQuestionDetailsFixture,
+  openAdvancedTool,
   openRecommendationCenter,
   openVolunteerWorkbench,
+  returnToVolunteerGuide,
   scoresFixture,
   selectDropdownOption,
   setRecommendationFormForE2E,

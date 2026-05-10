@@ -8,218 +8,162 @@
       <div class="action-row">
         <el-button @click="emit('sync-from-recommendation')">沿用推荐条件</el-button>
         <el-button @click="emit('reset')">清空工作台</el-button>
-        <el-button type="primary" :loading="loading" @click="emit('load-preview')">生成智能筛选</el-button>
       </div>
     </div>
 
-    <section v-if="guidePreview" class="guide-summary-panel">
+    <div class="guide-progress-strip" aria-label="志愿推荐步骤">
+      <article
+        v-for="(step, index) in guideProgressSteps"
+        :key="step.key"
+        class="guide-progress-item"
+        :class="`state-${step.state}`"
+      >
+        <span>{{ index + 1 }}</span>
+        <div>
+          <strong>{{ step.label }}</strong>
+          <p>{{ step.summary }}</p>
+        </div>
+      </article>
+    </div>
+
+    <section class="guide-step-section candidate-step">
       <div class="section-head compact">
         <div>
-          <h3>智能筛选结果</h3>
-          <p>
-            共 {{ guidePreview.source_preview.candidate_count }} 条候选；
-            生效位次 {{ guidePreview.source_preview.effective_rank ?? "暂无" }}；
-            {{ guidePreview.source_preview.score_input_label }}。
-          </p>
+          <h3>1 考生条件</h3>
+          <p>先确认学生、考试、批次、成绩/位次和选科组合；本区足够后再生成智能筛选。</p>
         </div>
-        <el-tag
-          :type="guidePreview.readiness.status === 'blocked' ? 'danger' : guidePreview.readiness.status === 'warning' ? 'warning' : 'success'"
-          effect="plain"
-        >
-          {{
-            guidePreview.readiness.status === "blocked"
-              ? "需要先处理"
-              : guidePreview.readiness.status === "warning"
-              ? "可用但需复核"
-              : "条件就绪"
-          }}
-        </el-tag>
-      </div>
-      <div class="guide-group-grid">
-        <article v-for="group in guideGroups" :key="group.key" class="guide-group-card">
-          <span>{{ group.label }}</span>
-          <strong>{{ group.count }} 条</strong>
-          <p v-if="group.candidates[0]">{{ group.candidates[0].evidence.summary }}</p>
-          <p v-else>当前没有该分层候选。</p>
-        </article>
-      </div>
-      <div v-if="guidePreview.next_actions.length" class="guide-action-list">
-        <article
-          v-for="action in guidePreview.next_actions"
-          :key="action.code"
-          class="guide-action-item"
-          :class="`level-${action.level}`"
-        >
-          <strong>{{ action.title }}</strong>
-          <p>{{ action.detail }}</p>
-        </article>
-      </div>
-    </section>
-
-    <section class="draft-toolbar-card">
-      <div class="draft-toolbar-copy">
-        <strong>草稿持久化</strong>
-        <p>当前志愿表可保存为命名草稿，后续可再次载入继续排序、打印和导出。</p>
-      </div>
-      <div class="draft-toolbar-actions">
-        <el-input v-model="draftName" placeholder="草稿名称，例如：张三-本科批第一版" />
-        <div class="draft-toolbar-buttons">
-          <el-button type="primary" :loading="savingDraft" @click="emit('save-draft')">保存草稿</el-button>
-          <el-button :loading="savingDraft" @click="emit('save-draft-as')">另存为新草稿</el-button>
-          <el-button :disabled="!currentDraftId" @click="emit('print-draft')">打印预览</el-button>
-          <el-button
-            :disabled="!currentDraftId"
-            :loading="exportingDraftId === currentDraftId"
-            @click="emit('export-draft')"
-          >
-            导出 Excel
-          </el-button>
+        <div class="action-row">
+          <el-button type="primary" :loading="loading" @click="emit('load-preview')">生成智能筛选</el-button>
         </div>
-        <p class="draft-toolbar-status">
-          {{ currentDraftId ? "当前已保存草稿，可直接打印或导出。" : "需先保存草稿后才能打印或导出。" }}
-        </p>
       </div>
-    </section>
 
-    <div class="filter-grid">
-      <el-select v-model="form.student_id" filterable placeholder="选择学生">
-        <el-option
-          v-for="student in studentOptions"
-          :key="student.id"
-          :label="`${student.student_no} - ${student.name}`"
-          :value="student.id"
+      <div class="filter-grid candidate-filter-grid">
+        <el-select v-model="form.student_id" filterable placeholder="选择学生">
+          <el-option
+            v-for="student in studentOptions"
+            :key="student.id"
+            :label="`${student.student_no} - ${student.name}`"
+            :value="student.id"
+          />
+        </el-select>
+        <el-select v-model="form.exam_id" filterable placeholder="参考考试">
+          <el-option v-for="exam in examOptions" :key="exam.id" :label="exam.name" :value="exam.id" />
+        </el-select>
+        <el-select v-model="form.province" filterable placeholder="省份">
+          <el-option v-for="province in provinceOptions" :key="province" :label="province" :value="province" />
+        </el-select>
+        <el-select v-model="form.target_year" filterable placeholder="目标年份">
+          <el-option v-for="year in yearOptions" :key="year" :label="String(year)" :value="year" />
+        </el-select>
+        <el-select v-model="form.batch" clearable filterable placeholder="批次，可选">
+          <el-option-group v-if="batchOptionGroups.available.length" label="可用于推荐">
+            <el-option v-for="batch in batchOptionGroups.available" :key="`available-${batch}`" :label="batch" :value="batch" />
+          </el-option-group>
+          <el-option-group v-if="batchOptionGroups.needsRule.length" label="需规则维护">
+            <el-option v-for="batch in batchOptionGroups.needsRule" :key="`needs-rule-${batch}`" :label="batch" :value="batch" />
+          </el-option-group>
+        </el-select>
+        <el-select v-model="form.exam_mode" clearable filterable placeholder="科类/模式，可选">
+          <el-option v-for="mode in examModeOptions" :key="mode" :label="mode" :value="mode" />
+        </el-select>
+        <el-select v-model="form.candidate_type" clearable filterable placeholder="考生类别，可选">
+          <el-option label="按学生档案判断" value="" />
+          <el-option v-for="item in gaokaoCandidateTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+        </el-select>
+        <el-select v-model="form.score_input_mode" placeholder="成绩/位次来源">
+          <el-option v-for="item in scoreInputModeOptions" :key="item.value" :label="item.label" :value="item.value" />
+        </el-select>
+        <el-input v-model="form.subject_combination" placeholder="选科组合，可选" />
+        <el-input v-model="form.reference_exam_name" placeholder="参考考试说明，可选" />
+        <el-input-number
+          v-if="showRankInput"
+          v-model="form.student_rank_override"
+          :min="1"
+          :max="999999"
+          controls-position="right"
+          style="width: 100%"
+          :placeholder="rankInputPlaceholder"
         />
-      </el-select>
-      <el-select v-model="form.exam_id" filterable placeholder="参考考试">
-        <el-option v-for="exam in examOptions" :key="exam.id" :label="exam.name" :value="exam.id" />
-      </el-select>
-      <el-select v-model="form.province" filterable placeholder="省份">
-        <el-option v-for="province in provinceOptions" :key="province" :label="province" :value="province" />
-      </el-select>
-      <el-select v-model="form.target_year" filterable placeholder="目标年份">
-        <el-option v-for="year in yearOptions" :key="year" :label="String(year)" :value="year" />
-      </el-select>
-      <el-select v-model="form.batch" clearable filterable placeholder="批次，可选">
-        <el-option v-for="batch in batchOptions" :key="batch" :label="batch" :value="batch" />
-      </el-select>
-      <el-select v-model="form.exam_mode" clearable filterable placeholder="科类/模式，可选">
-        <el-option v-for="mode in examModeOptions" :key="mode" :label="mode" :value="mode" />
-      </el-select>
-      <el-select v-model="form.candidate_type" clearable filterable placeholder="考生类别，可选">
-        <el-option label="按学生档案判断" value="" />
-        <el-option v-for="item in gaokaoCandidateTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
-      </el-select>
-      <el-select v-model="form.score_input_mode" placeholder="成绩/位次来源">
-        <el-option v-for="item in scoreInputModeOptions" :key="item.value" :label="item.label" :value="item.value" />
-      </el-select>
-      <el-select
-        v-model="form.target_regions_json"
-        multiple
-        filterable
-        allow-create
-        default-first-option
-        collapse-tags
-        placeholder="目标地区偏好"
-      >
-        <el-option v-for="item in targetRegionOptions" :key="item" :label="item" :value="item" />
-      </el-select>
-      <el-select
-        v-model="form.school_level_tags_json"
-        multiple
-        filterable
-        allow-create
-        default-first-option
-        collapse-tags
-        placeholder="院校层级偏好"
-      >
-        <el-option v-for="item in schoolLevelOptions" :key="item" :label="item" :value="item" />
-      </el-select>
-      <el-input v-model="form.major_keyword" placeholder="专业方向关键词，可选" />
-      <el-input v-model="form.subject_combination" placeholder="选科组合，可选" />
-      <el-input v-model="form.reference_exam_name" placeholder="参考考试说明，可选" />
-      <el-input-number
-        v-if="showRankInput"
-        v-model="form.student_rank_override"
-        :min="1"
-        :max="999999"
-        controls-position="right"
-        style="width: 100%"
-        :placeholder="rankInputPlaceholder"
-      />
-      <el-input-number
-        v-if="showScoreInput"
-        v-model="form.comprehensive_score"
-        :min="0"
-        :max="1000"
-        controls-position="right"
-        style="width: 100%"
-        :placeholder="scoreInputPlaceholder"
-      />
-      <el-input-number
-        v-if="showScoreRangeInput"
-        v-model="form.score_range_min"
-        :min="0"
-        :max="1000"
-        controls-position="right"
-        style="width: 100%"
-        placeholder="分数区间下限"
-      />
-      <el-input-number
-        v-if="showScoreRangeInput"
-        v-model="form.score_range_max"
-        :min="0"
-        :max="1000"
-        controls-position="right"
-        style="width: 100%"
-        placeholder="分数区间上限"
-      />
-      <el-input-number
-        v-if="showRankRangeInput"
-        v-model="form.rank_range_min"
-        :min="1"
-        :max="999999"
-        controls-position="right"
-        style="width: 100%"
-        placeholder="位次区间下限"
-      />
-      <el-input-number
-        v-if="showRankRangeInput"
-        v-model="form.rank_range_max"
-        :min="1"
-        :max="999999"
-        controls-position="right"
-        style="width: 100%"
-        placeholder="位次区间上限"
-      />
-      <el-select v-if="showRiskPreference" v-model="form.risk_preference" placeholder="结果风险偏好">
-        <el-option v-for="item in riskPreferenceOptions" :key="item.value" :label="item.label" :value="item.value" />
-      </el-select>
-      <div v-if="showHistoricalMappingToggle" class="inline-switch-card">
-        <span class="inline-switch-label">历年映射估算</span>
-        <el-switch v-model="form.use_historical_mapping" inline-prompt active-text="开启" inactive-text="关闭" />
+        <el-input-number
+          v-if="showScoreInput"
+          v-model="form.comprehensive_score"
+          :min="0"
+          :max="1000"
+          controls-position="right"
+          style="width: 100%"
+          :placeholder="scoreInputPlaceholder"
+        />
+        <el-input-number
+          v-if="showScoreRangeInput"
+          v-model="form.score_range_min"
+          :min="0"
+          :max="1000"
+          controls-position="right"
+          style="width: 100%"
+          placeholder="分数区间下限"
+        />
+        <el-input-number
+          v-if="showScoreRangeInput"
+          v-model="form.score_range_max"
+          :min="0"
+          :max="1000"
+          controls-position="right"
+          style="width: 100%"
+          placeholder="分数区间上限"
+        />
+        <el-input-number
+          v-if="showRankRangeInput"
+          v-model="form.rank_range_min"
+          :min="1"
+          :max="999999"
+          controls-position="right"
+          style="width: 100%"
+          placeholder="位次区间下限"
+        />
+        <el-input-number
+          v-if="showRankRangeInput"
+          v-model="form.rank_range_max"
+          :min="1"
+          :max="999999"
+          controls-position="right"
+          style="width: 100%"
+          placeholder="位次区间上限"
+        />
+        <el-select v-if="showRiskPreference" v-model="form.risk_preference" placeholder="结果风险偏好">
+          <el-option v-for="item in riskPreferenceOptions" :key="item.value" :label="item.label" :value="item.value" />
+        </el-select>
+        <div v-if="showHistoricalMappingToggle" class="inline-switch-card">
+          <span class="inline-switch-label">历年映射估算</span>
+          <el-switch v-model="form.use_historical_mapping" inline-prompt active-text="开启" inactive-text="关闭" />
+        </div>
       </div>
-    </div>
 
-    <div v-if="examScoreAutofillNotice || loadingExamScoreAutofill" class="exam-score-autofill-bar">
-      <div class="exam-score-autofill-copy">
-        <strong>{{ loadingExamScoreAutofill ? "正在读取考试成绩" : examScoreAutofillNotice?.title }}</strong>
-        <p>{{ loadingExamScoreAutofill ? "选择学生和参考考试后，系统会尝试读取本次总分与校内名次。" : examScoreAutofillNotice?.detail }}</p>
+      <div v-if="batchOptionGroups.suggestion" class="batch-rule-tip">
+        <strong>{{ batchOptionGroups.suggestion.title }}</strong>
+        <p>{{ batchOptionGroups.suggestion.detail }}</p>
       </div>
-      <el-button
-        v-if="examScoreAutofillNotice?.canApply"
-        type="primary"
-        link
-        @click="emit('apply-exam-score-autofill')"
-      >
-        一键使用本次考试成绩
-      </el-button>
-    </div>
 
-    <section class="career-preference-card">
+      <div v-if="examScoreAutofillNotice || loadingExamScoreAutofill" class="exam-score-autofill-bar">
+        <div class="exam-score-autofill-copy">
+          <strong>{{ loadingExamScoreAutofill ? "正在读取考试成绩" : examScoreAutofillNotice?.title }}</strong>
+          <p>{{ loadingExamScoreAutofill ? "选择学生和参考考试后，系统会尝试读取本次总分与校内名次。" : examScoreAutofillNotice?.detail }}</p>
+        </div>
+        <el-button
+          v-if="examScoreAutofillNotice?.canApply"
+          type="primary"
+          link
+          @click="emit('apply-exam-score-autofill')"
+        >
+          一键使用本次考试成绩
+        </el-button>
+      </div>
+    </section>
+
+    <section class="guide-step-section preference-step">
       <div class="section-head compact">
         <div>
-          <h3>意向偏好</h3>
-          <p>记录 1~3 个目标就业方向、行业/岗位偏好和可接受路径；偏好只影响同层排序，不覆盖硬性录取条件。</p>
+          <h3>2 意向偏好</h3>
+          <p>偏好只影响同层排序，不覆盖省份、批次、科类、选科等硬条件。</p>
         </div>
         <div class="action-row">
           <el-button
@@ -241,6 +185,32 @@
       </div>
 
       <p class="career-preference-status">{{ careerPreferenceStatusCopy }}</p>
+
+      <div class="career-grid">
+        <el-select
+          v-model="form.target_regions_json"
+          multiple
+          filterable
+          allow-create
+          default-first-option
+          collapse-tags
+          placeholder="目标地区偏好"
+        >
+          <el-option v-for="item in targetRegionOptions" :key="item" :label="item" :value="item" />
+        </el-select>
+        <el-select
+          v-model="form.school_level_tags_json"
+          multiple
+          filterable
+          allow-create
+          default-first-option
+          collapse-tags
+          placeholder="院校层级偏好"
+        >
+          <el-option v-for="item in schoolLevelOptions" :key="item" :label="item" :value="item" />
+        </el-select>
+        <el-input v-model="form.major_keyword" placeholder="专业方向关键词，可选" />
+      </div>
 
       <div class="career-grid">
         <el-select v-model="form.primary_direction_id" clearable filterable placeholder="首选就业方向">
@@ -272,217 +242,313 @@
         </el-select>
       </div>
 
-      <div class="career-priority-block">
-        <span class="career-label">偏好重点</span>
-        <el-checkbox-group v-model="form.priority_focuses_json" class="draft-column-options">
-          <el-checkbox-button v-for="item in careerPriorityFocusOptions" :key="item.value" :label="item.value">
-            {{ item.label }}
-          </el-checkbox-button>
-        </el-checkbox-group>
-      </div>
+      <el-collapse class="advanced-preference-collapse">
+        <el-collapse-item name="advanced-preference" title="更多偏好">
+          <div class="career-priority-block">
+            <span class="career-label">偏好重点</span>
+            <el-checkbox-group v-model="form.priority_focuses_json" class="draft-column-options">
+              <el-checkbox-button v-for="item in careerPriorityFocusOptions" :key="item.value" :label="item.value">
+                {{ item.label }}
+              </el-checkbox-button>
+            </el-checkbox-group>
+          </div>
 
-      <div class="career-grid">
-        <el-select
-          v-model="form.preferred_industries_json"
-          multiple
-          filterable
-          allow-create
-          default-first-option
-          collapse-tags
-          placeholder="目标行业偏好，可选"
-        >
-          <el-option v-for="item in careerIndustryOptions" :key="item" :label="item" :value="item" />
-        </el-select>
-        <el-select
-          v-model="form.preferred_job_types_json"
-          multiple
-          filterable
-          allow-create
-          default-first-option
-          collapse-tags
-          placeholder="目标岗位偏好，可选"
-        >
-          <el-option v-for="item in careerJobTypeOptions" :key="item" :label="item" :value="item" />
-        </el-select>
-        <el-select
-          v-model="form.target_employment_cities_json"
-          multiple
-          filterable
-          allow-create
-          default-first-option
-          collapse-tags
-          placeholder="目标就业城市，可选"
-        >
-          <el-option v-for="item in provinceOptions" :key="`career-city-${item}`" :label="item" :value="item" />
-        </el-select>
-      </div>
+          <div class="career-grid">
+            <el-select
+              v-model="form.preferred_industries_json"
+              multiple
+              filterable
+              allow-create
+              default-first-option
+              collapse-tags
+              placeholder="目标行业偏好，可选"
+            >
+              <el-option v-for="item in careerIndustryOptions" :key="item" :label="item" :value="item" />
+            </el-select>
+            <el-select
+              v-model="form.preferred_job_types_json"
+              multiple
+              filterable
+              allow-create
+              default-first-option
+              collapse-tags
+              placeholder="目标岗位偏好，可选"
+            >
+              <el-option v-for="item in careerJobTypeOptions" :key="item" :label="item" :value="item" />
+            </el-select>
+            <el-select
+              v-model="form.target_employment_cities_json"
+              multiple
+              filterable
+              allow-create
+              default-first-option
+              collapse-tags
+              placeholder="目标就业城市，可选"
+            >
+              <el-option v-for="item in provinceOptions" :key="`career-city-${item}`" :label="item" :value="item" />
+            </el-select>
+          </div>
 
-      <div class="career-path-grid">
-        <label class="career-check">
-          <el-checkbox v-model="form.accepts_postgraduate">接受读研路径</el-checkbox>
-        </label>
-        <label class="career-check">
-          <el-checkbox v-model="form.accepts_public_service">接受考公/考编路径</el-checkbox>
-        </label>
-        <label class="career-check">
-          <el-checkbox v-model="form.accepts_certificate">接受资格证路径</el-checkbox>
-        </label>
-        <label class="career-check">
-          <el-checkbox v-model="form.accepts_long_training">接受长培养周期</el-checkbox>
-        </label>
-      </div>
+          <div class="career-path-grid">
+            <label class="career-check">
+              <el-checkbox v-model="form.accepts_postgraduate">接受读研路径</el-checkbox>
+            </label>
+            <label class="career-check">
+              <el-checkbox v-model="form.accepts_public_service">接受考公/考编路径</el-checkbox>
+            </label>
+            <label class="career-check">
+              <el-checkbox v-model="form.accepts_certificate">接受资格证路径</el-checkbox>
+            </label>
+            <label class="career-check">
+              <el-checkbox v-model="form.accepts_long_training">接受长培养周期</el-checkbox>
+            </label>
+          </div>
+
+          <el-input
+            v-model="form.note"
+            class="note-box"
+            type="textarea"
+            :rows="2"
+            placeholder="补充说明，例如职业方向、地域偏好或需要重点规避的情况"
+          />
+        </el-collapse-item>
+      </el-collapse>
     </section>
 
-    <el-input
-      v-model="form.note"
-      class="note-box"
-      type="textarea"
-      :rows="2"
-      placeholder="补充说明，例如职业方向、地域偏好或需要重点规避的情况"
-    />
-
-    <el-alert
-      v-if="preview"
-      class="result-alert"
-      type="info"
-      show-icon
-      :closable="false"
-      :title="`${preview.student_name} · ${formatStudentType(preview.student_type)} · ${preview.exam_name}`"
-    >
-      <template #default>
-        当前总分 {{ preview.total_score }}，考试位次 {{ preview.snapshot_rank ?? "暂无" }}，生效位次
-        {{ preview.effective_rank ?? "暂无" }}，当前按“{{ preview.score_input_label }}”计算。已匹配
-        {{ preview.candidate_count }} 条候选计划，当前展示 {{ preview.returned_candidate_count ?? preview.candidates.length }} 条，
-        {{ preview.applicable_rule_count }} 条省份规则。
-        <div v-if="preview.input_notes.length" class="preview-note-list">
-          <div v-for="item in preview.input_notes" :key="item">{{ item }}</div>
+    <section class="guide-step-section screening-step">
+      <div class="section-head compact">
+        <div>
+          <h3>3 智能筛选</h3>
+          <p>按冲刺、稳妥、保底、仅关注组织候选，优先展示能直接行动的原因。</p>
         </div>
-      </template>
-    </el-alert>
+        <el-tag :type="guideReadinessTagType" effect="plain">{{ guideReadinessStatusLabel }}</el-tag>
+      </div>
 
-    <el-alert
-      v-if="preview?.is_candidate_truncated"
-      class="result-alert"
-      type="warning"
-      show-icon
-      :closable="false"
-      title="智能筛选结果较多，页面已只展示前 300 条；请增加批次、地区、院校层级或专业关键词筛选。"
-    />
-
-    <section v-if="preview?.rule_alerts.length" class="rule-alert-grid">
-      <article
-        v-for="alert in preview.rule_alerts"
-        :key="`${alert.code}-${alert.detail}`"
-        class="rule-alert-card"
-        :class="`level-${normalizeAlertLevel(alert.level)}`"
-      >
-        <div class="rule-alert-head">
-          <strong>{{ alert.title }}</strong>
-          <el-tag :type="alertTagType(alert.level)" effect="plain">{{ alertLevelLabel(alert.level) }}</el-tag>
-        </div>
-        <p>{{ alert.detail }}</p>
-      </article>
-    </section>
-
-    <section class="insight-grid">
-      <article class="insight-panel">
+      <section v-if="guidePreview" class="guide-summary-panel">
         <div class="section-head compact">
           <div>
-            <h3>筛选解释</h3>
-            <p>把当前筛选条件、命中的规则和候选生成依据集中展示，避免只看到结果看不到过程。</p>
+            <h3>筛选摘要</h3>
+            <p>
+              共 {{ guidePreview.source_preview.candidate_count }} 条候选；
+              生效位次 {{ guidePreview.source_preview.effective_rank ?? "暂无" }}；
+              {{ guidePreview.source_preview.score_input_label }}。
+            </p>
           </div>
         </div>
-        <div class="insight-chip-list">
-          <span v-for="item in workbenchExplanation.items" :key="`${item.label}-${item.value}`" class="page-chip">
-            <strong>{{ item.label }}</strong>{{ item.value }}
-          </span>
-        </div>
-        <ul class="insight-notes">
-          <li v-for="note in workbenchExplanation.notes" :key="note">{{ note }}</li>
-        </ul>
-      </article>
-
-      <article class="insight-panel">
-        <div class="section-head compact">
-          <div>
-            <h3>风险校验</h3>
-            <p>先看志愿位、保底项和选科复核，再决定是否保存、打印或导出草稿。</p>
-          </div>
-        </div>
-        <div class="check-list">
-          <article
-            v-for="item in draftChecks"
-            :key="`${item.level}-${item.title}`"
-            class="check-item"
-            :class="`level-${item.level}`"
-          >
-            <strong>{{ item.title }}</strong>
-            <p>{{ item.detail }}</p>
+        <div class="guide-group-grid">
+          <article v-for="group in guideGroups" :key="group.key" class="guide-group-card">
+            <span>{{ group.label }}</span>
+            <strong>{{ group.count }} 条</strong>
+            <p v-if="group.candidates[0]">{{ group.candidates[0].evidence.summary }}</p>
+            <p v-else>当前没有该分层候选。</p>
           </article>
         </div>
-      </article>
-    </section>
+      </section>
 
-    <section class="insight-panel rule-insight-panel">
-      <div class="section-head compact">
-        <div>
-          <h3>规则差异摘要</h3>
-          <p>把当前选中的规则和兼容命中的规则并排列出，便于判断模式回退、志愿结构和口径差异。</p>
-        </div>
-      </div>
-      <div v-if="ruleInsightCards.length" class="rule-card-grid">
+      <div class="guide-action-list">
         <article
-          v-for="card in ruleInsightCards"
-          :key="card.key"
-          class="rule-card"
-          :class="{ selected: card.isSelected }"
+          v-for="action in compactGuideActions"
+          :key="action.code"
+          class="guide-action-item"
+          :class="`level-${action.level}`"
         >
-          <div class="rule-card-head">
-            <div>
-              <strong>{{ card.title }}</strong>
-              <p>{{ card.subtitle }}</p>
+          <strong>{{ action.title }}</strong>
+          <p>{{ action.detail }}</p>
+        </article>
+      </div>
+
+      <div v-if="compactReadinessItems.length" class="compact-readiness-list">
+        <article
+          v-for="item in compactReadinessItems"
+          :key="`${item.code}-${item.detail}`"
+          class="compact-readiness-item"
+          :class="`level-${item.level}`"
+        >
+          <strong>{{ item.title }}</strong>
+          <p>{{ item.detail }}</p>
+        </article>
+      </div>
+
+      <el-alert
+        v-if="preview"
+        class="result-alert"
+        type="info"
+        show-icon
+        :closable="false"
+        :title="`${preview.student_name} · ${formatStudentType(preview.student_type)} · ${preview.exam_name}`"
+      >
+        <template #default>
+          当前总分 {{ preview.total_score }}，考试位次 {{ preview.snapshot_rank ?? "暂无" }}，生效位次
+          {{ preview.effective_rank ?? "暂无" }}，当前按“{{ preview.score_input_label }}”计算。已匹配
+          {{ preview.candidate_count }} 条候选计划，当前展示 {{ preview.returned_candidate_count ?? preview.candidates.length }} 条，
+          {{ preview.applicable_rule_count }} 条省份规则。
+          <div v-if="preview.input_notes.length" class="preview-note-list">
+            <div v-for="item in preview.input_notes" :key="item">{{ item }}</div>
+          </div>
+        </template>
+      </el-alert>
+
+      <el-alert
+        v-if="preview?.is_candidate_truncated"
+        class="result-alert"
+        type="warning"
+        show-icon
+        :closable="false"
+        title="智能筛选结果较多，页面已只展示前 300 条；请增加批次、地区、院校层级或专业关键词筛选。"
+      />
+
+      <el-collapse class="evidence-collapse">
+        <el-collapse-item name="evidence" title="查看依据与复核明细">
+          <section v-if="preview?.rule_alerts.length" class="rule-alert-grid">
+            <article
+              v-for="alert in preview.rule_alerts"
+              :key="`${alert.code}-${alert.detail}`"
+              class="rule-alert-card"
+              :class="`level-${normalizeAlertLevel(alert.level)}`"
+            >
+              <div class="rule-alert-head">
+                <strong>{{ alert.title }}</strong>
+                <el-tag :type="alertTagType(alert.level)" effect="plain">{{ alertLevelLabel(alert.level) }}</el-tag>
+              </div>
+              <p>{{ alert.detail }}</p>
+            </article>
+          </section>
+
+          <section class="insight-grid">
+            <article class="insight-panel">
+              <div class="section-head compact">
+                <div>
+                  <h3>筛选解释</h3>
+                  <p>把当前筛选条件、命中的规则和候选生成依据集中展示。</p>
+                </div>
+              </div>
+              <div class="insight-chip-list">
+                <span v-for="item in workbenchExplanation.items" :key="`${item.label}-${item.value}`" class="page-chip">
+                  <strong>{{ item.label }}</strong>{{ item.value }}
+                </span>
+              </div>
+              <ul class="insight-notes">
+                <li v-for="note in workbenchExplanation.notes" :key="note">{{ note }}</li>
+              </ul>
+            </article>
+
+            <article class="insight-panel">
+              <div class="section-head compact">
+                <div>
+                  <h3>风险校验</h3>
+                  <p>先看志愿位、保底项和选科复核，再决定是否保存、打印或导出草稿。</p>
+                </div>
+              </div>
+              <div class="check-list">
+                <article
+                  v-for="item in draftChecks"
+                  :key="`${item.level}-${item.title}`"
+                  class="check-item"
+                  :class="`level-${item.level}`"
+                >
+                  <strong>{{ item.title }}</strong>
+                  <p>{{ item.detail }}</p>
+                </article>
+              </div>
+            </article>
+          </section>
+
+          <section class="insight-panel rule-insight-panel">
+            <div class="section-head compact">
+              <div>
+                <h3>规则差异摘要</h3>
+                <p>把当前选中的规则和兼容命中的规则并排列出，便于判断模式回退、志愿结构和口径差异。</p>
+              </div>
             </div>
-            <el-tag :type="card.isSelected ? 'success' : 'info'" effect="plain">
-              {{ card.isSelected ? "当前控制规则" : "兼容预览规则" }}
-            </el-tag>
-          </div>
-          <div class="insight-chip-list">
-            <span v-for="fact in card.facts" :key="`${card.key}-${fact.label}`" class="page-chip">
-              <strong>{{ fact.label }}</strong>{{ fact.value }}
-            </span>
-          </div>
-          <ul v-if="card.notes.length" class="insight-notes rule-notes">
-            <li v-for="note in card.notes" :key="`${card.key}-${note}`">{{ note }}</li>
-          </ul>
-        </article>
-      </div>
-      <div v-else class="comparison-placeholder inner">
-        生成智能筛选后，这里会展示当前命中的省份规则和兼容规则差异。
-      </div>
+            <div v-if="ruleInsightCards.length" class="rule-card-grid">
+              <article
+                v-for="card in ruleInsightCards"
+                :key="card.key"
+                class="rule-card"
+                :class="{ selected: card.isSelected }"
+              >
+                <div class="rule-card-head">
+                  <div>
+                    <strong>{{ card.title }}</strong>
+                    <p>{{ card.subtitle }}</p>
+                  </div>
+                  <el-tag :type="card.isSelected ? 'success' : 'info'" effect="plain">
+                    {{ card.isSelected ? "当前控制规则" : "兼容预览规则" }}
+                  </el-tag>
+                </div>
+                <div class="insight-chip-list">
+                  <span v-for="fact in card.facts" :key="`${card.key}-${fact.label}`" class="page-chip">
+                    <strong>{{ fact.label }}</strong>{{ fact.value }}
+                  </span>
+                </div>
+                <ul v-if="card.notes.length" class="insight-notes rule-notes">
+                  <li v-for="note in card.notes" :key="`${card.key}-${note}`">{{ note }}</li>
+                </ul>
+              </article>
+            </div>
+            <div v-else class="comparison-placeholder inner">
+              生成智能筛选后，这里会展示当前命中的省份规则和兼容规则差异。
+            </div>
+          </section>
+
+          <section v-if="boundaryInsightCards.length" class="insight-panel boundary-insight-panel">
+            <div class="section-head compact">
+              <div>
+                <h3>边界概览</h3>
+                <p>把规则提醒和智能筛选真实命中情况合并展示，先看清哪些结果是基线、回退或待复核。</p>
+              </div>
+            </div>
+            <div class="boundary-card-grid">
+              <article
+                v-for="card in boundaryInsightCards"
+                :key="card.key"
+                class="boundary-card"
+                :class="`tone-${card.tone}`"
+              >
+                <strong>{{ card.title }}</strong>
+                <p class="boundary-summary">{{ card.summary }}</p>
+                <p class="boundary-detail">{{ card.detail }}</p>
+              </article>
+            </div>
+          </section>
+        </el-collapse-item>
+      </el-collapse>
     </section>
 
-    <section v-if="boundaryInsightCards.length" class="insight-panel boundary-insight-panel">
+    <section class="guide-step-section draft-step">
       <div class="section-head compact">
         <div>
-          <h3>边界概览</h3>
-          <p>把规则提醒和智能筛选真实命中情况合并展示，先看清哪些结果是基线、回退或待复核，再决定是否直接排草稿。</p>
+          <h3>4 志愿草稿</h3>
+          <p>从候选加入、排序、复核，再保存、打印或导出。草稿工具只在这里出现。</p>
         </div>
       </div>
-      <div class="boundary-card-grid">
-        <article
-          v-for="card in boundaryInsightCards"
-          :key="card.key"
-          class="boundary-card"
-          :class="`tone-${card.tone}`"
-        >
-          <strong>{{ card.title }}</strong>
-          <p class="boundary-summary">{{ card.summary }}</p>
-          <p class="boundary-detail">{{ card.detail }}</p>
-        </article>
-      </div>
-    </section>
 
-    <div class="workbench-grid">
+      <section class="draft-toolbar-card">
+        <div class="draft-toolbar-copy">
+          <strong>草稿持久化</strong>
+          <p>当前志愿表可保存为命名草稿，后续可再次载入继续排序、打印和导出。</p>
+        </div>
+        <div class="draft-toolbar-actions">
+          <el-input v-model="draftName" placeholder="草稿名称，例如：张三-本科批第一版" />
+          <div class="draft-toolbar-buttons">
+            <el-button type="primary" :loading="savingDraft" @click="emit('save-draft')">保存草稿</el-button>
+            <el-button :loading="savingDraft" @click="emit('save-draft-as')">另存为新草稿</el-button>
+            <el-button :disabled="!currentDraftId" @click="emit('print-draft')">打印预览</el-button>
+            <el-button
+              :disabled="!currentDraftId"
+              :loading="exportingDraftId === currentDraftId"
+              @click="emit('export-draft')"
+            >
+              导出 Excel
+            </el-button>
+          </div>
+          <p class="draft-toolbar-status">
+            {{ currentDraftId ? "当前已保存草稿，可直接打印或导出。" : "需先保存草稿后才能打印或导出。" }}
+          </p>
+        </div>
+      </section>
+
+      <div class="workbench-grid">
       <section class="nested-panel">
         <div class="section-head compact">
           <div>
@@ -498,6 +564,7 @@
         </div>
 
         <div v-if="preview?.candidates.length">
+
           <el-table :data="preview.candidates" stripe>
             <el-table-column label="分层" width="90">
               <template #default="{ row }">
@@ -1101,7 +1168,8 @@
           </div>
         </div>
       </section>
-    </div>
+      </div>
+    </section>
   </section>
 </template>
 
@@ -1125,6 +1193,13 @@ import {
   buildVolunteerEmploymentProfile,
   buildVolunteerRuleInsightCards,
 } from "./volunteerWorkbench";
+import {
+  buildVolunteerBatchOptionGroups,
+  buildVolunteerGuideActionItems,
+  buildVolunteerGuideProgressSteps,
+  buildVolunteerGuideReadiness,
+  summarizeVolunteerReadinessItems,
+} from "./volunteerGuide";
 import type {
   VolunteerExamScoreAutofillNotice,
 } from "./volunteerWorkbench";
@@ -1186,6 +1261,7 @@ const props = defineProps<{
   provinceOptions: string[];
   targetRegionOptions: string[];
   schoolLevelOptions: string[];
+  volunteerRules: ProvinceVolunteerRule[];
   preview: VolunteerWorkbenchPreviewResponse | null;
   guidePreview: VolunteerGuidePreviewResponse | null;
   guideGroups: VolunteerGuideCandidateGroup[];
@@ -1244,6 +1320,27 @@ const compareDraftIdModel = computed<number | undefined>({
   set: (value) => emit("compare-draft-change", value),
 });
 const draftViewMode = ref<VolunteerDraftViewMode>("batch");
+const guideProgressSteps = computed(() => buildVolunteerGuideProgressSteps(props.guidePreview, props.draft.length));
+const guideReadiness = computed(() => buildVolunteerGuideReadiness(props.guidePreview));
+const compactReadinessItems = computed(() => summarizeVolunteerReadinessItems(guideReadiness.value.items));
+const compactGuideActions = computed(() => buildVolunteerGuideActionItems(props.guidePreview));
+const batchOptionGroups = computed(() =>
+  buildVolunteerBatchOptionGroups({
+    batchOptions: props.batchOptions,
+    rules: props.volunteerRules,
+    currentBatch: props.form.batch,
+  }),
+);
+const guideReadinessStatusLabel = computed(() => {
+  if (guideReadiness.value.status === "blocked") return "需要先处理";
+  if (guideReadiness.value.status === "warning") return "可生成但需复核";
+  return "条件就绪";
+});
+const guideReadinessTagType = computed(() => {
+  if (guideReadiness.value.status === "blocked") return "danger";
+  if (guideReadiness.value.status === "warning") return "warning";
+  return "success";
+});
 const showRankInput = computed(() => ["actual_rank", "estimated_score_and_rank"].includes(props.form.score_input_mode));
 const showScoreInput = computed(() =>
   ["actual_score", "estimated_score", "estimated_score_and_rank"].includes(props.form.score_input_mode),
@@ -1362,18 +1459,163 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
   padding: 24px;
 }
 
-.career-preference-card {
+.guide-progress-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.guide-progress-item {
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+  min-height: 86px;
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(126, 143, 158, 0.16);
+  background: #ffffff;
+}
+
+.guide-progress-item > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #edf3f7;
+  color: #4f6578;
+  font-weight: 700;
+}
+
+.guide-progress-item strong {
+  color: #20364b;
+  font-size: 14px;
+}
+
+.guide-progress-item p {
+  margin: 6px 0 0;
+  color: #607588;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.guide-progress-item.state-active,
+.guide-progress-item.state-done {
+  border-color: rgba(48, 116, 174, 0.24);
+  background: #f5f9fd;
+}
+
+.guide-progress-item.state-done > span {
+  background: #2f8f5b;
+  color: #ffffff;
+}
+
+.guide-progress-item.state-active > span {
+  background: #2f6f9f;
+  color: #ffffff;
+}
+
+.guide-progress-item.state-warning {
+  border-color: rgba(194, 136, 47, 0.25);
+  background: #fff9ef;
+}
+
+.guide-progress-item.state-warning > span {
+  background: #c8882f;
+  color: #ffffff;
+}
+
+.guide-progress-item.state-blocked {
+  border-color: rgba(196, 86, 86, 0.25);
+  background: #fff6f6;
+}
+
+.guide-progress-item.state-blocked > span {
+  background: #c45656;
+  color: #ffffff;
+}
+
+.guide-step-section {
   margin-top: 16px;
   padding: 18px;
-  border-radius: 22px;
+  border-radius: 8px;
   background: rgba(248, 250, 252, 0.96);
   border: 1px solid rgba(126, 143, 158, 0.14);
+}
+
+.candidate-filter-grid {
+  margin-top: 14px;
+}
+
+.batch-rule-tip,
+.compact-readiness-item {
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(194, 136, 47, 0.24);
+  background: #fff9ef;
+}
+
+.batch-rule-tip {
+  margin-top: 12px;
+}
+
+.batch-rule-tip strong,
+.compact-readiness-item strong {
+  color: #20364b;
+}
+
+.batch-rule-tip p,
+.compact-readiness-item p {
+  margin: 6px 0 0;
+  color: #5f7487;
+  line-height: 1.55;
+}
+
+.advanced-preference-collapse,
+.evidence-collapse {
+  margin-top: 14px;
+  border: 1px solid rgba(126, 143, 158, 0.14);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+:deep(.advanced-preference-collapse .el-collapse-item__header),
+:deep(.evidence-collapse .el-collapse-item__header) {
+  padding: 0 14px;
+  background: #f8fbfd;
+  color: #20364b;
+  font-weight: 700;
+}
+
+:deep(.advanced-preference-collapse .el-collapse-item__content),
+:deep(.evidence-collapse .el-collapse-item__content) {
+  padding: 4px 14px 16px;
+}
+
+.compact-readiness-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.compact-readiness-item.level-blocking {
+  border-color: rgba(196, 86, 86, 0.24);
+  background: #fff6f6;
+}
+
+.draft-step {
+  background: rgba(246, 249, 252, 0.96);
 }
 
 .guide-summary-panel {
   margin-top: 16px;
   padding: 18px;
-  border-radius: 22px;
+  border-radius: 8px;
   background: rgba(244, 248, 251, 0.96);
   border: 1px solid rgba(126, 143, 158, 0.14);
 }
@@ -1385,7 +1627,7 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
   gap: 16px;
   margin-top: 12px;
   padding: 12px 14px;
-  border-radius: 12px;
+  border-radius: 8px;
   border: 1px solid rgba(59, 130, 246, 0.18);
   background: #f4f8ff;
 }
@@ -1417,7 +1659,7 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
 .guide-group-card,
 .guide-action-item {
   padding: 14px;
-  border-radius: 14px;
+  border-radius: 8px;
   border: 1px solid rgba(126, 143, 158, 0.14);
   background: rgba(255, 255, 255, 0.9);
 }
@@ -1482,7 +1724,7 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
   align-items: center;
   min-height: 44px;
   padding: 0 12px;
-  border-radius: 14px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.82);
   border: 1px solid rgba(126, 143, 158, 0.14);
 }
@@ -1494,7 +1736,7 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
 .inline-switch-card {
   min-height: 40px;
   border: 1px solid #d7e2ea;
-  border-radius: 12px;
+  border-radius: 8px;
   padding: 0 12px;
   display: flex;
   align-items: center;
@@ -1525,7 +1767,7 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
 
 .rule-alert-card {
   padding: 14px 16px;
-  border-radius: 18px;
+  border-radius: 8px;
   border: 1px solid rgba(126, 143, 158, 0.14);
   background: rgba(247, 250, 253, 0.94);
 }
@@ -1566,7 +1808,7 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
 
 .insight-panel {
   padding: 18px;
-  border-radius: 22px;
+  border-radius: 8px;
   background: rgba(244, 248, 251, 0.94);
   border: 1px solid rgba(126, 143, 158, 0.12);
 }
@@ -1596,7 +1838,7 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
 
 .rule-card {
   padding: 16px;
-  border-radius: 18px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(126, 143, 158, 0.12);
 }
@@ -1643,7 +1885,7 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
 
 .boundary-card {
   padding: 16px;
-  border-radius: 18px;
+  border-radius: 8px;
   border: 1px solid rgba(126, 143, 158, 0.14);
   background: rgba(255, 255, 255, 0.92);
 }
@@ -1688,7 +1930,7 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
 
 .check-item {
   padding: 14px 16px;
-  border-radius: 16px;
+  border-radius: 8px;
   border: 1px solid rgba(126, 143, 158, 0.14);
   background: rgba(255, 255, 255, 0.88);
 }
@@ -1726,7 +1968,7 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
   gap: 16px;
   margin-top: 16px;
   padding: 16px 18px;
-  border-radius: 18px;
+  border-radius: 8px;
   background: rgba(247, 250, 253, 0.92);
   border: 1px solid rgba(124, 139, 154, 0.12);
 }
@@ -1771,7 +2013,7 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
 
 .nested-panel {
   padding: 18px;
-  border-radius: 22px;
+  border-radius: 8px;
   background: rgba(245, 249, 252, 0.9);
   border: 1px solid rgba(126, 143, 158, 0.12);
 }
@@ -1902,7 +2144,7 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
   gap: 10px;
   margin-bottom: 14px;
   padding: 14px 16px;
-  border-radius: 16px;
+  border-radius: 8px;
   background: rgba(246, 249, 252, 0.92);
   border: 1px solid rgba(126, 143, 158, 0.12);
 }
@@ -1937,7 +2179,7 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
   width: 100%;
   min-height: 32px;
   border: 1px dashed rgba(99, 122, 146, 0.32);
-  border-radius: 10px;
+  border-radius: 8px;
   background: rgba(247, 250, 253, 0.94);
   color: #587189;
   font-size: 12px;
@@ -1971,7 +2213,7 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
 
 .draft-group-card {
   padding: 14px;
-  border-radius: 18px;
+  border-radius: 8px;
   border: 1px solid rgba(126, 143, 158, 0.12);
   background: rgba(255, 255, 255, 0.86);
 }
@@ -2020,7 +2262,7 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
   justify-content: space-between;
   gap: 16px;
   padding: 14px 16px;
-  border-radius: 18px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.86);
   border: 1px solid rgba(126, 143, 158, 0.12);
 }
@@ -2070,7 +2312,7 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
 
 .comparison-summary-card {
   padding: 16px;
-  border-radius: 18px;
+  border-radius: 8px;
   border: 1px solid rgba(126, 143, 158, 0.12);
   background: rgba(255, 255, 255, 0.88);
 }
@@ -2130,7 +2372,7 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
 
 .comparison-column {
   padding: 16px;
-  border-radius: 18px;
+  border-radius: 8px;
   border: 1px solid rgba(126, 143, 158, 0.12);
   background: rgba(255, 255, 255, 0.88);
 }
@@ -2161,7 +2403,7 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
 
 .comparison-item {
   padding: 12px 14px;
-  border-radius: 14px;
+  border-radius: 8px;
   background: rgba(246, 249, 252, 0.95);
   border: 1px solid rgba(126, 143, 158, 0.1);
 }
@@ -2182,7 +2424,7 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
 
 .comparison-empty {
   padding: 14px;
-  border-radius: 14px;
+  border-radius: 8px;
   color: #7a8ea1;
   font-size: 13px;
   line-height: 1.6;
@@ -2208,6 +2450,8 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
   .career-path-grid,
   .guide-group-grid,
   .guide-action-list,
+  .guide-progress-strip,
+  .compact-readiness-list,
   .insight-grid,
   .workbench-grid {
     grid-template-columns: 1fr;
