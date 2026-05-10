@@ -4,7 +4,7 @@ const pagesWithStatGrids = [
   { path: "/exams", heading: "考试成绩中心" },
   { path: "/analytics", heading: "分析中心" },
   { path: "/gaokao-pathways", heading: "山东升学方案中心" },
-  { path: "/recommendations", heading: "高考志愿工作台" },
+  { path: "/recommendations", heading: "高考志愿推荐向导" },
   { path: "/system-tools", heading: "系统设置" },
 ];
 

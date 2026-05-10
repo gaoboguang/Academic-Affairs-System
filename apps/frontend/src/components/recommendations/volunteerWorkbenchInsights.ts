@@ -87,11 +87,11 @@ export function buildVolunteerRuleInsightCardsFromRules(
       notes.push(`备注：${rule.note}`);
     }
 
-    let subtitle = "当前候选池与草稿都按这条规则解释。";
+    let subtitle = "当前智能筛选与草稿都按这条规则解释。";
     if (hasMultipleRules) {
       subtitle = isSelected
         ? "当前草稿按这条规则控制上限，其余规则保留作兼容预览。"
-        : "这是一条兼容命中的规则，可用于解释模式回退和候选池差异。";
+        : "这是一条兼容命中的规则，可用于解释模式回退和智能筛选差异。";
     }
 
     return {

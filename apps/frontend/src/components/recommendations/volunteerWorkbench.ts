@@ -165,7 +165,7 @@ export function createVolunteerWorkbenchForm(): VolunteerWorkbenchFormState {
 
 export function validateVolunteerWorkbenchForm(form: VolunteerWorkbenchFormState): string | null {
   if (!form.student_id || !form.exam_id) {
-    return "学生志愿工作台至少需要选择学生和参考考试";
+    return "志愿推荐向导至少需要选择学生和参考考试";
   }
   if (!form.province.trim()) {
     return "省份不能为空";
@@ -833,7 +833,7 @@ export function buildVolunteerWorkbenchExplanation(
   }
 
   if (!preview) {
-    notes.push("选择学生与考试后刷新候选池，系统才会生成候选计划和风险分层。");
+    notes.push("选择学生与考试后生成智能筛选，系统才会生成候选计划和风险分层。");
     return { items, notes };
   }
 
@@ -845,8 +845,8 @@ export function buildVolunteerWorkbenchExplanation(
     const rankBasis = formatOptionalNumber(preview.effective_rank);
     notes.push(
       rankBasis
-        ? `当前候选池已按生效位次 ${rankBasis} 与近年录取基线做冲稳保分层。`
-        : "当前候选池已按近年录取基线做冲稳保分层，但位次仍需人工复核。",
+        ? `当前智能筛选已按生效位次 ${rankBasis} 与近年录取基线做冲稳保分层。`
+        : "当前智能筛选已按近年录取基线做冲稳保分层，但位次仍需人工复核。",
     );
   } else {
     notes.push(
@@ -890,7 +890,7 @@ export function buildVolunteerDraftChecks(
       : {
           level: "warning",
           title: "当前还没有形成志愿表草稿",
-          detail: "先从左侧候选池加入至少 1 条计划，再进行保存或导出。",
+          detail: "先从左侧智能筛选加入至少 1 条计划，再进行保存或导出。",
         },
   );
 

@@ -11,7 +11,7 @@
 - `planning.spec.ts`：学生升学规划目标、路径生成任务、任务完成和规划跟进表闭环。
 - `reports.spec.ts`：报表参数、打印预览、导出记录和报表异常提示。
 - `recommendations.spec.ts`：推荐生成、历史、模板、对比、失败回退和批量推荐。
-- `gaokao-volunteer.spec.ts`：学生志愿工作台、招生计划、省份规则、草稿、就业方向和山东普通类入口。
+- `gaokao-volunteer.spec.ts`：志愿推荐向导、招生计划、省份规则、草稿、就业方向和山东普通类入口。
 - `system-backup.spec.ts`：系统设置、备份创建和备份恢复入口。
 - `helpers/localEduE2e.ts`：跨域复用的测试前置、下拉选择、导入 fixture 和推荐/志愿工作台 helper。
 

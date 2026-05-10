@@ -9,6 +9,11 @@ import { formatUserActionError } from "../../utils/userFeedback";
 import { uniqueStrings } from "./helpers";
 import { buildVolunteerDraftOutputWarningMessage } from "./recommendationOutputGuards";
 import {
+  buildVolunteerGuideReadiness,
+  buildVolunteerGuideStepCards,
+  groupVolunteerGuideCandidates,
+} from "./volunteerGuide";
+import {
   applyStudentCareerPreferenceToForm,
   appendVolunteerDraftItem,
   buildStudentCareerPreferencePayload,
@@ -38,6 +43,7 @@ import type {
   VolunteerDraftDetail,
   VolunteerDraftItem,
   VolunteerDraftSummary,
+  VolunteerGuidePreviewResponse,
   VolunteerWorkbenchCandidate,
   VolunteerWorkbenchPreviewResponse,
 } from "./types";
@@ -51,7 +57,7 @@ interface VolunteerWorkspaceOptions {
 }
 
 function reportError(error: unknown): void {
-  ElMessage.error(formatUserActionError("处理学生志愿工作台", error, "先确认学生、考试、批次、规则和草稿状态正确；如果仍失败，请刷新候选池后重试。"));
+  ElMessage.error(formatUserActionError("处理志愿推荐向导", error, "先确认学生、考试、批次、规则和草稿状态正确；如果仍失败，请重新生成智能筛选后重试。"));
 }
 
 async function confirmWarningAction(message: string, title: string, confirmButtonText: string): Promise<boolean> {
@@ -74,6 +80,7 @@ async function confirmWarningAction(message: string, title: string, confirmButto
 export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) {
   const volunteerWorkbenchForm = reactive(createVolunteerWorkbenchForm());
   const workbenchPreview = ref<VolunteerWorkbenchPreviewResponse | null>(null);
+  const volunteerGuidePreview = ref<VolunteerGuidePreviewResponse | null>(null);
   const workbenchLoading = ref(false);
   const volunteerDraft = ref<VolunteerDraftItem[]>([]);
   const volunteerDraftName = ref("");
@@ -139,6 +146,9 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
   const volunteerDraftChecks = computed(() =>
     buildVolunteerDraftChecks(volunteerDraft.value, selectedVolunteerRule.value, remainingVolunteerSlots.value),
   );
+  const volunteerGuideReadiness = computed(() => buildVolunteerGuideReadiness(volunteerGuidePreview.value));
+  const volunteerGuideStepCards = computed(() => buildVolunteerGuideStepCards(volunteerGuidePreview.value, volunteerDraft.value.length));
+  const volunteerGuideGroups = computed(() => groupVolunteerGuideCandidates(volunteerGuidePreview.value));
   const compareVolunteerDraftOptions = computed(() =>
     savedVolunteerDrafts.value.filter((item) => item.id !== currentVolunteerDraftId.value),
   );
@@ -219,7 +229,7 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
     );
     if (shouldConfirm) {
       const confirmed = await confirmWarningAction(
-        "会用推荐中心当前条件覆盖工作台里的学生、考试、分数模式和筛选项。当前候选池和志愿草稿不会立即清空，但刷新后会按新条件重新解释。是否继续？",
+        "会用推荐中心当前条件覆盖向导里的学生、考试、分数模式和筛选项。当前智能筛选结果和志愿草稿不会立即清空，但重新生成后会按新条件解释。是否继续？",
         "沿用推荐条件",
         "继续覆盖",
       );
@@ -237,6 +247,7 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
       target_year: workbenchYearOptions.value[0] ?? new Date().getFullYear(),
     });
     workbenchPreview.value = null;
+    volunteerGuidePreview.value = null;
     volunteerDraft.value = [];
     volunteerDraftName.value = "";
     currentVolunteerDraftId.value = undefined;
@@ -254,7 +265,7 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
     );
     if (shouldConfirm) {
       const confirmed = await confirmWarningAction(
-        "会清空当前工作台里的筛选条件、候选池结果、草稿内容和当前草稿绑定关系。未保存的临时调整不会保留。是否继续？",
+        "会清空当前向导里的筛选条件、智能筛选结果、草稿内容和当前草稿绑定关系。未保存的临时调整不会保留。是否继续？",
         "清空工作台",
         "继续清空",
       );
@@ -275,13 +286,15 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
 
     try {
       workbenchLoading.value = true;
-      const preview = await apiRequest<VolunteerWorkbenchPreviewResponse>(
-        "/api/recommendations/volunteer-workbench/preview",
+      const guide = await apiRequest<VolunteerGuidePreviewResponse>(
+        "/api/recommendations/volunteer-guide/preview",
         {
           method: "POST",
           body: JSON.stringify(buildVolunteerWorkbenchPayload(volunteerWorkbenchForm)),
         },
       );
+      volunteerGuidePreview.value = guide;
+      const preview = guideToWorkbenchPreview(guide);
       workbenchPreview.value = preview;
       volunteerDraft.value = reconcileDraftItems(
         preview,
@@ -291,10 +304,10 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
       );
 
       if (!preview.candidate_count) {
-        if (!options.silent) ElMessage.info("当前条件下暂无可加入候选池的招生计划");
+        if (!options.silent) ElMessage.info("当前条件下暂无可加入志愿表的候选；请查看上方就绪提示。");
         return;
       }
-      if (!options.silent) ElMessage.success(`候选池已刷新，共 ${preview.candidate_count} 条可选计划`);
+      if (!options.silent) ElMessage.success(`智能筛选已生成，共 ${preview.candidate_count} 条可选计划`);
     } catch (error) {
       reportError(error);
     } finally {
@@ -692,6 +705,10 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
     volunteerDraftComparison,
     volunteerDraftName,
     volunteerDraftChecks,
+    volunteerGuideGroups,
+    volunteerGuidePreview,
+    volunteerGuideReadiness,
+    volunteerGuideStepCards,
     volunteerLimit,
     volunteerWorkbenchForm,
     workbenchExplanation,
@@ -703,6 +720,48 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
     workbenchPreview,
     workbenchYearOptions,
     savingStudentCareerPreference,
+  };
+}
+
+export function guideToWorkbenchPreview(guide: VolunteerGuidePreviewResponse): VolunteerWorkbenchPreviewResponse {
+  const candidates = groupVolunteerGuideCandidates(guide).flatMap((group) => group.candidates.map((item) => item.candidate));
+  return {
+    student_id: guide.student_id,
+    student_name: guide.student_name,
+    exam_id: guide.exam_id,
+    exam_name: guide.exam_name,
+    province: guide.province,
+    target_year: guide.target_year,
+    student_type: guide.student_type,
+    candidate_type: guide.candidate_type,
+    total_score: guide.source_preview.total_score ?? 0,
+    snapshot_rank: null,
+    effective_rank: guide.source_preview.effective_rank ?? null,
+    score_input_mode: guide.score_input_mode ?? guide.source_preview.score_input_mode,
+    score_input_label: guide.source_preview.score_input_label,
+    score_confidence: guide.source_preview.score_confidence,
+    input_notes: [
+      ...guide.input_notes,
+      ...guide.readiness.items.map((item) => item.detail),
+      ...guide.next_actions.map((item) => item.detail),
+    ],
+    rule_alerts: [
+      ...guide.rule_alerts,
+      ...guide.readiness.items
+        .filter((item) => item.code !== "not_generated" && !guide.rule_alerts.some((alert) => alert.code === item.code))
+        .map((item) => ({
+          code: item.code,
+          level: item.level === "blocking" ? "warning" : "info",
+          title: item.title,
+          detail: item.detail,
+        })),
+    ],
+    applicable_rule_count: guide.applicable_rule_count,
+    applicable_rules: guide.applicable_rules,
+    candidate_count: guide.source_preview.candidate_count,
+    returned_candidate_count: guide.source_preview.returned_candidate_count,
+    is_candidate_truncated: guide.source_preview.is_candidate_truncated,
+    candidates,
   };
 }
 

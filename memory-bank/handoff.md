@@ -1,5 +1,34 @@
 # 交接说明
 
+## 当前主线状态（2026-05-10）
+
+- 本轮已完成用户要求的“高考志愿板块阳光志愿式修整”：
+  - 当前分支：`codex/gaokao-volunteer-guide-20260510`
+  - `/recommendations` 默认入口为“高考志愿推荐向导”，首屏按考生条件、意向偏好、智能筛选、志愿草稿复核组织；“推荐中心”“山东普通类推荐”“数据与规则”“数据健康”仍保留
+  - 新增后端接口 `POST /api/recommendations/volunteer-guide/preview`，schema 在 `apps/backend/app/schemas/recommendation.py`，服务在 `apps/backend/app/services/_recommendations_volunteer_guide.py`，路由在 `apps/backend/app/api/routes/recommendations.py`
+  - 新接口复用 `preview_volunteer_workbench()`，返回 readiness、source_preview、冲/稳/保/仅关注 groups、candidate evidence、next_actions，同时保留旧工作台所需 `student_type`、`candidate_type`、`score_input_mode`、`input_notes`、`rule_alerts`、`applicable_rules`
+  - 前端 `useGaokaoVolunteerWorkspace.ts` 改为调用新向导接口，并用 `guideToWorkbenchPreview()` 适配回旧工作台响应，以继续复用草稿、排序、保存、打印、导出和志愿上限校验
+  - 新增前端 helper `apps/frontend/src/components/recommendations/volunteerGuide.ts`，新增单测 `apps/frontend/tests/volunteer-guide.test.ts`；`RecommendationVolunteerWorkbenchPanel.vue` 增加智能筛选摘要和 next actions 展示
+  - 所有“刷新候选池 / 学生志愿工作台”主链路文案已换成“生成智能筛选 / 志愿推荐向导”，但测试名里仍可出现“候选池”作为历史业务概念，不影响页面
+  - 本轮不新增迁移、不写真实 `data/app.db`、不联网抓阳光高考数据；页面明确“结果只作本地参考，正式填报仍以省级志愿系统为准”
+- 2026-05-10 收口复核已验证：
+  - `npm run backend:test -- apps/backend/tests/test_volunteer_guide.py apps/backend/tests/test_recommendation_workflow.py -q`：18 passed
+  - `npm run frontend:lint`：通过
+  - `npm run frontend:test -- tests/volunteer-guide.test.ts tests/volunteer-workbench.test.ts tests/navigation.test.ts`：46 passed
+  - `npm run frontend:build`：通过
+  - `npm run e2e -- tests/e2e/gaokao-volunteer.spec.ts`：11 passed
+  - `npm run check:e2e`：46 passed
+  - `npm run backend:data-health -- --json`：运行成功，仍为已知 warning，单招 / 综评缺专门录取结果，只能初筛
+  - `npm run check`：质量门禁通过；后端 149 passed，前端 lint 通过，前端 41 files / 208 tests passed，前端构建通过
+- 本轮收口额外修正：
+  - `tests/e2e/admin-stat-grid-layout.spec.ts` 同步 `/recommendations` 新 H1“高考志愿推荐向导”
+  - `tests/e2e/gaokao-volunteer.spec.ts` 的草稿排序验证改用页面稳定的“上移”按钮，不依赖完整套件中容易受浏览器拖拽事件影响的 HTML5 drag
+  - `tests/e2e/helpers/localEduE2e.ts` 的 `selectDropdownOption()` 对 Element Plus 下拉弹层过渡增加短重试；推荐对比定向和完整 `check:e2e` 已验证通过
+- 后续注意：
+  - 不要把 `volunteer-guide/preview` 当成独立算法重写入口；它当前是编排层，底层候选仍以 `_recommendations_workbench.py` 为准
+  - 若后续继续优化阳光志愿式体验，优先增强解释字段、草稿复核和详情跳转，不要绕开现有省份规则、选科硬过滤和特殊类型初筛边界
+  - 2026 普通类正式计划、一分一段、省控线仍待官方发布；单招 / 综评仍缺专门录取结果，不能用普通类数据关闭缺口
+
 ## 当前主线状态（2026-05-09）
 
 - 本轮已修正高考数据总览“覆盖率”容易误解的问题：

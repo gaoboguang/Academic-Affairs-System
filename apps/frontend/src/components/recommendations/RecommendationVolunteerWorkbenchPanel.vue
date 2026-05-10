@@ -2,15 +2,59 @@
   <section class="soft-card panel-block">
     <div class="section-head">
       <div>
-        <h3>学生志愿工作台</h3>
-        <p>先按学生、考试、批次和选科条件刷新候选池，再把可报计划整理到志愿表草稿中。</p>
+        <h3>志愿推荐向导</h3>
+        <p>按考生条件、意向偏好、智能筛选和志愿草稿复核推进；推荐结果只作本地辅助参考。</p>
       </div>
       <div class="action-row">
         <el-button @click="emit('sync-from-recommendation')">沿用推荐条件</el-button>
         <el-button @click="emit('reset')">清空工作台</el-button>
-        <el-button type="primary" :loading="loading" @click="emit('load-preview')">刷新候选池</el-button>
+        <el-button type="primary" :loading="loading" @click="emit('load-preview')">生成智能筛选</el-button>
       </div>
     </div>
+
+    <section v-if="guidePreview" class="guide-summary-panel">
+      <div class="section-head compact">
+        <div>
+          <h3>智能筛选结果</h3>
+          <p>
+            共 {{ guidePreview.source_preview.candidate_count }} 条候选；
+            生效位次 {{ guidePreview.source_preview.effective_rank ?? "暂无" }}；
+            {{ guidePreview.source_preview.score_input_label }}。
+          </p>
+        </div>
+        <el-tag
+          :type="guidePreview.readiness.status === 'blocked' ? 'danger' : guidePreview.readiness.status === 'warning' ? 'warning' : 'success'"
+          effect="plain"
+        >
+          {{
+            guidePreview.readiness.status === "blocked"
+              ? "需要先处理"
+              : guidePreview.readiness.status === "warning"
+              ? "可用但需复核"
+              : "条件就绪"
+          }}
+        </el-tag>
+      </div>
+      <div class="guide-group-grid">
+        <article v-for="group in guideGroups" :key="group.key" class="guide-group-card">
+          <span>{{ group.label }}</span>
+          <strong>{{ group.count }} 条</strong>
+          <p v-if="group.candidates[0]">{{ group.candidates[0].evidence.summary }}</p>
+          <p v-else>当前没有该分层候选。</p>
+        </article>
+      </div>
+      <div v-if="guidePreview.next_actions.length" class="guide-action-list">
+        <article
+          v-for="action in guidePreview.next_actions"
+          :key="action.code"
+          class="guide-action-item"
+          :class="`level-${action.level}`"
+        >
+          <strong>{{ action.title }}</strong>
+          <p>{{ action.detail }}</p>
+        </article>
+      </div>
+    </section>
 
     <section class="draft-toolbar-card">
       <div class="draft-toolbar-copy">
@@ -159,8 +203,8 @@
     <section class="career-preference-card">
       <div class="section-head compact">
         <div>
-          <h3>职业意向输入</h3>
-          <p>先记录 1~3 个目标就业方向、行业/岗位偏好和可接受路径，后续排序增强会直接复用这里的参数。</p>
+          <h3>意向偏好</h3>
+          <p>记录 1~3 个目标就业方向、行业/岗位偏好和可接受路径；偏好只影响同层排序，不覆盖硬性录取条件。</p>
         </div>
         <div class="action-row">
           <el-button
@@ -307,7 +351,7 @@
       type="warning"
       show-icon
       :closable="false"
-      title="候选池结果较多，页面已只展示前 300 条；请增加批次、地区、院校层级或专业关键词筛选。"
+      title="智能筛选结果较多，页面已只展示前 300 条；请增加批次、地区、院校层级或专业关键词筛选。"
     />
 
     <section v-if="preview?.rule_alerts.length" class="rule-alert-grid">
@@ -398,7 +442,7 @@
         </article>
       </div>
       <div v-else class="comparison-placeholder inner">
-        刷新候选池后，这里会展示当前命中的省份规则和兼容规则差异。
+        生成智能筛选后，这里会展示当前命中的省份规则和兼容规则差异。
       </div>
     </section>
 
@@ -406,7 +450,7 @@
       <div class="section-head compact">
         <div>
           <h3>边界概览</h3>
-          <p>把规则提醒和候选池真实命中情况合并展示，先看清哪些结果是基线、回退或待复核，再决定是否直接排草稿。</p>
+          <p>把规则提醒和智能筛选真实命中情况合并展示，先看清哪些结果是基线、回退或待复核，再决定是否直接排草稿。</p>
         </div>
       </div>
       <div class="boundary-card-grid">
@@ -427,8 +471,8 @@
       <section class="nested-panel">
         <div class="section-head compact">
           <div>
-            <h3>候选池</h3>
-            <p>候选池会优先使用专业线，缺少专业线时回退到院校基线，并给出风险提示。</p>
+            <h3>智能筛选</h3>
+            <p>优先使用专业历史线，其次院校历史线、省控线参考和计划清单初筛，并给出风险提示。</p>
           </div>
           <div class="candidate-stats" v-if="preview">
             <span class="page-chip">
@@ -568,7 +612,7 @@
           </el-table>
         </div>
         <div v-else class="comparison-placeholder">
-          {{ preview ? "当前条件下暂无可加入志愿表的候选计划。" : "选择学生与考试后刷新候选池，这里会显示可报计划。" }}
+          {{ preview ? "当前条件下暂无可加入志愿表的候选计划，请查看生成前复核提示。" : "选择学生与考试后生成智能筛选，这里会显示可报计划。" }}
         </div>
       </section>
 
@@ -884,7 +928,7 @@
             </div>
           </article>
         </div>
-        <div v-else class="comparison-placeholder">从左侧候选池加入计划后，这里会形成可排序的志愿表草稿。</div>
+        <div v-else class="comparison-placeholder">从左侧智能筛选加入计划后，这里会形成可排序的志愿表草稿。</div>
 
         <div class="saved-drafts-panel">
           <div class="section-head compact">
@@ -1099,6 +1143,8 @@ import type {
   VolunteerDraftItem,
   VolunteerDraftViewMode,
   VolunteerBoundaryInsightCard,
+  VolunteerGuideCandidateGroup,
+  VolunteerGuidePreviewResponse,
   VolunteerWorkbenchExplanation,
   VolunteerWorkbenchCandidate,
   VolunteerWorkbenchFormState,
@@ -1123,6 +1169,8 @@ const props = defineProps<{
   targetRegionOptions: string[];
   schoolLevelOptions: string[];
   preview: VolunteerWorkbenchPreviewResponse | null;
+  guidePreview: VolunteerGuidePreviewResponse | null;
+  guideGroups: VolunteerGuideCandidateGroup[];
   draft: VolunteerDraftItem[];
   draftName: string;
   loading: boolean;
@@ -1299,6 +1347,59 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
   border-radius: 22px;
   background: rgba(248, 250, 252, 0.96);
   border: 1px solid rgba(126, 143, 158, 0.14);
+}
+
+.guide-summary-panel {
+  margin-top: 16px;
+  padding: 18px;
+  border-radius: 22px;
+  background: rgba(244, 248, 251, 0.96);
+  border: 1px solid rgba(126, 143, 158, 0.14);
+}
+
+.guide-group-grid,
+.guide-action-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.guide-action-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 12px;
+}
+
+.guide-group-card,
+.guide-action-item {
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(126, 143, 158, 0.14);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.guide-group-card span {
+  display: block;
+  color: #667b8e;
+  font-size: 13px;
+}
+
+.guide-group-card strong,
+.guide-action-item strong {
+  display: block;
+  margin-top: 6px;
+  color: #20364b;
+}
+
+.guide-group-card p,
+.guide-action-item p {
+  margin: 7px 0 0;
+  color: #5f7487;
+  line-height: 1.55;
+}
+
+.guide-action-item.level-warning {
+  border-color: rgba(194, 136, 47, 0.24);
+  background: #fff9ef;
 }
 
 .career-preference-status {
@@ -2060,6 +2161,8 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
 
   .career-grid,
   .career-path-grid,
+  .guide-group-grid,
+  .guide-action-list,
   .insight-grid,
   .workbench-grid {
     grid-template-columns: 1fr;

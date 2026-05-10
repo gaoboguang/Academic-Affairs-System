@@ -189,33 +189,42 @@ async function importQuestionDetailsByApi(page: Page, examId: number, fixturePat
 }
 
 async function selectDropdownOption(page: Page, select: Locator, optionText: string): Promise<void> {
-  await select.click();
-  const option = page.locator(".el-select-dropdown:visible .el-select-dropdown__item").filter({ hasText: optionText }).first();
-  if (!(await option.isVisible({ timeout: 1000 }).catch(() => false))) {
-    const filterInput = select.locator("input").first();
-    const canFill =
-      (await filterInput.count()) > 0
-      && (await filterInput
-        .evaluate((element) => {
-          const input = element as HTMLInputElement;
-          return !input.readOnly && !input.disabled;
-        })
-        .catch(() => false));
-    if (canFill) {
-      await filterInput.fill(optionText, { timeout: 1000 }).catch(async () => {
-        await page.keyboard.type(optionText);
-      });
-    } else {
-      const matchingOption = page.locator(".el-select-dropdown__item").filter({ hasText: optionText }).last();
-      if ((await matchingOption.count()) > 0) {
-        await matchingOption.evaluate((element) => element.scrollIntoView({ block: "center" })).catch(() => undefined);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await select.click();
+    const option = page.locator(".el-select-dropdown:visible .el-select-dropdown__item").filter({ hasText: optionText }).first();
+    if (!(await option.isVisible({ timeout: 1000 }).catch(() => false))) {
+      const filterInput = select.locator("input").first();
+      const canFill =
+        (await filterInput.count()) > 0
+        && (await filterInput
+          .evaluate((element) => {
+            const input = element as HTMLInputElement;
+            return !input.readOnly && !input.disabled;
+          })
+          .catch(() => false));
+      if (canFill) {
+        await filterInput.fill(optionText, { timeout: 1000 }).catch(async () => {
+          await page.keyboard.type(optionText);
+        });
       } else {
-        await page.keyboard.type(optionText);
+        const matchingOption = page.locator(".el-select-dropdown__item").filter({ hasText: optionText }).last();
+        if ((await matchingOption.count()) > 0) {
+          await matchingOption.evaluate((element) => element.scrollIntoView({ block: "center" })).catch(() => undefined);
+        } else {
+          await page.keyboard.type(optionText);
+        }
       }
     }
+    await expect(option).toBeVisible();
+    try {
+      await option.click({ timeout: 1500 });
+      return;
+    } catch (error) {
+      if (attempt === 2) throw error;
+      await page.keyboard.press("Escape").catch(() => undefined);
+      await page.waitForTimeout(100);
+    }
   }
-  await expect(option).toBeVisible();
-  await option.click();
 }
 
 interface RecommendationFormE2EFields {
@@ -465,9 +474,9 @@ async function openVolunteerWorkbench(page: Page): Promise<Locator> {
 
   await ensureVolunteerRuleConfigured(page);
 
-  await page.getByRole("tab", { name: "学生志愿工作台" }).click();
-  const workbenchPanel = page.locator(".panel-block").filter({ hasText: "学生志愿工作台" }).first();
-  await expect(workbenchPanel.getByRole("heading", { name: "学生志愿工作台" })).toBeVisible();
+  await page.getByRole("tab", { name: "志愿推荐向导" }).click();
+  const workbenchPanel = page.locator(".panel-block").filter({ hasText: "志愿推荐向导" }).first();
+  await expect(workbenchPanel.getByRole("heading", { name: "志愿推荐向导" })).toBeVisible();
   return workbenchPanel;
 }
 
@@ -483,8 +492,8 @@ async function createVolunteerDraft(page: Page): Promise<{
   const draftName = `E2E-志愿草稿-张三-${Date.now()}`;
 
   await fillVolunteerWorkbenchContext(page, workbenchPanel);
-  await workbenchPanel.getByRole("button", { name: "刷新候选池" }).click();
-  await expectToast(page, "候选池已刷新");
+  await workbenchPanel.getByRole("button", { name: "生成智能筛选" }).click();
+  await expectToast(page, "智能筛选已生成");
   await expect(workbenchPanel.getByText("张三 · 普通生 · 2026届高一4月月考")).toBeVisible();
   await expect(candidatePanel.locator(".el-table__row").filter({ hasText: "岭南科技大学" }).first()).toBeVisible();
 

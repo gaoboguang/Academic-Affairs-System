@@ -243,7 +243,7 @@ describe("volunteer workbench helpers", () => {
 
   it("validates required fields and builds normalized preview payload", () => {
     expect(validateVolunteerWorkbenchForm(buildForm({ student_id: undefined }))).toBe(
-      "学生志愿工作台至少需要选择学生和参考考试",
+      "志愿推荐向导至少需要选择学生和参考考试",
     );
     expect(
       validateVolunteerWorkbenchForm(buildForm({ score_input_mode: "score_range", score_range_min: 580, score_range_max: undefined })),

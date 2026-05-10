@@ -314,7 +314,7 @@ def preview_volunteer_workbench(
         )
     if is_candidate_truncated:
         detail = (
-            f"当前条件命中 {candidate_count} 条候选计划，页面仅展示前 "
+            f"当前智能筛选命中 {candidate_count} 条候选计划，页面仅展示前 "
             f"{VOLUNTEER_WORKBENCH_CANDIDATE_RETURN_LIMIT} 条；建议增加批次、地区、院校层级或专业关键词筛选。"
         )
         rule_notes.append(detail)
@@ -322,7 +322,7 @@ def preview_volunteer_workbench(
             VolunteerWorkbenchRuleAlertRead(
                 code="candidate_result_truncated",
                 level="warning",
-                title="候选池结果已截断",
+                title="智能筛选结果已截断",
                 detail=detail,
             )
         )

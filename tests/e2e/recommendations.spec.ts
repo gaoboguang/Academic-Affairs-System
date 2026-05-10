@@ -234,7 +234,7 @@ test("Stage B 批量场景：混合生源地学生可分别生成方案并写入
   await page.getByRole("button", { name: "打开数据与规则" }).click();
   await page.getByRole("tab", { name: "录取库" }).click();
   await ensureCrossProvinceAdmissionsImported(page);
-  await page.getByRole("button", { name: "回到工作台" }).click();
+  await page.getByRole("button", { name: "回到推荐向导" }).click();
   await page.getByRole("tab", { name: "推荐中心" }).click();
 
   await generatePanel.locator(".el-radio-button").filter({ hasText: "批量学生" }).first().click();

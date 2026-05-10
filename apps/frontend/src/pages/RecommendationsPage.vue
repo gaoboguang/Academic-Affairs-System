@@ -1,8 +1,8 @@
 <template>
   <AppPage
-    eyebrow="高考志愿 / 教师工作台"
-    title="高考志愿工作台"
-    description="围绕教师的一次志愿辅导流程组织：选学生、刷候选、排草稿、查风险、保存或导出。"
+    eyebrow="高考志愿 / 智能推荐向导"
+    title="高考志愿推荐向导"
+    description="按考生条件、意向偏好、智能筛选和志愿草稿复核组织一次完整辅导；结果只作本地参考，正式填报仍以省级志愿系统为准。"
     :meta="pageMeta"
   >
     <template #actions>
@@ -13,7 +13,7 @@
         <el-button @click="activeTab = 'data-health'">数据健康</el-button>
         <el-button @click="activeTab = 'colleges'">打开数据与规则</el-button>
         <el-button type="primary" @click="activeTab = 'volunteer-workbench'"
-          >回到工作台</el-button
+          >回到推荐向导</el-button
         >
       </div>
     </template>
@@ -55,8 +55,8 @@
       class="recommendation-section-stack"
     >
       <AppFilterBar
-        title="当前辅导条件"
-        description="先选学生和考试，再刷新候选池；草稿保存后可打印或导出。"
+        title="考生条件"
+        description="先确认学生、考试、年份、批次、科类和成绩/位次；生成后再进入智能筛选和草稿复核。"
         sticky
       >
         <div class="command-fields">
@@ -149,55 +149,54 @@
             type="primary"
             :loading="workbenchLoading"
             @click="loadVolunteerWorkbenchPreview"
-            >刷新候选池</el-button
+            >生成智能筛选</el-button
           >
         </div>
       </AppFilterBar>
 
-      <div class="workbench-priority-grid">
-        <article class="soft-card priority-card">
-          <span>学生画像与偏好</span>
-          <strong>{{
-            workbenchExplanation.items[0]?.value || "未选择学生"
-          }}</strong>
-          <p>
-            {{
-              studentCareerPreference
-                ? "已读取学生职业意向"
-                : "可在工作台内补充职业方向、行业和岗位偏好"
-            }}
-          </p>
-        </article>
-        <article class="soft-card priority-card">
-          <span>候选池 / 冲稳保</span>
-          <strong>{{
-            workbenchPreview
-              ? `${workbenchPreview.returned_candidate_count ?? workbenchPreview.candidates.length} / ${workbenchPreview.candidate_count}`
-              : "待刷新"
-          }}</strong>
-          <p>
-            {{
-              workbenchPreview?.is_candidate_truncated
-                ? "结果已截断，请继续缩小条件"
-                : "刷新后展示冲刺、稳妥和保底候选"
-            }}
-          </p>
-        </article>
-        <article class="soft-card priority-card">
-          <span>志愿草稿篮</span>
-          <strong>{{ volunteerDraft.length }} 条</strong>
-          <p>
-            {{
-              remainingVolunteerSlots === null
-                ? "等待命中省份规则"
-                : `剩余 ${remainingVolunteerSlots} 个志愿位`
-            }}
-          </p>
+      <div class="guide-step-grid">
+        <article
+          v-for="step in volunteerGuideStepCards"
+          :key="step.key"
+          class="soft-card guide-step-card"
+          :class="`status-${step.status}`"
+        >
+          <span>{{ step.title }}</span>
+          <strong>{{ step.summary }}</strong>
         </article>
       </div>
 
+      <section class="soft-card guide-readiness-card">
+        <div class="section-head compact">
+          <div>
+            <h3>生成前复核</h3>
+            <p>系统会把缺位次、缺规则、选科待核、特殊类型初筛等事项集中列出。</p>
+          </div>
+          <el-tag :type="volunteerGuideReadiness.status === 'blocked' ? 'danger' : volunteerGuideReadiness.status === 'warning' ? 'warning' : 'success'" effect="plain">
+            {{
+              volunteerGuideReadiness.status === "blocked"
+                ? "需要先处理"
+                : volunteerGuideReadiness.status === "warning"
+                ? "可生成但需复核"
+                : "条件就绪"
+            }}
+          </el-tag>
+        </div>
+        <div class="guide-readiness-list">
+          <article
+            v-for="item in volunteerGuideReadiness.items"
+            :key="`${item.code}-${item.detail}`"
+            class="guide-readiness-item"
+            :class="`level-${item.level}`"
+          >
+            <strong>{{ item.title }}</strong>
+            <p>{{ item.detail }}</p>
+          </article>
+        </div>
+      </section>
+
       <el-tabs v-model="activeTab" class="secondary-tabs">
-        <el-tab-pane label="学生志愿工作台" name="volunteer-workbench">
+        <el-tab-pane label="志愿推荐向导" name="volunteer-workbench">
           <RecommendationVolunteerWorkbenchPanel
             :form="volunteerWorkbenchForm"
             :student-options="studentOptions"
@@ -231,6 +230,8 @@
             :selected-rule="selectedVolunteerRule"
             :workbench-explanation="workbenchExplanation"
             :draft-checks="volunteerDraftChecks"
+            :guide-preview="volunteerGuidePreview"
+            :guide-groups="volunteerGuideGroups"
             :volunteer-limit="volunteerLimit"
             :remaining-slots="remainingVolunteerSlots"
             @load-preview="loadVolunteerWorkbenchPreview"
@@ -965,6 +966,10 @@ const {
   volunteerDraft,
   volunteerDraftComparison,
   volunteerDraftChecks,
+  volunteerGuideGroups,
+  volunteerGuidePreview,
+  volunteerGuideReadiness,
+  volunteerGuideStepCards,
   volunteerDraftName,
   volunteerLimit,
   volunteerWorkbenchForm,
@@ -1144,7 +1149,7 @@ function openMajorDetail(majorId: number): void {
 }
 
 .section-nav-button span,
-.priority-card span,
+.guide-step-card span,
 .data-health-card span {
   display: block;
   color: #667b8e;
@@ -1152,7 +1157,7 @@ function openMajorDetail(majorId: number): void {
 }
 
 .section-nav-button strong,
-.priority-card strong,
+.guide-step-card strong,
 .data-health-card strong {
   display: block;
   margin-top: 8px;
@@ -1173,7 +1178,7 @@ function openMajorDetail(majorId: number): void {
   gap: 16px;
 }
 
-.priority-card p,
+.guide-step-card strong,
 .data-health-card p {
   margin: 7px 0 0;
   color: #6c8194;
@@ -1186,16 +1191,70 @@ function openMajorDetail(majorId: number): void {
   gap: 10px;
 }
 
-.workbench-priority-grid,
+.guide-step-grid,
 .data-health-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
-.priority-card,
+.guide-step-card,
 .data-health-card {
   padding: 18px;
+}
+
+.guide-step-card {
+  min-height: 112px;
+  border-left: 4px solid transparent;
+}
+
+.guide-step-card.status-ready {
+  border-left-color: #2f8f5b;
+}
+
+.guide-step-card.status-warning {
+  border-left-color: #c8882f;
+}
+
+.guide-step-card.status-blocked {
+  border-left-color: #c45656;
+}
+
+.guide-readiness-card {
+  padding: 18px;
+}
+
+.guide-readiness-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.guide-readiness-item {
+  padding: 12px;
+  border: 1px solid rgba(124, 142, 158, 0.16);
+  border-radius: 8px;
+  background: #f8fbfd;
+}
+
+.guide-readiness-item strong {
+  color: #263b50;
+}
+
+.guide-readiness-item p {
+  margin: 6px 0 0;
+  color: #667b8e;
+  line-height: 1.5;
+}
+
+.guide-readiness-item.level-blocking {
+  border-color: rgba(196, 86, 86, 0.28);
+  background: #fff6f6;
+}
+
+.guide-readiness-item.level-warning {
+  border-color: rgba(200, 136, 47, 0.28);
+  background: #fffaf1;
 }
 
 .secondary-tabs {
@@ -1259,6 +1318,8 @@ function openMajorDetail(majorId: number): void {
   .recommendation-section-nav,
   .command-fields,
   .workbench-priority-grid,
+  .guide-step-grid,
+  .guide-readiness-list,
   .data-health-grid,
   .health-columns,
   .recommend-layout,
