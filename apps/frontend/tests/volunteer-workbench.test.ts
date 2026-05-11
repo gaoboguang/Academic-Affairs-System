@@ -30,9 +30,12 @@ import {
   isSameVolunteerCareerPreference,
   moveVolunteerDraftItem,
   reorderVolunteerDraftItem,
+  upsertVolunteerDraftSummary,
   validateVolunteerDraftName,
   validateVolunteerWorkbenchForm,
 } from "../src/components/recommendations/volunteerWorkbench";
+import fs from "node:fs";
+import path from "node:path";
 import {
   alertLevelLabel,
   alertTagType,
@@ -54,6 +57,7 @@ import {
 import type {
   ProvinceVolunteerRule,
   VolunteerDraftItem,
+  VolunteerDraftSummary,
   VolunteerWorkbenchCandidate,
   VolunteerWorkbenchFormState,
   VolunteerWorkbenchPreviewResponse,
@@ -150,6 +154,17 @@ function buildCandidate(planId: number, overrides: Partial<VolunteerWorkbenchCan
     risk_flags_json: [],
     source_note: "测试",
     import_batch_name: "2026-广东-本科",
+    recent_history_json: [
+      {
+        year: 2025,
+        batch: "本科批",
+        plan_count: 60,
+        admission_count: 56,
+        min_score: 585,
+        min_rank: 28500,
+        tuition_fee: "6500 元/年",
+      },
+    ],
     major_direction: null,
     career_path: null,
     major_note: null,
@@ -188,6 +203,29 @@ function buildRule(overrides: Partial<ProvinceVolunteerRule> = {}): ProvinceVolu
   };
 }
 
+function buildDraftSummary(overrides: Partial<VolunteerDraftSummary> = {}): VolunteerDraftSummary {
+  return {
+    id: 1,
+    name: "第一版",
+    student_id: 1,
+    student_name: "张三",
+    exam_id: 2,
+    exam_name: "2026届高一4月月考",
+    province: "广东",
+    target_year: 2026,
+    batch: "本科批",
+    exam_mode: "物理类",
+    candidate_type: "general",
+    art_track: null,
+    score_input_mode: "estimated_score",
+    item_count: 2,
+    created_at: "2026-05-11T07:49:00",
+    updated_at: "2026-05-11T07:50:00",
+    is_active: true,
+    ...overrides,
+  };
+}
+
 function buildPreview(overrides: Partial<VolunteerWorkbenchPreviewResponse> = {}): VolunteerWorkbenchPreviewResponse {
   return {
     student_id: 1,
@@ -217,6 +255,18 @@ function buildPreview(overrides: Partial<VolunteerWorkbenchPreviewResponse> = {}
 }
 
 describe("volunteer workbench helpers", () => {
+  it("uses recent history columns instead of the old evidence column in the candidate table", () => {
+    const template = fs.readFileSync(
+      path.resolve(__dirname, "../src/components/recommendations/RecommendationVolunteerWorkbenchPanel.vue"),
+      "utf8",
+    );
+
+    expect(template).toContain('label="近三年录取情况"');
+    expect(template).toContain("录取/投档");
+    expect(template).toContain("暂无近三年记录");
+    expect(template).not.toContain('el-table-column label="依据"');
+  });
+
   it("formats volunteer workbench presentation copy", () => {
     expect(resultTypeLabel("challenge")).toBe("冲刺");
     expect(resultTypeLabel("custom")).toBe("custom");
@@ -386,6 +436,29 @@ describe("volunteer workbench helpers", () => {
     const limited = appendVolunteerDraftItem(second.items, buildCandidate(3), 2);
     expect(limited.added).toBe(false);
     expect(limited.reason).toBe("limit");
+  });
+
+  it("keeps old draft candidate snapshots usable when recent history is missing", () => {
+    const legacyCandidate = {
+      ...buildCandidate(1),
+      recent_history_json: undefined,
+    } as VolunteerWorkbenchCandidate;
+
+    const result = appendVolunteerDraftItem([], legacyCandidate);
+    expect(result.added).toBe(true);
+    expect(result.items[0].candidate.recent_history_json).toEqual([]);
+
+    const payload = buildVolunteerDraftPayload("旧草稿兼容", buildForm(), result.items, buildRule());
+    expect(payload.items[0].candidate.recent_history_json).toEqual([]);
+  });
+
+  it("keeps the saved draft visible when the server list refresh is briefly stale", () => {
+    const originalDraft = buildDraftSummary({ id: 1, name: "第一版", updated_at: "2026-05-11T07:50:00" });
+    const savedDraft = buildDraftSummary({ id: 2, name: "第二版", updated_at: "2026-05-11T07:51:00" });
+
+    const nextDrafts = upsertVolunteerDraftSummary([originalDraft], savedDraft);
+
+    expect(nextDrafts.map((item) => item.name)).toEqual(["第二版", "第一版"]);
   });
 
   it("detects pending workbench changes and formats draft labels", () => {

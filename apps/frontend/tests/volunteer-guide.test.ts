@@ -167,6 +167,17 @@ function buildGuide(overrides: Partial<VolunteerGuidePreviewResponse> = {}): Vol
               risk_flags_json: [],
               source_note: "招生计划简章",
               import_batch_name: "2026-广东-本科",
+              recent_history_json: [
+                {
+                  year: 2025,
+                  batch: "本科批",
+                  plan_count: 120,
+                  admission_count: 118,
+                  min_score: 585,
+                  min_rank: 28000,
+                  tuition_fee: "6850 元/年",
+                },
+              ],
             },
             evidence: {
               strength: "major_history",
@@ -407,5 +418,14 @@ describe("volunteer guide helpers", () => {
     expect(preview.applicable_rules[0].volunteer_limit).toBe(45);
     expect(preview.rule_alerts[0].code).toBe("candidate_result_truncated");
     expect(preview.input_notes).toContain("按预估位次生成。");
+    expect(preview.candidates[0].recent_history_json[0]).toEqual({
+      year: 2025,
+      batch: "本科批",
+      plan_count: 120,
+      admission_count: 118,
+      min_score: 585,
+      min_rank: 28000,
+      tuition_fee: "6850 元/年",
+    });
   });
 });

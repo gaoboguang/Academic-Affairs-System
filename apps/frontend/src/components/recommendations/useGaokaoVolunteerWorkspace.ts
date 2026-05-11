@@ -36,6 +36,7 @@ import {
   reorderVolunteerDraftItem,
   removeVolunteerDraftItem,
   shouldApplyVolunteerExamScoreAutofill,
+  upsertVolunteerDraftSummary,
   validateVolunteerDraftName,
   validateVolunteerWorkbenchForm,
 } from "./volunteerWorkbench";
@@ -509,6 +510,7 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
       volunteerDraftName.value = savedDraft.name;
       persistedVolunteerRule.value = savedDraft.selected_rule ?? null;
       volunteerDraft.value = mapDraftDetailItems(savedDraft);
+      savedVolunteerDrafts.value = upsertVolunteerDraftSummary(savedVolunteerDrafts.value, savedDraft);
       await loadVolunteerDrafts();
       ElMessage.success(mode === "save-as" ? "已另存为新草稿" : "志愿草稿已保存");
     } catch (error) {

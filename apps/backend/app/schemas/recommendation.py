@@ -748,6 +748,7 @@ class VolunteerWorkbenchCandidateRead(BaseModel):
     risk_flags_json: list[str] = Field(default_factory=list)
     source_note: str | None = None
     import_batch_name: str | None = None
+    recent_history_json: list[dict] = Field(default_factory=list)
 
 
 class VolunteerWorkbenchRuleAlertRead(BaseModel):

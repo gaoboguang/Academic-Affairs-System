@@ -8,6 +8,16 @@
 
 ## 2026-05-11 新增
 
+- 已完成高考志愿推荐池“音乐类过滤 + 近三年录取展示”修复：
+  - 后端新增艺术类别文本识别 helper，支持从招生计划专业快照名、标准专业名和来源备注推断艺术类别；戏曲类优先识别，避免“戏曲音乐”进入音乐类
+  - 音乐类候选硬过滤为必须有音乐/声乐/器乐/钢琴/音乐剧等正向证据；美术与设计、舞蹈、表导、书法、播音与主持、戏曲和无音乐证据的泛艺术专业不再进入音乐推荐池
+  - 候选展示名优先使用带统考类别或方向的招生计划快照名，解决标准专业名过泛导致老师无法判断类别的问题
+  - `VolunteerWorkbenchCandidateRead` 新增 `recent_history_json`；后端按目标年前最近 3 个可用历史年份返回计划人数、录取/投档人数、最低分、最低位次和学费，并在专业 ID 不一致时按同校同艺术类别 + 规范化专业名补齐历史
+  - 前端候选表移除默认“依据”大列，改为“近三年录取情况”紧凑表；旧草稿没有该字段时显示空状态，不崩溃
+  - 修复志愿草稿“另存为新草稿”后列表偶发缺新版本的问题：保存接口返回后先把新草稿同步进本地已保存列表，再刷新服务端列表；新增单测覆盖服务端列表短暂滞后时新草稿仍可见
+  - 真实接口抽样验证：山东 2026 艺术类本科批统考 / 音乐类当前返回 24 条候选，无产品设计、环境设计、视觉传达、美术等候选，也无非音乐泛艺术专业；24 条中 22 条带最低分，21 条带录取/投档人数
+  - 验证通过：`npm run backend:test -- apps/backend/tests/test_volunteer_guide_art_unification.py apps/backend/tests/test_recommendation_workflow.py -q`（24 passed）、`npm run frontend:test -- tests/volunteer-guide.test.ts tests/volunteer-workbench.test.ts`（51 passed）、`npm run frontend:lint`、`npm run frontend:build`、`npm run e2e -- tests/e2e/gaokao-volunteer.spec.ts`（11 passed）、`npm run backend:data-health -- --json`、SQLite 完整性 / 外键检查、`git diff --check`
+
 - 已修复“山东 2026 艺术类本科批统考 / 音乐类仍无候选”的真实链路问题：
   - 复核确认不是批次规则缺失，真实库已存在山东 2026 `艺术类本科批统考` 的艺术类规则；问题在于应用侧 `enrollment_plan` 中山东 2026 正式招生计划为 0，旧逻辑只按目标年查计划，导致规则命中但候选池为空
   - 后端新增目标年计划选择：目标年计划存在时使用目标年；目标年缺计划且 `use_historical_mapping=true` 时回退最近可用历史计划年做模拟候选；未开启历史映射时返回 `missing_target_year_enrollment_plan`

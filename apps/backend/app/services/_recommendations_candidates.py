@@ -8,7 +8,7 @@ from app.repositories.exams import get_total_snapshots_for_exam
 from app.repositories.recommendations import list_admission_candidates, list_enrollment_plan_candidates
 
 from ._recommendations_shared import RecommendationSettingsState
-from ._recommendations_volunteer_options import normalize_art_track
+from ._recommendations_volunteer_options import art_track_matches_text, infer_art_track_from_text, normalize_art_track
 
 ART_LIKE_STUDENT_TYPES = {"art", "sports", "fine_art", "music", "dance", "media"}
 GENERAL_REFERENCE_FALLBACK_TYPES = {"spring_exam", "independent_recruitment", "comprehensive_evaluation"}
@@ -123,6 +123,7 @@ def get_admission_reference_candidates(
             major_name=item.major.name if item.major else None,
             candidate_art_track=art_track,
             record_art_track=item.art_track,
+            record_text=item.source_note,
             target_regions=target_regions,
             school_levels=school_levels,
             major_keyword=major_keyword,
@@ -172,6 +173,7 @@ def filter_enrollment_plans(
             major_name=item.major.name if item.major else item.major_name_snapshot or None,
             candidate_art_track=art_track,
             record_art_track=None,
+            record_text=_join_filter_text(item.major_name_snapshot, item.source_note),
             target_regions=target_regions,
             school_levels=school_levels,
             major_keyword=major_keyword,
@@ -237,6 +239,7 @@ def _matches_common_candidate_filters(
     major_name: str | None,
     candidate_art_track: str | None,
     record_art_track: str | None,
+    record_text: str | None,
     target_regions: list[str],
     school_levels: list[str],
     major_keyword: str | None,
@@ -255,12 +258,13 @@ def _matches_common_candidate_filters(
         level_tags = set(college.school_level_tags_json or []) if college else set()
         if not level_tags.intersection(expected_levels) and not is_whitelisted:
             return False
-    if major_keyword and (not major_name or major_keyword not in major_name):
+    searchable_major_text = _join_filter_text(major_name, record_text)
+    if major_keyword and major_keyword not in searchable_major_text:
         return False
     if is_art_like_student_type(student_type) and college and not college.supports_art:
         return False
     normalized_candidate_art_track = normalize_art_track(candidate_art_track) or normalize_art_track(student.art_track)
-    normalized_record_art_track = normalize_art_track(record_art_track)
+    normalized_record_art_track = normalize_art_track(record_art_track) or infer_art_track_from_text(major_name, record_text)
     if (
         is_art_like_student_type(student_type)
         and normalized_candidate_art_track
@@ -268,4 +272,15 @@ def _matches_common_candidate_filters(
         and normalized_record_art_track != normalized_candidate_art_track
     ):
         return False
+    if (
+        is_art_like_student_type(student_type)
+        and normalized_candidate_art_track
+        and not normalized_record_art_track
+        and not art_track_matches_text(normalized_candidate_art_track, major_name, record_text)
+    ):
+        return False
     return True
+
+
+def _join_filter_text(*values: str | None) -> str:
+    return " ".join((value or "").strip() for value in values if (value or "").strip())

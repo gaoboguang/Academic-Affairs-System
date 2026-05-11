@@ -59,6 +59,45 @@ ART_SCORE_FORMULAS = {
 
 ART_MANUAL_REVIEW_TRACKS = {"opera"}
 
+ART_TRACK_EXCLUSION_KEYWORDS = {
+    "fine_art_design": ("音乐", "声乐", "器乐", "舞蹈", "表（导）演", "表导演", "戏剧影视表演", "服装表演", "播音", "主持", "书法", "戏曲"),
+    "music": ("美术", "设计", "视觉传达", "环境设计", "产品设计", "数字媒体艺术", "动画", "摄影", "绘画", "书画", "舞蹈", "表（导）演", "表导演", "戏剧影视表演", "服装表演", "播音", "主持", "书法", "戏曲"),
+    "dance": ("美术", "设计", "音乐", "声乐", "器乐", "表（导）演", "表导演", "戏剧影视表演", "服装表演", "播音", "主持", "书法", "戏曲"),
+    "performance_directing": ("美术", "设计", "音乐", "声乐", "器乐", "舞蹈", "播音", "主持", "书法", "戏曲"),
+    "calligraphy": ("美术", "设计", "音乐", "声乐", "器乐", "舞蹈", "表（导）演", "表导演", "播音", "主持", "戏曲"),
+    "broadcast_hosting": ("美术", "设计", "音乐", "声乐", "器乐", "舞蹈", "表（导）演", "表导演", "书法", "戏曲"),
+    "opera": ("美术", "设计", "音乐类", "声乐", "器乐", "舞蹈", "表（导）演", "表导演", "播音", "主持", "书法"),
+}
+
+ART_TRACK_INCLUSION_KEYWORDS = {
+    "fine_art_design": ("美术", "美术与设计", "设计类", "视觉传达", "环境设计", "产品设计", "数字媒体艺术", "动画", "摄影", "绘画", "书画", "艺术设计", "公共艺术", "文物保护与修复"),
+    "music": (
+        "音乐类",
+        "音乐表演",
+        "音乐教育",
+        "音乐学",
+        "音乐剧",
+        "音乐治疗",
+        "现代流行音乐",
+        "流行音乐",
+        "声乐",
+        "器乐",
+        "钢琴",
+        "小提琴",
+        "小号",
+        "管乐",
+        "打击乐",
+        "弦乐",
+        "流行演唱",
+        "民族表演艺术",
+    ),
+    "dance": ("舞蹈类", "舞蹈表演", "舞蹈学", "舞蹈编导", "国际标准舞", "芭蕾舞"),
+    "performance_directing": ("表（导）演", "表导演", "戏剧影视表演", "戏剧影视导演", "服装表演", "表演类", "表演("),
+    "calligraphy": ("书法类", "书法学", "书法"),
+    "broadcast_hosting": ("播音与主持", "播音", "主持", "广播电视编导"),
+    "opera": ("戏曲类", "戏曲", "京剧"),
+}
+
 SHANDONG_BATCH_ALIASES = {
     "艺术本科批": "艺术类本科批统考",
     "艺术类本科批": "艺术类本科批统考",
@@ -92,6 +131,31 @@ def normalize_art_track(value: str | None) -> str | None:
     if not normalized:
         return None
     return ART_LEGACY_CANDIDATE_TYPE_TO_TRACK.get(normalized, normalized)
+
+
+def infer_art_track_from_text(*values: str | None) -> str | None:
+    text = " ".join((value or "").strip() for value in values if (value or "").strip())
+    if not text:
+        return None
+    for track in ("opera", "fine_art_design", "dance", "performance_directing", "broadcast_hosting", "calligraphy", "music"):
+        if any(keyword in text for keyword in ART_TRACK_INCLUSION_KEYWORDS[track]):
+            return track
+    return None
+
+
+def art_track_matches_text(target_track: str | None, *values: str | None) -> bool:
+    normalized_target = normalize_art_track(target_track)
+    if not normalized_target:
+        return True
+    inferred = infer_art_track_from_text(*values)
+    if inferred:
+        return inferred == normalized_target
+    text = " ".join((value or "").strip() for value in values if (value or "").strip())
+    if not text:
+        return True
+    if normalized_target == "music":
+        return False
+    return not any(keyword in text for keyword in ART_TRACK_EXCLUSION_KEYWORDS.get(normalized_target, ()))
 
 
 def normalize_batch(province: str, batch: str | None) -> tuple[str | None, bool]:

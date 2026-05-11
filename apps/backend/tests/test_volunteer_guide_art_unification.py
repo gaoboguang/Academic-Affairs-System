@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy import text
 
-from app.models import College, EnrollmentPlan, Major, StudentPathwayProfile
+from app.models import AdmissionRecord, College, EnrollmentPlan, Major, StudentPathwayProfile
 
 from tests.test_recommendation_workflow import create_exam_with_scores
 
@@ -74,6 +74,174 @@ def _seed_art_plan(app, *, year: int = 2026) -> None:
                 student_type="art",
                 source_note="艺术类本科批统考测试计划",
                 import_batch_name="sd-art-alias-test",
+                is_active=True,
+            )
+        )
+
+
+def _seed_mixed_art_plans_with_history(app) -> None:
+    with app.state.db.session_scope() as session:
+        college = College(
+            name="山东艺术类别过滤测试大学",
+            college_code="SDART02",
+            province="山东",
+            city="济南",
+            supports_art=True,
+            is_active=True,
+        )
+        music_major = Major(
+            name="音乐表演",
+            major_code="130201",
+            category="艺术学",
+            is_art_related=True,
+            is_active=True,
+        )
+        music_plan_major = Major(
+            name="音乐表演（音乐类（音乐表演）统考成绩）",
+            major_code="130201",
+            category="艺术学",
+            is_art_related=True,
+            is_active=True,
+        )
+        design_major = Major(
+            name="产品设计",
+            major_code="130504",
+            category="艺术学",
+            is_art_related=True,
+            is_active=True,
+        )
+        opera_major = Major(
+            name="戏曲音乐",
+            major_code="130315",
+            category="艺术学",
+            is_art_related=True,
+            is_active=True,
+        )
+        ambiguous_art_major = Major(
+            name="影视多媒体技术",
+            major_code="560208",
+            category="艺术学",
+            is_art_related=True,
+            is_active=True,
+        )
+        music_theater_major = Major(
+            name="表演",
+            major_code="130301",
+            category="艺术学",
+            is_art_related=True,
+            is_active=True,
+        )
+        session.add_all([college, music_major, music_plan_major, design_major, opera_major, ambiguous_art_major, music_theater_major])
+        session.flush()
+        for year in (2023, 2024, 2025):
+            session.add(
+                EnrollmentPlan(
+                    year=year,
+                    province="山东",
+                    batch="本科批",
+                    exam_mode="3+3",
+                    college_id=college.id,
+                    major_id=music_plan_major.id,
+                    college_code_snapshot="SDART02",
+                    major_group_code="M01",
+                    major_name_snapshot="音乐表演（音乐类（音乐表演）统考成绩）",
+                    major_code_snapshot="130201",
+                    plan_count=10 + year - 2023,
+                    tuition_fee=f"{12000 + year - 2023} 元/年",
+                    student_type="art",
+                    source_note="音乐类招生计划",
+                    is_active=True,
+                )
+            )
+            session.add(
+                AdmissionRecord(
+                    year=year,
+                    province="山东",
+                    batch="艺术类本科批",
+                    college_id=college.id,
+                    major_id=music_major.id,
+                    student_type="art",
+                    art_track="音乐类" if year == 2025 else None,
+                    min_score=480 + year - 2023,
+                    min_rank=3000 - (year - 2023) * 100,
+                    plan_count=8 + year - 2023,
+                    source_note="音乐类录取样本",
+                    is_active=True,
+                )
+            )
+        session.add(
+            EnrollmentPlan(
+                year=2025,
+                province="山东",
+                batch="本科批",
+                exam_mode="3+3",
+                college_id=college.id,
+                major_id=design_major.id,
+                college_code_snapshot="SDART02",
+                major_group_code="D01",
+                major_name_snapshot="产品设计（美术与设计类统考成绩）",
+                major_code_snapshot="130504",
+                plan_count=20,
+                tuition_fee="13000 元/年",
+                student_type="art",
+                source_note="美术与设计类招生计划",
+                is_active=True,
+            )
+        )
+        session.add(
+            EnrollmentPlan(
+                year=2025,
+                province="山东",
+                batch="本科批",
+                exam_mode="3+3",
+                college_id=college.id,
+                major_id=music_theater_major.id,
+                college_code_snapshot="SDART02",
+                major_group_code="T01",
+                major_name_snapshot="表演（音乐剧）",
+                major_code_snapshot="130301",
+                plan_count=5,
+                tuition_fee="14000 元/年",
+                student_type="art",
+                source_note="艺术类招生计划",
+                is_active=True,
+            )
+        )
+        session.add(
+            EnrollmentPlan(
+                year=2025,
+                province="山东",
+                batch="本科批",
+                exam_mode="3+3",
+                college_id=college.id,
+                major_id=opera_major.id,
+                college_code_snapshot="SDART02",
+                major_group_code="O01",
+                major_name_snapshot="戏曲音乐（戏曲类联考成绩）",
+                major_code_snapshot="130315",
+                plan_count=6,
+                tuition_fee="9000 元/年",
+                student_type="art",
+                source_note="戏曲类招生计划",
+                is_active=True,
+            )
+        )
+        session.add(
+            EnrollmentPlan(
+                year=2025,
+                province="山东",
+                batch="本科批",
+                exam_mode="3+3",
+                college_id=college.id,
+                major_id=ambiguous_art_major.id,
+                college_code_snapshot="SDART02",
+                major_group_code="V01",
+                major_name_snapshot="影视多媒体技术",
+                major_code_snapshot="560208",
+                plan_count=9,
+                tuition_fee="11000 元/年",
+                student_type="art",
+                source_note="艺术类招生计划",
                 is_active=True,
             )
         )
@@ -303,3 +471,71 @@ def test_general_estimated_score_uses_score_rank_segment_not_school_rank(client)
     assert payload["source_preview"]["effective_rank"] != 58
     assert any("一分一段" in item for item in payload["input_notes"])
     assert any("校内名次不用于志愿推荐" in item for item in payload["input_notes"])
+
+
+def test_music_art_track_filters_design_and_opera_plans_and_returns_recent_history(client, app) -> None:
+    exam_id = create_exam_with_scores(client)
+    _seed_mixed_art_plans_with_history(app)
+
+    response = client.post(
+        "/api/recommendations/volunteer-guide/preview",
+        json={
+            "student_id": 1,
+            "exam_id": exam_id,
+            "province": "山东",
+            "target_year": 2026,
+            "batch": "艺术类本科批统考",
+            "exam_mode": "3+3",
+            "candidate_type": "art",
+            "art_track": "music",
+            "score_input_mode": "estimated_score",
+            "culture_score": 370,
+            "professional_score": 240,
+            "use_historical_mapping": True,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    candidates = [
+        item["candidate"]
+        for group in payload["groups"].values()
+        for item in group["candidates"]
+    ]
+    assert candidates
+    major_names = {item["major_name"] for item in candidates}
+    assert "音乐表演（音乐类（音乐表演）统考成绩）" in major_names
+    assert "表演（音乐剧）" in major_names
+    assert "产品设计" not in major_names
+    assert "戏曲音乐" not in major_names
+    assert "影视多媒体技术" not in major_names
+    music_candidate = next(item for item in candidates if item["major_name"] == "音乐表演（音乐类（音乐表演）统考成绩）")
+    assert music_candidate["recent_history_json"] == [
+        {
+            "year": 2025,
+            "batch": "本科批",
+            "plan_count": 12,
+            "admission_count": 10,
+            "min_score": 482.0,
+            "min_rank": 2800,
+            "tuition_fee": "12002 元/年",
+        },
+        {
+            "year": 2024,
+            "batch": "本科批",
+            "plan_count": 11,
+            "admission_count": 9,
+            "min_score": 481.0,
+            "min_rank": 2900,
+            "tuition_fee": "12001 元/年",
+        },
+        {
+            "year": 2023,
+            "batch": "本科批",
+            "plan_count": 10,
+            "admission_count": 8,
+            "min_score": 480.0,
+            "min_rank": 3000,
+            "tuition_fee": "12000 元/年",
+        },
+    ]
