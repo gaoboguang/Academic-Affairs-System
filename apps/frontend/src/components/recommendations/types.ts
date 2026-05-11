@@ -842,6 +842,17 @@ export interface VolunteerWorkbenchCandidate {
   risk_flags_json: string[];
   source_note?: string | null;
   import_batch_name?: string | null;
+  recent_history_json?: VolunteerWorkbenchCandidateHistory[] | null;
+}
+
+export interface VolunteerWorkbenchCandidateHistory {
+  year: number;
+  batch?: string | null;
+  plan_count?: number | null;
+  admission_count?: number | null;
+  min_score?: number | null;
+  min_rank?: number | null;
+  tuition_fee?: string | null;
 }
 
 export interface VolunteerWorkbenchPreviewResponse {

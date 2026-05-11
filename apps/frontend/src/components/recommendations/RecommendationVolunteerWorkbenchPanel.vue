@@ -629,12 +629,6 @@
                 {{ row.batch }} / {{ row.exam_mode }}
               </template>
             </el-table-column>
-            <el-table-column label="计划数" prop="plan_count" width="80" />
-            <el-table-column label="参考位次" width="120">
-              <template #default="{ row }">
-                {{ row.reference_rank ?? row.latest_min_rank ?? "暂无" }}
-              </template>
-            </el-table-column>
             <el-table-column label="风险提示" min-width="200">
               <template #default="{ row }">
                 <div class="risk-tag-list">
@@ -651,59 +645,31 @@
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="依据" min-width="260">
+            <el-table-column label="近三年录取情况" min-width="520">
               <template #default="{ row }">
-                <div class="match-tag-list" v-if="row.match_tags_json.length">
-                  <el-tag
-                    v-for="tag in row.match_tags_json"
-                    :key="`${row.plan_id}-${tag}`"
-                    size="small"
-                    type="info"
-                    effect="plain"
-                  >
-                    {{ tag }}
-                  </el-tag>
-                </div>
-                <div v-if="buildVolunteerCandidateRuleCopy(row)" class="match-rule-copy">
-                  {{ buildVolunteerCandidateRuleCopy(row) }}
-                </div>
-                <div v-if="buildVolunteerCandidateReferenceCopy(row)" class="match-reference-copy">
-                  {{ buildVolunteerCandidateReferenceCopy(row) }}
-                </div>
-                <div v-if="row.fallback_priority_label" class="match-reference-copy">
-                  初筛优先级：{{ row.fallback_priority_label }}
-                  <span v-if="row.fallback_priority_score !== null && row.fallback_priority_score !== undefined">
-                    · {{ row.fallback_priority_score }}
-                  </span>
-                  <span v-if="row.fallback_priority_notes_json?.length">
-                    · {{ row.fallback_priority_notes_json.join("；") }}
-                  </span>
-                  <span v-if="row.fallback_category_label"> · {{ row.fallback_category_label }}</span>
-                  <span v-if="row.fallback_review_notes_json?.length">
-                    · 核对：{{ row.fallback_review_notes_json.join("；") }}
-                  </span>
-                </div>
-                <div v-if="row.chapter_url || row.chapter_campus_note || row.chapter_review_status" class="match-reference-copy">
-                  <a v-if="row.chapter_url" :href="row.chapter_url" target="_blank" rel="noreferrer">查看招生章程</a>
-                  <span v-else>招生章程待补链</span>
-                  <span v-if="row.chapter_campus_note"> · {{ row.chapter_campus_note }}</span>
-                </div>
-                <div class="match-layering-copy">
-                  {{ buildVolunteerCandidateLayeringCopy(row) }}
-                </div>
-                <div class="reason-copy">{{ row.reason_text }}</div>
-                <div v-if="buildVolunteerCandidateExplanationNotes(row).length" class="candidate-explanation-list">
+                <div v-if="candidateRecentHistory(row).length" class="recent-history-table">
+                  <div class="recent-history-row recent-history-head">
+                    <span>年份</span>
+                    <span>计划</span>
+                    <span>录取/投档</span>
+                    <span>最低分</span>
+                    <span>最低位次</span>
+                    <span>学费</span>
+                  </div>
                   <div
-                    v-for="note in buildVolunteerCandidateExplanationNotes(row)"
-                    :key="`${row.plan_id}-${note}`"
-                    class="candidate-explanation-item"
+                    v-for="history in candidateRecentHistory(row)"
+                    :key="`${row.plan_id}-${history.year}-${history.batch || 'batch'}`"
+                    class="recent-history-row"
                   >
-                    {{ note }}
+                    <span>{{ history.year }}</span>
+                    <span>{{ formatOptionalValue(history.plan_count) }}</span>
+                    <span>{{ formatOptionalValue(history.admission_count) }}</span>
+                    <span>{{ formatOptionalValue(history.min_score) }}</span>
+                    <span>{{ formatOptionalValue(history.min_rank) }}</span>
+                    <span>{{ history.tuition_fee || "-" }}</span>
                   </div>
                 </div>
-                <div v-if="row.match_notes_json.length" class="match-note-list">
-                  <div v-for="note in row.match_notes_json" :key="`${row.plan_id}-${note}`">{{ note }}</div>
-                </div>
+                <span v-else class="muted-copy">暂无近三年记录</span>
               </template>
             </el-table-column>
             <el-table-column label="操作" width="100" fixed="right">
@@ -1212,10 +1178,6 @@ import {
 } from "./helpers";
 import {
   buildVolunteerBoundaryInsightCards,
-  buildVolunteerCandidateExplanationNotes,
-  buildVolunteerCandidateLayeringCopy,
-  buildVolunteerCandidateReferenceCopy,
-  buildVolunteerCandidateRuleCopy,
   buildVolunteerDraftViewSections,
   buildVolunteerEmploymentProfile,
   buildVolunteerRuleInsightCards,
@@ -1465,6 +1427,15 @@ const careerPreferenceStatusCopy = computed(() => {
 
 function formatRiskFlag(value: string): string {
   return getRecommendationRiskFlagText(value);
+}
+
+function formatOptionalValue(value: number | string | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "-";
+  return String(value);
+}
+
+function candidateRecentHistory(candidate: VolunteerWorkbenchCandidate) {
+  return candidate.recent_history_json ?? [];
 }
 
 function handleDraftDragStart(event: DragEvent, planId: number): void {
@@ -2126,6 +2097,27 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.recent-history-table {
+  display: grid;
+  gap: 4px;
+  min-width: 480px;
+}
+
+.recent-history-row {
+  display: grid;
+  grid-template-columns: 48px 54px 76px 70px 82px minmax(80px, 1fr);
+  align-items: center;
+  gap: 8px;
+  color: #516a80;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.recent-history-head {
+  color: #8a9bad;
+  font-weight: 700;
 }
 
 .reason-copy {

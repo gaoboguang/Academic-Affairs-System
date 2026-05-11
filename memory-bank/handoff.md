@@ -2,6 +2,27 @@
 
 ## 当前主线状态（2026-05-11）
 
+- 最新修复：“选择音乐类但推荐池混入美术 / 泛艺术专业，且缺少近三年录取展示”已处理：
+  - 当前分支：`codex/gaokao-volunteer-history-art-filter-20260511`
+  - 本轮未新增表、未新增迁移、未重导数据；只用现有 `enrollment_plan` 和 `admission_record`
+  - 后端新增艺术类别文本识别，计划和录取没有结构化 `art_track` 时，会从专业标准名、招生计划快照名、来源备注中识别；`opera` 优先，避免“戏曲音乐”误判成音乐
+  - 音乐类候选现在必须命中音乐 / 声乐 / 器乐 / 钢琴 / 音乐剧等正向关键词；美术与设计、舞蹈、表导、书法、播音、戏曲以及无音乐证据的泛艺术专业会被过滤
+  - 招生计划 `major_name_snapshot` 已参与过滤、关键词搜索和候选展示；标准专业名过泛时，前端显示带统考类别/方向的计划快照名
+  - `VolunteerWorkbenchCandidateRead.recent_history_json` 返回最近 3 个历史年份的 `year/batch/plan_count/admission_count/min_score/min_rank/tuition_fee`；当计划和录取记录专业 ID 不一致时，后端会按同校同艺术类别 + 规范化专业名补齐录取历史
+  - 前端候选表默认不再展示长“依据”列，改为“近三年录取情况”小表；旧草稿缺 `recent_history_json` 会自动视为空数组
+  - 前端草稿保存列表已做即时一致性修复：`save-as` 接口返回后先把新草稿 upsert 到 `savedVolunteerDrafts`，再刷新服务端列表，避免列表请求短暂早于数据库提交导致“第二版”草稿卡片不出现
+  - 真实接口抽样：段立萌 / exam_id=2 / 山东 2026 / 艺术类本科批统考 / 音乐类 / 文化分 370.5 / 专业分 238 / 历年映射开启，返回 24 条候选，`bad_design=[]`、`bad_non_music=[]`，22 条带最低分，21 条带录取/投档人数
+  - 注意：山东艺术类源录取表多提供综合最低分和录取/投档人数，不稳定提供最低位次；系统保持空值，不伪造位次
+  - 已验证：
+    - `npm run backend:test -- apps/backend/tests/test_volunteer_guide_art_unification.py apps/backend/tests/test_recommendation_workflow.py -q`：24 passed
+    - `npm run frontend:test -- tests/volunteer-guide.test.ts tests/volunteer-workbench.test.ts`：51 passed
+    - `npm run frontend:lint`：通过
+    - `npm run frontend:build`：通过
+    - `npm run e2e -- tests/e2e/gaokao-volunteer.spec.ts`：11 passed
+    - `npm run backend:data-health -- --json`：成功，仍为已知 warning
+    - SQLite：Alembic `20260510_0032`、`integrity_check=ok`、`foreign_key_check` 无输出
+    - `git diff --check`：通过
+
 - 最新修复：“山东 2026 艺术类本科批统考 / 音乐类仍无候选”已定位并处理：
   - 这不是规则缺失；真实库已有山东 2026 `艺术类本科批统考` art 规则
   - 根因是应用侧 `enrollment_plan` 中山东 2026 正式招生计划为 0，旧逻辑只查目标年计划，所以候选池为空

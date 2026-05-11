@@ -778,6 +778,102 @@ def list_enrollment_plan_candidate_years(
     return [int(item) for item in session.scalars(stmt).all()]
 
 
+def list_recent_enrollment_plan_history(
+    session: Session,
+    *,
+    before_year: int,
+    province: str,
+    college_id: int,
+    major_id: int | None,
+    student_type: str,
+    batches: Sequence[str] | None = None,
+    exam_mode: str | None = None,
+    limit: int = 3,
+) -> Sequence[EnrollmentPlan]:
+    conditions = [
+        EnrollmentPlan.year < before_year,
+        EnrollmentPlan.province == province,
+        EnrollmentPlan.college_id == college_id,
+        EnrollmentPlan.is_active.is_(True),
+        EnrollmentPlan.student_type.in_(_resolve_candidate_student_type_values(student_type)),
+    ]
+    if major_id is not None:
+        conditions.append(EnrollmentPlan.major_id == major_id)
+    if batches:
+        conditions.append(EnrollmentPlan.batch.in_(tuple(batches)))
+    if exam_mode:
+        conditions.append(EnrollmentPlan.exam_mode.in_(build_compatible_exam_modes(exam_mode)))
+    stmt = (
+        select(EnrollmentPlan)
+        .options(joinedload(EnrollmentPlan.major))
+        .where(and_(*conditions))
+        .order_by(desc(EnrollmentPlan.year), EnrollmentPlan.id)
+        .limit(limit * 4)
+    )
+    return session.scalars(stmt).unique().all()
+
+
+def list_recent_admission_history(
+    session: Session,
+    *,
+    before_year: int,
+    province: str,
+    college_id: int,
+    major_id: int | None,
+    student_type: str,
+    batches: Sequence[str] | None = None,
+    limit: int = 3,
+) -> Sequence[AdmissionRecord]:
+    conditions = [
+        AdmissionRecord.year < before_year,
+        AdmissionRecord.province == province,
+        AdmissionRecord.college_id == college_id,
+        AdmissionRecord.is_active.is_(True),
+        AdmissionRecord.student_type.in_(_resolve_candidate_student_type_values(student_type)),
+    ]
+    if major_id is not None:
+        conditions.append(AdmissionRecord.major_id == major_id)
+    if batches:
+        conditions.append(AdmissionRecord.batch.in_(tuple(batches)))
+    stmt = (
+        select(AdmissionRecord)
+        .options(joinedload(AdmissionRecord.major))
+        .where(and_(*conditions))
+        .order_by(desc(AdmissionRecord.year), AdmissionRecord.id)
+        .limit(limit * 6)
+    )
+    return session.scalars(stmt).unique().all()
+
+
+def list_recent_admission_history_for_college(
+    session: Session,
+    *,
+    before_year: int,
+    province: str,
+    college_id: int,
+    student_type: str,
+    batches: Sequence[str] | None = None,
+    limit: int = 3,
+) -> Sequence[AdmissionRecord]:
+    conditions = [
+        AdmissionRecord.year < before_year,
+        AdmissionRecord.province == province,
+        AdmissionRecord.college_id == college_id,
+        AdmissionRecord.is_active.is_(True),
+        AdmissionRecord.student_type.in_(_resolve_candidate_student_type_values(student_type)),
+    ]
+    if batches:
+        conditions.append(AdmissionRecord.batch.in_(tuple(batches)))
+    stmt = (
+        select(AdmissionRecord)
+        .options(joinedload(AdmissionRecord.major))
+        .where(and_(*conditions))
+        .order_by(desc(AdmissionRecord.year), AdmissionRecord.id)
+        .limit(limit * 20)
+    )
+    return session.scalars(stmt).unique().all()
+
+
 def _enrollment_plan_candidate_conditions(
     *,
     year: int | None,

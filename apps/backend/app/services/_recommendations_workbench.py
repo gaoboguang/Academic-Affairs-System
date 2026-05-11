@@ -12,6 +12,9 @@ from app.repositories.exams import get_exam
 from app.repositories.recommendations import (
     build_compatible_exam_modes,
     get_employment_direction,
+    list_recent_admission_history_for_college,
+    list_recent_admission_history,
+    list_recent_enrollment_plan_history,
     list_major_employment_mappings_for_majors,
     list_province_volunteer_rules as repo_list_province_volunteer_rules,
 )
@@ -49,8 +52,10 @@ from ._recommendations_shared import _load_recommendation_settings_state, _seria
 from ._recommendations_special_type_rules import resolve_special_type_context
 from ._recommendations_volunteer_options import (
     ART_MANUAL_REVIEW_TRACKS,
+    art_track_matches_text,
     calculate_art_comprehensive_score,
     compatible_batches,
+    infer_art_track_from_text,
     normalize_art_track,
     normalize_volunteer_fields,
 )
@@ -401,6 +406,7 @@ def preview_volunteer_workbench(
                 used_plan_only_reference=used_plan_only_reference,
                 batch_dict_context=batch_dict_context,
                 province_policy_context=province_policy_context,
+                candidate_art_track=candidate_art_track,
             )
         )
 
@@ -687,8 +693,9 @@ def _build_workbench_candidate(
     used_plan_only_reference: bool = False,
     batch_dict_context=None,
     province_policy_context=None,
+    candidate_art_track: str | None = None,
 ) -> VolunteerWorkbenchCandidateRead:
-    major_name = plan.major.name if plan.major else plan.major_name_snapshot or None
+    major_name = _display_plan_major_name(plan)
     risk_flags = list(evaluation.get("risk_flags_json") or [])
     match_tags: list[str] = []
     match_notes: list[str] = []
@@ -912,7 +919,146 @@ def _build_workbench_candidate(
             if using_historical_plan_year
             else plan.import_batch_name
         ),
+        recent_history_json=_build_recent_candidate_history(
+            session=session,
+            plan=plan,
+            target_year=target_year,
+            student_type=plan.student_type,
+            candidate_art_track=candidate_art_track,
+            batches=compatible_batches(payload.province, payload.batch, plan.student_type),
+            exam_mode=payload.exam_mode,
+        ),
     )
+
+
+def _build_recent_candidate_history(
+    *,
+    session: Session,
+    plan: EnrollmentPlan,
+    target_year: int,
+    student_type: str,
+    candidate_art_track: str | None,
+    batches: tuple[str, ...],
+    exam_mode: str | None,
+) -> list[dict]:
+    plan_rows = [
+        item
+        for item in list_recent_enrollment_plan_history(
+            session,
+            before_year=target_year,
+            province=plan.province,
+            college_id=plan.college_id,
+            major_id=plan.major_id,
+            student_type=student_type,
+            batches=batches,
+            exam_mode=exam_mode,
+            limit=3,
+        )
+        if _history_item_matches_art_track(
+            candidate_art_track,
+            item.major.name if item.major else None,
+            item.major_name_snapshot,
+            item.source_note,
+            None,
+        )
+    ]
+    admission_rows = [
+        item
+        for item in list_recent_admission_history(
+            session,
+            before_year=target_year,
+            province=plan.province,
+            college_id=plan.college_id,
+            major_id=plan.major_id,
+            student_type=student_type,
+            batches=batches,
+            limit=3,
+        )
+        if _history_item_matches_art_track(
+            candidate_art_track,
+            item.major.name if item.major else None,
+            None,
+            item.source_note,
+            item.art_track,
+        )
+    ]
+    if not admission_rows:
+        plan_major_key = _canonical_history_major_name(_display_plan_major_name(plan))
+        admission_rows = [
+            item
+            for item in list_recent_admission_history_for_college(
+                session,
+                before_year=target_year,
+                province=plan.province,
+                college_id=plan.college_id,
+                student_type=student_type,
+                batches=batches,
+                limit=3,
+            )
+            if _history_item_matches_art_track(
+                candidate_art_track,
+                item.major.name if item.major else None,
+                None,
+                item.source_note,
+                item.art_track,
+            )
+            and _canonical_history_major_name(item.major.name if item.major else None) == plan_major_key
+        ]
+    years = sorted({item.year for item in [*plan_rows, *admission_rows]}, reverse=True)[:3]
+    history: list[dict] = []
+    for year in years:
+        plan_row = next((item for item in plan_rows if item.year == year), None)
+        admission_row = next((item for item in admission_rows if item.year == year), None)
+        history.append(
+            {
+                "year": year,
+                "batch": (plan_row.batch if plan_row else admission_row.batch if admission_row else None),
+                "plan_count": plan_row.plan_count if plan_row else None,
+                "admission_count": admission_row.plan_count if admission_row else None,
+                "min_score": admission_row.min_score if admission_row else None,
+                "min_rank": admission_row.min_rank if admission_row else None,
+                "tuition_fee": plan_row.tuition_fee if plan_row else None,
+            }
+        )
+    return history
+
+
+def _history_item_matches_art_track(
+    candidate_art_track: str | None,
+    major_name: str | None,
+    major_name_snapshot: str | None,
+    source_note: str | None,
+    record_art_track: str | None,
+) -> bool:
+    normalized_candidate = normalize_art_track(candidate_art_track)
+    if not normalized_candidate:
+        return True
+    normalized_record = normalize_art_track(record_art_track) or infer_art_track_from_text(
+        major_name,
+        major_name_snapshot,
+        source_note,
+    )
+    if normalized_record:
+        return normalized_record == normalized_candidate
+    return art_track_matches_text(normalized_candidate, major_name, major_name_snapshot, source_note)
+
+
+def _display_plan_major_name(plan: EnrollmentPlan) -> str | None:
+    snapshot_name = (plan.major_name_snapshot or "").strip() or None
+    major_name = plan.major.name if plan.major else None
+    if snapshot_name and infer_art_track_from_text(snapshot_name) and snapshot_name != major_name:
+        return snapshot_name
+    return major_name or snapshot_name
+
+
+def _canonical_history_major_name(value: str | None) -> str:
+    text_value = (value or "").strip()
+    if not text_value:
+        return ""
+    for marker in ("（", "(", "<", " "):
+        if marker in text_value:
+            text_value = text_value.split(marker, 1)[0]
+    return text_value.strip()
 
 
 def _load_chapter_rule_contexts(

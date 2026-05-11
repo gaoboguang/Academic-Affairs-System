@@ -39,8 +39,30 @@ export interface VolunteerDraftMutationResult {
 function normalizeDraft(items: VolunteerDraftItem[]): VolunteerDraftItem[] {
   return items.map((item, index) => ({
     ...item,
+    candidate: normalizeVolunteerCandidate(item.candidate),
     order: index + 1,
   }));
+}
+
+function normalizeVolunteerCandidate(candidate: VolunteerWorkbenchCandidate): VolunteerWorkbenchCandidate {
+  return {
+    ...candidate,
+    recent_history_json: candidate.recent_history_json ?? [],
+  };
+}
+
+export function upsertVolunteerDraftSummary(
+  drafts: VolunteerDraftSummary[],
+  savedDraft: VolunteerDraftSummary,
+): VolunteerDraftSummary[] {
+  const merged = [
+    savedDraft,
+    ...drafts.filter((item) => item.id !== savedDraft.id),
+  ];
+  return merged.sort((left, right) => {
+    const updatedDiff = new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime();
+    return updatedDiff || right.id - left.id;
+  });
 }
 
 const volunteerDraftResultSections: Array<{
@@ -396,7 +418,7 @@ export function buildVolunteerDraftPayload(
     items: items.map((item) => ({
       order: item.order,
       plan_id: item.plan_id,
-      candidate: item.candidate,
+      candidate: normalizeVolunteerCandidate(item.candidate),
     })),
   };
 }
@@ -441,7 +463,7 @@ export function appendVolunteerDraftItem(
       {
         order: items.length + 1,
         plan_id: candidate.plan_id,
-        candidate,
+        candidate: normalizeVolunteerCandidate(candidate),
       },
     ]),
     added: true,
