@@ -11,7 +11,9 @@ import { buildVolunteerDraftOutputWarningMessage } from "./recommendationOutputG
 import {
   buildVolunteerGuideReadiness,
   buildVolunteerGuideStepCards,
+  calculateVolunteerArtComprehensiveScore,
   groupVolunteerGuideCandidates,
+  normalizeVolunteerBatchAlias,
 } from "./volunteerGuide";
 import {
   applyStudentCareerPreferenceToForm,
@@ -53,6 +55,7 @@ import type {
   VolunteerDraftItem,
   VolunteerDraftSummary,
   VolunteerGuidePreviewResponse,
+  VolunteerGuideOptions,
   VolunteerWorkbenchCandidate,
   VolunteerWorkbenchPreviewResponse,
 } from "./types";
@@ -122,6 +125,8 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
   const loadingStudentCareerPreference = ref(false);
   const savingStudentCareerPreference = ref(false);
   const loadingExamScoreAutofill = ref(false);
+  const loadingVolunteerGuideOptions = ref(false);
+  const volunteerGuideOptions = ref<VolunteerGuideOptions | null>(null);
   const currentExamScoreAutofillSource = ref<VolunteerExamScoreAutofillSource | null>(null);
   const lastAppliedExamScoreAutofillSource = ref<VolunteerExamScoreAutofillSource | null>(null);
   const examScoreAutofillStatus = ref<VolunteerExamScoreAutofillStatus>("idle");
@@ -136,6 +141,7 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
   );
   const workbenchBatchOptions = computed(() =>
     uniqueStrings([
+      ...(volunteerGuideOptions.value?.batches.map((item) => item.value) ?? []),
       ...options.batchOptions.value,
       ...(workbenchPreview.value?.applicable_rules ?? []).map((item) => item.batch),
       volunteerWorkbenchForm.batch,
@@ -196,6 +202,14 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
   const workbenchCareerJobTypeOptions = computed(() =>
     uniqueStrings(options.employmentDirections.value.flatMap((item) => item.common_job_types_json ?? [])),
   );
+  const volunteerSelectedArtFormula = computed(() =>
+    calculateVolunteerArtComprehensiveScore(
+      volunteerGuideOptions.value,
+      volunteerWorkbenchForm.art_track,
+      volunteerWorkbenchForm.culture_score,
+      volunteerWorkbenchForm.professional_score,
+    ),
+  );
 
   watch(
     () => options.planYearOptions.value,
@@ -203,6 +217,15 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
       if (!volunteerWorkbenchForm.target_year && years.length) {
         volunteerWorkbenchForm.target_year = years[0];
       }
+    },
+    { immediate: true },
+  );
+
+  watch(
+    () => [volunteerWorkbenchForm.province, volunteerWorkbenchForm.target_year] as const,
+    (next, previous) => {
+      if (previous && next[0] === previous[0] && next[1] === previous[1]) return;
+      void loadVolunteerGuideOptions();
     },
     { immediate: true },
   );
@@ -221,6 +244,7 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
     () => [
       volunteerWorkbenchForm.score_input_mode,
       volunteerWorkbenchForm.comprehensive_score,
+      volunteerWorkbenchForm.culture_score,
       volunteerWorkbenchForm.student_rank_override,
       volunteerWorkbenchForm.reference_exam_name,
     ] as const,
@@ -340,6 +364,7 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
           body: JSON.stringify(buildVolunteerWorkbenchPayload(volunteerWorkbenchForm)),
         },
       );
+      applyNormalizedGuideFields(guide);
       volunteerGuidePreview.value = guide;
       const preview = guideToWorkbenchPreview(guide);
       workbenchPreview.value = preview;
@@ -359,6 +384,38 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
       reportError(error);
     } finally {
       workbenchLoading.value = false;
+    }
+  }
+
+  async function loadVolunteerGuideOptions(): Promise<void> {
+    const province = volunteerWorkbenchForm.province || "山东";
+    const year = volunteerWorkbenchForm.target_year || new Date().getFullYear();
+    try {
+      loadingVolunteerGuideOptions.value = true;
+      const query = new URLSearchParams({ province, year: String(year) });
+      const payload = await apiRequest<VolunteerGuideOptions>(`/api/recommendations/volunteer-guide/options?${query.toString()}`);
+      volunteerGuideOptions.value = payload;
+      const normalizedBatch = normalizeVolunteerBatchAlias(volunteerWorkbenchForm.batch, payload);
+      if (normalizedBatch && normalizedBatch !== volunteerWorkbenchForm.batch) {
+        volunteerWorkbenchForm.batch = normalizedBatch;
+      }
+    } catch (error) {
+      volunteerGuideOptions.value = null;
+      ElMessage.warning(formatUserActionError("读取志愿字段选项", error, "将暂时使用本地兜底选项，建议稍后刷新页面。"));
+    } finally {
+      loadingVolunteerGuideOptions.value = false;
+    }
+  }
+
+  function applyNormalizedGuideFields(guide: VolunteerGuidePreviewResponse): void {
+    if (guide.normalized_batch && guide.normalized_batch !== volunteerWorkbenchForm.batch) {
+      volunteerWorkbenchForm.batch = guide.normalized_batch;
+    }
+    if (guide.candidate_type && guide.candidate_type !== volunteerWorkbenchForm.candidate_type) {
+      volunteerWorkbenchForm.candidate_type = guide.candidate_type;
+    }
+    if ((guide.art_track ?? "") !== (volunteerWorkbenchForm.art_track || "")) {
+      volunteerWorkbenchForm.art_track = guide.art_track ?? "";
     }
   }
 
@@ -503,6 +560,7 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
         batch: detail.batch ?? "",
         exam_mode: detail.exam_mode ?? "",
         candidate_type: detail.candidate_type ?? "",
+        art_track: detail.art_track ?? "",
         score_input_mode: detail.score_input_mode ?? "actual_rank",
         score_range_min: detail.score_range_min ?? undefined,
         score_range_max: detail.score_range_max ?? undefined,
@@ -578,7 +636,7 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
     }
     applyVolunteerExamScoreAutofill(volunteerWorkbenchForm, source);
     lastAppliedExamScoreAutofillSource.value = source;
-    examScoreAutofillStatus.value = source.grade_rank === undefined || source.grade_rank === null ? "needs_rank" : "applied";
+    examScoreAutofillStatus.value = "applied";
   }
 
   function clearPreviousExamScoreAutofillIfCurrent(): void {
@@ -588,6 +646,7 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
     }
     volunteerWorkbenchForm.score_input_mode = "actual_rank";
     volunteerWorkbenchForm.comprehensive_score = undefined;
+    volunteerWorkbenchForm.culture_score = undefined;
     volunteerWorkbenchForm.student_rank_override = undefined;
     volunteerWorkbenchForm.reference_exam_name = "";
     lastAppliedExamScoreAutofillSource.value = null;
@@ -649,7 +708,7 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
       examScoreAutofillStatus.value = "manual_override";
       return;
     }
-    examScoreAutofillStatus.value = source.grade_rank === undefined || source.grade_rank === null ? "needs_rank" : "applied";
+    examScoreAutofillStatus.value = "applied";
   }
 
   function applyCurrentExamScoreToWorkbench(): void {
@@ -827,6 +886,7 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
     exportingVolunteerDraftId,
     examScoreAutofillNotice,
     loadVolunteerWorkbenchPreview,
+    loadingVolunteerGuideOptions,
     loadVolunteerDraftDetail,
     loadVolunteerDrafts,
     loadVolunteerDraftComparison,
@@ -854,6 +914,8 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
     volunteerDraftName,
     volunteerDraftChecks,
     volunteerGuideGroups,
+    volunteerGuideOptions,
+    volunteerSelectedArtFormula,
     volunteerGuidePreview,
     volunteerGuideReadiness,
     volunteerGuideStepCards,
@@ -882,7 +944,12 @@ export function guideToWorkbenchPreview(guide: VolunteerGuidePreviewResponse): V
     target_year: guide.target_year,
     student_type: guide.student_type,
     candidate_type: guide.candidate_type,
+    art_track: guide.art_track,
+    normalized_batch: guide.normalized_batch,
     total_score: guide.source_preview.total_score ?? 0,
+    culture_score: guide.source_preview.culture_score ?? null,
+    professional_score: guide.source_preview.professional_score ?? null,
+    art_comprehensive_score: guide.source_preview.art_comprehensive_score ?? null,
     snapshot_rank: null,
     effective_rank: guide.source_preview.effective_rank ?? null,
     score_input_mode: guide.score_input_mode ?? guide.source_preview.score_input_mode,

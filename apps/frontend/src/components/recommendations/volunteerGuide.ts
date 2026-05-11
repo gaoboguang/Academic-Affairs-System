@@ -3,6 +3,8 @@ import type {
   VolunteerGuideCandidateGroup,
   VolunteerGuideGroupKey,
   VolunteerGuideNextAction,
+  VolunteerGuideOptionItem,
+  VolunteerGuideOptions,
   VolunteerGuidePreviewResponse,
   VolunteerGuideReadiness,
   VolunteerGuideReadinessItem,
@@ -35,6 +37,7 @@ export interface VolunteerBatchOptionGroupInput {
   batchOptions: string[];
   rules: ProvinceVolunteerRule[];
   currentBatch?: string | null;
+  guideOptions?: VolunteerGuideOptions | null;
 }
 
 export function buildVolunteerGuideReadiness(
@@ -155,11 +158,18 @@ export function buildVolunteerGuideStepCards(
 }
 
 export function buildVolunteerBatchOptionGroups(input: VolunteerBatchOptionGroupInput): VolunteerBatchOptionGroups {
-  const ruleBatches = uniqueOrderedStrings(input.rules.map((item) => item.batch));
-  const allBatches = uniqueOrderedStrings([...ruleBatches, ...input.batchOptions, input.currentBatch ?? ""]);
+  const guideBatches = input.guideOptions?.batches.map((item) => item.value) ?? [];
+  const maintainedRuleBatches = input.guideOptions?.maintained_rule_batches ?? [];
+  const ruleBatches = uniqueOrderedStrings([
+    ...guideBatches,
+    ...maintainedRuleBatches,
+    ...input.rules.map((item) => item.batch),
+  ]);
+  const normalizedCurrent = normalizeVolunteerBatchAlias(input.currentBatch, input.guideOptions);
+  const allBatches = uniqueOrderedStrings([...ruleBatches, ...input.batchOptions, normalizedCurrent ?? "", input.currentBatch ?? ""]);
   const available = allBatches.filter((item) => ruleBatches.includes(item));
-  const needsRule = allBatches.filter((item) => item && !ruleBatches.includes(item));
-  const currentBatch = (input.currentBatch ?? "").trim();
+  const needsRule = allBatches.filter((item) => item && !ruleBatches.includes(item) && !isKnownBatchAlias(item, ruleBatches, input.guideOptions));
+  const currentBatch = (normalizedCurrent ?? "").trim();
   const currentUnmatched = currentBatch && !ruleBatches.includes(currentBatch) ? currentBatch : undefined;
   const suggestionTarget = currentUnmatched ? findSimilarBatch(currentUnmatched, ruleBatches) : undefined;
   return {
@@ -175,6 +185,53 @@ export function buildVolunteerBatchOptionGroups(input: VolunteerBatchOptionGroup
         }
       : undefined,
   };
+}
+
+export function normalizeVolunteerBatchAlias(
+  batch?: string | null,
+  guideOptions?: VolunteerGuideOptions | null,
+): string | undefined {
+  const normalized = (batch ?? "").trim();
+  if (!normalized) return undefined;
+  return guideOptions?.batch_aliases[normalized] || normalized;
+}
+
+function isKnownBatchAlias(
+  batch: string,
+  ruleBatches: string[],
+  guideOptions?: VolunteerGuideOptions | null,
+): boolean {
+  const normalized = normalizeVolunteerBatchAlias(batch, guideOptions);
+  return Boolean(normalized && normalized !== batch && ruleBatches.includes(normalized));
+}
+
+export function buildVolunteerGuideOptionItems(
+  backendOptions: ReadonlyArray<VolunteerGuideOptionItem> | undefined,
+  fallbackOptions: ReadonlyArray<VolunteerGuideOptionItem>,
+): VolunteerGuideOptionItem[] {
+  return [...(backendOptions?.length ? backendOptions : fallbackOptions)];
+}
+
+export function calculateVolunteerArtComprehensiveScore(
+  guideOptions: VolunteerGuideOptions | null,
+  artTrack?: string | null,
+  cultureScore?: number,
+  professionalScore?: number,
+): number | null {
+  const normalizedTrack = (artTrack ?? "").trim();
+  if (!normalizedTrack || cultureScore === undefined || professionalScore === undefined) return null;
+  const formula = guideOptions?.art_score_formulas[normalizedTrack];
+  if (
+    !formula
+    || formula.requires_manual_review
+    || typeof formula.culture_weight !== "number"
+    || typeof formula.professional_weight !== "number"
+  ) {
+    return null;
+  }
+  const fullScore = formula.professional_full_score && formula.professional_full_score > 0 ? formula.professional_full_score : 300;
+  const value = cultureScore * formula.culture_weight + professionalScore * 750 / fullScore * formula.professional_weight;
+  return Math.round(value * 100) / 100;
 }
 
 export function summarizeVolunteerReadinessItems(items: VolunteerGuideReadinessItem[], limit = 3): VolunteerGuideReadinessItem[] {
@@ -260,6 +317,7 @@ function batchTokens(value: string): Set<string> {
 
 function readinessPriority(item: VolunteerGuideReadinessItem): number {
   if (item.level === "blocking") {
+    if (item.code.includes("target_year_enrollment_plan")) return -1;
     if (item.code.includes("rule")) return 0;
     if (item.code.includes("rank")) return 1;
     if (item.code.includes("score")) return 1;
@@ -271,6 +329,7 @@ function readinessPriority(item: VolunteerGuideReadinessItem): number {
 }
 
 function readinessActionTitle(item: VolunteerGuideReadinessItem): string {
+  if (item.code.includes("target_year_enrollment_plan")) return "先处理招生计划";
   if (item.code.includes("rule")) return "先处理批次规则";
   if (item.code.includes("subject")) return "补充选科组合";
   if (item.code.includes("candidate")) return "调整条件或补充数据";

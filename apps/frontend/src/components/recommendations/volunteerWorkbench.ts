@@ -92,7 +92,7 @@ const careerPriorityFocusLabels: Record<string, string> = {
 const scoreInputModeLabels: Record<string, string> = {
   actual_rank: "正式位次（高考省位次）",
   actual_score: "正式分数",
-  estimated_score: "预估分数",
+  estimated_score: "校内分数估算",
   estimated_score_and_rank: "预估分 + 预估位次（本次考试/模拟推荐）",
   score_range: "分数区间",
   rank_range: "位次区间",
@@ -124,7 +124,7 @@ export interface VolunteerExamScoreAutofillNotice {
 
 const candidateTypeLabels: Record<string, string> = {
   general: "普通类",
-  art: "艺体类",
+  art: "艺术类",
   sports: "体育类",
   fine_art: "美术类",
   music: "音乐类",
@@ -153,10 +153,11 @@ export function createVolunteerWorkbenchForm(): VolunteerWorkbenchFormState {
     exam_id: undefined,
     province: "山东",
     target_year: new Date().getFullYear(),
-    batch: "",
-    exam_mode: "",
-    candidate_type: "",
-    score_input_mode: "actual_rank",
+  batch: "",
+  exam_mode: "",
+  candidate_type: "",
+  art_track: "",
+  score_input_mode: "actual_rank",
     score_range_min: undefined,
     score_range_max: undefined,
     rank_range_min: undefined,
@@ -196,9 +197,9 @@ function isVolunteerExamScoreAutofillStillCurrent(
   source: VolunteerExamScoreAutofillSource,
 ): boolean {
   return (
-    form.score_input_mode === "estimated_score_and_rank"
-    && sameOptionalNumber(form.comprehensive_score, source.total_score)
-    && sameOptionalNumber(form.student_rank_override, source.grade_rank)
+    form.score_input_mode === "estimated_score"
+    && sameOptionalNumber(form.culture_score, source.total_score)
+    && form.student_rank_override === undefined
     && form.reference_exam_name === source.exam_name
   );
 }
@@ -213,6 +214,7 @@ export function shouldApplyVolunteerExamScoreAutofill(
   return (
     form.score_input_mode === "actual_rank"
     && form.comprehensive_score === undefined
+    && form.culture_score === undefined
     && form.student_rank_override === undefined
     && !normalizeOptionalString(form.reference_exam_name)
   );
@@ -222,9 +224,10 @@ export function applyVolunteerExamScoreAutofill(
   form: VolunteerWorkbenchFormState,
   source: VolunteerExamScoreAutofillSource,
 ): void {
-  form.score_input_mode = "estimated_score_and_rank";
+  form.score_input_mode = "estimated_score";
+  form.culture_score = source.total_score ?? undefined;
   form.comprehensive_score = source.total_score ?? undefined;
-  form.student_rank_override = source.grade_rank ?? undefined;
+  form.student_rank_override = undefined;
   form.reference_exam_name = source.exam_name;
 }
 
@@ -240,12 +243,12 @@ export function buildVolunteerExamScoreAutofillNotice(
 ): VolunteerExamScoreAutofillNotice | null {
   if (status === "idle") return null;
   const basis = source ? formatExamAutofillScore(source) : "";
-  const localScopeNote = "校内考试口径，仅作模拟参考，不是山东省正式位次；高考出分后请切换为正式位次（高考省位次）。";
+  const localScopeNote = "校内考试口径，仅作模拟参考，不是山东省正式位次；校内名次不用于志愿推荐，高考出分后请在成绩/位次来源中切换为正式位次（高考省位次）。";
 
   if (status === "applied" && source) {
     return {
       title: "考试成绩已带入",
-      detail: `${basis}，已作为预估分和预估位次使用。${localScopeNote}`,
+      detail: `${basis}，已带入校内总分作为文化分/预估分。${localScopeNote}`,
       tone: "success",
       canApply: false,
     };
@@ -253,15 +256,15 @@ export function buildVolunteerExamScoreAutofillNotice(
   if (status === "needs_rank" && source) {
     return {
       title: "考试成绩已带入",
-      detail: `${source.exam_name} 已读取总分 ${source.total_score ?? "暂无"}，但没有校内名次；已先作为预估分，仍需补位次，或在成绩/位次来源切换其他模式。${localScopeNote}`,
-      tone: "warning",
+      detail: `${source.exam_name} 已读取总分 ${source.total_score ?? "暂无"}，已作为校内分数估算使用。${localScopeNote}`,
+      tone: "success",
       canApply: false,
     };
   }
   if (status === "manual_override" && source) {
     return {
       title: "已读取本次考试成绩",
-      detail: `${basis}。当前分数、位次或成绩/位次来源已手动调整，不会覆盖；可一键使用本次考试成绩。${localScopeNote}`,
+      detail: `${basis}。当前分数或成绩/位次来源已手动调整，不会覆盖；可一键使用本次考试总分。${localScopeNote}`,
       tone: "info",
       canApply: true,
     };
@@ -300,6 +303,17 @@ export function validateVolunteerWorkbenchForm(form: VolunteerWorkbenchFormState
   if (!form.province.trim()) {
     return "省份不能为空";
   }
+  if (form.candidate_type === "art") {
+    if (!normalizeOptionalString(form.art_track)) {
+      return "艺术类学生需要选择艺术类别";
+    }
+    if (form.culture_score === undefined && form.comprehensive_score === undefined) {
+      return "艺术类推荐需要文化成绩";
+    }
+    if (form.professional_score === undefined) {
+      return "艺术类推荐需要填写艺术专业分";
+    }
+  }
   const scoreValidationError = validateScoreInputFields(form);
   if (scoreValidationError) {
     return scoreValidationError;
@@ -336,6 +350,7 @@ export function buildVolunteerWorkbenchPayload(
     batch: normalizeOptionalString(form.batch),
     exam_mode: normalizeOptionalString(form.exam_mode),
     candidate_type: normalizeOptionalString(form.candidate_type) ?? "",
+    art_track: normalizeOptionalString(form.art_track),
     ...buildScoreInputPayload(form),
     target_regions_json: uniqueStrings(form.target_regions_json),
     school_level_tags_json: uniqueStrings(form.school_level_tags_json),
@@ -365,6 +380,7 @@ export function buildVolunteerDraftPayload(
     batch: normalizeOptionalString(form.batch),
     exam_mode: normalizeOptionalString(form.exam_mode),
     candidate_type: normalizeOptionalString(form.candidate_type) ?? "",
+    art_track: normalizeOptionalString(form.art_track),
     ...buildScoreInputPayload(form),
     target_regions_json: uniqueStrings(form.target_regions_json),
     school_level_tags_json: uniqueStrings(form.school_level_tags_json),
@@ -521,7 +537,7 @@ export function hasVolunteerWorkbenchPendingChanges(
   if ((form.target_year ?? defaultForm.target_year) !== defaultForm.target_year) {
     return true;
   }
-  if (normalizeOptionalString(form.batch) || normalizeOptionalString(form.exam_mode) || normalizeOptionalString(form.candidate_type)) {
+  if (normalizeOptionalString(form.batch) || normalizeOptionalString(form.exam_mode) || normalizeOptionalString(form.candidate_type) || normalizeOptionalString(form.art_track)) {
     return true;
   }
   if (form.score_input_mode !== defaultForm.score_input_mode) {

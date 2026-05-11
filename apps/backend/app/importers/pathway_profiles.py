@@ -29,6 +29,10 @@ PATHWAY_PROFILE_TEMPLATE_HEADERS = [
     "选科组合",
     "春考专业类别",
     "艺术类别",
+    "艺术专业分",
+    "艺术专业满分",
+    "艺术成绩来源",
+    "艺术成绩备注",
     "体育类别",
     "已完成高考报名",
     "普通高中应届",
@@ -60,6 +64,10 @@ PATHWAY_PROFILE_SAMPLE_ROW = [
     "",
     "",
     "",
+    "",
+    "",
+    "",
+    "",
     "是",
     "是",
     "否",
@@ -84,6 +92,12 @@ _HEADER_ALIASES = {
     "高考报名状态": "已完成高考报名",
     "春季高考专业类别": "春考专业类别",
     "春季高考类别": "春考专业类别",
+    "艺术统考分": "艺术专业分",
+    "艺术专业成绩": "艺术专业分",
+    "艺术统考满分": "艺术专业满分",
+    "艺术专业分满分": "艺术专业满分",
+    "艺术分来源": "艺术成绩来源",
+    "艺术分备注": "艺术成绩备注",
     "是否接受专科": "接受专科",
     "是否接受民办院校": "接受民办院校",
     "是否接受中外合作": "接受中外合作",
@@ -98,6 +112,8 @@ _TEXT_FIELDS = {
     "选科组合": "subject_combination",
     "春考专业类别": "spring_exam_category",
     "艺术类别": "art_track",
+    "艺术成绩来源": "art_score_source",
+    "艺术成绩备注": "art_score_note",
     "体育类别": "sports_track",
     "备注": "note",
 }
@@ -184,6 +200,8 @@ class PathwayProfileImportPayload:
     province: str | None = None
     candidate_type: str | None = None
     exam_type: str | None = None
+    art_professional_score: float | None = None
+    art_professional_full_score: float | None = None
     text_updates: dict[str, str] = field(default_factory=dict)
     boolean_updates: dict[str, bool] = field(default_factory=dict)
     material_updates: dict[str, bool] = field(default_factory=dict)
@@ -297,6 +315,13 @@ class StudentPathwayProfileImporter:
                 else:
                     payload.text_updates[field_name] = value
 
+        art_professional_score = self._parse_optional_float("艺术专业分", row.get("艺术专业分"))
+        if art_professional_score is not None:
+            payload.art_professional_score = art_professional_score
+        art_professional_full_score = self._parse_optional_float("艺术专业满分", row.get("艺术专业满分"))
+        if art_professional_full_score is not None:
+            payload.art_professional_full_score = art_professional_full_score
+
         for header, field_name in _BOOLEAN_FIELDS.items():
             value = self._parse_optional_bool(header, row.get(header))
             if value is not None:
@@ -329,6 +354,19 @@ class StudentPathwayProfileImporter:
         if normalized in {"否", "n", "no", "false", "0", "不符合", "不接受"}:
             return False
         raise ValueError(f"{label} 无法识别: {text}")
+
+    @staticmethod
+    def _parse_optional_float(label: str, raw_value: object) -> float | None:
+        text = clean_text(raw_value)
+        if not text:
+            return None
+        try:
+            value = float(text)
+        except ValueError as exc:
+            raise ValueError(f"{label} 无法识别: {text}") from exc
+        if value < 0:
+            raise ValueError(f"{label} 不能为负数")
+        return value
 
     def _get_existing_profile(self, student_id: int, province: str | None) -> StudentPathwayProfile | None:
         if province:
@@ -374,6 +412,10 @@ class StudentPathwayProfileImporter:
             profile.candidate_type = payload.candidate_type
         if payload.exam_type:
             profile.exam_type = payload.exam_type
+        if payload.art_professional_score is not None:
+            profile.art_professional_score = payload.art_professional_score
+        if payload.art_professional_full_score is not None:
+            profile.art_professional_full_score = payload.art_professional_full_score
         for field_name, value in payload.text_updates.items():
             setattr(profile, field_name, value)
         for field_name, value in payload.boolean_updates.items():

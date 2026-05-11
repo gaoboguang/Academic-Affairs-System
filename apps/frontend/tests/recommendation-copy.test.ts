@@ -103,7 +103,7 @@ describe("recommendation copy", () => {
   });
 
   it("formats risk flags as teacher-readable copy", () => {
-    expect(formatRecommendationRiskFlags(["sample_insufficient", "simulation_mode"])).toBe("样本不足 / 模拟测算");
+    expect(formatRecommendationRiskFlags(["sample_insufficient", "simulation_mode", "historical_plan_simulation"])).toBe("样本不足 / 模拟测算 / 按历史计划模拟");
   });
 
   it("keeps global recommendation risk notices explicit", () => {

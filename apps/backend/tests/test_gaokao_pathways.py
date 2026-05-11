@@ -59,6 +59,14 @@ def _first_student_id(client) -> int:
     return data["items"][0]["id"]
 
 
+def _sheet_headers(sheet) -> list[str]:
+    return [sheet.cell(row=1, column=index).value for index in range(1, sheet.max_column + 1)]
+
+
+def _row_value(row: tuple[object, ...], headers: list[str], header: str) -> object:
+    return row[headers.index(header)]
+
+
 def _pathway_by_code(items: list[dict], code: str) -> dict:
     return next(item for item in items if item["pathway_code"] == code)
 
@@ -266,8 +274,12 @@ def test_pathway_profile_template_endpoint_contains_expected_headers(client) -> 
     assert response.status_code == 200
     workbook = load_workbook(BytesIO(response.content), read_only=True)
     sheet = workbook["数据"]
-    headers = [sheet.cell(row=1, column=index).value for index in range(1, 28)]
+    headers = _sheet_headers(sheet)
     assert headers[:7] == ["学号", "姓名", "班级", "生源地", "考生类型", "考试类型", "选科组合"]
+    assert "艺术专业分" in headers
+    assert "艺术专业满分" in headers
+    assert "艺术成绩来源" in headers
+    assert "艺术成绩备注" in headers
     assert "高考报名确认材料" in headers
     assert "体检限制" in headers
     workbook.close()
@@ -325,6 +337,41 @@ def test_pathway_profile_import_updates_subjects_without_clearing_existing_value
         assert profile.materials_json == {"gaokao_registration": True}
         assert profile.known_body_limitations_json == {"note": "色觉正常"}
         assert profile.note == "原备注"
+
+
+def test_pathway_profile_import_updates_art_professional_score(client, app) -> None:
+    response = client.post(
+        "/api/gaokao/pathway-profiles/import",
+        files={
+            "file": (
+                "pathway-art.xlsx",
+                _build_pathway_profile_workbook(
+                    headers=["学号", "姓名", "考生类型", "艺术类别", "艺术专业分", "艺术专业满分", "艺术成绩来源", "艺术成绩备注"],
+                    rows=[["2026001", "张三", "艺术类", "music", 240, 300, "山东音乐类统考", "声乐方向"]],
+                ),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success_rows"] == 1
+    assert payload["failed_rows"] == 0
+
+    with app.state.db.session_scope() as session:
+        profile = session.scalar(
+            select(StudentPathwayProfile)
+            .join(StudentPathwayProfile.student)
+            .where(StudentPathwayProfile.student.has(student_no="2026001"))
+        )
+        assert profile is not None
+        assert profile.candidate_type == "art"
+        assert profile.art_track == "music"
+        assert profile.art_professional_score == 240
+        assert profile.art_professional_full_score == 300
+        assert profile.art_score_source == "山东音乐类统考"
+        assert profile.art_score_note == "声乐方向"
 
 
 def test_pathway_profile_import_creates_profile_and_reports_bad_rows(client, app, test_settings) -> None:
@@ -434,17 +481,17 @@ def test_pathway_profile_export_includes_students_with_and_without_profiles(clie
     assert response.status_code == 200
     workbook = load_workbook(BytesIO(response.content), read_only=True)
     sheet = workbook["数据"]
-    headers = [sheet.cell(row=1, column=index).value for index in range(1, 28)]
+    headers = _sheet_headers(sheet)
     assert headers[:7] == ["学号", "姓名", "班级", "生源地", "考生类型", "考试类型", "选科组合"]
     rows = list(sheet.iter_rows(min_row=2, values_only=True))
     row_by_no = {str(row[0]): row for row in rows}
-    assert row_by_no["2026001"][2] == "1班"
-    assert row_by_no["2026001"][6] == "物理,化学,生物"
-    assert row_by_no["2026001"][10] == "是"
-    assert row_by_no["2026001"][22] == "是"
-    assert row_by_no["2026001"][25] == "无"
-    assert row_by_no["2026002"][2] == "1班"
-    assert row_by_no["2026002"][6] is None
+    assert _row_value(row_by_no["2026001"], headers, "班级") == "1班"
+    assert _row_value(row_by_no["2026001"], headers, "选科组合") == "物理,化学,生物"
+    assert _row_value(row_by_no["2026001"], headers, "已完成高考报名") == "是"
+    assert _row_value(row_by_no["2026001"], headers, "高考报名确认材料") == "是"
+    assert _row_value(row_by_no["2026001"], headers, "体检限制") == "无"
+    assert _row_value(row_by_no["2026002"], headers, "班级") == "1班"
+    assert _row_value(row_by_no["2026002"], headers, "选科组合") is None
     workbook.close()
 
 

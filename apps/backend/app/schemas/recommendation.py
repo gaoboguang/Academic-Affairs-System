@@ -614,6 +614,33 @@ class ShandongRushStableSafeRecommendationResponse(BaseModel):
     watch: list[ShandongRushStableSafeCandidateRead] = Field(default_factory=list)
 
 
+class VolunteerGuideOptionItemRead(BaseModel):
+    value: str
+    label: str
+
+
+class VolunteerGuideArtScoreFormulaRead(BaseModel):
+    art_track: str
+    label: str
+    culture_weight: float | None = None
+    professional_weight: float | None = None
+    professional_full_score: float | None = None
+    formula_text: str
+    requires_manual_review: bool = False
+
+
+class VolunteerGuideOptionsRead(BaseModel):
+    province: str
+    year: int
+    candidate_types: list[VolunteerGuideOptionItemRead] = Field(default_factory=list)
+    art_tracks: list[VolunteerGuideOptionItemRead] = Field(default_factory=list)
+    batches: list[VolunteerGuideOptionItemRead] = Field(default_factory=list)
+    batch_aliases: dict[str, str] = Field(default_factory=dict)
+    score_input_modes: list[VolunteerGuideOptionItemRead] = Field(default_factory=list)
+    art_score_formulas: dict[str, VolunteerGuideArtScoreFormulaRead] = Field(default_factory=dict)
+    maintained_rule_batches: list[str] = Field(default_factory=list)
+
+
 class VolunteerWorkbenchPreviewPayload(BaseModel):
     student_id: int
     exam_id: int
@@ -622,6 +649,7 @@ class VolunteerWorkbenchPreviewPayload(BaseModel):
     batch: str | None = None
     exam_mode: str | None = None
     candidate_type: str = ""
+    art_track: str | None = None
     score_input_mode: str = "actual_rank"
     score_range_min: float | None = None
     score_range_max: float | None = None
@@ -738,7 +766,12 @@ class VolunteerWorkbenchPreviewResponse(BaseModel):
     target_year: int
     student_type: str
     candidate_type: str
+    art_track: str | None = None
+    normalized_batch: str | None = None
     total_score: float
+    culture_score: float | None = None
+    professional_score: float | None = None
+    art_comprehensive_score: float | None = None
     snapshot_rank: int | None = None
     effective_rank: int | None = None
     score_input_mode: str = "actual_rank"
@@ -779,6 +812,9 @@ class VolunteerGuideSourcePreviewRead(BaseModel):
     score_confidence: str
     effective_rank: int | None = None
     total_score: float | None = None
+    culture_score: float | None = None
+    professional_score: float | None = None
+    art_comprehensive_score: float | None = None
 
 
 class VolunteerGuideEvidenceRead(BaseModel):
@@ -821,6 +857,8 @@ class VolunteerGuidePreviewResponse(BaseModel):
     target_year: int
     student_type: str
     candidate_type: str
+    art_track: str | None = None
+    normalized_batch: str | None = None
     score_input_mode: str = "actual_rank"
     input_notes: list[str] = Field(default_factory=list)
     rule_alerts: list[VolunteerWorkbenchRuleAlertRead] = Field(default_factory=list)
@@ -847,6 +885,7 @@ class VolunteerDraftPayload(BaseModel):
     batch: str | None = None
     exam_mode: str | None = None
     candidate_type: str = ""
+    art_track: str | None = None
     score_input_mode: str = "actual_rank"
     score_range_min: float | None = None
     score_range_max: float | None = None
@@ -898,6 +937,7 @@ class VolunteerDraftSummaryRead(ORMModel):
     batch: str | None = None
     exam_mode: str | None = None
     candidate_type: str = ""
+    art_track: str | None = None
     score_input_mode: str = "actual_rank"
     item_count: int
     updated_at: datetime
@@ -944,6 +984,7 @@ class RecommendationGeneratePayload(BaseModel):
     name: str | None = None
     target_year: int | None = None
     province: str | None = None
+    art_track: str | None = None
     target_regions_json: list[str] = Field(default_factory=list)
     school_level_tags_json: list[str] = Field(default_factory=list)
     major_keyword: str | None = None

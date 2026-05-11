@@ -7,6 +7,10 @@ export interface StudentPathwayProfilePayload {
   subject_combination: string | null;
   spring_exam_category: string | null;
   art_track: string | null;
+  art_professional_score: number | null;
+  art_professional_full_score: number | null;
+  art_score_source: string | null;
+  art_score_note: string | null;
   sports_track: string | null;
   has_gaokao_registration: PathwayBooleanValue;
   is_fresh_graduate: PathwayBooleanValue;
@@ -131,6 +135,16 @@ export const pathwayExamTypeOptions = [
   { value: "high_level_sports", label: "高水平运动队" },
 ];
 
+export const pathwayArtTrackOptions = [
+  { value: "fine_art_design", label: "美术与设计类" },
+  { value: "music", label: "音乐类" },
+  { value: "dance", label: "舞蹈类" },
+  { value: "performance_directing", label: "表（导）演类" },
+  { value: "calligraphy", label: "书法类" },
+  { value: "broadcast_hosting", label: "播音与主持类" },
+  { value: "opera", label: "戏曲类" },
+];
+
 export const pathwayBooleanOptions: Array<{ value: PathwayBooleanValue; label: string }> = [
   { value: true, label: "已确认" },
   { value: false, label: "不符合 / 不接受" },
@@ -177,6 +191,10 @@ const profileFieldLabels: Record<string, string> = {
   subject_combination: "选科组合",
   spring_exam_category: "春考专业类别",
   art_track: "艺术类别",
+  art_professional_score: "艺术专业分",
+  art_professional_full_score: "艺术专业满分",
+  art_score_source: "艺术成绩来源",
+  art_score_note: "艺术成绩备注",
   sports_track: "体育类别",
   has_gaokao_registration: "高考报名状态",
   is_fresh_graduate: "普通高中应届状态",
@@ -202,6 +220,10 @@ export function createStudentPathwayProfileForm(): StudentPathwayProfilePayload 
     subject_combination: null,
     spring_exam_category: null,
     art_track: null,
+    art_professional_score: null,
+    art_professional_full_score: 300,
+    art_score_source: null,
+    art_score_note: null,
     sports_track: null,
     has_gaokao_registration: null,
     is_fresh_graduate: null,
@@ -240,6 +262,10 @@ export function applyPathwayProfileToForm(
     subject_combination: profile.subject_combination ?? null,
     spring_exam_category: profile.spring_exam_category ?? null,
     art_track: profile.art_track ?? null,
+    art_professional_score: profile.art_professional_score ?? null,
+    art_professional_full_score: profile.art_professional_full_score ?? 300,
+    art_score_source: profile.art_score_source ?? null,
+    art_score_note: profile.art_score_note ?? null,
     sports_track: profile.sports_track ?? null,
     has_gaokao_registration: profile.has_gaokao_registration ?? null,
     is_fresh_graduate: profile.is_fresh_graduate ?? null,
@@ -272,6 +298,10 @@ export function buildStudentPathwayProfilePayload(form: StudentPathwayProfilePay
     subject_combination: normalizeString(form.subject_combination),
     spring_exam_category: normalizeString(form.spring_exam_category),
     art_track: normalizeString(form.art_track),
+    art_professional_score: form.art_professional_score,
+    art_professional_full_score: form.art_professional_full_score,
+    art_score_source: normalizeString(form.art_score_source),
+    art_score_note: normalizeString(form.art_score_note),
     sports_track: normalizeString(form.sports_track),
     career_preferences_json: form.career_preferences_json ?? {},
     region_preferences_json: form.region_preferences_json ?? {},

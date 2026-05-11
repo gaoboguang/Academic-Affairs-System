@@ -63,6 +63,7 @@ interface VolunteerWorkbenchContextOptions {
   targetYear?: string;
   batch?: string;
   examMode?: string;
+  scoreInputMode?: string;
   majorKeyword?: string;
   subjectCombination?: string;
   studentRankOverride?: string;
@@ -408,10 +409,11 @@ async function fillVolunteerWorkbenchContext(
     targetYear: gaokaoTargetYear,
     batch: "本科批",
     examMode: "物理类",
+    scoreInputMode: "正式位次",
     majorKeyword: "",
     subjectCombination: "物理+化学",
     studentRankOverride: "31000",
-    fillRankOverride: false,
+    fillRankOverride: true,
     ...options,
   };
 
@@ -423,10 +425,13 @@ async function fillVolunteerWorkbenchContext(
   await selectDropdownOption(page, filterSelects.nth(4), config.batch);
   await selectDropdownOption(page, filterSelects.nth(5), config.examMode);
   await expect(workbenchPanel.getByText("校内考试口径，仅作模拟参考").first()).toBeVisible();
+  if (config.scoreInputMode) {
+    await selectDropdownOption(page, filterSelects.nth(7), config.scoreInputMode);
+  }
   await workbenchPanel.getByPlaceholder("专业方向关键词，可选").fill(config.majorKeyword);
   await workbenchPanel.getByPlaceholder("选科组合，可选").fill(config.subjectCombination);
   if (config.fillRankOverride) {
-    await workbenchPanel.getByPlaceholder("预估位次").fill(config.studentRankOverride);
+    await workbenchPanel.getByPlaceholder(/位次/).fill(config.studentRankOverride);
   }
 }
 

@@ -8,6 +8,7 @@ from app.repositories.exams import get_total_snapshots_for_exam
 from app.repositories.recommendations import list_admission_candidates, list_enrollment_plan_candidates
 
 from ._recommendations_shared import RecommendationSettingsState
+from ._recommendations_volunteer_options import normalize_art_track
 
 ART_LIKE_STUDENT_TYPES = {"art", "sports", "fine_art", "music", "dance", "media"}
 GENERAL_REFERENCE_FALLBACK_TYPES = {"spring_exam", "independent_recruitment", "comprehensive_evaluation"}
@@ -15,7 +16,7 @@ GENERAL_REFERENCE_FALLBACK_TYPES = {"spring_exam", "independent_recruitment", "c
 
 def detect_student_type(student: Student) -> str:
     normalized_student_type = (student.student_type or "").strip()
-    normalized_art_track = (student.art_track or "").strip()
+    normalized_art_track = normalize_art_track(student.art_track) or ""
     if normalized_student_type and normalized_student_type not in {"general", "repeat", "art", "sports"}:
         return normalized_student_type
     if normalized_art_track == "sports" or normalized_student_type == "sports":
@@ -55,6 +56,7 @@ def filter_candidates(
     province: str,
     student: Student,
     student_type: str,
+    art_track: str | None = None,
     target_regions: list[str],
     school_levels: list[str],
     major_keyword: str | None,
@@ -66,6 +68,7 @@ def filter_candidates(
         province=province,
         student=student,
         student_type=student_type,
+        art_track=art_track,
         target_regions=target_regions,
         school_levels=school_levels,
         major_keyword=major_keyword,
@@ -81,17 +84,20 @@ def get_admission_reference_candidates(
     province: str,
     student: Student,
     student_type: str,
+    art_track: str | None = None,
     target_regions: list[str],
     school_levels: list[str],
     major_keyword: str | None,
     subject_combination: str | None,
     settings: RecommendationSettingsState,
+    batches: tuple[str, ...] = (),
 ) -> tuple[list[AdmissionRecord], bool]:
     query_student_type = "general" if uses_general_reference_pool(student_type) else student_type
     items = list_admission_candidates(
         session,
         province=province,
         student_type=query_student_type,
+        batches=batches or None,
         subject_requirement=subject_combination,
     )
     used_general_reference_fallback = False
@@ -100,6 +106,7 @@ def get_admission_reference_candidates(
             session,
             province=province,
             student_type="general",
+            batches=batches or None,
             subject_requirement=subject_combination,
         )
         used_general_reference_fallback = bool(items)
@@ -114,6 +121,7 @@ def get_admission_reference_candidates(
             major=item.major,
             college_id=item.college.id if item.college else item.college_id,
             major_name=item.major.name if item.major else None,
+            candidate_art_track=art_track,
             record_art_track=item.art_track,
             target_regions=target_regions,
             school_levels=school_levels,
@@ -131,6 +139,7 @@ def filter_enrollment_plans(
     province: str,
     student: Student,
     student_type: str,
+    art_track: str | None = None,
     batch: str | None,
     exam_mode: str | None,
     target_regions: list[str],
@@ -138,6 +147,7 @@ def filter_enrollment_plans(
     major_keyword: str | None,
     subject_combination: str | None,
     settings: RecommendationSettingsState,
+    batches: tuple[str, ...] = (),
 ) -> list[EnrollmentPlan]:
     query_student_type = "general" if uses_general_reference_pool(student_type) else student_type
     items = list_enrollment_plan_candidates(
@@ -146,6 +156,7 @@ def filter_enrollment_plans(
         province=province,
         student_type=query_student_type,
         batch=batch,
+        batches=batches or None,
         exam_mode=exam_mode,
         subject_requirement=subject_combination,
     )
@@ -159,6 +170,7 @@ def filter_enrollment_plans(
             major=item.major,
             college_id=item.college.id if item.college else item.college_id,
             major_name=item.major.name if item.major else item.major_name_snapshot or None,
+            candidate_art_track=art_track,
             record_art_track=None,
             target_regions=target_regions,
             school_levels=school_levels,
@@ -166,6 +178,53 @@ def filter_enrollment_plans(
             settings=settings,
         )
     ]
+
+
+def select_enrollment_plan_year(
+    session: Session,
+    *,
+    target_year: int,
+    province: str,
+    student_type: str,
+    batch: str | None,
+    exam_mode: str | None,
+    subject_combination: str | None,
+    batches: tuple[str, ...] = (),
+    use_historical_mapping: bool = False,
+) -> tuple[int, bool, int]:
+    from app.repositories.recommendations import (
+        count_enrollment_plan_candidates,
+        list_enrollment_plan_candidate_years,
+    )
+
+    query_student_type = "general" if uses_general_reference_pool(student_type) else student_type
+    target_count = count_enrollment_plan_candidates(
+        session,
+        year=target_year,
+        province=province,
+        student_type=query_student_type,
+        batch=batch,
+        batches=batches or None,
+        exam_mode=exam_mode,
+        subject_requirement=subject_combination,
+    )
+    if target_count > 0:
+        return target_year, False, target_count
+    if not use_historical_mapping:
+        return target_year, False, 0
+    candidate_years = list_enrollment_plan_candidate_years(
+        session,
+        before_year=target_year,
+        province=province,
+        student_type=query_student_type,
+        batch=batch,
+        batches=batches or None,
+        exam_mode=exam_mode,
+        subject_requirement=subject_combination,
+    )
+    if not candidate_years:
+        return target_year, False, 0
+    return candidate_years[0], True, 0
 
 
 def _matches_common_candidate_filters(
@@ -176,6 +235,7 @@ def _matches_common_candidate_filters(
     major,
     college_id: int,
     major_name: str | None,
+    candidate_art_track: str | None,
     record_art_track: str | None,
     target_regions: list[str],
     school_levels: list[str],
@@ -199,6 +259,13 @@ def _matches_common_candidate_filters(
         return False
     if is_art_like_student_type(student_type) and college and not college.supports_art:
         return False
-    if is_art_like_student_type(student_type) and student.art_track and record_art_track and record_art_track != student.art_track:
+    normalized_candidate_art_track = normalize_art_track(candidate_art_track) or normalize_art_track(student.art_track)
+    normalized_record_art_track = normalize_art_track(record_art_track)
+    if (
+        is_art_like_student_type(student_type)
+        and normalized_candidate_art_track
+        and normalized_record_art_track
+        and normalized_record_art_track != normalized_candidate_art_track
+    ):
         return False
     return True

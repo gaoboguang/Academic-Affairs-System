@@ -644,6 +644,76 @@ def test_candidate_filters_match_exact_special_student_types(app) -> None:
     assert {item.student_type for item in spring_admission_reference} == {"general"}
 
 
+def test_art_candidate_filter_uses_normalized_request_track(app) -> None:
+    from app.models import AdmissionRecord, College, Major, Student
+    from app.services._recommendations_candidates import get_admission_reference_candidates
+    from app.services._recommendations_shared import RecommendationSettingsState
+
+    with app.state.db.session_scope() as session:
+        college = College(name="艺术类别请求测试大学", province="山东", supports_art=True, is_active=True)
+        music_major = Major(name="音乐类请求测试专业", is_art_related=True, is_active=True)
+        fine_art_major = Major(name="美术类请求测试专业", is_art_related=True, is_active=True)
+        session.add_all([college, music_major, fine_art_major])
+        session.flush()
+        session.add_all(
+            [
+                AdmissionRecord(
+                    year=2025,
+                    province="山东",
+                    batch="艺术类本科批统考",
+                    college_id=college.id,
+                    major_id=music_major.id,
+                    student_type="art",
+                    art_track="music",
+                    min_score=500,
+                    is_active=True,
+                ),
+                AdmissionRecord(
+                    year=2025,
+                    province="山东",
+                    batch="艺术类本科批统考",
+                    college_id=college.id,
+                    major_id=fine_art_major.id,
+                    student_type="art",
+                    art_track="fine_art_design",
+                    min_score=500,
+                    is_active=True,
+                ),
+            ]
+        )
+        student = Student(
+            name="艺术类别请求测试生",
+            student_no="ARTREQ001",
+            gender="女",
+            student_type="art",
+            art_track="fine_art_design",
+            is_active=True,
+        )
+        session.add(student)
+        session.flush()
+
+        items, _ = get_admission_reference_candidates(
+            session,
+            province="山东",
+            student=student,
+            student_type="art",
+            art_track="music",
+            target_regions=[],
+            school_levels=[],
+            major_keyword=None,
+            subject_combination=None,
+            settings=RecommendationSettingsState(
+                safe_ratio_max=0.85,
+                steady_ratio_max=1.0,
+                rush_ratio_max=1.15,
+                whitelist_college_ids=[],
+                blacklist_college_ids=[],
+            ),
+        )
+
+    assert {item.major.name for item in items if item.major} == {"音乐类请求测试专业"}
+
+
 def update_major_profile(client, major_name: str, *, direction: str, career_path: str, note: str) -> None:
     major_response = client.get(f"/api/majors?keyword={major_name}")
     assert major_response.status_code == 200
@@ -831,6 +901,7 @@ def test_art_score_line_fallback_supports_preview_and_generation(client, app) ->
             "candidate_type": "art",
             "score_input_mode": "estimated_score",
             "culture_score": 360,
+            "professional_score": 240,
         },
     )
     assert preview_response.status_code == 200
@@ -842,6 +913,9 @@ def test_art_score_line_fallback_supports_preview_and_generation(client, app) ->
     assert candidate["reference_record_count"] == 0
     assert candidate["latest_min_score"] == 330
     assert candidate["score_basis"] == "culture_score"
+    assert preview_payload["culture_score"] == 360
+    assert preview_payload["professional_score"] == 240
+    assert preview_payload["art_comprehensive_score"] == 480
     assert candidate["fallback_priority_label"] in {"重点比较", "优先核看"}
     assert any("省级控制线" in note for note in candidate["fallback_priority_notes_json"])
     assert candidate["fallback_category_label"] == "艺术音乐类"
@@ -863,6 +937,7 @@ def test_art_score_line_fallback_supports_preview_and_generation(client, app) ->
             "target_year": 2026,
             "score_input_mode": "estimated_score",
             "culture_score": 360,
+            "professional_score": 240,
         },
     )
     assert generate_response.status_code == 200
@@ -2188,8 +2263,9 @@ def test_admission_import_and_recommendation_generation(client, app) -> None:
             "student_id": 3,
             "exam_id": exam_id,
             "province": "广东",
-            "student_rank_override": 25000,
-            "comprehensive_score": 540,
+            "score_input_mode": "estimated_score",
+            "culture_score": 360,
+            "professional_score": 270,
         },
     )
     assert art_response.status_code == 200

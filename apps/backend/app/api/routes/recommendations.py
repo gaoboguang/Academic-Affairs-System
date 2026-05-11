@@ -57,6 +57,7 @@ from app.schemas.recommendation import (
     VolunteerDraftPayload,
     VolunteerDraftRead,
     VolunteerDraftSummaryRead,
+    VolunteerGuideOptionsRead,
     VolunteerGuidePreviewResponse,
     VolunteerWorkbenchPreviewPayload,
     VolunteerWorkbenchPreviewResponse,
@@ -602,6 +603,15 @@ def preview_volunteer_workbench(
     session: Session = Depends(get_db_session),
 ) -> VolunteerWorkbenchPreviewResponse:
     return service.preview_volunteer_workbench(session, payload)
+
+
+@router.get("/recommendations/volunteer-guide/options", response_model=VolunteerGuideOptionsRead)
+def get_volunteer_guide_options(
+    province: str = Query(default="山东"),
+    year: int | None = Query(default=None),
+    session: Session = Depends(get_db_session),
+) -> VolunteerGuideOptionsRead:
+    return service.get_volunteer_guide_options(session, province=province, year=year)
 
 
 @router.post("/recommendations/volunteer-guide/preview", response_model=VolunteerGuidePreviewResponse)

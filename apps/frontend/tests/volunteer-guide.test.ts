@@ -4,7 +4,9 @@ import {
   guideToWorkbenchPreview,
 } from "../src/components/recommendations/useGaokaoVolunteerWorkspace";
 import {
+  buildVolunteerGuideOptionItems,
   buildVolunteerBatchOptionGroups,
+  calculateVolunteerArtComprehensiveScore,
   buildVolunteerGuideActionItems,
   buildVolunteerGuideProgressSteps,
   buildVolunteerGuideReadiness,
@@ -232,7 +234,7 @@ describe("volunteer guide helpers", () => {
     expect(completed[3].state).toBe("done");
   });
 
-  it("groups batch options by configured rules and keeps current unmatched value", () => {
+  it("groups batch options by backend canonical rules and normalizes aliases", () => {
     const rules: ProvinceVolunteerRule[] = [
       buildGuide().applicable_rules[0],
       {
@@ -247,12 +249,55 @@ describe("volunteer guide helpers", () => {
       batchOptions: ["艺术本科批", "本科批", "专科批"],
       rules,
       currentBatch: "艺术本科批",
+      guideOptions: {
+        province: "山东",
+        year: 2026,
+        candidate_types: [{ value: "general", label: "普通类" }, { value: "art", label: "艺术类" }],
+        art_tracks: [{ value: "music", label: "音乐类" }],
+        batches: [{ value: "本科批", label: "本科批" }, { value: "艺术类本科批统考", label: "艺术类本科批统考" }],
+        batch_aliases: { 艺术本科批: "艺术类本科批统考" },
+        score_input_modes: [{ value: "estimated_score", label: "校内分数估算" }],
+        art_score_formulas: {},
+        maintained_rule_batches: ["本科批", "艺术类本科批统考"],
+      },
     });
 
     expect(groups.available).toEqual(["本科批", "艺术类本科批统考"]);
-    expect(groups.needsRule).toEqual(["艺术本科批", "专科批"]);
-    expect(groups.currentUnmatched).toBe("艺术本科批");
-    expect(groups.suggestion?.detail).toContain("艺术类本科批统考");
+    expect(groups.needsRule).toEqual(["专科批"]);
+    expect(groups.currentUnmatched).toBeUndefined();
+    expect(groups.suggestion).toBeUndefined();
+  });
+
+  it("uses backend option items and art score formulas before local fallbacks", () => {
+    expect(buildVolunteerGuideOptionItems([{ value: "art", label: "艺术类" }], [{ value: "music", label: "音乐类" }])).toEqual([
+      { value: "art", label: "艺术类" },
+    ]);
+    expect(calculateVolunteerArtComprehensiveScore(
+      {
+        province: "山东",
+        year: 2026,
+        candidate_types: [],
+        art_tracks: [],
+        batches: [],
+        batch_aliases: {},
+        score_input_modes: [],
+        maintained_rule_batches: [],
+        art_score_formulas: {
+          music: {
+            art_track: "music",
+            label: "音乐类",
+            culture_weight: 0.5,
+            professional_weight: 0.5,
+            professional_full_score: 300,
+            formula_text: "文化成绩 * 50% + 专业成绩 * 750 / 300 * 50%",
+            requires_manual_review: false,
+          },
+        },
+      },
+      "music",
+      370,
+      240,
+    )).toBe(485);
   });
 
   it("summarizes readiness blockers into short actionable items", () => {
@@ -276,6 +321,12 @@ describe("volunteer guide helpers", () => {
         detail: "当前条件没有匹配到可加入志愿表的计划。",
       },
       {
+        code: "missing_target_year_enrollment_plan",
+        level: "blocking",
+        title: "缺少目标年份招生计划",
+        detail: "山东 2026 年正式招生计划尚未导入（艺术类“艺术类本科批统考”）；当前不能按目标年份生成可加入志愿表的正式候选。",
+      },
+      {
         code: "chapter_pending",
         level: "warning",
         title: "章程待核",
@@ -284,9 +335,10 @@ describe("volunteer guide helpers", () => {
     ]);
 
     expect(summary).toHaveLength(3);
-    expect(summary[0].title).toBe("先处理批次规则");
-    expect(summary[0].detail).toContain("艺术本科批");
-    expect(summary[1].title).toBe("补充选科组合");
+    expect(summary[0].title).toBe("先处理招生计划");
+    expect(summary[0].detail).toContain("2026 年正式招生计划");
+    expect(summary.map((item) => item.title)).toContain("先处理批次规则");
+    expect(summary.map((item) => item.title)).toContain("补充选科组合");
   });
 
   it("keeps guide next actions short for the main screen", () => {

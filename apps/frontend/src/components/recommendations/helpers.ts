@@ -49,21 +49,27 @@ export const volunteerUnitTypeOptions = ["院校", "院校专业组", "专业"];
 
 export const gaokaoCandidateTypeOptions = [
   { value: "general", label: "普通类" },
-  { value: "art", label: "艺体类" },
+  { value: "art", label: "艺术类" },
   { value: "sports", label: "体育类" },
-  { value: "fine_art", label: "美术类" },
+  { value: "spring_exam", label: "春季高考" },
+  { value: "independent_recruitment", label: "高职单招" },
+  { value: "comprehensive_evaluation", label: "高职综评" },
+];
+
+export const gaokaoArtTrackOptions = [
+  { value: "fine_art_design", label: "美术与设计类" },
   { value: "music", label: "音乐类" },
   { value: "dance", label: "舞蹈类" },
-  { value: "media", label: "传媒类" },
-  { value: "spring_exam", label: "春季高考" },
-  { value: "independent_recruitment", label: "单独招生" },
-  { value: "comprehensive_evaluation", label: "综合评价招生" },
+  { value: "performance_directing", label: "表（导）演类" },
+  { value: "calligraphy", label: "书法类" },
+  { value: "broadcast_hosting", label: "播音与主持类" },
+  { value: "opera", label: "戏曲类" },
 ];
 
 export const scoreInputModeOptions = [
   { value: "actual_rank", label: "正式位次（高考省位次）" },
   { value: "actual_score", label: "正式分数" },
-  { value: "estimated_score", label: "预估分数" },
+  { value: "estimated_score", label: "校内分数估算" },
   { value: "estimated_score_and_rank", label: "预估分 + 预估位次（本次考试/模拟推荐）" },
   { value: "score_range", label: "分数区间" },
   { value: "rank_range", label: "位次区间" },

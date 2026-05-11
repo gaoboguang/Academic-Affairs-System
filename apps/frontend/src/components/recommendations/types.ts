@@ -754,6 +754,7 @@ export interface VolunteerWorkbenchPreviewPayload extends CareerPreferenceFields
   batch?: string;
   exam_mode?: string;
   candidate_type: string;
+  art_track?: string;
   score_input_mode: ScoreInputMode;
   score_range_min?: number;
   score_range_max?: number;
@@ -852,7 +853,12 @@ export interface VolunteerWorkbenchPreviewResponse {
   target_year: number;
   student_type: string;
   candidate_type: string;
+  art_track?: string | null;
+  normalized_batch?: string | null;
   total_score: number;
+  culture_score?: number | null;
+  professional_score?: number | null;
+  art_comprehensive_score?: number | null;
   snapshot_rank?: number | null;
   effective_rank?: number | null;
   score_input_mode: ScoreInputMode;
@@ -897,6 +903,9 @@ export interface VolunteerGuideSourcePreview {
   score_confidence: string;
   effective_rank?: number | null;
   total_score?: number | null;
+  culture_score?: number | null;
+  professional_score?: number | null;
+  art_comprehensive_score?: number | null;
 }
 
 export interface VolunteerGuideEvidence {
@@ -930,6 +939,33 @@ export interface VolunteerGuideNextAction {
   detail: string;
 }
 
+export interface VolunteerGuideOptionItem {
+  value: string;
+  label: string;
+}
+
+export interface VolunteerGuideArtScoreFormula {
+  art_track: string;
+  label: string;
+  culture_weight?: number | null;
+  professional_weight?: number | null;
+  professional_full_score?: number | null;
+  formula_text: string;
+  requires_manual_review: boolean;
+}
+
+export interface VolunteerGuideOptions {
+  province: string;
+  year: number;
+  candidate_types: VolunteerGuideOptionItem[];
+  art_tracks: VolunteerGuideOptionItem[];
+  batches: VolunteerGuideOptionItem[];
+  batch_aliases: Record<string, string>;
+  score_input_modes: VolunteerGuideOptionItem[];
+  art_score_formulas: Record<string, VolunteerGuideArtScoreFormula>;
+  maintained_rule_batches: string[];
+}
+
 export interface VolunteerGuidePreviewResponse {
   student_id: number;
   student_name: string;
@@ -939,6 +975,8 @@ export interface VolunteerGuidePreviewResponse {
   target_year: number;
   student_type: string;
   candidate_type: string;
+  art_track?: string | null;
+  normalized_batch?: string | null;
   score_input_mode: ScoreInputMode;
   input_notes: string[];
   rule_alerts: VolunteerWorkbenchRuleAlert[];
@@ -1010,6 +1048,7 @@ export interface VolunteerWorkbenchFormState extends CareerPreferenceFields {
   batch: string;
   exam_mode: string;
   candidate_type: string;
+  art_track: string;
   score_input_mode: ScoreInputMode;
   score_range_min?: number;
   score_range_max?: number;
@@ -1090,6 +1129,7 @@ export interface VolunteerDraftSavePayload extends CareerPreferenceFields {
   batch?: string;
   exam_mode?: string;
   candidate_type: string;
+  art_track?: string;
   score_input_mode: ScoreInputMode;
   score_range_min?: number;
   score_range_max?: number;
@@ -1127,6 +1167,7 @@ export interface VolunteerDraftSummary {
   batch?: string | null;
   exam_mode?: string | null;
   candidate_type: string;
+  art_track?: string | null;
   score_input_mode: ScoreInputMode;
   item_count: number;
   created_at: string;

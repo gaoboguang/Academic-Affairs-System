@@ -1,5 +1,41 @@
 # 交接说明
 
+## 当前主线状态（2026-05-11）
+
+- 最新修复：“山东 2026 艺术类本科批统考 / 音乐类仍无候选”已定位并处理：
+  - 这不是规则缺失；真实库已有山东 2026 `艺术类本科批统考` art 规则
+  - 根因是应用侧 `enrollment_plan` 中山东 2026 正式招生计划为 0，旧逻辑只查目标年计划，所以候选池为空
+  - 现在目标年有计划时使用目标年；目标年无计划且 `use_historical_mapping=true` 时，用最近可用历史计划年模拟；目标年无计划且未开启历史映射时，明确返回 `missing_target_year_enrollment_plan`
+  - 历史模拟候选会带 `historical_plan_simulation` 风险标记，页面显示“按历史计划模拟”，说明“不是 2026 年正式招生计划”
+  - 真实接口复核：段立萌 / exam_id=2 / 山东 2026 / 艺术类本科批统考 / 音乐类 / 文化分 370.5 / 专业分 238.96；开启历年映射估算返回 143 条 2025 历史模拟候选，关闭时 0 候选且阻断原因清楚
+  - 后续不要把这类情况再解释为“规则未维护”；正式填报前仍需导入 2026 官方招生计划后重新生成
+
+- 本轮已完成用户要求的“高考志愿字段统一与艺术生综合分修复”：
+  - 当前分支：`codex/gaokao-art-score-unification-20260510`
+  - 真实主库已备份：`data/backups/app_before_art_volunteer_fields_20260511_000001.db`
+  - 真实主库已迁移到 Alembic `20260510_0032`，新增艺术专业分字段和志愿草稿 `art_track`；`sqlite3 data/app.db "SELECT version_num FROM alembic_version; PRAGMA integrity_check; PRAGMA foreign_key_check;"` 输出 `20260510_0032`、`ok`，外键检查无输出
+  - 新增后端统一字段模块 / 接口：`apps/backend/app/services/_recommendations_volunteer_options.py`、`GET /api/recommendations/volunteer-guide/options?province=山东&year=2026`
+  - 字段口径：`candidate_type` 只存大类，`art_track` 存艺术类别；旧 `candidate_type=music/fine_art/dance/media` 仍兼容归一
+  - 批次口径：山东 `艺术本科批`、`艺术类本科批`、`艺术类本科统考批` 等别名统一为 `艺术类本科批统考`；计划 / 历史查询兼容同义批次
+  - 艺术综合分：美术与设计、音乐、舞蹈、表（导）演按 `文化 * 50% + 专业 * 750 / 300 * 50%`；书法按 `60%/40%`；播音与主持按 `70%/30%`；戏曲 / 校考 / 省际联考仅人工复核
+  - 普通类校内考试：只自动带入总分，不再用校内位次；`estimated_score` 会尝试一分一段换算省位次，缺失时提示只能模拟参考
+  - 前端志愿向导、学生升学画像、画像批量导入导出、草稿保存 / 读取、旧推荐生成入口均已同步艺术类别和专业分字段
+  - E2E helper `tests/e2e/helpers/localEduE2e.ts` 默认改为使用“正式位次（高考省位次）”和测试省位次，避免测试依赖校内名次；分数区间和校内分数估算链路仍有单独覆盖
+- 已验证：
+  - `npm run backend:test`：156 passed
+  - `npm run frontend:test`：42 files / 220 tests passed
+  - `npm run frontend:lint`：通过
+  - `npm run frontend:build`：通过
+  - `npm run e2e -- tests/e2e/gaokao-volunteer.spec.ts`：11 passed
+  - `npm run check:e2e`：46 passed
+  - `npm run backend:data-health -- --json`：运行成功，状态仍为已知 warning
+  - SQLite：Alembic `20260510_0032`、`integrity_check=ok`、`foreign_key_check` 无输出
+- 当前剩余风险 / 注意事项：
+  - 数据健康唯一 P0 警告仍是单招 / 综评已有招生计划但缺专门录取结果，只能初筛，不能包装成完整录取把握
+  - 2026 普通类正式计划、一分一段、省控线仍待官方发布；正式填报前必须替换为当年官方数据
+  - 后续如果改志愿字段选项或艺术公式，优先改后端 options 与测试，不要只改前端硬编码
+  - 本轮尚未提交；工作区包含本轮多文件变更和新增迁移 / options / 测试文件
+
 ## 当前主线状态（2026-05-10）
 
 - 本轮已完成用户要求的“高考志愿向导界面低风险重做”：

@@ -100,10 +100,13 @@
         :draft-checks="volunteerDraftChecks"
         :guide-preview="volunteerGuidePreview"
         :guide-groups="volunteerGuideGroups"
+        :guide-options="volunteerGuideOptions"
         :volunteer-limit="volunteerLimit"
         :remaining-slots="remainingVolunteerSlots"
         :exam-score-autofill-notice="examScoreAutofillNotice"
         :loading-exam-score-autofill="loadingExamScoreAutofill"
+        :loading-volunteer-guide-options="loadingVolunteerGuideOptions"
+        :art-comprehensive-score-preview="volunteerSelectedArtFormula"
         @load-preview="loadVolunteerWorkbenchPreview"
         @reset="resetVolunteerWorkbench"
         @sync-from-recommendation="syncVolunteerWorkbenchFromRecommendation"
@@ -725,6 +728,7 @@ const {
   loadVolunteerDraftDetail,
   loadVolunteerDrafts,
   loadingExamScoreAutofill,
+  loadingVolunteerGuideOptions,
   loadingVolunteerDrafts,
   loadingStudentCareerPreference,
   loadingHistory,
@@ -853,7 +857,9 @@ const {
   volunteerDraftComparison,
   volunteerDraftChecks,
   volunteerGuideGroups,
+  volunteerGuideOptions,
   volunteerGuidePreview,
+  volunteerSelectedArtFormula,
   volunteerDraftName,
   volunteerLimit,
   volunteerWorkbenchForm,

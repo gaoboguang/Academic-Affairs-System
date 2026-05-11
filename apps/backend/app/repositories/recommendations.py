@@ -659,6 +659,7 @@ def list_admission_candidates(
     province: str,
     student_type: str,
     batch: str | None = None,
+    batches: Sequence[str] | None = None,
     subject_requirement: str | None = None,
 ) -> Sequence[AdmissionRecord]:
     stmt = (
@@ -672,10 +673,12 @@ def list_admission_candidates(
             AdmissionRecord.is_active.is_(True),
         )
     )
-    if batch:
+    if batches:
+        stmt = stmt.where(AdmissionRecord.batch.in_(tuple(batches)))
+    elif batch:
         stmt = stmt.where(AdmissionRecord.batch == batch)
     stmt = stmt.where(AdmissionRecord.student_type.in_(_resolve_candidate_student_type_values(student_type)))
-    if subject_requirement:
+    if subject_requirement and "+" in subject_requirement:
         stmt = stmt.where(
             (AdmissionRecord.subject_requirement.is_(None))
             | (AdmissionRecord.subject_requirement.contains(subject_requirement))
@@ -691,31 +694,27 @@ def list_enrollment_plan_candidates(
     province: str,
     student_type: str,
     batch: str | None = None,
+    batches: Sequence[str] | None = None,
     exam_mode: str | None = None,
     subject_requirement: str | None = None,
 ) -> Sequence[EnrollmentPlan]:
+    conditions = _enrollment_plan_candidate_conditions(
+        year=year,
+        province=province,
+        student_type=student_type,
+        batch=batch,
+        batches=batches,
+        exam_mode=exam_mode,
+        subject_requirement=subject_requirement,
+    )
     stmt = (
         select(EnrollmentPlan)
         .options(
             joinedload(EnrollmentPlan.college).joinedload(College.aliases),
             joinedload(EnrollmentPlan.major),
         )
-        .where(
-            EnrollmentPlan.year == year,
-            EnrollmentPlan.province == province,
-            EnrollmentPlan.is_active.is_(True),
-        )
+        .where(and_(*conditions))
     )
-    if batch:
-        stmt = stmt.where(EnrollmentPlan.batch == batch)
-    if exam_mode:
-        stmt = stmt.where(EnrollmentPlan.exam_mode.in_(build_compatible_exam_modes(exam_mode)))
-    stmt = stmt.where(EnrollmentPlan.student_type.in_(_resolve_candidate_student_type_values(student_type)))
-    if subject_requirement:
-        stmt = stmt.where(
-            (EnrollmentPlan.subject_requirement.is_(None))
-            | (EnrollmentPlan.subject_requirement.contains(subject_requirement))
-        )
     stmt = stmt.order_by(
         EnrollmentPlan.batch,
         EnrollmentPlan.exam_mode,
@@ -726,10 +725,96 @@ def list_enrollment_plan_candidates(
     return session.scalars(stmt).unique().all()
 
 
+def count_enrollment_plan_candidates(
+    session: Session,
+    *,
+    year: int,
+    province: str,
+    student_type: str,
+    batch: str | None = None,
+    batches: Sequence[str] | None = None,
+    exam_mode: str | None = None,
+    subject_requirement: str | None = None,
+) -> int:
+    conditions = _enrollment_plan_candidate_conditions(
+        year=year,
+        province=province,
+        student_type=student_type,
+        batch=batch,
+        batches=batches,
+        exam_mode=exam_mode,
+        subject_requirement=subject_requirement,
+    )
+    return session.scalar(select(func.count()).select_from(EnrollmentPlan).where(and_(*conditions))) or 0
+
+
+def list_enrollment_plan_candidate_years(
+    session: Session,
+    *,
+    before_year: int,
+    province: str,
+    student_type: str,
+    batch: str | None = None,
+    batches: Sequence[str] | None = None,
+    exam_mode: str | None = None,
+    subject_requirement: str | None = None,
+) -> list[int]:
+    conditions = _enrollment_plan_candidate_conditions(
+        year=None,
+        province=province,
+        student_type=student_type,
+        batch=batch,
+        batches=batches,
+        exam_mode=exam_mode,
+        subject_requirement=subject_requirement,
+    )
+    conditions.append(EnrollmentPlan.year < before_year)
+    stmt = (
+        select(EnrollmentPlan.year)
+        .distinct()
+        .where(and_(*conditions))
+        .order_by(desc(EnrollmentPlan.year))
+    )
+    return [int(item) for item in session.scalars(stmt).all()]
+
+
+def _enrollment_plan_candidate_conditions(
+    *,
+    year: int | None,
+    province: str,
+    student_type: str,
+    batch: str | None = None,
+    batches: Sequence[str] | None = None,
+    exam_mode: str | None = None,
+    subject_requirement: str | None = None,
+) -> list:
+    conditions = [
+        EnrollmentPlan.province == province,
+        EnrollmentPlan.is_active.is_(True),
+        EnrollmentPlan.student_type.in_(_resolve_candidate_student_type_values(student_type)),
+    ]
+    if year is not None:
+        conditions.append(EnrollmentPlan.year == year)
+    if batches:
+        conditions.append(EnrollmentPlan.batch.in_(tuple(batches)))
+    elif batch:
+        conditions.append(EnrollmentPlan.batch == batch)
+    if exam_mode:
+        conditions.append(EnrollmentPlan.exam_mode.in_(build_compatible_exam_modes(exam_mode)))
+    if subject_requirement and "+" in subject_requirement:
+        conditions.append(
+            (EnrollmentPlan.subject_requirement.is_(None))
+            | (EnrollmentPlan.subject_requirement.contains(subject_requirement))
+        )
+    return conditions
+
+
 def _resolve_candidate_student_type_values(student_type: str) -> tuple[str, ...]:
     normalized = (student_type or "").strip()
     if normalized in {"", "general", "repeat"}:
         return ("general", "common", "")
+    if normalized in {"fine_art_design", "fine_art", "music", "dance", "media", "broadcast_hosting", "performance_directing", "calligraphy", "opera"}:
+        return ("art", normalized)
     return (normalized,)
 
 

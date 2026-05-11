@@ -72,7 +72,39 @@
           </label>
           <label class="pathway-field">
             <span>艺术类别</span>
-            <el-input v-model="form.art_track" placeholder="如：美术与设计类" />
+            <el-select v-model="form.art_track" clearable filterable placeholder="选择艺术类别">
+              <el-option v-for="item in pathwayArtTrackOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+          </label>
+          <label class="pathway-field">
+            <span>艺术专业分</span>
+            <el-input-number
+              v-model="form.art_professional_score"
+              :min="0"
+              :max="300"
+              controls-position="right"
+              style="width: 100%"
+              placeholder="省统考专业分"
+            />
+          </label>
+          <label class="pathway-field">
+            <span>艺术专业满分</span>
+            <el-input-number
+              v-model="form.art_professional_full_score"
+              :min="1"
+              :max="750"
+              controls-position="right"
+              style="width: 100%"
+              placeholder="默认 300"
+            />
+          </label>
+          <label class="pathway-field">
+            <span>艺术成绩来源</span>
+            <el-input v-model="form.art_score_source" placeholder="如：山东音乐类统考" />
+          </label>
+          <label class="pathway-field wide">
+            <span>艺术成绩备注</span>
+            <el-input v-model="form.art_score_note" placeholder="校考、省际联考或需人工复核的说明" />
           </label>
           <label class="pathway-field">
             <span>体育类别</span>
@@ -193,6 +225,7 @@ import {
   buildStudentPathwayProfilePayload,
   collectStudentPathwayGaps,
   createStudentPathwayProfileForm,
+  pathwayArtTrackOptions,
   pathwayBooleanOptions,
   pathwayCandidateTypeOptions,
   pathwayExamTypeOptions,

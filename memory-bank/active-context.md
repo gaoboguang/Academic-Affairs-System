@@ -2,6 +2,31 @@
 
 ## 当前状态
 
+- 2026-05-11 已修复“山东艺术类本科批统考仍无候选”的真实根因：
+  - 根因不是批次规则缺失；真实库 `province_volunteer_rule` 已有山东 2026 `艺术类本科批统考` art 规则，截图条件能命中 1 条规则
+  - 真实原因是应用侧 `enrollment_plan` 中山东 2026 招生计划为 0；此前 preview 只按目标年查计划，所以规则命中但候选计划为 0
+  - 后端新增目标年计划选择逻辑：目标年有计划时使用目标年；目标年无计划且 `use_historical_mapping=true` 时，回退最近可用历史计划年做模拟候选；未开启历史映射时明确返回 `missing_target_year_enrollment_plan`
+  - 历史模拟候选会显式标记 `historical_plan_simulation`，候选说明写明“按 2025 年历史招生计划模拟，不是 2026 年正式招生计划”，不可包装成正式录取把握
+  - 前端风险标签新增中文文案“按历史计划模拟”，readiness 短摘要优先提示“先处理招生计划”，避免继续显示泛化“调整条件或补充数据”
+  - 真实接口复核：段立萌 / 202604高三二模 / 山东 2026 / 艺术类本科批统考 / 音乐类 / 文化分 370.5 / 专业分 238.96 / 历年映射开启时返回 143 条历史模拟候选；关闭时阻断并提示山东 2026 正式招生计划尚未导入
+  - 已重启本地服务，当前前端 `http://127.0.0.1:5173`、后端 `http://127.0.0.1:8000`
+  - 验证通过：后端推荐专项 `26 passed`、后端全量 `158 passed`、前端相关定向 `56 passed`、前端全量 `42 files / 220 tests passed`、`frontend:lint`、`frontend:build`、高考志愿 E2E `11 passed`、`backend:data-health -- --json` 成功但仍为已知 warning、SQLite `20260510_0032` / `integrity_check=ok` / 外键检查无输出
+  - 当前健康警告仍是数据事实：2026 正式招生计划、一分一段、省控线待官方发布；单招 / 综评缺专门录取结果，只能初筛
+
+- 2026-05-11 已完成“高考志愿字段统一与艺术生综合分修复”：
+  - 当前分支：`codex/gaokao-art-score-unification-20260510`
+  - 真实主库已先备份到 `data/backups/app_before_art_volunteer_fields_20260511_000001.db`，再执行迁移到 Alembic `20260510_0032`；SQLite `integrity_check=ok`，`foreign_key_check` 无输出
+  - 新增迁移 `apps/backend/alembic/versions/20260510_0032_art_volunteer_fields.py`：为 `student_pathway_profile` 增加 `art_professional_score`、`art_professional_full_score`、`art_score_source`、`art_score_note`，为 `volunteer_draft` 增加 `art_track`
+  - 新增统一字段配置服务 `apps/backend/app/services/_recommendations_volunteer_options.py` 和接口 `GET /api/recommendations/volunteer-guide/options?province=山东&year=2026`；前端志愿向导的考生类型、艺术类别、批次别名、成绩来源和艺术综合分公式以后端 options 为准
+  - 字段语义已统一：`candidate_type` 只表示普通类 / 艺术类 / 体育类 / 春考 / 单招 / 综评等大类；`art_track` 单独表示美术与设计、音乐、舞蹈、表（导）演、书法、播音与主持、戏曲；旧 `candidate_type=music/fine_art/dance/media` 会兼容归一为 `candidate_type=art` + 对应 `art_track`
+  - 批次别名已归一：`艺术本科批`、`艺术类本科批`、`艺术类本科统考批` 等在山东统一落到 `艺术类本科批统考`；计划 / 历史查询兼容同义批次，避免前端误报“艺术本科批暂未维护规则”
+  - 艺术类推荐必须有文化分、艺术类别和专业统考分；美术与设计、音乐、舞蹈、表（导）演按 `文化成绩 * 50% + 专业成绩 * 750 / 300 * 50%`，书法按 `60%/40%`，播音与主持按 `70%/30%`；戏曲 / 校考 / 省际联考保留人工复核，不包装成录取把握
+  - 普通类校内考试只自动带入总分，不再把校内位次写入推荐位次；`estimated_score` 模式会优先用官方一分一段换算省位次，缺少一分一段时明确提示只能按分数和计划模拟参考
+  - 学生“升学画像”页面、批量导入导出模板、志愿草稿保存 / 读取、旧推荐生成入口、志愿向导 preview 均已带上艺术类别和专业分字段；旧草稿和旧 payload 保持兼容
+  - E2E 公共志愿填表 helper 已改为默认使用“正式位次（高考省位次）”填测试用省位次，避免测试重新依赖校内名次；另保留“分数区间”和“校内分数估算”专项链路
+  - 验证通过：`npm run backend:test` 为 156 passed；`npm run frontend:test` 为 42 files / 220 tests passed；`npm run frontend:lint` 通过；`npm run frontend:build` 通过；`npm run e2e -- tests/e2e/gaokao-volunteer.spec.ts` 为 11 passed；`npm run check:e2e` 为 46 passed；`npm run backend:data-health -- --json` 成功但为已知 warning；SQLite 版本 `20260510_0032`、完整性 `ok`
+  - 当前唯一健康警告仍是数据事实：单招 / 综评已有招生计划但缺专门录取结果，只能初筛，不能当作完整录取把握
+
 - 2026-05-10 已完成“高考志愿向导界面低风险重做”：
   - 当前分支仍为 `codex/gaokao-volunteer-guide-20260510`
   - `/recommendations` 默认首屏已收口为单一“高考志愿推荐向导”，外层重复的条件栏、步骤卡和生成前复核卡已移除；页面顶部只保留“升学方案中心 / 高级工具 / 回到推荐向导”和简洁状态条

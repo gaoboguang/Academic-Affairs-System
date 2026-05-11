@@ -68,10 +68,13 @@
         </el-select>
         <el-select v-model="form.candidate_type" clearable filterable placeholder="考生类别，可选">
           <el-option label="按学生档案判断" value="" />
-          <el-option v-for="item in gaokaoCandidateTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <el-option v-for="item in candidateTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+        </el-select>
+        <el-select v-if="showArtFields" v-model="form.art_track" clearable filterable placeholder="艺术类别">
+          <el-option v-for="item in artTrackOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
         <el-select v-model="form.score_input_mode" placeholder="成绩/位次来源">
-          <el-option v-for="item in scoreInputModeOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <el-option v-for="item in guideScoreInputModeOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
         <el-input v-model="form.subject_combination" placeholder="选科组合，可选" />
         <el-input v-model="form.reference_exam_name" placeholder="参考考试说明，可选" />
@@ -92,6 +95,24 @@
           controls-position="right"
           style="width: 100%"
           :placeholder="scoreInputPlaceholder"
+        />
+        <el-input-number
+          v-if="showArtFields"
+          v-model="form.culture_score"
+          :min="0"
+          :max="750"
+          controls-position="right"
+          style="width: 100%"
+          placeholder="艺术文化分"
+        />
+        <el-input-number
+          v-if="showArtFields"
+          v-model="form.professional_score"
+          :min="0"
+          :max="300"
+          controls-position="right"
+          style="width: 100%"
+          placeholder="艺术专业分"
         />
         <el-input-number
           v-if="showScoreRangeInput"
@@ -143,10 +164,15 @@
         <p>{{ batchOptionGroups.suggestion.detail }}</p>
       </div>
 
+      <div v-if="showArtFields" class="batch-rule-tip">
+        <strong>艺术综合分</strong>
+        <p>{{ artFormulaCopy }}</p>
+      </div>
+
       <div v-if="examScoreAutofillNotice || loadingExamScoreAutofill" class="exam-score-autofill-bar">
         <div class="exam-score-autofill-copy">
           <strong>{{ loadingExamScoreAutofill ? "正在读取考试成绩" : examScoreAutofillNotice?.title }}</strong>
-          <p>{{ loadingExamScoreAutofill ? "选择学生和参考考试后，系统会尝试读取本次总分与校内名次。" : examScoreAutofillNotice?.detail }}</p>
+          <p>{{ loadingExamScoreAutofill ? "选择学生和参考考试后，系统会尝试读取本次总分；校内名次不会用于志愿推荐。" : examScoreAutofillNotice?.detail }}</p>
         </div>
         <el-button
           v-if="examScoreAutofillNotice?.canApply"
@@ -1178,6 +1204,7 @@ import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 
 import {
+  gaokaoArtTrackOptions,
   careerPriorityFocusOptions,
   gaokaoCandidateTypeOptions,
   riskPreferenceOptions,
@@ -1195,6 +1222,7 @@ import {
 } from "./volunteerWorkbench";
 import {
   buildVolunteerBatchOptionGroups,
+  buildVolunteerGuideOptionItems,
   buildVolunteerGuideActionItems,
   buildVolunteerGuideProgressSteps,
   buildVolunteerGuideReadiness,
@@ -1237,6 +1265,7 @@ import type {
   VolunteerDraftViewMode,
   VolunteerBoundaryInsightCard,
   VolunteerGuideCandidateGroup,
+  VolunteerGuideOptions,
   VolunteerGuidePreviewResponse,
   VolunteerWorkbenchExplanation,
   VolunteerWorkbenchCandidate,
@@ -1285,6 +1314,9 @@ const props = defineProps<{
   remainingSlots: number | null;
   examScoreAutofillNotice: VolunteerExamScoreAutofillNotice | null;
   loadingExamScoreAutofill: boolean;
+  loadingVolunteerGuideOptions: boolean;
+  guideOptions: VolunteerGuideOptions | null;
+  artComprehensiveScorePreview: number | null;
 }>();
 
 const router = useRouter();
@@ -1329,6 +1361,7 @@ const batchOptionGroups = computed(() =>
     batchOptions: props.batchOptions,
     rules: props.volunteerRules,
     currentBatch: props.form.batch,
+    guideOptions: props.guideOptions,
   }),
 );
 const guideReadinessStatusLabel = computed(() => {
@@ -1343,7 +1376,7 @@ const guideReadinessTagType = computed(() => {
 });
 const showRankInput = computed(() => ["actual_rank", "estimated_score_and_rank"].includes(props.form.score_input_mode));
 const showScoreInput = computed(() =>
-  ["actual_score", "estimated_score", "estimated_score_and_rank"].includes(props.form.score_input_mode),
+  ["actual_score", "estimated_score", "estimated_score_and_rank"].includes(props.form.score_input_mode) && !showArtFields.value,
 );
 const showScoreRangeInput = computed(() => props.form.score_input_mode === "score_range");
 const showRankRangeInput = computed(() => props.form.score_input_mode === "rank_range");
@@ -1351,14 +1384,33 @@ const showHistoricalMappingToggle = computed(() =>
   ["actual_score", "estimated_score", "score_range", "rank_range"].includes(props.form.score_input_mode),
 );
 const showRiskPreference = computed(() => ["score_range", "rank_range"].includes(props.form.score_input_mode));
+const showArtFields = computed(() => props.form.candidate_type === "art");
+const candidateTypeOptions = computed(() =>
+  buildVolunteerGuideOptionItems(props.guideOptions?.candidate_types, gaokaoCandidateTypeOptions),
+);
+const artTrackOptions = computed(() =>
+  buildVolunteerGuideOptionItems(props.guideOptions?.art_tracks, gaokaoArtTrackOptions),
+);
+const guideScoreInputModeOptions = computed(() =>
+  buildVolunteerGuideOptionItems(props.guideOptions?.score_input_modes, scoreInputModeOptions),
+);
 const rankInputPlaceholder = computed(() =>
   props.form.score_input_mode === "estimated_score_and_rank" ? "预估位次" : "位次覆盖",
 );
 const scoreInputPlaceholder = computed(() => {
   if (props.form.score_input_mode === "actual_score") return "正式分数";
-  if (props.form.score_input_mode === "estimated_score") return "预估分数";
+  if (props.form.score_input_mode === "estimated_score") return "校内分数";
   if (props.form.score_input_mode === "estimated_score_and_rank") return "预估分数";
   return "综合分";
+});
+const artFormulaCopy = computed(() => {
+  if (!showArtFields.value) return "";
+  const formula = props.guideOptions?.art_score_formulas[props.form.art_track];
+  if (formula?.requires_manual_review || props.form.art_track === "opera") {
+    return formula?.formula_text || "戏曲类、校考或省际联考录取原则差异较大，需要按当年公告和院校章程人工复核。";
+  }
+  const score = props.artComprehensiveScorePreview === null ? "待补齐文化分和专业分后计算" : `当前综合分约 ${props.artComprehensiveScorePreview}`;
+  return `${score}。${formula?.formula_text || "山东 2026 艺术类省统考平行志愿按文化分和专业分折算综合分"}；校考等特殊规则仍需人工复核。`;
 });
 const draftViewSections = computed(() => buildVolunteerDraftViewSections(props.draft));
 const ruleInsightCards = computed<VolunteerRuleInsightCard[]>(() =>

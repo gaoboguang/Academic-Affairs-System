@@ -6,6 +6,20 @@ import type { EmploymentDirectionItem } from "../src/components/recommendations/
 
 const apiRequestMock = vi.fn();
 
+function buildVolunteerGuideOptionsResponse() {
+  return {
+    province: "山东",
+    year: 2026,
+    candidate_types: [{ value: "general", label: "普通类" }],
+    art_tracks: [],
+    batches: [{ value: "本科批", label: "本科批" }],
+    batch_aliases: {},
+    score_input_modes: [{ value: "estimated_score", label: "校内分数估算" }],
+    art_score_formulas: {},
+    maintained_rule_batches: ["本科批"],
+  };
+}
+
 vi.mock("../src/api/client", () => ({
   apiRequest: apiRequestMock,
   openFile: vi.fn(),
@@ -53,6 +67,9 @@ describe("volunteer workspace exam score autofill", () => {
       if (path === "/api/students/1/career-preference") {
         return Promise.resolve(null);
       }
+      if (path.startsWith("/api/recommendations/volunteer-guide/options?")) {
+        return Promise.resolve(buildVolunteerGuideOptionsResponse());
+      }
       if (path.startsWith("/api/recommendations/volunteer-drafts?")) {
         return Promise.resolve([]);
       }
@@ -60,8 +77,11 @@ describe("volunteer workspace exam score autofill", () => {
     });
   });
 
-  it("fills estimated score and rank after selecting a student and reference exam", async () => {
+  it("fills local exam score without school rank after selecting a student and reference exam", async () => {
     apiRequestMock.mockImplementation((path: string) => {
+      if (path.startsWith("/api/recommendations/volunteer-guide/options?")) {
+        return Promise.resolve(buildVolunteerGuideOptionsResponse());
+      }
       if (path === "/api/analytics/exams/2/students") {
         return Promise.resolve({
           exam_id: 2,
@@ -81,9 +101,9 @@ describe("volunteer workspace exam score autofill", () => {
     workspace.volunteerWorkbenchForm.exam_id = 2;
     await flushAsyncUpdates();
 
-    expect(workspace.volunteerWorkbenchForm.score_input_mode).toBe("estimated_score_and_rank");
+    expect(workspace.volunteerWorkbenchForm.score_input_mode).toBe("estimated_score");
     expect(workspace.volunteerWorkbenchForm.comprehensive_score).toBe(582);
-    expect(workspace.volunteerWorkbenchForm.student_rank_override).toBe(123);
+    expect(workspace.volunteerWorkbenchForm.student_rank_override).toBeUndefined();
     expect(workspace.volunteerWorkbenchForm.reference_exam_name).toBe("202604高三二模");
     expect(workspace.examScoreAutofillNotice.value?.title).toBe("考试成绩已带入");
     expect(workspace.examScoreAutofillNotice.value?.detail).toContain("校内考试口径，仅作模拟参考");
@@ -91,6 +111,9 @@ describe("volunteer workspace exam score autofill", () => {
 
   it("does not overwrite manual score edits but exposes one-click apply", async () => {
     apiRequestMock.mockImplementation((path: string) => {
+      if (path.startsWith("/api/recommendations/volunteer-guide/options?")) {
+        return Promise.resolve(buildVolunteerGuideOptionsResponse());
+      }
       if (path === "/api/analytics/exams/2/students") {
         return Promise.resolve({
           exam_id: 2,
@@ -106,7 +129,7 @@ describe("volunteer workspace exam score autofill", () => {
     const { useGaokaoVolunteerWorkspace } = await import("../src/components/recommendations/useGaokaoVolunteerWorkspace");
     const workspace = useGaokaoVolunteerWorkspace(buildWorkspaceOptions());
 
-    workspace.volunteerWorkbenchForm.score_input_mode = "estimated_score_and_rank";
+    workspace.volunteerWorkbenchForm.score_input_mode = "estimated_score";
     workspace.volunteerWorkbenchForm.comprehensive_score = 590;
     workspace.volunteerWorkbenchForm.student_rank_override = 110;
     workspace.volunteerWorkbenchForm.reference_exam_name = "手动调整";
@@ -121,12 +144,15 @@ describe("volunteer workspace exam score autofill", () => {
     workspace.applyCurrentExamScoreToWorkbench();
 
     expect(workspace.volunteerWorkbenchForm.comprehensive_score).toBe(582);
-    expect(workspace.volunteerWorkbenchForm.student_rank_override).toBe(123);
+    expect(workspace.volunteerWorkbenchForm.student_rank_override).toBeUndefined();
     expect(workspace.volunteerWorkbenchForm.reference_exam_name).toBe("202604高三二模");
   });
 
   it("updates values when switching exams if the old values came from autofill", async () => {
     apiRequestMock.mockImplementation((path: string) => {
+      if (path.startsWith("/api/recommendations/volunteer-guide/options?")) {
+        return Promise.resolve(buildVolunteerGuideOptionsResponse());
+      }
       if (path === "/api/analytics/exams/2/students") {
         return Promise.resolve({
           exam_id: 2,
@@ -156,12 +182,15 @@ describe("volunteer workspace exam score autofill", () => {
     await flushAsyncUpdates();
 
     expect(workspace.volunteerWorkbenchForm.comprehensive_score).toBe(601);
-    expect(workspace.volunteerWorkbenchForm.student_rank_override).toBe(88);
+    expect(workspace.volunteerWorkbenchForm.student_rank_override).toBeUndefined();
     expect(workspace.volunteerWorkbenchForm.reference_exam_name).toBe("202605高三三模");
   });
 
   it("shows a missing-rank notice when the selected exam only has total score", async () => {
     apiRequestMock.mockImplementation((path: string) => {
+      if (path.startsWith("/api/recommendations/volunteer-guide/options?")) {
+        return Promise.resolve(buildVolunteerGuideOptionsResponse());
+      }
       if (path === "/api/analytics/exams/2/students") {
         return Promise.resolve({
           exam_id: 2,
@@ -183,6 +212,6 @@ describe("volunteer workspace exam score autofill", () => {
 
     expect(workspace.volunteerWorkbenchForm.comprehensive_score).toBe(582);
     expect(workspace.volunteerWorkbenchForm.student_rank_override).toBeUndefined();
-    expect(workspace.examScoreAutofillNotice.value?.detail).toContain("仍需补位次");
+    expect(workspace.examScoreAutofillNotice.value?.detail).toContain("校内名次不用于志愿推荐");
   });
 });

@@ -9,7 +9,7 @@ from app.models import EnrollmentPlan
 
 
 SCORE_LINE_SUPPORTED_STUDENT_TYPES = {"art", "sports"}
-PLAN_ONLY_REFERENCE_SUPPORTED_STUDENT_TYPES = {"spring_exam", "independent_recruitment", "comprehensive_evaluation"}
+PLAN_ONLY_REFERENCE_SUPPORTED_STUDENT_TYPES = {"art", "sports", "spring_exam", "independent_recruitment", "comprehensive_evaluation"}
 
 LINE_TYPE_LABELS = {
     "junior_culture_control": "专科文化控制线",
@@ -106,8 +106,10 @@ def build_score_line_reference_evaluation(
     plan: EnrollmentPlan,
     score_value: float | None,
     score_source: str | None,
+    culture_score: float | None = None,
+    comprehensive_score: float | None = None,
 ) -> tuple[dict[str, object], ScoreLineReference] | None:
-    if score_value is None or not supports_score_line_reference(student_type):
+    if not supports_score_line_reference(student_type):
         return None
     reference = get_best_score_line_reference(
         session,
@@ -118,7 +120,15 @@ def build_score_line_reference_evaluation(
         major_name=plan.major.name if plan.major else plan.major_name_snapshot,
         score_source=score_source,
     )
-    if not reference or float(score_value) < float(reference.score):
+    if not reference:
+        return None
+    reference_score_value = _select_score_for_reference(
+        reference=reference,
+        score_value=score_value,
+        culture_score=culture_score,
+        comprehensive_score=comprehensive_score,
+    )
+    if reference_score_value is None or float(reference_score_value) < float(reference.score):
         return None
 
     reference_years = [reference.year]
@@ -151,7 +161,10 @@ def build_score_line_reference_evaluation(
             "province": province,
             "college_name": plan.college.name if plan.college else None,
             "major_name": plan.major.name if plan.major else plan.major_name_snapshot,
-            "student_score": score_value,
+            "student_score": reference_score_value,
+            "input_score": score_value,
+            "culture_score": culture_score,
+            "comprehensive_score": comprehensive_score,
             "student_rank": None,
             "score_line_reference": True,
             "score_line_candidate_type": reference.candidate_type,
@@ -178,6 +191,20 @@ def build_score_line_reference_evaluation(
         "requires_long_training_path": None,
     }
     return evaluation, reference
+
+
+def _select_score_for_reference(
+    *,
+    reference: ScoreLineReference,
+    score_value: float | None,
+    culture_score: float | None,
+    comprehensive_score: float | None,
+) -> float | None:
+    if reference.score_basis == "culture_score":
+        return culture_score if culture_score is not None else score_value
+    if reference.score_basis == "comprehensive_score":
+        return comprehensive_score if comprehensive_score is not None else score_value
+    return score_value
 
 
 def get_best_score_line_reference(

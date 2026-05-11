@@ -1,7 +1,7 @@
 import { computed, onMounted, watch } from "vue";
 import ElMessage from "element-plus/es/components/message/index";
 
-import { provinceOptions } from "./helpers";
+import { gaokaoCandidateTypeOptions, provinceOptions } from "./helpers";
 import { useRecommendationCatalogManager } from "./useRecommendationCatalogManager";
 import { useRecommendationCareerManager } from "./useRecommendationCareerManager";
 import { useGaokaoPlanningManager } from "./useGaokaoPlanningManager";
@@ -40,6 +40,11 @@ export function useRecommendationsPage() {
     recommendationForm: workflow.recommendationForm,
   });
   const loadedTabs = new Set<string>();
+  const guideCandidateTypeOptions = computed(() =>
+    volunteerWorkspace.volunteerGuideOptions.value?.candidate_types.length
+      ? volunteerWorkspace.volunteerGuideOptions.value.candidate_types
+      : gaokaoCandidateTypeOptions,
+  );
 
   const summaryCards = computed(() => {
     const workflowCards = workflow.summaryCards.value;
@@ -168,6 +173,7 @@ export function useRecommendationsPage() {
     ...shandongWorkbench,
     ...volunteerWorkspace,
     ...workflow,
+    gaokaoCandidateTypeOptions: guideCandidateTypeOptions,
     provinceOptions,
     summaryCards,
   };

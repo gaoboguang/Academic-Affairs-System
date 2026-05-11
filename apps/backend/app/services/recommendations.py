@@ -83,6 +83,7 @@ from ._recommendations_settings import (
 from ._recommendations_shared import _load_recommendation_thresholds
 from ._recommendations_shandong_rush_stable_safe import preview_shandong_rush_stable_safe_recommendations
 from ._recommendations_volunteer_guide import preview_volunteer_guide
+from ._recommendations_volunteer_options import get_volunteer_guide_options
 from ._recommendations_workbench import preview_volunteer_workbench
 
 
@@ -114,6 +115,7 @@ __all__ = [
     "get_major_detail",
     "get_recommendation_settings",
     "get_volunteer_draft_detail",
+    "get_volunteer_guide_options",
     "import_admissions",
     "import_enrollment_plans",
     "list_admission_records",

@@ -68,7 +68,8 @@ function buildForm(overrides: Partial<VolunteerWorkbenchFormState> = {}): Volunt
     batch: "本科批",
     exam_mode: "物理类",
     candidate_type: "general",
-    score_input_mode: "estimated_score_and_rank",
+    art_track: "",
+    score_input_mode: "estimated_score",
     score_range_min: undefined,
     score_range_max: undefined,
     rank_range_min: undefined,
@@ -91,7 +92,7 @@ function buildForm(overrides: Partial<VolunteerWorkbenchFormState> = {}): Volunt
     accepts_public_service: false,
     accepts_certificate: true,
     accepts_long_training: false,
-    student_rank_override: 31000,
+    student_rank_override: undefined,
     comprehensive_score: 580,
     professional_score: 240,
     culture_score: 340,
@@ -200,10 +201,10 @@ function buildPreview(overrides: Partial<VolunteerWorkbenchPreviewResponse> = {}
     total_score: 580,
     snapshot_rank: 32000,
     effective_rank: 31000,
-    score_input_mode: "estimated_score_and_rank",
-    score_input_label: "预估分数 + 预估位次",
+    score_input_mode: "estimated_score",
+    score_input_label: "校内分数估算",
     score_confidence: "estimated",
-    input_notes: ["当前按预估位次为主、预估分数为辅的模拟模式生成。", "参考考试：2026届一模。"],
+    input_notes: ["校内名次不用于志愿推荐；当前仅使用分数通过官方一分一段估算省位次。", "参考考试：2026届一模。"],
     rule_alerts: [],
     applicable_rule_count: 1,
     applicable_rules: [buildRule()],
@@ -259,7 +260,7 @@ describe("volunteer workbench helpers", () => {
       batch: "本科批",
       exam_mode: "物理类",
       candidate_type: "general",
-      score_input_mode: "estimated_score_and_rank",
+      score_input_mode: "estimated_score",
       score_range_min: undefined,
       score_range_max: undefined,
       rank_range_min: undefined,
@@ -282,7 +283,7 @@ describe("volunteer workbench helpers", () => {
       accepts_public_service: false,
       accepts_certificate: true,
       accepts_long_training: false,
-      student_rank_override: 31000,
+      student_rank_override: undefined,
       comprehensive_score: 580,
       professional_score: 240,
       culture_score: 340,
@@ -304,9 +305,9 @@ describe("volunteer workbench helpers", () => {
 
     applyVolunteerExamScoreAutofill(form, source);
 
-    expect(form.score_input_mode).toBe("estimated_score_and_rank");
+    expect(form.score_input_mode).toBe("estimated_score");
     expect(form.comprehensive_score).toBe(582);
-    expect(form.student_rank_override).toBe(123);
+    expect(form.student_rank_override).toBeUndefined();
     expect(form.reference_exam_name).toBe("202604高三二模");
 
     const notice = buildVolunteerExamScoreAutofillNotice("applied", source);
@@ -317,7 +318,7 @@ describe("volunteer workbench helpers", () => {
 
   it("keeps manual score edits unless the user chooses to reuse exam results", () => {
     const form = buildForm({
-      score_input_mode: "estimated_score_and_rank",
+      score_input_mode: "estimated_score",
       comprehensive_score: 590,
       student_rank_override: 120,
       reference_exam_name: "手动调整",
@@ -338,7 +339,7 @@ describe("volunteer workbench helpers", () => {
 
     applyVolunteerExamScoreAutofill(form, previousSource);
     expect(form.comprehensive_score).toBe(582);
-    expect(form.student_rank_override).toBe(123);
+    expect(form.student_rank_override).toBeUndefined();
     expect(form.reference_exam_name).toBe("202604高三二模");
   });
 
@@ -368,7 +369,7 @@ describe("volunteer workbench helpers", () => {
     expect(form.reference_exam_name).toBe("202605高三三模");
 
     const notice = buildVolunteerExamScoreAutofillNotice("needs_rank", nextSource);
-    expect(notice?.detail).toContain("仍需补位次");
+    expect(notice?.detail).toContain("校内名次不用于志愿推荐");
     expect(notice?.detail).toContain("成绩/位次来源");
   });
 
@@ -468,7 +469,7 @@ describe("volunteer workbench helpers", () => {
       batch: "本科批",
       exam_mode: "物理类",
       candidate_type: "general",
-      score_input_mode: "estimated_score_and_rank",
+      score_input_mode: "estimated_score",
       score_range_min: undefined,
       score_range_max: undefined,
       rank_range_min: undefined,
@@ -491,7 +492,7 @@ describe("volunteer workbench helpers", () => {
       accepts_public_service: false,
       accepts_certificate: true,
       accepts_long_training: false,
-      student_rank_override: 31000,
+      student_rank_override: undefined,
       comprehensive_score: 580,
       professional_score: 240,
       culture_score: 340,
@@ -1316,21 +1317,21 @@ describe("volunteer workbench helpers", () => {
         { label: "批次", value: "本科批" },
         { label: "模式", value: "物理类" },
         { label: "类别", value: "普通类" },
-        { label: "成绩/位次来源", value: "预估分 + 预估位次（本次考试/模拟推荐）" },
+        { label: "成绩/位次来源", value: "校内分数估算" },
         { label: "专业", value: "软件工程" },
         { label: "选科", value: "物理+化学" },
         { label: "参考考试", value: "2026届一模" },
         { label: "首选方向", value: "方向 11" },
         { label: "偏好重点", value: "稳定性 / 薪酬" },
-        { label: "位次", value: "31000" },
+        { label: "总分", value: "580" },
       ]),
     );
     expect(explanation.notes.some((item) => item.includes("本次附加筛选包含 选科组合、目标地区、院校层级、专业关键词"))).toBe(true);
-    expect(explanation.notes.some((item) => item.includes("当前成绩/位次来源为“预估分 + 预估位次（本次考试/模拟推荐）”"))).toBe(true);
+    expect(explanation.notes.some((item) => item.includes("当前成绩/位次来源为“校内分数估算”"))).toBe(true);
     expect(explanation.notes.some((item) => item.includes("历年映射估算提示"))).toBe(true);
     expect(explanation.notes.some((item) => item.includes("当前命中 广东 2026 物理类 本科批 规则"))).toBe(true);
     expect(explanation.notes.some((item) => item.includes("当前职业意向已记录到工作台和草稿中"))).toBe(true);
-    expect(explanation.notes.some((item) => item.includes("当前按预估位次为主、预估分数为辅"))).toBe(true);
+    expect(explanation.notes.some((item) => item.includes("校内名次不用于志愿推荐"))).toBe(true);
     expect(explanation.notes.some((item) => item.includes("建议优先放宽 选科组合、目标地区、院校层级、专业关键词"))).toBe(true);
   });
 

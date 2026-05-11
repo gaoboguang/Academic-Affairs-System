@@ -4,10 +4,10 @@ from collections import defaultdict
 from dataclasses import dataclass
 
 from fastapi import HTTPException
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from app.models import AdmissionRecord, EnrollmentPlan, Student
+from app.models import AdmissionRecord, EnrollmentPlan, Student, StudentPathwayProfile
 from app.repositories.exams import get_exam
 from app.repositories.recommendations import (
     build_compatible_exam_modes,
@@ -28,6 +28,7 @@ from ._recommendations_candidates import (
     filter_enrollment_plans,
     get_admission_reference_candidates,
     get_student_exam_metrics,
+    select_enrollment_plan_year,
 )
 from ._recommendations_fallback_priority import build_fallback_priority
 from ._recommendations_result_builder import (
@@ -43,8 +44,16 @@ from ._recommendations_score_lines import (
     build_score_line_reference_evaluation,
 )
 from ._recommendations_score_input import apply_input_context_to_evaluation, resolve_score_input_context
+from ._recommendations_score_rank import try_lookup_rank_for_score
 from ._recommendations_shared import _load_recommendation_settings_state, _serialize_province_volunteer_rule
 from ._recommendations_special_type_rules import resolve_special_type_context
+from ._recommendations_volunteer_options import (
+    ART_MANUAL_REVIEW_TRACKS,
+    calculate_art_comprehensive_score,
+    compatible_batches,
+    normalize_art_track,
+    normalize_volunteer_fields,
+)
 
 GENERIC_CHAPTER_PENDING_NOTE = "待通过阳光高考章程查询逐校补链，当前仅完成山东 2025 工作集名单。"
 VOLUNTEER_WORKBENCH_CANDIDATE_RETURN_LIMIT = 300
@@ -78,13 +87,68 @@ def preview_volunteer_workbench(
         raise HTTPException(status_code=404, detail="考试不存在")
 
     target_year = payload.target_year or exam.exam_date.year
-    student_type = _resolve_candidate_type(student, payload.candidate_type)
+    pathway_profile = _load_student_pathway_profile(session, student.id, payload.province)
+    detected_candidate_type = detect_student_type(student)
+    profile_candidate_type = (pathway_profile.candidate_type or "").strip() if pathway_profile else ""
+    normalized_fields = normalize_volunteer_fields(
+        province=payload.province,
+        candidate_type=payload.candidate_type or profile_candidate_type,
+        art_track=payload.art_track or (pathway_profile.art_track if pathway_profile else None) or student.art_track,
+        batch=payload.batch,
+        detected_candidate_type=detected_candidate_type,
+    )
+    student_type = normalized_fields.candidate_type
+    candidate_art_track = normalized_fields.art_track
+    normalized_batch = normalized_fields.batch
+    query_batches = compatible_batches(payload.province, normalized_batch, student_type)
     total_score, snapshot_rank = get_student_exam_metrics(session, payload.student_id, payload.exam_id)
+    resolved_score_mode = payload.score_input_mode
+    resolved_student_rank_override = payload.student_rank_override
+    resolved_comprehensive_score = payload.comprehensive_score
+    resolved_culture_score = payload.culture_score
+    resolved_professional_score = payload.professional_score
+    input_notes = list(normalized_fields.notes)
+
+    if student_type == "art":
+        art_context = _resolve_art_score_context(
+            payload=payload,
+            profile=pathway_profile,
+            total_score=total_score,
+            art_track=normalized_fields.art_track,
+        )
+        if art_context["blocking_detail"]:
+            raise HTTPException(status_code=400, detail=art_context["blocking_detail"])
+        if art_context["manual_review_detail"]:
+            input_notes.append(str(art_context["manual_review_detail"]))
+        resolved_score_mode = "estimated_score"
+        resolved_student_rank_override = None
+        resolved_culture_score = art_context["culture_score"]
+        resolved_professional_score = art_context["professional_score"]
+        resolved_comprehensive_score = art_context["comprehensive_score"]
+        input_notes.append(str(art_context["note"]))
+    elif (payload.score_input_mode or "").strip() == "estimated_score":
+        lookup_score = payload.comprehensive_score if payload.comprehensive_score is not None else payload.culture_score
+        if lookup_score is not None:
+            lookup = try_lookup_rank_for_score(
+                session,
+                province=payload.province,
+                target_year=target_year,
+                score=float(lookup_score),
+            )
+            input_notes.append("校内名次不用于志愿推荐；当前仅使用分数通过官方一分一段估算省位次。")
+            if lookup:
+                resolved_student_rank_override = lookup.rank
+                input_notes.append(f"当前按 {lookup.year} 年一分一段把 {float(lookup_score):g} 分换算为约 {lookup.rank} 位。")
+                if lookup.basis == "previous_year_score_rank_segment":
+                    input_notes.append(f"{target_year} 年一分一段暂缺，当前按最近可用年份做历史估算。")
+            else:
+                resolved_student_rank_override = None
+                input_notes.append("当前缺少可用一分一段表，无法把校内分数换算为省位次；结果只按分数和计划做模拟参考。")
     input_context = resolve_score_input_context(
-        score_input_mode=payload.score_input_mode,
-        student_rank_override=payload.student_rank_override,
-        comprehensive_score=payload.comprehensive_score,
-        culture_score=payload.culture_score,
+        score_input_mode=resolved_score_mode,
+        student_rank_override=resolved_student_rank_override,
+        comprehensive_score=resolved_comprehensive_score,
+        culture_score=resolved_culture_score,
         score_range_min=payload.score_range_min,
         score_range_max=payload.score_range_max,
         rank_range_min=payload.rank_range_min,
@@ -92,8 +156,8 @@ def preview_volunteer_workbench(
         reference_exam_name=payload.reference_exam_name,
         use_historical_mapping=payload.use_historical_mapping,
         risk_preference=payload.risk_preference,
-        total_score=total_score,
-        snapshot_rank=snapshot_rank,
+        total_score=resolved_comprehensive_score if student_type == "art" and resolved_comprehensive_score is not None else total_score,
+        snapshot_rank=None if resolved_score_mode == "estimated_score" else snapshot_rank,
     )
     effective_rank = input_context["effective_rank"]
     score_value = input_context["score_value"]
@@ -104,34 +168,80 @@ def preview_volunteer_workbench(
         province=payload.province,
         target_year=target_year,
         exam_mode=payload.exam_mode,
-        batch=payload.batch,
+        batch=normalized_batch,
         candidate_type=student_type,
     )
     settings = _load_recommendation_settings_state(session)
+    plan_year, using_historical_plan_year, target_plan_count = select_enrollment_plan_year(
+        session,
+        target_year=target_year,
+        province=payload.province,
+        student_type=student_type,
+        batch=normalized_batch,
+        exam_mode=payload.exam_mode,
+        subject_combination=payload.subject_combination,
+        batches=query_batches,
+        use_historical_mapping=payload.use_historical_mapping,
+    )
+    if target_plan_count <= 0:
+        detail = _missing_target_year_plan_detail(
+            province=payload.province,
+            target_year=target_year,
+            batch=normalized_batch,
+            student_type=student_type,
+        )
+        if using_historical_plan_year:
+            historical_detail = (
+                f"{detail} 当前已按“历年映射估算”使用 {plan_year} 年历史招生计划做模拟候选，"
+                f"不是 {target_year} 年正式招生计划；正式出分和计划发布后必须重新计算。"
+            )
+            input_notes.append(historical_detail)
+            rule_alerts.append(
+                VolunteerWorkbenchRuleAlertRead(
+                    code="historical_enrollment_plan_simulation",
+                    level="info",
+                    title="按历史计划模拟",
+                    detail=historical_detail,
+                )
+            )
+        else:
+            input_notes.append(detail)
+            rule_alerts.append(
+                VolunteerWorkbenchRuleAlertRead(
+                    code="missing_target_year_enrollment_plan",
+                    level="warning",
+                    title="缺少目标年份招生计划",
+                    detail=detail,
+                )
+            )
     enrollment_plans = filter_enrollment_plans(
         session,
-        year=target_year,
+        year=plan_year,
         province=payload.province,
         student=student,
         student_type=student_type,
-        batch=payload.batch,
+        art_track=candidate_art_track,
+        batch=normalized_batch,
         exam_mode=payload.exam_mode,
         target_regions=payload.target_regions_json,
         school_levels=payload.school_level_tags_json,
         major_keyword=payload.major_keyword,
         subject_combination=payload.subject_combination,
         settings=settings,
+        batches=query_batches,
     )
     admissions, used_general_reference_fallback = get_admission_reference_candidates(
         session,
         province=payload.province,
         student=student,
         student_type=student_type,
+        art_track=candidate_art_track,
         target_regions=payload.target_regions_json,
         school_levels=payload.school_level_tags_json,
         major_keyword=payload.major_keyword,
         subject_combination=payload.subject_combination,
         settings=settings,
+        batches=query_batches,
     )
     exact_records, college_records = _group_admission_records(admissions)
 
@@ -195,6 +305,8 @@ def preview_volunteer_workbench(
                 plan=plan,
                 score_value=score_value,
                 score_source=score_source,
+                culture_score=resolved_culture_score,
+                comprehensive_score=resolved_comprehensive_score,
             )
             if score_line_fallback:
                 evaluation, score_line_reference = score_line_fallback
@@ -277,6 +389,8 @@ def preview_volunteer_workbench(
                 session=session,
                 plan=plan,
                 payload=payload,
+                target_year=target_year,
+                using_historical_plan_year=using_historical_plan_year,
                 evaluation=evaluation,
                 used_college_fallback=used_college_fallback,
                 used_general_reference_fallback=used_general_reference_fallback,
@@ -336,13 +450,18 @@ def preview_volunteer_workbench(
         target_year=target_year,
         student_type=student_type,
         candidate_type=student_type,
-        total_score=total_score,
+        art_track=candidate_art_track,
+        normalized_batch=normalized_batch,
+        total_score=resolved_comprehensive_score if student_type == "art" and resolved_comprehensive_score is not None else total_score,
+        culture_score=resolved_culture_score,
+        professional_score=resolved_professional_score,
+        art_comprehensive_score=resolved_comprehensive_score if student_type == "art" else None,
         snapshot_rank=snapshot_rank,
         effective_rank=effective_rank,
-        score_input_mode=payload.score_input_mode,
+        score_input_mode=resolved_score_mode,
         score_input_label=str(input_context["mode_label"]),
         score_confidence=str(input_context["confidence"]),
-        input_notes=[*list(input_context["notes"]), *rule_notes],
+        input_notes=[*input_notes, *list(input_context["notes"]), *rule_notes],
         rule_alerts=rule_alerts,
         applicable_rule_count=len(serialized_rules),
         applicable_rules=serialized_rules,
@@ -505,6 +624,29 @@ def _dedupe_notes(notes: list[str]) -> list[str]:
     return deduped
 
 
+def _missing_target_year_plan_detail(
+    *,
+    province: str,
+    target_year: int,
+    batch: str | None,
+    student_type: str,
+) -> str:
+    type_label = {
+        "general": "普通类",
+        "art": "艺术类",
+        "sports": "体育类",
+        "spring_exam": "春季高考",
+        "independent_recruitment": "高职单招",
+        "comprehensive_evaluation": "高职综评",
+        "repeat": "复读生",
+    }.get(student_type or "", student_type or "当前类别")
+    batch_text = f"“{batch}”" if batch else "当前批次"
+    return (
+        f"{province} {target_year} 年正式招生计划尚未导入（{type_label}{batch_text}）；"
+        "当前不能按目标年份生成可加入志愿表的正式候选。"
+    )
+
+
 def _group_admission_records(
     records: list[AdmissionRecord],
 ) -> tuple[dict[tuple[int, int | None], list[AdmissionRecord]], dict[int, list[AdmissionRecord]]]:
@@ -533,6 +675,8 @@ def _build_workbench_candidate(
     session: Session,
     plan: EnrollmentPlan,
     payload: VolunteerWorkbenchPreviewPayload,
+    target_year: int,
+    using_historical_plan_year: bool,
     evaluation: dict[str, object],
     used_college_fallback: bool,
     used_general_reference_fallback: bool,
@@ -565,9 +709,7 @@ def _build_workbench_candidate(
         plan=plan,
         reference_scope=reference_scope,
         student_type=plan.student_type,
-        score_value=_read_optional_float((evaluation.get("snapshot_json") or {}).get("student_score"))
-        if isinstance(evaluation.get("snapshot_json"), dict)
-        else None,
+        score_value=_score_value_for_fallback_priority(evaluation),
         reference_score=score_line_reference.score if score_line_reference else None,
         career_match_score=_read_optional_float(evaluation.get("career_match_score")),
         batch_order=matched_rule.batch_order if matched_rule else None,
@@ -596,7 +738,13 @@ def _build_workbench_candidate(
             match_tags.append("基线规则命中")
     if used_plan_only_reference:
         match_tags.append("计划清单初筛")
-        match_notes.append(f"当前按 {plan.province} {plan.year} 年当年招生计划清单做方向性初筛。")
+        if using_historical_plan_year:
+            match_notes.append(
+                f"当前按 {plan.year} 年历史招生计划模拟（{plan.province}），"
+                f"不是 {target_year} 年正式招生计划，正式填报前必须重新计算。"
+            )
+        else:
+            match_notes.append(f"当前按 {plan.province} {plan.year} 年当年招生计划清单做方向性初筛。")
     elif score_line_reference:
         match_tags.append("省控线参考")
         match_notes.append(
@@ -634,6 +782,12 @@ def _build_workbench_candidate(
         risk_flags.append("general_reference_fallback")
         match_tags.append("普通类录取参考")
         match_notes.append("当前缺少该类别专门录取结果，先按普通类录取结果参考。")
+    if using_historical_plan_year:
+        risk_flags.append("historical_plan_simulation")
+        match_tags.append("历史计划模拟")
+        match_notes.append(
+            f"{target_year} 年正式招生计划尚未导入；本条仅按 {plan.year} 年计划和历史参考生成，不能直接当作正式志愿。"
+        )
     if chapter_context and chapter_context.campus_note:
         match_notes.append(f"校区备注：{chapter_context.campus_note}")
     if chapter_context and chapter_context.other_risk_note and chapter_context.other_risk_note != GENERIC_CHAPTER_PENDING_NOTE:
@@ -753,7 +907,11 @@ def _build_workbench_candidate(
         reason_text=" ".join(reason_segments),
         risk_flags_json=sorted(set(risk_flags)),
         source_note=plan.source_note,
-        import_batch_name=plan.import_batch_name,
+        import_batch_name=(
+            f"{plan.import_batch_name or ''}（按 {plan.year} 年历史计划模拟）".strip()
+            if using_historical_plan_year
+            else plan.import_batch_name
+        ),
     )
 
 
@@ -920,9 +1078,97 @@ def _read_optional_float(value: object) -> float | None:
     return None
 
 
+def _score_value_for_fallback_priority(evaluation: dict[str, object]) -> float | None:
+    snapshot = evaluation.get("snapshot_json")
+    if not isinstance(snapshot, dict):
+        return None
+    score_basis = str(snapshot.get("score_line_score_basis") or evaluation.get("score_basis") or "")
+    if score_basis == "culture_score":
+        return _read_optional_float(snapshot.get("culture_score")) or _read_optional_float(snapshot.get("student_score"))
+    if score_basis == "comprehensive_score":
+        return _read_optional_float(snapshot.get("comprehensive_score")) or _read_optional_float(snapshot.get("student_score"))
+    return _read_optional_float(snapshot.get("student_score"))
+
+
 def _resolve_candidate_type(student: Student, candidate_type: str | None) -> str:
     normalized = (candidate_type or "").strip()
     return normalized or detect_student_type(student)
+
+
+def _load_student_pathway_profile(
+    session: Session,
+    student_id: int,
+    province: str,
+) -> StudentPathwayProfile | None:
+    normalized_province = (province or "").strip()
+    profile = session.scalar(
+        select(StudentPathwayProfile).where(
+            StudentPathwayProfile.student_id == student_id,
+            StudentPathwayProfile.province == normalized_province,
+            StudentPathwayProfile.is_active.is_(True),
+        )
+    ) if normalized_province else None
+    if profile:
+        return profile
+    return session.scalar(
+        select(StudentPathwayProfile)
+        .where(
+            StudentPathwayProfile.student_id == student_id,
+            StudentPathwayProfile.is_active.is_(True),
+        )
+        .order_by(
+            (StudentPathwayProfile.province == "山东").desc(),
+            StudentPathwayProfile.id.desc(),
+        )
+    )
+
+
+def _resolve_art_score_context(
+    *,
+    payload: VolunteerWorkbenchPreviewPayload,
+    profile: StudentPathwayProfile | None,
+    total_score: float,
+    art_track: str | None,
+) -> dict[str, object]:
+    normalized_art_track = normalize_art_track(art_track)
+    if not normalized_art_track:
+        return {"blocking_detail": "艺术类推荐需要先选择艺术类别。"}
+    if normalized_art_track in ART_MANUAL_REVIEW_TRACKS:
+        return {
+            "blocking_detail": "戏曲类、校考或省际联考录取原则差异较大，需按当年公告和院校章程人工复核。",
+            "manual_review_detail": None,
+        }
+    culture_score = payload.culture_score if payload.culture_score is not None else payload.comprehensive_score
+    if culture_score is None:
+        culture_score = total_score
+    professional_score = (
+        payload.professional_score
+        if payload.professional_score is not None
+        else profile.art_professional_score
+        if profile
+        else None
+    )
+    professional_full_score = profile.art_professional_full_score if profile and profile.art_professional_full_score else 300
+    if culture_score is None:
+        return {"blocking_detail": "艺术类推荐需要文化成绩。"}
+    if professional_score is None:
+        return {"blocking_detail": "艺术类推荐需要先维护艺术专业统考分。"}
+    comprehensive_score = calculate_art_comprehensive_score(
+        art_track=normalized_art_track,
+        culture_score=float(culture_score),
+        professional_score=float(professional_score),
+        professional_full_score=float(professional_full_score or 300),
+    )
+    if comprehensive_score is None:
+        return {"blocking_detail": "当前艺术类别暂未配置可自动计算的省统考综合分公式。"}
+    return {
+        "blocking_detail": None,
+        "manual_review_detail": None,
+        "culture_score": float(culture_score),
+        "professional_score": float(professional_score),
+        "comprehensive_score": comprehensive_score,
+        "note": f"艺术类已按山东 2026 省统考公式计算综合分：文化分 {float(culture_score):g}，专业分 {float(professional_score):g}，综合分 {comprehensive_score:g}。",
+    }
 
 
 def _group_major_employment_mappings(
