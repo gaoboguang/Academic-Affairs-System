@@ -45,6 +45,21 @@ class CollegePageRead(BaseModel):
     page_size: int
 
 
+class CollegeCatalogItemRead(CollegeRead):
+    has_profile: bool
+    plan_count: int = 0
+    admission_count: int = 0
+    latest_plan_year: int | None = None
+    latest_admission_year: int | None = None
+
+
+class CollegeCatalogPageRead(BaseModel):
+    items: list[CollegeCatalogItemRead]
+    total: int
+    page: int
+    page_size: int
+
+
 class MajorPayload(BaseModel):
     name: str
     major_code: str | None = None

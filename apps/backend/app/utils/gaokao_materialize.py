@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -36,6 +37,7 @@ def materialize_gaokao_structured_tables(
     with sqlite3.connect(str(db_path)) as conn:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
+        conn.create_function("_compact_chinese_college_name", 1, _compact_chinese_college_name)
         stats = {
             "colleges_upserted": _upsert_colleges(conn),
             "majors_upserted": _upsert_majors(conn),
@@ -89,11 +91,12 @@ def _upsert_colleges(conn: sqlite3.Connection) -> int:
         """
     ).fetchall()
 
-    touched_ids: set[int] = set()
     alias_rows: list[tuple[int, str]] = []
 
     for row in rows:
-        name = _clean_text(row["college_name"])
+        raw_name = _clean_text(row["college_name"])
+        aliases = _decode_json_string_list(row["alias_names"])
+        name = _preferred_college_display_name(raw_name, aliases)
         if not name:
             continue
         note = _compose_college_note(row)
@@ -130,8 +133,7 @@ def _upsert_colleges(conn: sqlite3.Connection) -> int:
             ),
         )
         college_id = conn.execute("SELECT id FROM college WHERE name = ?", (name,)).fetchone()[0]
-        touched_ids.add(college_id)
-        for alias_name in _decode_json_string_list(row["alias_names"]):
+        for alias_name in [raw_name, *aliases]:
             cleaned_alias = _clean_text(alias_name)
             if cleaned_alias and cleaned_alias != name:
                 alias_rows.append((college_id, cleaned_alias))
@@ -149,10 +151,10 @@ def _upsert_colleges(conn: sqlite3.Connection) -> int:
             ?,
             1
         FROM (
-            SELECT province, college_name_snapshot
+            SELECT province, _compact_chinese_college_name(college_name_snapshot) AS college_name_snapshot
             FROM gaokao_admission_plan
             UNION
-            SELECT province, college_name_snapshot
+            SELECT province, _compact_chinese_college_name(college_name_snapshot) AS college_name_snapshot
             FROM gaokao_admission_result
         ) raw_names
         WHERE COALESCE(college_name_snapshot, '') != ''
@@ -177,9 +179,9 @@ def _upsert_colleges(conn: sqlite3.Connection) -> int:
         SELECT c.id, raw.candidate_type
         FROM college c
         JOIN (
-            SELECT college_name_snapshot AS college_name, candidate_type FROM gaokao_admission_plan
+            SELECT _compact_chinese_college_name(college_name_snapshot) AS college_name, candidate_type FROM gaokao_admission_plan
             UNION ALL
-            SELECT college_name_snapshot AS college_name, candidate_type FROM gaokao_admission_result
+            SELECT _compact_chinese_college_name(college_name_snapshot) AS college_name, candidate_type FROM gaokao_admission_result
         ) raw
             ON raw.college_name = c.name
         """
@@ -308,7 +310,7 @@ def _upsert_admission_records(conn: sqlite3.Connection) -> int:
             m.id AS app_major_id
         FROM gaokao_admission_result r
         JOIN college c
-            ON c.name = r.college_name_snapshot
+            ON c.name = _compact_chinese_college_name(r.college_name_snapshot)
         LEFT JOIN major m
             ON m.name = r.major_name_snapshot
         """,
@@ -384,7 +386,7 @@ def _upsert_enrollment_plans(conn: sqlite3.Connection) -> int:
             m.id AS app_major_id
         FROM gaokao_admission_plan p
         JOIN college c
-            ON c.name = p.college_name_snapshot
+            ON c.name = _compact_chinese_college_name(p.college_name_snapshot)
         LEFT JOIN major m
             ON m.name = p.major_name_snapshot
         """,
@@ -486,6 +488,26 @@ def _clean_text(value: object) -> str | None:
         return None
     current = str(value).strip()
     return current or None
+
+
+def _compact_chinese_college_name(value: object) -> str | None:
+    current = _clean_text(value)
+    if not current:
+        return None
+    return re.sub(r"(?<=[\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])", "", current)
+
+
+def _preferred_college_display_name(raw_name: object, aliases: list[str]) -> str | None:
+    name = _clean_text(raw_name)
+    if not name:
+        return None
+    compacted = _compact_chinese_college_name(name)
+    if compacted and compacted != name:
+        for alias in aliases:
+            cleaned_alias = _clean_text(alias)
+            if cleaned_alias == compacted:
+                return compacted
+    return name
 
 
 def _clean_json_text(value: object) -> str | None:

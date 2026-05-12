@@ -1,5 +1,82 @@
 # 交接说明
 
+## 最新备份清理（2026-05-12 院校库收口后）
+
+- 用户要求“合并提交到 main，然后把之前的备份清理一下”，已先清理旧备份：
+  - 清理清单：`.tmp/backup-cleanup-college-catalog-20260512.json`
+  - 仅删除 `data/backups` 下旧 `.db/.zip` 备份，未触碰 `data/app.db`、上传、导出、模板或运行数据
+  - 删除 27 个旧中间备份，释放 `17,314,400,706` bytes（约 16.13 GiB）
+  - 当前 `data/backups` 约 4.1G，剩余 6 个关键回滚点
+- 保留备份：
+  - `data/backups/p0_delivery_backup_20260512_084637.zip`
+  - `data/backups/app_before_college_catalog_location_cleanup_20260512_115211.db`
+  - `data/backups/app_before_college_duplicate_location_cleanup_20260512_122119.db`
+  - `data/backups/app_before_admission_score_backfill_20260512_124005.db`
+  - `data/backups/app_before_college_alias_duplicate_cleanup_20260512_142350.db`
+  - `data/backups/app_before_college_space_name_cleanup_20260512_155114.db`
+
+## 最新数据修复（2026-05-12 院校旧名副本与地区异常）
+
+- 已追加处理用户追问的“为什么还是出现这种问题”：
+  - 前次只清理了“招生省份误写院校所在地”和“专业名混入院校库”，漏掉了“带空格旧名 / 别名被当成活跃院校主档”的污染层
+  - 典型脏副本包括 `东华理工 大学`、`中国人民 公安大学`、`中国人民 警察大学`，它们曾以山东副本形式活跃；另有 `宁夏工商职业 技术学院` 边角残留
+- 已修复真实 `data/app.db`：
+  - 备份：`data/backups/app_before_college_space_name_cleanup_20260512_155114.db`
+  - 带空格旧名山东副本已停用；`宁夏工商职业 技术学院` 已规范为 `宁夏工商职业技术学院`
+  - 带空格旧写法保留为正式院校 `college_alias`，所以老师输入旧名仍可搜到正式院校，但不会展示为独立大学
+  - 停用副本 `3586 宁夏工商职业技术学院` 已改名为 `宁夏工商职业技术学院(停用重复副本)`，避免唯一约束冲突
+- 已补防复发代码：
+  - `apps/backend/app/utils/gaokao_materialize.py`：中文院校名内部空格压缩；raw 主名带空格且别名含无空格正式名时，用正式名作为应用侧展示名；raw 计划 / 录取 join 应用院校时也压缩中文内部空格
+  - `scripts/import_gaokao_scraper_bundle.py`：继续优先国家代码、`gaokao_college` 正式名 / 别名与 canonical 括号归一匹配，避免脏 app 名覆盖正式主档
+  - `apps/backend/app/repositories/recommendations.py`：院校目录搜索覆盖 `college_alias.alias_name`，旧带空格名称会返回正式院校
+- 已复核：
+  - 活跃院校名内部空格残留：0
+  - 活跃 `山东 + 北京市/南昌市/廊坊市/银川市` 等截图异常样例：0
+  - `东华理工 大学`、`中国人民 公安大学`、`中国人民 警察大学` 是停用副本；正式主档分别为江西 / 抚州市、北京 / 西城区、河北 / 廊坊市
+  - `宁夏工商职业 技术学院` 作为别名命中 `宁夏工商职业技术学院`，宁夏 / 银川市
+
+## 最新数据修复（2026-05-12 近三年录取分数）
+
+- 已修复用户反馈的“近三年录取分数不应该是空白”：
+  - 根因不是源数据缺失，而是部分 gaokao-scraper 艺术类 / 体育类投档情况表把综合投档分放在源字段 `min_rank`，旧导入按位次写入，导致页面最低分为空、最低位次出现 446 / 574 这类分数值
+  - `scripts/import_gaokao_scraper_bundle.py` 已加防护：艺术 / 体育记录在 `min_score` 为空且 `min_rank` 为 100-750 区间时，按最低分写入，最低位次置空，并标记“投档分字段识别为最低分”；raw `gaokao_admission_result` 也同步按语义字段写入
+  - 新增测试 `test_scraper_bundle_treats_art_and_sports_rank_field_as_score_when_score_missing`
+  - 真实库已备份：`data/backups/app_before_admission_score_backfill_20260512_124005.db`
+  - 真实库已回填：`admission_record` 2484 条、`gaokao_admission_result` 2501 条；回填后 `min_score IS NULL AND min_rank BETWEEN 100 AND 750 AND art/sports` 的错位记录为 0
+  - 真实接口复核：三亚学院艺术 / 体育录取页签现在显示最低分；志愿候选卡普通类“法学”样例近三年显示 515 / 510 / 501，音乐类样例显示 494.99、485.03 等最低分
+- 已验证：
+  - `npm run backend:test -- apps/backend/tests/test_gaokao_scraper_bundle_import.py apps/backend/tests/test_gaokao_profile_details.py -q`：9 passed
+  - `npm run backend:data-health -- --json`：成功，仍为既有 warning（单招/综评只有计划、缺专门录取结果，只能初筛）
+  - SQLite：`integrity_check=ok`，外键检查无输出
+  - `git diff --check`：通过
+
+## 最新功能状态（2026-05-12 院校库浏览页）
+
+- 已按用户要求完成“可以直接查看所有院校数据”的独立入口：
+  - 当前分支：`codex/college-catalog-page`
+  - 新增前端页面 `/colleges`，左侧导航位于“决策输出 / 院校库”；默认展示有院校身份信息或画像的启用院校，支持名称/代码、省份、院校类型、层级标签、画像状态、招生数据状态筛选和分页
+  - 院校列表是只读浏览页，显示院校名称、代码、地区、类型、层级标签、画像状态、计划数、录取/投档数、最近计划年份、最近录取年份和详情入口；新增/编辑院校仍在 `/recommendations` 数据与规则维护区
+  - 新增后端只读接口 `GET /api/colleges/catalog/page`，读取 `college`、`college_profile_detail`、`enrollment_plan`、`admission_record` 聚合汇总，不新增数据库表、不新增迁移、不写 `data/app.db`
+  - 2026-05-12 用户截图复核后修正：真实 `college` 表中混有无省份/城市/院校类型/院校代码/画像的专业名记录（如 `AA物联网应用技术`），院校库目录接口已默认排除这类记录；仅有招生/录取数据不再足以让记录进入院校库。维护区旧接口 `/api/colleges/page` 保持原始口径，方便后续数据清理
+  - 地区错因已确认并修复：旧 scraper 投档/录取导入把“山东招生省份”写进院校所在地；现在 `scripts/import_gaokao_scraper_bundle.py` 不再这样写，且疑似“专业名错位为院校名”的异常行只入 raw、不创建应用侧院校或录取记录
+  - 目录接口进一步排除招生计划变体：`高校专项计划`、`综合评价招生`、`其他类`、`公安政法类`、`航海类`、`飞行技术`、`定向培养军士生`、`高本贯通`、`校企合作计划`、`省属公费`、`地方专项计划` 等不会作为独立大学出现在 `/colleges`
+  - 导入脚本新增 gaokao_college 别名与全半角括号归一匹配，避免 `中国地质大学(北京)` / `中国地质大学（北京）` 这种同一学校被再次拆成“山东副本”和正式主档
+  - 真实主库已做两次备份：`data/backups/app_before_college_catalog_location_cleanup_20260512_115211.db`（所在地/字母伪院校清理前）和 `data/backups/app_before_college_duplicate_location_cleanup_20260512_122119.db`（括号重复主档合并前）
+  - 真实库已清理：三亚学院等外省院校所在地回到学校本身；活跃字母前缀伪院校和其应用侧录取/专业关系为 0；11 组全角/半角括号重复院校副本已停用，并迁移可合并的招生计划、录取/投档、院校专业关系到正式主档
+  - `/colleges/:collegeId` 详情页保留院校画像、联系方式、山东近年趋势、开设专业画像和来源证据；招生数据区已改为“录取/投档”和“招生计划”两个分页页签，默认山东，可筛选其他省份
+  - 录取/投档页签使用 `/api/admissions/page`，本轮兼容新增 `batch` 查询参数；招生计划页签使用 `/api/enrollment-plans/page` 并支持专业关键词
+  - SQLite JSON 层级标签筛选使用 `json_each` 精确匹配数组项；不要改回普通 `LIKE '双一流'`，中文 JSON 会被转义导致匹配不稳定
+- 已验证：
+  - `npm run backend:test -- apps/backend/tests/test_gaokao_profile_details.py apps/backend/tests/test_gaokao_scraper_bundle_import.py -q`：8 passed
+  - `npm run frontend:test -- tests/college-catalog.test.ts tests/navigation.test.ts`：8 passed
+  - `npm run frontend:lint`：通过
+  - `npm run frontend:build`：通过
+  - `npm run e2e -- tests/e2e/colleges.spec.ts`：1 passed
+  - `npm run backend:data-health -- --json`：通过，仍为既有 warning（单招/综评只有计划、缺专门录取结果，只能初筛）
+  - SQLite：`integrity_check=ok`，外键检查无输出
+  - 真实接口抽样：`/api/colleges/catalog/page?keyword=上海` 只返回上海所在地院校；`keyword=中国地质大学` 只返回北京/武汉正式主档；`keyword=高校专项计划` 和 `keyword=AA` 均为 0
+  - `git diff --check`：通过
+
 ## 最新项目体检（2026-05-12 08:52）
 
 - 已按用户“对项目整体做一次全面体检，如有问题直接解决”完成全项目检查，并修复唯一真实安全项。

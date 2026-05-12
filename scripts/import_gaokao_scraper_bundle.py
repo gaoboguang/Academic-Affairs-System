@@ -73,6 +73,8 @@ class _ApplyContext:
         self.report = report
         self.now = datetime.now().isoformat(sep=" ", timespec="seconds")
         self.colleges_by_name: dict[str, int] = {}
+        self.colleges_by_canonical_name: dict[str, int] = {}
+        self.colleges_by_canonical_name_scores: dict[str, int] = {}
         self.colleges_by_code: dict[str, int] = {}
         self.colleges_by_enrollment_code: dict[str, int] = {}
         self.majors_by_name: dict[str, int] = {}
@@ -101,12 +103,41 @@ class _ApplyContext:
 
     def _load_entity_maps(self) -> None:
         self.colleges_by_name.clear()
+        self.colleges_by_canonical_name.clear()
+        self.colleges_by_canonical_name_scores.clear()
         self.colleges_by_code.clear()
-        for row in self.conn.execute("SELECT id, name, college_code FROM college"):
-            self.colleges_by_name[_normalize_key(row["name"])] = int(row["id"])
+        for row in self.conn.execute("SELECT id, name, college_code, province, city FROM college"):
+            college_id = int(row["id"])
+            self.colleges_by_name[_normalize_key(row["name"])] = college_id
             code = _clean_text(row["college_code"])
+            self._remember_canonical_college_name(
+                row["name"],
+                college_id,
+                row["province"],
+                row["city"],
+                source_priority=40 if code else 10,
+            )
             if code:
-                self.colleges_by_code[_normalize_code(code)] = int(row["id"])
+                self.colleges_by_code[_normalize_code(code)] = college_id
+        for row in self._iter_gaokao_college_alias_rows():
+            college_id = self._find_existing_college_for_gaokao_row(row)
+            if college_id is None:
+                continue
+            self._remember_canonical_college_name(
+                row["college_name"],
+                college_id,
+                row["province"],
+                row["city"],
+                source_priority=100,
+            )
+            for alias_name in _decode_json_string_list(row["alias_names"]):
+                self._remember_canonical_college_name(
+                    alias_name,
+                    college_id,
+                    row["province"],
+                    row["city"],
+                    source_priority=100,
+                )
         for row in self.conn.execute(
             "SELECT college_id, enrollment_code FROM college_profile_detail WHERE enrollment_code IS NOT NULL"
         ):
@@ -252,11 +283,23 @@ class _ApplyContext:
         supports_art: bool = False,
     ) -> int:
         normalized_name = _normalize_key(name)
-        college_id = self.colleges_by_name.get(normalized_name)
-        if college_id is None and national_code:
+        college_id = None
+        if national_code:
             college_id = self.colleges_by_code.get(_normalize_code(national_code))
+        if college_id is None:
+            college_id = self.colleges_by_canonical_name.get(_canonical_college_name_key(name))
+        if college_id is None:
+            college_id = self.colleges_by_name.get(normalized_name)
         if college_id is None and enrollment_code:
             college_id = self.colleges_by_enrollment_code.get(_normalize_code(enrollment_code))
+        if college_id is None and enrollment_code:
+            by_location = self._find_college_by_name_and_location(
+                normalized_name=normalized_name,
+                province=province,
+                city=city,
+            )
+            if by_location is not None:
+                college_id = by_location
         if college_id is None:
             cursor = self.conn.execute(
                 """
@@ -310,11 +353,103 @@ class _ApplyContext:
             )
             self.report["applied"]["updated_rows"] += 1
         self.colleges_by_name[normalized_name] = college_id
+        self._remember_canonical_college_name(name, college_id, province, city)
         if national_code:
             self.colleges_by_code[_normalize_code(national_code)] = college_id
         if enrollment_code:
             self.colleges_by_enrollment_code[_normalize_code(enrollment_code)] = college_id
         return college_id
+
+    def _remember_canonical_college_name(
+        self,
+        name: Any,
+        college_id: int,
+        province: Any = None,
+        city: Any = None,
+        source_priority: int = 0,
+    ) -> None:
+        key = _canonical_college_name_key(name)
+        if not key:
+            return
+        current_score = _college_canonical_match_score(
+            name,
+            province=province,
+            city=city,
+            source_priority=source_priority,
+        )
+        existing_score = self.colleges_by_canonical_name_scores.get(key)
+        if existing_score is None or current_score > existing_score:
+            self.colleges_by_canonical_name[key] = college_id
+            self.colleges_by_canonical_name_scores[key] = current_score
+
+    def _iter_gaokao_college_alias_rows(self) -> list[sqlite3.Row]:
+        if not _table_exists(self.conn, "gaokao_college"):
+            return []
+        columns = _table_columns(self.conn, "gaokao_college")
+        name_column = "college_name" if "college_name" in columns else "name" if "name" in columns else None
+        if name_column is None:
+            return []
+        select_columns = [
+            "id",
+            "college_code" if "college_code" in columns else "NULL AS college_code",
+            f"{name_column} AS college_name",
+            "alias_names" if "alias_names" in columns else "NULL AS alias_names",
+            "province" if "province" in columns else "NULL AS province",
+            "city" if "city" in columns else "NULL AS city",
+        ]
+        deleted_filter = "COALESCE(is_deleted, 0) = 0" if "is_deleted" in columns else "1 = 1"
+        return self.conn.execute(
+            f"""
+            SELECT {", ".join(select_columns)}
+            FROM gaokao_college
+            WHERE {deleted_filter}
+            ORDER BY id
+            """
+        ).fetchall()
+
+    def _find_existing_college_for_gaokao_row(self, row: sqlite3.Row) -> int | None:
+        code = _clean_text(row["college_code"])
+        if code:
+            college_id = self.colleges_by_code.get(_normalize_code(code))
+            if college_id is not None:
+                return college_id
+        for candidate_name in [row["college_name"], *_decode_json_string_list(row["alias_names"])]:
+            college_id = self.colleges_by_name.get(_normalize_key(candidate_name))
+            if college_id is not None:
+                return college_id
+            college_id = self.colleges_by_canonical_name.get(_canonical_college_name_key(candidate_name))
+            if college_id is not None:
+                return college_id
+        return None
+
+    def _find_college_by_name_and_location(
+        self,
+        *,
+        normalized_name: str,
+        province: str | None,
+        city: str | None,
+    ) -> int | None:
+        if not province and not city:
+            return None
+        if not _table_exists(self.conn, "gaokao_college"):
+            return None
+        row = self.conn.execute(
+            """
+            SELECT c.id
+            FROM college c
+            LEFT JOIN gaokao_college g ON (g.college_code = c.college_code OR g.college_name = c.name)
+               AND COALESCE(g.is_deleted, 0) = 0
+            WHERE lower(replace(c.name, ' ', '')) = ?
+              AND (
+                COALESCE(NULLIF(g.province, ''), c.province) = ?
+                OR COALESCE(NULLIF(g.city, ''), c.city) = ?
+              )
+            ORDER BY c.is_active DESC, c.id
+            LIMIT 1
+            """,
+            (normalized_name, province, city),
+        ).fetchone()
+        return int(row["id"]) if row else None
 
     def _ensure_major(self, *, name: str, major_code: str | None = None, category: str | None = None) -> int:
         normalized_name = _normalize_key(name)
@@ -792,6 +927,10 @@ class _ApplyContext:
         if year is None or not school_name or not major_name:
             self.report["conflicts"].append({"record": record, "reason": "投档/录取记录缺少年份、院校或专业，已跳过应用表。"})
             return
+        if _is_misaligned_major_as_school_record(record):
+            self.report["conflicts"].append({"record": record, "reason": "疑似专业名错位为院校名，已跳过应用表。"})
+            self._upsert_raw_admission(record, source_document_id, import_run_id)
+            return
         category = _clean_text(record.get("category")) or "普通类"
         data_type = _clean_text(record.get("data_type")) or ""
         if data_type == "录取情况表" and category == "春季高考" and _clean_text(record.get("school_code") or "").isdigit():
@@ -804,18 +943,21 @@ class _ApplyContext:
         college_id = self._ensure_college(
             name=school_name,
             enrollment_code=enrollment_code,
-            province=PROVINCE if _looks_shandong_enrollment_code(enrollment_code) else None,
             supports_art=category in {"艺术类", "体育类"},
         )
         major_id = self._ensure_major(name=major_name)
         self._ensure_college_major(college_id, major_id, "[gaokao-scraper] 投档/录取关系")
         raw_min_score = _parse_float(record.get("min_score"))
-        min_rank = _parse_positive_int(record.get("min_rank"))
+        score_from_rank_field = _score_from_rank_field(record)
+        min_rank = None if score_from_rank_field is not None else _parse_positive_int(record.get("min_rank"))
         app_min_score, estimated = self._resolve_app_min_score(record)
+        if score_from_rank_field is not None:
+            app_min_score = score_from_rank_field
+            estimated = False
         plan_count = _parse_int(record.get("plan_count"))
         student_type = _normalize_student_type(category)
         art_track = _normalize_art_track(category)
-        source_note = _source_note(record, estimated=estimated)
+        source_note = _source_note(record, estimated=estimated, score_from_rank_field=score_from_rank_field is not None)
 
         self._upsert_raw_admission(record, source_document_id, import_run_id)
         self.conn.execute(
@@ -1073,8 +1215,8 @@ class _ApplyContext:
             _clean_text(record.get("school_name")),
             _clean_text(record.get("specialty_code")),
             _clean_text(record.get("specialty_name")),
-            _parse_float(record.get("min_score")),
-            _parse_positive_int(record.get("min_rank")),
+            _semantic_record_min_score(record),
+            _semantic_record_min_rank(record),
             _parse_int(record.get("plan_count")),
             str(record.get("min_rank")) if record.get("min_rank") is not None else None,
             _clean_text(record.get("data_type")),
@@ -1709,6 +1851,19 @@ def _ensure_required_profile_tables(conn: sqlite3.Connection) -> None:
         raise RuntimeError(f"数据库缺少画像表 {', '.join(missing)}，请先运行 Alembic 迁移。")
 
 
+def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
+    return bool(
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+            (table_name,),
+        ).fetchone()
+    )
+
+
+def _table_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
+    return {str(row["name"]) for row in conn.execute(f'PRAGMA table_info("{table_name}")').fetchall()}
+
+
 def _backup_database(db_path: Path) -> Path:
     backup_dir = db_path.parent / "backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
@@ -1720,10 +1875,7 @@ def _backup_database(db_path: Path) -> Path:
 
 
 def _estimate_score_by_rank(conn: sqlite3.Connection, *, year: int, rank: int) -> float | None:
-    table_exists = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='score_rank_segment'"
-    ).fetchone()
-    if not table_exists:
+    if not _table_exists(conn, "score_rank_segment"):
         return None
     row = conn.execute(
         """
@@ -1846,7 +1998,7 @@ def _infer_exam_mode(category: str) -> str:
     return "3+3"
 
 
-def _source_note(record: dict[str, Any], *, estimated: bool) -> str:
+def _source_note(record: dict[str, Any], *, estimated: bool, score_from_rank_field: bool = False) -> str:
     parts = [
         "[gaokao-scraper]",
         f"category={_clean_text(record.get('category')) or ''}",
@@ -1855,6 +2007,8 @@ def _source_note(record: dict[str, Any], *, estimated: bool) -> str:
     ]
     if estimated:
         parts.append("最低分按一分一段估算")
+    if score_from_rank_field:
+        parts.append("投档分字段识别为最低分")
     return "；".join(part for part in parts if part)
 
 
@@ -1878,6 +2032,31 @@ def _art_plan_detail_source_note(record: dict[str, Any]) -> str:
 def _record_hash(kind: str, record: dict[str, Any]) -> str:
     payload = json.dumps({"kind": kind, "record": record}, ensure_ascii=False, sort_keys=True, default=str)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _score_from_rank_field(record: dict[str, Any]) -> float | None:
+    category = _clean_text(record.get("category")) or ""
+    if category not in {"艺术类", "体育类"}:
+        return None
+    if _parse_float(record.get("min_score")) is not None:
+        return None
+    value = _parse_float(record.get("min_rank"))
+    if value is None:
+        return None
+    return value if 100 <= value <= 750 else None
+
+
+def _semantic_record_min_score(record: dict[str, Any]) -> float | None:
+    score_from_rank = _score_from_rank_field(record)
+    if score_from_rank is not None:
+        return score_from_rank
+    return _parse_float(record.get("min_score"))
+
+
+def _semantic_record_min_rank(record: dict[str, Any]) -> int | None:
+    if _score_from_rank_field(record) is not None:
+        return None
+    return _parse_positive_int(record.get("min_rank"))
 
 
 def _round_no(batch: str | None) -> str | None:
@@ -1975,6 +2154,26 @@ def _looks_shandong_enrollment_code(value: str | None) -> bool:
     return bool(value and re.fullmatch(r"[A-Z]\d{3}", value.strip(), flags=re.IGNORECASE))
 
 
+def _is_misaligned_major_as_school_record(record: dict[str, Any]) -> bool:
+    school_name = _clean_text(record.get("school_name")) or ""
+    school_code = _clean_text(record.get("school_code")) or ""
+    specialty_name = _clean_text(record.get("specialty_name")) or ""
+    plan_count = _parse_int(record.get("plan_count"))
+    min_rank = _parse_int(record.get("min_rank"))
+    min_score = _parse_float(record.get("min_score"))
+    looks_like_specialty_name = bool(re.match(r"^[A-Z]{2}\s*[\u4e00-\u9fff]", school_name)) and not any(
+        keyword in school_name
+        for keyword in ("大学", "学院", "学校", "职业技术学院", "高等专科学校", "研究院")
+    )
+    code_derived_from_name = bool(school_code and school_name and school_name.startswith(school_code[:2]))
+    degree_cell_shifted_to_specialty = specialty_name in {"本科", "专科", "高职", "高职专科"}
+    rank_score_swapped = bool(min_score is not None and min_score > 1000 and min_rank is not None and min_rank < 1000)
+    zero_plan_in_filing_row = plan_count == 0
+    return looks_like_specialty_name and code_derived_from_name and (
+        degree_cell_shifted_to_specialty or rank_score_swapped or zero_plan_in_filing_row
+    )
+
+
 def _parse_int(value: Any) -> int | None:
     if value is None:
         return None
@@ -2022,6 +2221,28 @@ def _normalize_key(value: Any) -> str:
     return re.sub(r"\s+", "", str(value or "")).strip().lower()
 
 
+def _canonical_college_name_key(value: Any) -> str:
+    current = _normalize_key(value)
+    return current.replace("（", "(").replace("）", ")")
+
+
+def _college_canonical_match_score(
+    name: Any,
+    *,
+    province: Any = None,
+    city: Any = None,
+    source_priority: int = 0,
+) -> int:
+    score = source_priority
+    if _clean_text(province):
+        score += 3
+    if _clean_text(city):
+        score += 2
+    if " " not in str(name or ""):
+        score += 1
+    return score
+
+
 def _normalize_code(value: Any) -> str:
     return re.sub(r"\s+", "", str(value or "")).strip().upper()
 
@@ -2041,6 +2262,24 @@ def _json_or_none(value: Any) -> str | None:
     if value is None:
         return None
     return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+
+
+def _decode_json_string_list(value: object) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        current = value.strip()
+        if not current:
+            return []
+        try:
+            parsed = json.loads(current)
+            if isinstance(parsed, list):
+                return [str(item) for item in parsed]
+        except Exception:
+            return [current]
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    return []
 
 
 def _sha256_file(path: Path) -> str:

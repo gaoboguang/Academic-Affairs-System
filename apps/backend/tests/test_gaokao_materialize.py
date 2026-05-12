@@ -121,6 +121,32 @@ def _create_minimal_raw_tables(db_path: Path) -> None:
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
+                3,
+                "A003",
+                "带空格职业 技术学院",
+                '["带空格职业技术学院"]',
+                "宁夏",
+                "银川市",
+                "财经",
+                '["专科"]',
+                "https://space.example.edu",
+                "名称含空格的来源主档",
+                "教育厅",
+                "junior",
+                "公办",
+                "active",
+                0,
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO gaokao_college (
+                id, college_code, college_name, alias_names, province, city,
+                school_type, level_tags, official_site, summary, affiliation,
+                education_level, school_nature, status, is_deleted
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
                 2,
                 "A002",
                 "测试艺术学院",
@@ -276,6 +302,36 @@ def _create_minimal_raw_tables(db_path: Path) -> None:
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
+                3,
+                "sd",
+                2025,
+                "普通类",
+                "常规批",
+                "带空格职业 技术学院",
+                "计算机科学与技术",
+                "A003",
+                "080901",
+                "02",
+                5,
+                None,
+                "5000",
+                "3年",
+                "主校区",
+                "带空格计划来源",
+                "https://space-plan.example",
+                "db-head",
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO gaokao_admission_plan (
+                id, province, year, candidate_type, batch_name,
+                college_name_snapshot, major_name_snapshot, college_code_snapshot,
+                major_code_snapshot, major_group_code, plan_count, subject_requirement_text,
+                tuition, duration_years, campus, source_title, source_url, data_version_label
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
                 2,
                 "sd",
                 2025,
@@ -309,11 +365,11 @@ def test_materialize_gaokao_structured_tables_is_idempotent(tmp_path: Path) -> N
     first = materialize_gaokao_structured_tables(db_path)
     second = materialize_gaokao_structured_tables(db_path)
 
-    assert first["stats"]["colleges_upserted"] == 2
+    assert first["stats"]["colleges_upserted"] == 3
     assert first["stats"]["majors_upserted"] == 2
     assert first["stats"]["admission_records_upserted"] == 2
-    assert first["stats"]["enrollment_plans_upserted"] == 2
-    assert first["stats"]["college_majors_upserted"] == 2
+    assert first["stats"]["enrollment_plans_upserted"] == 3
+    assert first["stats"]["college_majors_upserted"] == 3
     assert second["final_counts"] == first["final_counts"]
 
     with sqlite3.connect(db_path) as conn:
@@ -323,24 +379,44 @@ def test_materialize_gaokao_structured_tables_is_idempotent(tmp_path: Path) -> N
         admission_count = conn.execute("SELECT COUNT(*) FROM admission_record").fetchone()[0]
         plan_count = conn.execute("SELECT COUNT(*) FROM enrollment_plan").fetchone()[0]
         college_major_count = conn.execute("SELECT COUNT(*) FROM college_major").fetchone()[0]
+        spaced_college_row = conn.execute(
+            "SELECT id, name, province FROM college WHERE name LIKE '带空格职业%'"
+        ).fetchone()
+        spaced_aliases = conn.execute(
+            """
+            SELECT alias_name
+            FROM college_alias
+            WHERE college_id = ?
+            ORDER BY alias_name
+            """,
+            (spaced_college_row[0],),
+        ).fetchall()
         admission_rows = conn.execute(
             "SELECT province, batch, student_type, art_track, min_rank FROM admission_record ORDER BY student_type, min_rank"
         ).fetchall()
         plan_rows = conn.execute(
-            "SELECT province, batch, exam_mode, student_type, subject_requirement FROM enrollment_plan ORDER BY student_type, batch"
+            """
+            SELECT province, batch, exam_mode, student_type, subject_requirement
+            FROM enrollment_plan
+            ORDER BY student_type, batch, subject_requirement IS NULL, subject_requirement
+            """
         ).fetchall()
 
-    assert college_count == 2
-    assert alias_count == 2
+    assert college_count == 3
+    assert alias_count == 3
     assert major_count == 2
     assert admission_count == 2
-    assert plan_count == 2
-    assert college_major_count == 2
+    assert plan_count == 3
+    assert college_major_count == 3
+    assert spaced_college_row[1] == "带空格职业技术学院"
+    assert spaced_college_row[2] == "宁夏"
+    assert spaced_aliases == [("带空格职业 技术学院",)]
     assert admission_rows == [
         ("山东", "艺术类本科批统考", "art", "", 2034),
         ("山东", "常规批", "general", "", 10234),
     ]
     assert plan_rows == [
         ("山东", "常规批", "3+3", "general", "物理+化学"),
+        ("山东", "常规批", "3+3", "general", None),
         ("山东", "春季高考本科批", "春季高考", "spring_exam", None),
     ]

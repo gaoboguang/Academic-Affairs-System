@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.models import (
     AdmissionRecord,
     College,
+    CollegeAlias,
     CollegeMajor,
     CollegeMajorProfile,
     CollegeProfileDetail,
@@ -136,6 +137,200 @@ def test_college_detail_and_history_return_profiles(client, app) -> None:
     assert history["college_id"] == college_id
     assert history["admissions"][0]["min_rank"] == 12000
     assert history["plans"][0]["subject_requirement"] == "物理+化学"
+
+
+def test_college_catalog_page_returns_read_only_summary_and_filters(client, app) -> None:
+    with app.state.db.session_scope() as session:
+        profiled = College(
+            name="院校目录样例大学A",
+            college_code="CATA",
+            province="山东",
+            city="济南市",
+            school_type="综合类",
+            school_level_tags_json=["双一流"],
+            supports_art=False,
+            is_active=True,
+        )
+        planned = College(
+            name="院校目录样例学院B",
+            college_code="CATB",
+            province="广东",
+            city="广州市",
+            school_type="理工类",
+            school_level_tags_json=["省属重点"],
+            supports_art=True,
+            is_active=True,
+        )
+        no_data = College(
+            name="院校目录样例学院C",
+            college_code="CATC",
+            province="山东",
+            city="青岛市",
+            school_type="师范类",
+            school_level_tags_json=[],
+            supports_art=False,
+            is_active=True,
+        )
+        dirty_major_named_college = College(name="院校目录样例工程管理", province="山东", is_active=True)
+        special_plan_variant = College(name="院校目录样例大学A(高校专项计划)", province="山东", is_active=True)
+        inactive = College(name="院校目录样例停用大学", province="山东", is_active=False)
+        major = Major(name="院校目录样例专业", is_active=True)
+        session.add_all([profiled, planned, no_data, dirty_major_named_college, special_plan_variant, inactive, major])
+        session.flush()
+        session.add(
+            CollegeProfileDetail(
+                college_id=profiled.id,
+                enrollment_code="A100",
+                authority_department="山东省教育厅",
+                education_level="本科",
+                is_985=False,
+                is_211=False,
+                is_dual_class=True,
+                source_path="/fixtures/catalog-profile.json",
+            )
+        )
+        session.add(
+            EnrollmentPlan(
+                year=2025,
+                province="山东",
+                batch="常规批",
+                exam_mode="3+3",
+                college_id=profiled.id,
+                major_id=major.id,
+                major_group_code="01",
+                major_name_snapshot="院校目录样例专业",
+                plan_count=30,
+                student_type="general",
+                is_active=True,
+            )
+        )
+        session.add(
+            AdmissionRecord(
+                year=2024,
+                province="山东",
+                batch="常规批",
+                college_id=profiled.id,
+                major_id=major.id,
+                student_type="general",
+                min_score=610,
+                min_rank=11000,
+                is_active=True,
+            )
+        )
+        session.add(
+            EnrollmentPlan(
+                year=2026,
+                province="广东",
+                batch="本科批",
+                exam_mode="3+1+2",
+                college_id=planned.id,
+                major_id=major.id,
+                major_group_code="02",
+                major_name_snapshot="院校目录样例专业",
+                plan_count=12,
+                student_type="art",
+                is_active=True,
+            )
+        )
+        session.add(
+            AdmissionRecord(
+                year=2025,
+                province="山东",
+                batch="常规批",
+                college_id=dirty_major_named_college.id,
+                major_id=major.id,
+                student_type="general",
+                min_score=500,
+                min_rank=50000,
+                is_active=True,
+            )
+        )
+        session.add(
+            AdmissionRecord(
+                year=2025,
+                province="山东",
+                batch="常规批",
+                college_id=special_plan_variant.id,
+                major_id=major.id,
+                student_type="general",
+                min_score=620,
+                min_rank=8000,
+                is_active=True,
+            )
+        )
+
+    response = client.get("/api/colleges/catalog/page?keyword=院校目录样例&page=1&page_size=2")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 3
+    assert payload["page"] == 1
+    assert payload["page_size"] == 2
+    assert len(payload["items"]) == 2
+    first = payload["items"][0]
+    assert first["name"] == "院校目录样例大学A"
+    assert first["has_profile"] is True
+    assert first["plan_count"] == 1
+    assert first["admission_count"] == 1
+    assert first["latest_plan_year"] == 2025
+    assert first["latest_admission_year"] == 2024
+
+    with_profile = client.get("/api/colleges/catalog/page?keyword=院校目录样例&has_profile=true")
+    assert with_profile.status_code == 200
+    assert with_profile.json()["total"] == 1
+    assert with_profile.json()["items"][0]["name"] == "院校目录样例大学A"
+
+    with_admission_data = client.get("/api/colleges/catalog/page?keyword=院校目录样例&has_admission_data=true")
+    assert with_admission_data.status_code == 200
+    assert with_admission_data.json()["total"] == 2
+    assert {item["name"] for item in with_admission_data.json()["items"]} == {
+        "院校目录样例大学A",
+        "院校目录样例学院B",
+    }
+
+    variants = client.get("/api/colleges/catalog/page?keyword=高校专项计划")
+    assert variants.status_code == 200
+    assert variants.json()["items"] == []
+    assert variants.json()["total"] == 0
+
+    by_level = client.get("/api/colleges/catalog/page?keyword=院校目录样例&level_tag=双一流")
+    assert by_level.status_code == 200
+    assert by_level.json()["total"] == 1
+
+    no_match = client.get("/api/colleges/catalog/page?keyword=院校目录样例&school_type=农林类")
+    assert no_match.status_code == 200
+    assert no_match.json()["items"] == []
+    assert no_match.json()["total"] == 0
+
+
+def test_college_catalog_page_searches_alias_and_excludes_inactive_duplicate(client, app) -> None:
+    with app.state.db.session_scope() as session:
+        canonical = College(
+            name="目录别名样例大学",
+            college_code="ALIAS100",
+            province="江西",
+            city="抚州市",
+            school_type="理工类",
+            is_active=True,
+        )
+        dirty_duplicate = College(
+            name="目录别名 样例大学",
+            province="山东",
+            city="南昌市",
+            school_type="理工类",
+            is_active=False,
+        )
+        session.add_all([canonical, dirty_duplicate])
+        session.flush()
+        session.add(CollegeAlias(college_id=canonical.id, alias_name="目录别名 样例大学", is_active=True))
+
+    response = client.get("/api/colleges/catalog/page?keyword=目录别名%20样例大学")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["name"] == "目录别名样例大学"
+    assert payload["items"][0]["province"] == "江西"
+    assert payload["items"][0]["city"] == "抚州市"
 
 
 def test_major_detail_and_history_return_profiles(client, app) -> None:

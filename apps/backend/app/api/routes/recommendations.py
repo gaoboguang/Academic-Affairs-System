@@ -9,6 +9,7 @@ from app.schemas.recommendation import (
     AdmissionImportResponse,
     AdmissionRecordPageRead,
     AdmissionRecordRead,
+    CollegeCatalogPageRead,
     CollegePayload,
     CollegeAdmissionHistoryRead,
     CollegeDetailRead,
@@ -91,6 +92,31 @@ def list_colleges_page(
         keyword=keyword,
         province=province,
         supports_art=supports_art,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/colleges/catalog/page", response_model=CollegeCatalogPageRead)
+def list_college_catalog_page(
+    keyword: str | None = Query(default=None),
+    province: str | None = Query(default=None),
+    school_type: str | None = Query(default=None),
+    level_tag: str | None = Query(default=None),
+    has_profile: bool | None = Query(default=None),
+    has_admission_data: bool | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    session: Session = Depends(get_db_session),
+) -> CollegeCatalogPageRead:
+    return service.list_college_catalog_page(
+        session,
+        keyword=keyword,
+        province=province,
+        school_type=school_type,
+        level_tag=level_tag,
+        has_profile=has_profile,
+        has_admission_data=has_admission_data,
         page=page,
         page_size=page_size,
     )
@@ -287,6 +313,7 @@ def update_major_employment_mapping(
 def list_admission_records(
     year: int | None = Query(default=None),
     province: str | None = Query(default=None),
+    batch: str | None = Query(default=None),
     college_id: int | None = Query(default=None),
     student_type: str | None = Query(default=None),
     session: Session = Depends(get_db_session),
@@ -295,6 +322,7 @@ def list_admission_records(
         session,
         year=year,
         province=province,
+        batch=batch,
         college_id=college_id,
         student_type=student_type,
     )
@@ -304,6 +332,7 @@ def list_admission_records(
 def list_admission_records_page(
     year: int | None = Query(default=None),
     province: str | None = Query(default=None),
+    batch: str | None = Query(default=None),
     college_id: int | None = Query(default=None),
     student_type: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
@@ -314,6 +343,7 @@ def list_admission_records_page(
         session,
         year=year,
         province=province,
+        batch=batch,
         college_id=college_id,
         student_type=student_type,
         page=page,

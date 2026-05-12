@@ -2,14 +2,16 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from sqlalchemy import Select, and_, desc, func, or_, select
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import Select, and_, desc, exists, func, or_, select
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.models import (
     AdmissionRecord,
     College,
     CollegeAlias,
     CollegeMajor,
+    CollegeProfileDetail,
     EmploymentDirection,
     EnrollmentPlan,
     Major,
@@ -79,6 +81,162 @@ def list_colleges_page(
     stmt = build_college_query(keyword=keyword, province=province, supports_art=supports_art)
     stmt = stmt.offset((page - 1) * page_size).limit(page_size)
     return session.scalars(stmt).unique().all(), total
+
+
+def list_college_catalog_page(
+    session: Session,
+    *,
+    keyword: str | None = None,
+    province: str | None = None,
+    school_type: str | None = None,
+    level_tag: str | None = None,
+    has_profile: bool | None = None,
+    has_admission_data: bool | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> tuple[Sequence[tuple[College, int | None, int, int | None, int, int | None]], int]:
+    plan_summary = (
+        select(
+            EnrollmentPlan.college_id.label("college_id"),
+            func.count(EnrollmentPlan.id).label("plan_count"),
+            func.max(EnrollmentPlan.year).label("latest_plan_year"),
+        )
+        .where(EnrollmentPlan.is_active.is_(True))
+        .group_by(EnrollmentPlan.college_id)
+        .subquery()
+    )
+    admission_summary = (
+        select(
+            AdmissionRecord.college_id.label("college_id"),
+            func.count(AdmissionRecord.id).label("admission_count"),
+            func.max(AdmissionRecord.year).label("latest_admission_year"),
+        )
+        .where(AdmissionRecord.is_active.is_(True))
+        .group_by(AdmissionRecord.college_id)
+        .subquery()
+    )
+    profile_summary = (
+        select(CollegeProfileDetail.college_id.label("college_id"))
+        .where(CollegeProfileDetail.is_active.is_(True))
+        .subquery()
+    )
+    conditions = _college_catalog_conditions(
+        keyword=keyword,
+        province=province,
+        school_type=school_type,
+        level_tag=level_tag,
+        has_profile=has_profile,
+        has_admission_data=has_admission_data,
+        profile_summary=profile_summary,
+        plan_summary=plan_summary,
+        admission_summary=admission_summary,
+    )
+    from_clause = (
+        College.__table__
+        .outerjoin(profile_summary, profile_summary.c.college_id == College.id)
+        .outerjoin(plan_summary, plan_summary.c.college_id == College.id)
+        .outerjoin(admission_summary, admission_summary.c.college_id == College.id)
+    )
+    total = session.scalar(select(func.count()).select_from(from_clause).where(and_(*conditions))) or 0
+    stmt = (
+        select(
+            College,
+            profile_summary.c.college_id.label("profile_college_id"),
+            func.coalesce(plan_summary.c.plan_count, 0).label("plan_count"),
+            plan_summary.c.latest_plan_year,
+            func.coalesce(admission_summary.c.admission_count, 0).label("admission_count"),
+            admission_summary.c.latest_admission_year,
+        )
+        .select_from(from_clause)
+        .options(joinedload(College.aliases))
+        .where(and_(*conditions))
+        .order_by(College.name, College.id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    return session.execute(stmt).unique().all(), total
+
+
+def _college_catalog_conditions(
+    *,
+    keyword: str | None = None,
+    province: str | None = None,
+    school_type: str | None = None,
+    level_tag: str | None = None,
+    has_profile: bool | None = None,
+    has_admission_data: bool | None = None,
+    profile_summary,
+    plan_summary,
+    admission_summary,
+) -> list:
+    name_looks_like_college = or_(
+        College.name.contains("大学"),
+        College.name.contains("学院"),
+        College.name.contains("学校"),
+        College.name.contains("高等专科学校"),
+    )
+    has_identity = or_(
+        profile_summary.c.college_id.is_not(None),
+        and_(College.college_code.is_not(None), func.trim(College.college_code) != ""),
+        and_(College.province.is_not(None), func.trim(College.province) != ""),
+        and_(College.city.is_not(None), func.trim(College.city) != ""),
+        and_(College.school_type.is_not(None), func.trim(College.school_type) != ""),
+    )
+    conditions = [College.is_active.is_(True), has_identity, name_looks_like_college]
+    conditions.append(~_college_name_is_admission_variant())
+    if keyword:
+        alias_match = exists(
+            select(1).where(
+                CollegeAlias.college_id == College.id,
+                CollegeAlias.is_active.is_(True),
+                CollegeAlias.alias_name.contains(keyword),
+            )
+        )
+        conditions.append(or_(College.name.contains(keyword), College.college_code.contains(keyword), alias_match))
+    if province:
+        conditions.append(College.province == province)
+    if school_type:
+        conditions.append(College.school_type == school_type)
+    if level_tag:
+        level_values = func.json_each(College.school_level_tags_json).table_valued("value").alias("level_values")
+        conditions.append(
+            exists(
+                select(1)
+                .select_from(level_values)
+                .where(level_values.c.value == level_tag)
+            )
+        )
+    if has_profile is True:
+        conditions.append(profile_summary.c.college_id.is_not(None))
+    elif has_profile is False:
+        conditions.append(profile_summary.c.college_id.is_(None))
+    if has_admission_data is True:
+        conditions.append(or_(plan_summary.c.plan_count > 0, admission_summary.c.admission_count > 0))
+    elif has_admission_data is False:
+        conditions.append(func.coalesce(plan_summary.c.plan_count, 0) + func.coalesce(admission_summary.c.admission_count, 0) == 0)
+    return conditions
+
+
+def _college_name_is_admission_variant() -> ColumnElement[bool]:
+    variant_keywords = (
+        "高校专项计划",
+        "综合评价招生",
+        "其他类",
+        "公安政法类",
+        "航海类",
+        "飞行技术",
+        "定向培养军士生",
+        "高本贯通",
+        "校企合作计划",
+        "省属公费",
+        "地方专项计划",
+        "高职院校专项计划",
+        "边防军人子女预科班",
+    )
+    return and_(
+        College.name.contains("("),
+        or_(*(College.name.contains(keyword) for keyword in variant_keywords)),
+    )
 
 
 def _college_conditions(
@@ -368,12 +526,14 @@ def list_admission_records(
     *,
     year: int | None = None,
     province: str | None = None,
+    batch: str | None = None,
     college_id: int | None = None,
     student_type: str | None = None,
 ) -> Sequence[AdmissionRecord]:
     stmt = _build_admission_record_list_statement(
         year=year,
         province=province,
+        batch=batch,
         college_id=college_id,
         student_type=student_type,
     )
@@ -385,6 +545,7 @@ def list_admission_records_page(
     *,
     year: int | None = None,
     province: str | None = None,
+    batch: str | None = None,
     college_id: int | None = None,
     student_type: str | None = None,
     page: int = 1,
@@ -393,6 +554,7 @@ def list_admission_records_page(
     count_stmt = _build_admission_record_count_statement(
         year=year,
         province=province,
+        batch=batch,
         college_id=college_id,
         student_type=student_type,
     )
@@ -400,6 +562,7 @@ def list_admission_records_page(
     stmt = _build_admission_record_list_statement(
         year=year,
         province=province,
+        batch=batch,
         college_id=college_id,
         student_type=student_type,
     )
@@ -411,6 +574,7 @@ def _admission_record_conditions(
     *,
     year: int | None = None,
     province: str | None = None,
+    batch: str | None = None,
     college_id: int | None = None,
     student_type: str | None = None,
 ) -> list:
@@ -419,6 +583,8 @@ def _admission_record_conditions(
         conditions.append(AdmissionRecord.year == year)
     if province:
         conditions.append(AdmissionRecord.province == province)
+    if batch:
+        conditions.append(AdmissionRecord.batch == batch)
     if college_id:
         conditions.append(AdmissionRecord.college_id == college_id)
     if student_type:
@@ -430,6 +596,7 @@ def _build_admission_record_list_statement(
     *,
     year: int | None = None,
     province: str | None = None,
+    batch: str | None = None,
     college_id: int | None = None,
     student_type: str | None = None,
 ) -> Select[tuple[AdmissionRecord]]:
@@ -443,6 +610,7 @@ def _build_admission_record_list_statement(
     stmt = stmt.where(and_(*_admission_record_conditions(
         year=year,
         province=province,
+        batch=batch,
         college_id=college_id,
         student_type=student_type,
     )))
@@ -454,12 +622,14 @@ def _build_admission_record_count_statement(
     *,
     year: int | None = None,
     province: str | None = None,
+    batch: str | None = None,
     college_id: int | None = None,
     student_type: str | None = None,
 ):
     return select(func.count()).select_from(AdmissionRecord).where(and_(*_admission_record_conditions(
         year=year,
         province=province,
+        batch=batch,
         college_id=college_id,
         student_type=student_type,
     )))

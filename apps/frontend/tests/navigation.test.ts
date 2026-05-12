@@ -34,12 +34,16 @@ describe("navigation", () => {
   });
 
   it("keeps college and major detail pages under the recommendation workbench", () => {
+    const catalogItem = resolveNavItem("/colleges");
     const collegeItem = resolveNavItem("/colleges/1");
     const majorItem = resolveNavItem("/majors/2");
 
-    expect(collegeItem.path).toBe("/recommendations");
+    expect(catalogItem.path).toBe("/colleges");
+    expect(catalogItem.sectionId).toBe("decision");
+    expect(catalogItem.label).toBe("院校库");
+    expect(collegeItem.path).toBe("/colleges");
     expect(collegeItem.sectionId).toBe("decision");
-    expect(collegeItem.label).toBe("高考志愿工作台");
+    expect(collegeItem.label).toBe("院校库");
     expect(majorItem.path).toBe("/recommendations");
     expect(majorItem.sectionId).toBe("decision");
     expect(majorItem.label).toBe("高考志愿工作台");

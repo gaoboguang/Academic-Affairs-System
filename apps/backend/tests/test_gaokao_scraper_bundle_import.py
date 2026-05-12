@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sqlite3
 from pathlib import Path
 
 import pandas as pd
 from sqlalchemy import text
+
+from app.models import College
 
 
 def _load_importer_module():
@@ -111,6 +114,392 @@ def test_scraper_bundle_apply_imports_profiles_records_and_sources(app, test_set
     assert source_count >= 3
     assert raw_result_count == 1
     assert raw_plan_count == 1
+
+
+def test_scraper_bundle_keeps_college_location_and_skips_misaligned_major_rows(
+    app,
+    test_settings,
+    tmp_path: Path,
+) -> None:
+    module = _load_importer_module()
+    source_dir = _build_scraper_fixture(tmp_path)
+    records_path = source_dir / "output_final" / "all_categories_records.json"
+    records = json.loads(records_path.read_text(encoding="utf-8"))
+    records.extend(
+        [
+            {
+                "year": 2025,
+                "category": "普通类",
+                "batch": "常规批第1次",
+                "data_type": "投档情况表",
+                "specialty_code": "01",
+                "specialty_name": "酒店管理",
+                "school_code": "B123",
+                "school_name": "海南样例大学",
+                "plan_count": 4,
+                "min_rank": 22345,
+                "min_score": 580,
+            },
+            {
+                "year": 2025,
+                "category": "普通类",
+                "batch": "常规批第2次",
+                "data_type": "投档情况表",
+                "specialty_code": "",
+                "specialty_name": "专科",
+                "school_code": "AA物联网",
+                "school_name": "AA物联网应用技术",
+                "plan_count": 0,
+                "min_rank": 3,
+                "min_score": 620921,
+            },
+        ]
+    )
+    records_path.write_text(json.dumps(records, ensure_ascii=False), encoding="utf-8")
+
+    complete_path = source_dir / "output_final" / "complete_database.json"
+    complete = json.loads(complete_path.read_text(encoding="utf-8"))
+    complete.append(
+        {
+            "name": "海南样例大学",
+            "school_code": "B123",
+            "cdn_province": "海南",
+            "cdn_city": "三亚市",
+            "cdn_type": "综合类",
+            "cdn_nature": "民办",
+            "f985": False,
+            "f211": False,
+            "dual_class": "",
+            "website": "https://hainan.example.edu.cn",
+            "years": {},
+        }
+    )
+    complete_path.write_text(json.dumps(complete, ensure_ascii=False), encoding="utf-8")
+
+    summary_path = source_dir / "output_final" / "school_summary_complete.csv"
+    with summary_path.open("a", encoding="utf-8") as handle:
+        handle.write("海南样例大学,B123,海南,三亚市,综合类,民办,0,0,,0,0,,\n")
+
+    report = module.run_import(
+        source_dir=source_dir,
+        db_path=test_settings.db_path,
+        dry_run=False,
+        apply=True,
+        no_backup=True,
+    )
+
+    with app.state.db.session_scope() as session:
+        hainan_row = session.execute(
+            text(
+                """
+                SELECT province, city
+                FROM college
+                WHERE name = '海南样例大学'
+                """
+            )
+        ).mappings().one()
+        dirty_college_count = session.scalar(text("SELECT COUNT(*) FROM college WHERE name = 'AA物联网应用技术'"))
+        dirty_admission_count = session.scalar(
+            text(
+                """
+                SELECT COUNT(*)
+                FROM admission_record ar
+                JOIN college c ON c.id = ar.college_id
+                WHERE c.name = 'AA物联网应用技术'
+                """
+            )
+        )
+
+    assert hainan_row["province"] == "海南"
+    assert hainan_row["city"] == "三亚市"
+    assert dirty_college_count == 0
+    assert dirty_admission_count == 0
+    assert any("疑似专业名错位为院校名" in item["reason"] for item in report["conflicts"])
+
+
+def test_scraper_bundle_reuses_college_by_gaokao_alias_and_preserves_location(
+    app,
+    test_settings,
+    tmp_path: Path,
+) -> None:
+    module = _load_importer_module()
+    source_dir = _build_scraper_fixture(tmp_path)
+    records_path = source_dir / "output_final" / "all_categories_records.json"
+    records = json.loads(records_path.read_text(encoding="utf-8"))
+    records.append(
+        {
+            "year": 2025,
+            "category": "普通类",
+            "batch": "常规批第1次",
+            "data_type": "投档情况表",
+            "specialty_code": "01",
+            "specialty_name": "地质学",
+            "school_code": "B415",
+            "school_name": "中国地质大学(北京)",
+            "plan_count": 2,
+            "min_rank": 1200,
+            "min_score": 640,
+        }
+    )
+    records_path.write_text(json.dumps(records, ensure_ascii=False), encoding="utf-8")
+
+    with sqlite3.connect(test_settings.db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE gaokao_college (
+                id INTEGER PRIMARY KEY,
+                standard_id TEXT,
+                college_code TEXT,
+                college_name TEXT NOT NULL,
+                alias_names TEXT,
+                province TEXT,
+                city TEXT,
+                status TEXT NOT NULL,
+                created_at TEXT,
+                updated_at TEXT,
+                is_deleted BOOLEAN NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO gaokao_college (
+                standard_id, college_code, college_name, alias_names, province, city,
+                status, created_at, updated_at, is_deleted
+            ) VALUES (
+                'moe-test-cugb', '11415', '中国地质大学（北京）',
+                '["中国地质大学(北京)"]', '北京', '北京市',
+                'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0
+            )
+            """
+        )
+
+    with app.state.db.session_scope() as session:
+        session.add(
+            College(
+                name="中国地质大学（北京）",
+                college_code="11415",
+                province="北京",
+                city="北京市",
+                school_type="理工类",
+                is_active=True,
+            )
+        )
+
+    module.run_import(
+        source_dir=source_dir,
+        db_path=test_settings.db_path,
+        dry_run=False,
+        apply=True,
+        no_backup=True,
+    )
+
+    with app.state.db.session_scope() as session:
+        colleges = session.execute(
+            text(
+                """
+                SELECT name, province, city
+                FROM college
+                WHERE replace(replace(name, '（', '('), '）', ')') = '中国地质大学(北京)'
+                ORDER BY name
+                """
+            )
+        ).mappings().all()
+        admission_rows = session.execute(
+            text(
+                """
+                SELECT c.name, c.province, c.city
+                FROM admission_record ar
+                JOIN college c ON c.id = ar.college_id
+                WHERE ar.min_rank = 1200
+                """
+            )
+        ).mappings().all()
+
+    assert [row["name"] for row in colleges] == ["中国地质大学（北京）"]
+    assert colleges[0]["province"] == "北京"
+    assert colleges[0]["city"] == "北京市"
+    assert len(admission_rows) == 1
+    assert admission_rows[0]["name"] == "中国地质大学（北京）"
+    assert admission_rows[0]["province"] == "北京"
+
+
+def test_scraper_bundle_prefers_canonical_gaokao_college_when_dirty_alias_already_exists(
+    app,
+    test_settings,
+    tmp_path: Path,
+) -> None:
+    module = _load_importer_module()
+    source_dir = _build_scraper_fixture(tmp_path)
+    records_path = source_dir / "output_final" / "all_categories_records.json"
+    records = json.loads(records_path.read_text(encoding="utf-8"))
+    records.append(
+        {
+            "year": 2025,
+            "category": "普通类",
+            "batch": "常规批第1次",
+            "data_type": "投档情况表",
+            "specialty_code": "09",
+            "specialty_name": "应用化学",
+            "school_code": "D405",
+            "school_name": "东华理工 大学",
+            "plan_count": 2,
+            "min_rank": 1000,
+            "min_score": 640,
+        }
+    )
+    records_path.write_text(json.dumps(records, ensure_ascii=False), encoding="utf-8")
+
+    with sqlite3.connect(test_settings.db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE gaokao_college (
+                id INTEGER PRIMARY KEY,
+                standard_id TEXT,
+                college_code TEXT,
+                college_name TEXT NOT NULL,
+                alias_names TEXT,
+                province TEXT,
+                city TEXT,
+                status TEXT NOT NULL,
+                created_at TEXT,
+                updated_at TEXT,
+                is_deleted BOOLEAN NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO gaokao_college (
+                standard_id, college_code, college_name, alias_names, province, city,
+                status, created_at, updated_at, is_deleted
+            ) VALUES (
+                'moe-test-ecit', '10405', '东华理工大学',
+                '["东华理工大学", "东华理工 大学"]', '江西', '抚州市',
+                'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0
+            )
+            """
+        )
+
+    with app.state.db.session_scope() as session:
+        session.add_all(
+            [
+                College(
+                    name="东华理工大学",
+                    college_code="10405",
+                    province="江西",
+                    city="抚州市",
+                    school_type="理工类",
+                    is_active=True,
+                ),
+                College(
+                    name="东华理工 大学",
+                    province="山东",
+                    city="南昌市",
+                    school_type="理工类",
+                    is_active=True,
+                ),
+            ]
+        )
+
+    module.run_import(
+        source_dir=source_dir,
+        db_path=test_settings.db_path,
+        dry_run=False,
+        apply=True,
+        no_backup=True,
+    )
+
+    with app.state.db.session_scope() as session:
+        admission_rows = session.execute(
+            text(
+                """
+                SELECT c.name, c.province, c.city
+                FROM admission_record ar
+                JOIN college c ON c.id = ar.college_id
+                JOIN major m ON m.id = ar.major_id
+                WHERE m.name = '应用化学'
+                """
+            )
+        ).mappings().all()
+
+    assert len(admission_rows) == 1
+    assert admission_rows[0]["name"] == "东华理工大学"
+    assert admission_rows[0]["province"] == "江西"
+    assert admission_rows[0]["city"] == "抚州市"
+
+
+def test_scraper_bundle_treats_art_and_sports_rank_field_as_score_when_score_missing(
+    app,
+    test_settings,
+    tmp_path: Path,
+) -> None:
+    module = _load_importer_module()
+    source_dir = _build_scraper_fixture(tmp_path)
+    records_path = source_dir / "output_final" / "all_categories_records.json"
+    records = json.loads(records_path.read_text(encoding="utf-8"))
+    records.extend(
+        [
+            {
+                "year": 2025,
+                "category": "艺术类",
+                "batch": "本科批第1次",
+                "data_type": "投档情况表",
+                "specialty_code": "03",
+                "specialty_name": "音乐表演",
+                "school_code": "A999",
+                "school_name": "山东样例大学",
+                "plan_count": 2,
+                "min_rank": 482.75,
+                "min_score": None,
+            },
+            {
+                "year": 2025,
+                "category": "体育类",
+                "batch": "常规批第1次",
+                "data_type": "投档情况表",
+                "specialty_code": "04",
+                "specialty_name": "休闲体育",
+                "school_code": "A999",
+                "school_name": "山东样例大学",
+                "plan_count": 3,
+                "min_rank": 574.46,
+                "min_score": None,
+            },
+        ]
+    )
+    records_path.write_text(json.dumps(records, ensure_ascii=False), encoding="utf-8")
+
+    module.run_import(
+        source_dir=source_dir,
+        db_path=test_settings.db_path,
+        dry_run=False,
+        apply=True,
+        no_backup=True,
+    )
+
+    with app.state.db.session_scope() as session:
+        rows = session.execute(
+            text(
+                """
+                SELECT ar.student_type, ar.min_score, ar.min_rank, ar.source_note
+                FROM admission_record ar
+                JOIN major m ON m.id = ar.major_id
+                WHERE m.name IN ('音乐表演', '休闲体育')
+                ORDER BY ar.student_type
+                """
+            )
+        ).mappings().all()
+
+    assert len(rows) == 2
+    assert rows[0]["student_type"] == "art"
+    assert rows[0]["min_score"] == 482.75
+    assert rows[0]["min_rank"] is None
+    assert "投档分字段识别" in rows[0]["source_note"]
+    assert rows[1]["student_type"] == "sports"
+    assert rows[1]["min_score"] == 574.46
+    assert rows[1]["min_rank"] is None
+    assert "投档分字段识别" in rows[1]["source_note"]
 
 
 def test_scraper_bundle_parses_art_plan_detail_workbook_into_enrollment_plan(app, test_settings, tmp_path: Path) -> None:
