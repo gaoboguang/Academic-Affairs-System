@@ -32,6 +32,8 @@ const RECOMMENDATION_RISK_FLAG_LABELS: Record<string, string> = {
   cross_year_score_line_reference: "省控线按跨年份参考",
   plan_only_reference: "缺少专门结果，仅按计划清单初筛",
   historical_plan_simulation: "按历史计划模拟",
+  history_only_reference: "仅历史参考",
+  missing_enrollment_plan: "缺招生计划",
   chapter_pending_review: "章程待补链",
   chapter_special_requirement: "章程限制已提取",
   art_recommendation: "艺体推荐",

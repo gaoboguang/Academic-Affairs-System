@@ -574,12 +574,12 @@
         </div>
       </section>
 
-      <div class="workbench-grid">
+      <div class="workbench-stack">
       <section class="nested-panel">
         <div class="section-head compact">
           <div>
             <h3>智能筛选</h3>
-            <p>优先使用专业历史线，其次院校历史线、省控线参考和计划清单初筛，并给出风险提示。</p>
+            <p>按历史计划模拟时会明确标注；优先展示同类别同专业近三年的招生、录取和费用信息。</p>
           </div>
           <div class="candidate-stats" v-if="preview">
             <span class="page-chip">
@@ -589,101 +589,101 @@
           </div>
         </div>
 
-        <div v-if="preview?.candidates.length">
-
-          <el-table :data="preview.candidates" stripe>
-            <el-table-column label="分层" width="90">
-              <template #default="{ row }">
+        <div v-if="preview?.candidates.length" class="candidate-card-list">
+          <article v-for="row in preview.candidates" :key="row.plan_id" class="candidate-card">
+            <header class="candidate-card-head">
+              <div class="candidate-layer">
                 <el-tag :type="resultTagType(row.result_type)" effect="dark">
                   {{ resultTypeLabel(row.result_type) }}
                 </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="院校 / 专业" min-width="220">
-              <template #default="{ row }">
-                <div class="candidate-title">
-                  <el-button
-                    link
-                    type="primary"
-                    class="entity-link"
-                    @click="openCollegeDetail(row.college_id)"
-                  >
-                    {{ row.college_name || `院校 ${row.college_id}` }}
-                  </el-button>
-                  <el-button
-                    v-if="row.major_id"
-                    link
-                    type="primary"
-                    class="entity-link muted"
-                    @click="openMajorDetail(row.major_id)"
-                  >
-                    {{ row.major_name || `专业 ${row.major_id}` }}
-                  </el-button>
-                  <span v-else>{{ row.major_name || row.major_group_code || "院校级计划" }}</span>
-                  <small v-if="buildCodeMeta(row)">{{ buildCodeMeta(row) }}</small>
-                </div>
-              </template>
-            </el-table-column>
-            <el-table-column label="批次 / 模式" width="150">
-              <template #default="{ row }">
-                {{ row.batch }} / {{ row.exam_mode }}
-              </template>
-            </el-table-column>
-            <el-table-column label="风险提示" min-width="200">
-              <template #default="{ row }">
-                <div class="risk-tag-list">
-                  <el-tag
-                    v-for="flag in row.risk_flags_json"
-                    :key="`${row.plan_id}-${flag}`"
-                    size="small"
-                    type="warning"
-                    effect="plain"
-                  >
-                    {{ formatRiskFlag(flag) }}
-                  </el-tag>
-                  <span v-if="!row.risk_flags_json.length" class="muted-copy">无额外提示</span>
-                </div>
-              </template>
-            </el-table-column>
-            <el-table-column label="近三年录取情况" min-width="520">
-              <template #default="{ row }">
-                <div v-if="candidateRecentHistory(row).length" class="recent-history-table">
-                  <div class="recent-history-row recent-history-head">
-                    <span>年份</span>
-                    <span>计划</span>
-                    <span>录取/投档</span>
-                    <span>最低分</span>
-                    <span>最低位次</span>
-                    <span>学费</span>
-                  </div>
-                  <div
-                    v-for="history in candidateRecentHistory(row)"
-                    :key="`${row.plan_id}-${history.year}-${history.batch || 'batch'}`"
-                    class="recent-history-row"
-                  >
-                    <span>{{ history.year }}</span>
-                    <span>{{ formatOptionalValue(history.plan_count) }}</span>
-                    <span>{{ formatOptionalValue(history.admission_count) }}</span>
-                    <span>{{ formatOptionalValue(history.min_score) }}</span>
-                    <span>{{ formatOptionalValue(history.min_rank) }}</span>
-                    <span>{{ history.tuition_fee || "-" }}</span>
-                  </div>
-                </div>
-                <span v-else class="muted-copy">暂无近三年记录</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="100" fixed="right">
-              <template #default="{ row }">
+                <span>{{ row.batch }} / {{ row.exam_mode }}</span>
+              </div>
+              <div class="candidate-card-title">
                 <el-button
-                  size="small"
+                  link
+                  type="primary"
+                  class="entity-link"
+                  @click="openCollegeDetail(row.college_id)"
+                >
+                  {{ row.college_name || `院校 ${row.college_id}` }}
+                </el-button>
+                <el-button
+                  v-if="row.major_id"
+                  link
+                  type="primary"
+                  class="entity-link muted"
+                  @click="openMajorDetail(row.major_id)"
+                >
+                  {{ row.major_name || `专业 ${row.major_id}` }}
+                </el-button>
+                <span v-else>{{ row.major_name || row.major_group_code || "院校级计划" }}</span>
+                <small v-if="buildCodeMeta(row)">{{ buildCodeMeta(row) }}</small>
+              </div>
+              <div class="candidate-card-action">
+                <el-button
+                  type="primary"
+                  plain
                   :disabled="selectedPlanIds.has(row.plan_id)"
                   @click="emit('add-candidate', row)"
                 >
                   {{ selectedPlanIds.has(row.plan_id) ? "已加入" : "加入" }}
                 </el-button>
-              </template>
-            </el-table-column>
-          </el-table>
+              </div>
+            </header>
+
+            <div class="candidate-card-meta">
+              <span><strong>计划</strong>{{ candidatePlanCountLabel(row) }}</span>
+              <span><strong>学费</strong>{{ row.tuition_fee || "待补" }}</span>
+              <span><strong>参考最低分</strong>{{ formatOptionalValue(row.latest_min_score) }}</span>
+              <span><strong>参考最低位次</strong>{{ formatRankValue(row.latest_min_rank ?? row.reference_rank) }}</span>
+              <span><strong>依据口径</strong>{{ candidateReferenceScopeLabel(row) }}</span>
+            </div>
+
+            <section class="candidate-history-panel">
+              <div class="candidate-history-title">
+                <strong>近三年招生/录取情况</strong>
+                <span>招生计划、录取/投档人数、最低分、最低位次和学费按本地库原始口径展示。</span>
+              </div>
+              <div v-if="candidateRecentHistory(row).length" class="recent-history-table">
+                <div class="recent-history-row recent-history-head">
+                  <span>年份</span>
+                  <span>批次</span>
+                  <span>计划</span>
+                  <span>录取/投档</span>
+                  <span>最低分</span>
+                  <span>最低位次</span>
+                  <span>学费</span>
+                </div>
+                <div
+                  v-for="history in candidateRecentHistory(row)"
+                  :key="`${row.plan_id}-${history.year}-${history.batch || 'batch'}`"
+                  class="recent-history-row"
+                >
+                  <span>{{ history.year }}</span>
+                  <span>{{ history.batch || "-" }}</span>
+                  <span>{{ formatOptionalValue(history.plan_count) }}</span>
+                  <span>{{ formatOptionalValue(history.admission_count) }}</span>
+                  <span>{{ formatOptionalValue(history.min_score) }}</span>
+                  <span>{{ formatRankValue(history.min_rank) }}</span>
+                  <span>{{ history.tuition_fee || "-" }}</span>
+                </div>
+              </div>
+              <p v-else class="history-empty-copy">暂无同类别同专业近三年招生/录取记录；本条只能作为计划或省控线初筛，正式填报前需人工复核。</p>
+            </section>
+
+            <div class="risk-tag-list candidate-risk-tags">
+              <el-tag
+                v-for="flag in row.risk_flags_json"
+                :key="`${row.plan_id}-${flag}`"
+                size="small"
+                type="warning"
+                effect="plain"
+              >
+                {{ formatRiskFlag(flag) }}
+              </el-tag>
+              <span v-if="!row.risk_flags_json.length" class="muted-copy">无额外风险标签</span>
+            </div>
+          </article>
         </div>
         <div v-else class="comparison-placeholder">
           {{ preview ? "当前条件下暂无可加入志愿表的候选计划，请查看生成前复核提示。" : "选择学生与考试后生成智能筛选，这里会显示可报计划。" }}
@@ -1434,8 +1434,32 @@ function formatOptionalValue(value: number | string | null | undefined): string 
   return String(value);
 }
 
+function formatRankValue(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "源数据未公布";
+  return String(value);
+}
+
 function candidateRecentHistory(candidate: VolunteerWorkbenchCandidate) {
   return candidate.recent_history_json ?? [];
+}
+
+function candidateReferenceScopeLabel(candidate: VolunteerWorkbenchCandidate): string {
+  if (candidate.reference_scope === "history_only") return "缺招生计划，仅历史参考";
+  if (candidate.risk_flags_json.includes("historical_plan_simulation")) {
+    return `按 ${candidate.year} 年历史计划模拟`;
+  }
+  if (candidate.reference_scope === "major") return "专业历史线";
+  if (candidate.reference_scope === "college") return "院校历史线";
+  if (candidate.reference_scope === "score_line") return "省控线参考";
+  if (candidate.reference_scope === "plan_only") return "计划清单初筛";
+  return "人工复核";
+}
+
+function candidatePlanCountLabel(candidate: VolunteerWorkbenchCandidate): string {
+  if (candidate.reference_scope === "history_only" || candidate.risk_flags_json.includes("missing_enrollment_plan")) {
+    return "缺招生计划";
+  }
+  return `${candidate.plan_count} 人`;
 }
 
 function handleDraftDragStart(event: DragEvent, planId: number): void {
@@ -2027,9 +2051,8 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
   text-align: right;
 }
 
-.workbench-grid {
+.workbench-stack {
   display: grid;
-  grid-template-columns: 1.45fr 1fr;
   gap: 18px;
   margin-top: 18px;
 }
@@ -2099,15 +2122,115 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
   gap: 6px;
 }
 
+.candidate-card-list {
+  display: grid;
+  gap: 14px;
+}
+
+.candidate-card {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(126, 143, 158, 0.14);
+}
+
+.candidate-card-head {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.16fr) minmax(260px, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+}
+
+.candidate-layer {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  color: #61778b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.candidate-card-title {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.candidate-card-title > span {
+  color: #6a8094;
+  font-size: 13px;
+}
+
+.candidate-card-title small {
+  color: #8b9caf;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.candidate-card-action {
+  justify-self: end;
+}
+
+.candidate-card-meta {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.candidate-card-meta span {
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(247, 250, 253, 0.96);
+  color: #4f6578;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.candidate-card-meta strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #20364b;
+  font-size: 12px;
+}
+
+.candidate-history-panel {
+  padding: 14px;
+  border-radius: 8px;
+  background: rgba(246, 249, 252, 0.96);
+  border: 1px solid rgba(126, 143, 158, 0.1);
+}
+
+.candidate-history-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.candidate-history-title strong {
+  color: #20364b;
+}
+
+.candidate-history-title span {
+  color: #6a8094;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: right;
+}
+
 .recent-history-table {
   display: grid;
   gap: 4px;
-  min-width: 480px;
+  overflow-x: auto;
 }
 
 .recent-history-row {
   display: grid;
-  grid-template-columns: 48px 54px 76px 70px 82px minmax(80px, 1fr);
+  grid-template-columns: 58px minmax(128px, 1fr) 72px 92px 80px 104px minmax(92px, 1fr);
   align-items: center;
   gap: 8px;
   color: #516a80;
@@ -2118,6 +2241,17 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
 .recent-history-head {
   color: #8a9bad;
   font-weight: 700;
+}
+
+.history-empty-copy {
+  margin: 0;
+  color: #6a8094;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.candidate-risk-tags {
+  padding-top: 2px;
 }
 
 .reason-copy {
@@ -2497,8 +2631,30 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
   .guide-progress-strip,
   .compact-readiness-list,
   .insight-grid,
-  .workbench-grid {
+  .candidate-card-head,
+  .candidate-card-meta {
     grid-template-columns: 1fr;
+  }
+
+  .candidate-card-action {
+    justify-self: stretch;
+  }
+
+  .candidate-card-action .el-button {
+    width: 100%;
+  }
+
+  .candidate-history-title {
+    display: grid;
+  }
+
+  .candidate-history-title span {
+    text-align: left;
+  }
+
+  .recent-history-row {
+    min-width: 720px;
+    grid-template-columns: 52px minmax(108px, 1fr) 64px 80px 74px 92px minmax(88px, 1fr);
   }
 
   .saved-draft-card {

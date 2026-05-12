@@ -12,12 +12,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DB_PATH = PROJECT_ROOT / "data" / "app.db"
 IMPORTER_NAME = "gaokao_scraper_bundle"
 PARSER_VERSION = "20260508_0030"
 DATA_VERSION_LABEL = "gaokao_scraper_bundle_20260508"
+ART_PLAN_DETAIL_DATA_VERSION_LABEL = "gaokao_scraper_art_plan_detail_20260511"
 PROVINCE = "山东"
 
 
@@ -93,6 +96,7 @@ class _ApplyContext:
         self._import_specialty_score_profiles()
         self._deactivate_touched_business_rows()
         self._import_category_records()
+        self._import_art_plan_detail_records()
         self._finish_import_runs()
 
     def _load_entity_maps(self) -> None:
@@ -921,6 +925,138 @@ class _ApplyContext:
         )
         self.report["applied"]["enrollment_plans_upserted"] += 1
 
+    def _import_art_plan_detail_records(self) -> None:
+        for record in self.bundle.get("art_plan_detail_records", []):
+            source_path = record.get("_source_path")
+            source_document_id = self.source_docs.get(str(source_path)) if source_path else None
+            self._upsert_art_plan_detail_record(record, source_document_id, None)
+
+    def _upsert_art_plan_detail_record(
+        self,
+        record: dict[str, Any],
+        source_document_id: int | None,
+        import_run_id: int | None,
+    ) -> None:
+        year = _parse_int(record.get("year"))
+        school_name = _clean_text(record.get("school_name"))
+        school_code = _clean_text(record.get("school_code"))
+        major_snapshot = _clean_text(record.get("specialty_name"))
+        base_major_name = _clean_text(record.get("base_specialty_name")) or major_snapshot
+        specialty_code = _clean_text(record.get("specialty_code")) or ""
+        plan_count = _parse_int(record.get("plan_count"))
+        if year is None or not school_name or not major_snapshot or plan_count is None or plan_count <= 0:
+            self.report["conflicts"].append({"record": record, "reason": "艺术院校专业计划缺少年份、院校、专业或有效计划数，已跳过应用表。"})
+            return
+
+        batch = _clean_text(record.get("batch")) or "艺术类本科批"
+        source_path = record.get("_source_path")
+        rel_path = _relative_path(source_path) if isinstance(source_path, Path) else None
+        college_id = self._ensure_college(
+            name=school_name,
+            enrollment_code=school_code,
+            province=PROVINCE,
+            supports_art=True,
+        )
+        major_id = self._ensure_major(name=base_major_name or major_snapshot, category="艺术学")
+        self._ensure_college_major(college_id, major_id, "[gaokao-scraper] 艺术院校专业计划关系")
+        source_note = _art_plan_detail_source_note(record)
+        self._upsert_raw_art_plan_detail(record, source_document_id, import_run_id, source_note)
+
+        exact = self.conn.execute(
+            """
+            SELECT id FROM enrollment_plan
+            WHERE year = ? AND province = ? AND batch = ? AND exam_mode = ? AND college_id = ?
+              AND major_group_code = ? AND major_name_snapshot = ? AND student_type = ?
+            LIMIT 1
+            """,
+            (year, PROVINCE, batch, "3+3", college_id, specialty_code, major_snapshot, "art"),
+        ).fetchone()
+        fallback_blank = None
+        if exact is None and specialty_code:
+            fallback_blank = self.conn.execute(
+                """
+                SELECT id FROM enrollment_plan
+                WHERE year = ? AND province = ? AND batch = ? AND exam_mode = ? AND college_id = ?
+                  AND COALESCE(major_group_code, '') = '' AND major_name_snapshot = ? AND student_type = ?
+                LIMIT 1
+                """,
+                (year, PROVINCE, batch, "3+3", college_id, major_snapshot, "art"),
+            ).fetchone()
+
+        existing_id = int(exact["id"] if exact else fallback_blank["id"]) if (exact or fallback_blank) else None
+        if existing_id is not None:
+            self.conn.execute(
+                """
+                UPDATE enrollment_plan
+                SET major_id = ?, college_code_snapshot = ?, major_group_code = ?,
+                    major_name_snapshot = ?, major_code_snapshot = ?, plan_count = ?,
+                    subject_requirement = ?, tuition_fee = ?, schooling_years = ?,
+                    source_note = ?, import_batch_name = ?, source_document_id = ?,
+                    import_run_id = ?, is_active = 1, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (
+                    major_id,
+                    school_code,
+                    specialty_code,
+                    major_snapshot,
+                    specialty_code,
+                    plan_count,
+                    _clean_text(record.get("subject_requirement")),
+                    _clean_text(record.get("tuition")),
+                    _clean_text(record.get("duration_years")),
+                    source_note,
+                    ART_PLAN_DETAIL_DATA_VERSION_LABEL,
+                    source_document_id,
+                    import_run_id,
+                    existing_id,
+                ),
+            )
+        else:
+            self.conn.execute(
+                """
+                INSERT INTO enrollment_plan (
+                    year, province, batch, exam_mode, college_id, major_id, college_code_snapshot,
+                    major_group_code, major_name_snapshot, major_code_snapshot, plan_count,
+                    subject_requirement, tuition_fee, schooling_years, student_type, source_note,
+                    import_batch_name, source_document_id, import_run_id,
+                    created_at, updated_at, is_active
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1)
+                """,
+                (
+                    year,
+                    PROVINCE,
+                    batch,
+                    "3+3",
+                    college_id,
+                    major_id,
+                    school_code,
+                    specialty_code,
+                    major_snapshot,
+                    specialty_code,
+                    plan_count,
+                    _clean_text(record.get("subject_requirement")),
+                    _clean_text(record.get("tuition")),
+                    _clean_text(record.get("duration_years")),
+                    "art",
+                    source_note,
+                    ART_PLAN_DETAIL_DATA_VERSION_LABEL,
+                    source_document_id,
+                    import_run_id,
+                ),
+            )
+        self._upsert_college_major_profile(
+            college_id=college_id,
+            major_id=major_id,
+            school_major_feature=f"山东{year}{batch}：专业代号 {specialty_code or '-'}，计划 {plan_count}，来源 {rel_path or '-'}",
+            schooling_years=_clean_text(record.get("duration_years")),
+            raw_json={key: value for key, value in record.items() if not key.startswith("_")},
+            source_path=rel_path,
+            source_sha256=_sha256_file(source_path) if isinstance(source_path, Path) and source_path.exists() else None,
+        )
+        self.report["applied"]["art_plan_detail_rows_upserted"] += 1
+        self.report["applied"]["enrollment_plans_upserted"] += 1
+
     def _upsert_raw_admission(self, record: dict[str, Any], source_document_id: int | None, import_run_id: int | None) -> None:
         record_hash = _record_hash("admission", record)
         existing = self.conn.execute(
@@ -1050,6 +1186,79 @@ class _ApplyContext:
             )
         self.report["applied"]["raw_enrollment_plans_upserted"] += 1
 
+    def _upsert_raw_art_plan_detail(
+        self,
+        record: dict[str, Any],
+        source_document_id: int | None,
+        import_run_id: int | None,
+        source_note: str,
+    ) -> None:
+        record_hash = _record_hash("art_plan_detail", record)
+        existing = self.conn.execute(
+            "SELECT id FROM gaokao_admission_plan WHERE source_record_hash = ? LIMIT 1",
+            (record_hash,),
+        ).fetchone()
+        source_path = record.get("_source_path")
+        rel_path = _relative_path(source_path) if isinstance(source_path, Path) else None
+        values = (
+            PROVINCE,
+            _parse_int(record.get("year")),
+            "艺术类",
+            _clean_text(record.get("batch")),
+            _round_no(_clean_text(record.get("batch"))),
+            "art",
+            _clean_text(record.get("school_code")),
+            _clean_text(record.get("school_name")),
+            _clean_text(record.get("specialty_code")),
+            _clean_text(record.get("specialty_name")),
+            _clean_text(record.get("specialty_code")) or "",
+            _parse_int(record.get("plan_count")) or 0,
+            _clean_text(record.get("subject_requirement")),
+            _clean_text(record.get("duration_years")),
+            _clean_text(record.get("tuition")),
+            source_note,
+            _clean_text(record.get("_source_title")),
+            f"local:{rel_path}" if rel_path else None,
+            rel_path,
+            IMPORTER_NAME,
+            "pending_review",
+            record_hash,
+            ART_PLAN_DETAIL_DATA_VERSION_LABEL,
+            source_document_id,
+            import_run_id,
+        )
+        if existing:
+            self.conn.execute(
+                """
+                UPDATE gaokao_admission_plan
+                SET province = ?, year = ?, candidate_type = ?, batch_name = ?, round_no = ?,
+                    pathway_code = ?, college_code_snapshot = ?, college_name_snapshot = ?,
+                    major_code_snapshot = ?, major_name_snapshot = ?, major_group_code = ?, plan_count = ?,
+                    subject_requirement_text = ?, duration_years = ?, tuition = ?, major_note = ?,
+                    updated_at = CURRENT_TIMESTAMP, source_level = 'local_scraper',
+                    source_title = ?, source_url = ?, local_source_path = ?, parser_script_name = ?,
+                    review_status = ?, source_record_hash = ?, data_version_label = ?,
+                    source_document_id = ?, import_run_id = ?
+                WHERE id = ?
+                """,
+                (*values, int(existing["id"])),
+            )
+        else:
+            self.conn.execute(
+                """
+                INSERT INTO gaokao_admission_plan (
+                    province, year, candidate_type, batch_name, round_no, pathway_code,
+                    college_code_snapshot, college_name_snapshot, major_code_snapshot,
+                    major_name_snapshot, major_group_code, plan_count, subject_requirement_text,
+                    duration_years, tuition, major_note, created_at, updated_at, source_level,
+                    source_title, source_url, local_source_path, parser_script_name, review_status,
+                    source_record_hash, data_version_label, source_document_id, import_run_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'local_scraper', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                values,
+            )
+        self.report["applied"]["raw_enrollment_plans_upserted"] += 1
+
     def _resolve_app_min_score(self, record: dict[str, Any]) -> tuple[float | None, bool]:
         raw = _parse_float(record.get("min_score"))
         if raw is not None:
@@ -1100,6 +1309,7 @@ def _load_bundle(source_dir: Path) -> dict[str, Any]:
     complete_database = _read_json_list(complete_database_path)
     school_profile_paths = sorted((source_dir / "data" / "schools").glob("*.json")) if (source_dir / "data" / "schools").exists() else []
     specialty_score_paths = sorted((source_dir / "data" / "specialty_scores").glob("*.json")) if (source_dir / "data" / "specialty_scores").exists() else []
+    art_plan_detail_records = _load_art_plan_detail_records(source_dir)
     registerable_sources = _discover_registerable_sources(
         source_dir,
         records_path=records_path,
@@ -1115,6 +1325,7 @@ def _load_bundle(source_dir: Path) -> dict[str, Any]:
         "complete_database": complete_database,
         "school_profile_paths": school_profile_paths,
         "specialty_score_paths": specialty_score_paths,
+        "art_plan_detail_records": art_plan_detail_records,
         "registerable_sources": registerable_sources,
         "subject_requirements": subject_requirements,
     }
@@ -1130,6 +1341,11 @@ def _build_report(source_dir: Path, bundle: dict[str, Any]) -> dict[str, Any]:
             "admission_like": sum(1 for item in records if _is_admission_like(item) and not _is_obviously_header_record(item)),
             "plan_like": sum(1 for item in records if _is_plan_like(item) and not _is_obviously_header_record(item)),
             "skipped": skipped,
+        },
+        "art_plan_detail": {
+            "parsed_rows": len(bundle.get("art_plan_detail_records", [])),
+            "positive_rows": sum(1 for item in bundle.get("art_plan_detail_records", []) if (_parse_int(item.get("plan_count")) or 0) > 0),
+            "source_files": len({str(item.get("_source_path")) for item in bundle.get("art_plan_detail_records", []) if item.get("_source_path")}),
         },
         "profiles": {
             "complete_database_schools": len(bundle["complete_database"]),
@@ -1155,6 +1371,7 @@ def _build_report(source_dir: Path, bundle: dict[str, Any]) -> dict[str, Any]:
             "raw_enrollment_plans_upserted": 0,
             "admission_records_upserted": 0,
             "enrollment_plans_upserted": 0,
+            "art_plan_detail_rows_upserted": 0,
         },
     }
 
@@ -1235,6 +1452,138 @@ def _load_subject_requirements(paths: list[Path]) -> dict[tuple[int, str, str], 
                 if school_name:
                     requirements[(year, _normalize_key(school_name), _normalize_key(name))] = requirement
     return requirements
+
+
+def _load_art_plan_detail_records(source_dir: Path) -> list[dict[str, Any]]:
+    data_dir = source_dir / "data" / "all_toudang"
+    if not data_dir.exists():
+        return []
+    records: list[dict[str, Any]] = []
+    for path in sorted(data_dir.glob("*.xls*")):
+        records.extend(_parse_art_plan_detail_workbook(path))
+    return records
+
+
+def _parse_art_plan_detail_workbook(path: Path) -> list[dict[str, Any]]:
+    try:
+        table = pd.read_excel(path, header=None, dtype=object)
+    except Exception:
+        return []
+    if table.empty:
+        return []
+    title = _first_non_empty_cell(table)
+    if not _is_art_plan_detail_title(title):
+        return []
+    header_index = _find_art_plan_detail_header(table)
+    if header_index is None:
+        return []
+    year = _infer_year_from_text(title) or _infer_year_from_path(path)
+    batch = _infer_art_plan_detail_batch(title)
+    current_school_code: str | None = None
+    current_school_name: str | None = None
+    records: list[dict[str, Any]] = []
+    for row_number in range(header_index + 1, len(table)):
+        values = [_clean_text(value) for value in table.iloc[row_number].tolist()]
+        if not any(values):
+            continue
+        first = values[0]
+        name_cell = values[1] if len(values) > 1 else None
+        subject_requirement = values[2] if len(values) > 2 else None
+        duration_years = values[3] if len(values) > 3 else None
+        plan_count = _parse_int(values[4] if len(values) > 4 else None)
+        tuition = values[5] if len(values) > 5 else None
+        if first and name_cell and _looks_like_school_summary_row(first, name_cell, subject_requirement, duration_years, tuition):
+            current_school_code = first
+            current_school_name = name_cell
+            continue
+        if not current_school_name or not name_cell or plan_count is None or plan_count <= 0:
+            continue
+        specialty_code, specialty_name = _split_specialty_code_and_name(name_cell)
+        if not specialty_name:
+            continue
+        records.append(
+            {
+                "year": year,
+                "category": "艺术类",
+                "batch": batch,
+                "data_type": "院校专业计划",
+                "school_code": current_school_code,
+                "school_name": current_school_name,
+                "specialty_code": specialty_code,
+                "specialty_name": specialty_name,
+                "base_specialty_name": _base_specialty_name(specialty_name),
+                "subject_requirement": subject_requirement,
+                "duration_years": duration_years,
+                "plan_count": plan_count,
+                "tuition": tuition,
+                "_source_path": path,
+                "_source_title": title,
+                "_row_number": row_number + 1,
+            }
+        )
+    return records
+
+
+def _first_non_empty_cell(table: pd.DataFrame) -> str | None:
+    for value in table.to_numpy().flatten().tolist():
+        text = _clean_text(value)
+        if text:
+            return text
+    return None
+
+
+def _is_art_plan_detail_title(title: str | None) -> bool:
+    text = title or ""
+    return "山东省" in text and "艺术类" in text and "院校专业计划" in text and "计划" in text
+
+
+def _find_art_plan_detail_header(table: pd.DataFrame) -> int | None:
+    for index, row in table.iterrows():
+        joined = "|".join(_clean_text(value) or "" for value in row.tolist())
+        if "院校代号" in joined and "院校、专业" in joined and "计划数" in joined:
+            return int(index)
+    return None
+
+
+def _infer_art_plan_detail_batch(title: str | None) -> str:
+    text = title or ""
+    if "专科批" in text:
+        return "专科批"
+    return "本科批"
+
+
+def _looks_like_school_summary_row(
+    first: str | None,
+    name_cell: str | None,
+    subject_requirement: str | None,
+    duration_years: str | None,
+    tuition: str | None,
+) -> bool:
+    if not first or not name_cell:
+        return False
+    if subject_requirement or duration_years or tuition:
+        return False
+    return bool(re.fullmatch(r"[A-Z]\d{3}", first.strip(), flags=re.IGNORECASE))
+
+
+def _split_specialty_code_and_name(value: str | None) -> tuple[str | None, str | None]:
+    text = (value or "").strip()
+    if not text:
+        return None, None
+    match = re.match(r"^([A-Za-z0-9]{2})\s*(.+)$", text)
+    if match:
+        return match.group(1).upper(), match.group(2).strip()
+    return None, text
+
+
+def _base_specialty_name(value: str | None) -> str | None:
+    text = (value or "").strip()
+    if not text:
+        return None
+    marker_positions = [position for marker in ("（", "(") if (position := text.find(marker)) >= 0]
+    if marker_positions:
+        text = text[: min(marker_positions)]
+    return text.strip() or None
 
 
 def _build_complete_specialty_score_map(items: list[dict[str, Any]]) -> dict[tuple[int, str, str], float]:
@@ -1509,6 +1858,23 @@ def _source_note(record: dict[str, Any], *, estimated: bool) -> str:
     return "；".join(part for part in parts if part)
 
 
+def _art_plan_detail_source_note(record: dict[str, Any]) -> str:
+    parts = [
+        "[gaokao-scraper]",
+        "category=艺术类",
+        "data_type=院校专业计划",
+        f"batch={_clean_text(record.get('batch')) or ''}",
+        "缺额/新增计划",
+    ]
+    source_title = _clean_text(record.get("_source_title"))
+    if source_title:
+        parts.append(f"title={source_title}")
+    row_number = _parse_int(record.get("_row_number"))
+    if row_number:
+        parts.append(f"row={row_number}")
+    return "；".join(part for part in parts if part)
+
+
 def _record_hash(kind: str, record: dict[str, Any]) -> str:
     payload = json.dumps({"kind": kind, "record": record}, ensure_ascii=False, sort_keys=True, default=str)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -1697,6 +2063,11 @@ def _relative_path(path: Path | None) -> str | None:
 def _infer_year_from_path(path: Path) -> int:
     match = re.search(r"(20\d{2})", str(path))
     return int(match.group(1)) if match else 0
+
+
+def _infer_year_from_text(value: str | None) -> int | None:
+    match = re.search(r"(20\d{2})", value or "")
+    return int(match.group(1)) if match else None
 
 
 def main() -> None:

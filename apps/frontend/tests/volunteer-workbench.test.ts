@@ -255,15 +255,21 @@ function buildPreview(overrides: Partial<VolunteerWorkbenchPreviewResponse> = {}
 }
 
 describe("volunteer workbench helpers", () => {
-  it("uses recent history columns instead of the old evidence column in the candidate table", () => {
+  it("uses full-width candidate cards with recent history instead of the old crowded columns", () => {
     const template = fs.readFileSync(
       path.resolve(__dirname, "../src/components/recommendations/RecommendationVolunteerWorkbenchPanel.vue"),
       "utf8",
     );
 
-    expect(template).toContain('label="近三年录取情况"');
+    expect(template).toContain('class="candidate-card-list"');
+    expect(template).toContain("近三年招生/录取情况");
     expect(template).toContain("录取/投档");
-    expect(template).toContain("暂无近三年记录");
+    expect(template).toContain("暂无同类别同专业近三年招生/录取记录");
+    expect(template).toContain("缺招生计划，仅历史参考");
+    expect(template).toContain("candidatePlanCountLabel");
+    expect(template).toContain("workbench-stack");
+    expect(template).not.toContain("workbench-grid");
+    expect(template).not.toContain('label="近三年录取情况"');
     expect(template).not.toContain('el-table-column label="依据"');
   });
 
@@ -450,6 +456,43 @@ describe("volunteer workbench helpers", () => {
 
     const payload = buildVolunteerDraftPayload("旧草稿兼容", buildForm(), result.items, buildRule());
     expect(payload.items[0].candidate.recent_history_json).toEqual([]);
+  });
+
+  it("keeps history-only candidates as snapshots and does not save them as real plans", () => {
+    const historyOnlyCandidate = buildCandidate(-15, {
+      year: 2026,
+      batch: "艺术类本科批统考",
+      student_type: "art",
+      reference_scope: "history_only",
+      reference_years_json: [2025, 2024, 2023],
+      reference_record_count: 3,
+      plan_count: 0,
+      risk_flags_json: ["history_only_reference", "missing_enrollment_plan"],
+      match_notes_json: ["缺招生计划，仅历史参考：本条由历史录取/投档记录补入。"],
+      recent_history_json: [
+        {
+          year: 2025,
+          batch: "艺术类本科批",
+          plan_count: null,
+          admission_count: 18,
+          min_score: 486,
+          min_rank: null,
+          tuition_fee: null,
+        },
+      ],
+    });
+    const result = appendVolunteerDraftItem([], historyOnlyCandidate);
+
+    expect(result.added).toBe(true);
+    const payload = buildVolunteerDraftPayload("历史参考草稿", buildForm(), result.items, buildRule());
+    expect(payload.items[0].plan_id).toBeNull();
+    expect(payload.items[0].candidate.plan_id).toBe(-15);
+    expect(buildVolunteerCandidateReferenceCopy(historyOnlyCandidate)).toBe(
+      "缺招生计划，仅历史参考 · 2025 / 2024 / 2023 年 · 3 条历史录取/投档样本 · 来源：近年数据",
+    );
+    expect(buildVolunteerCandidateExplanationNotes(historyOnlyCandidate)).toContain(
+      "当前条目缺少同校同专业招生计划，只能按历史录取/投档记录参考；补齐招生计划前不能视作正式可填计划。",
+    );
   });
 
   it("keeps the saved draft visible when the server list refresh is briefly stale", () => {

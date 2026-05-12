@@ -504,6 +504,14 @@ async function openVolunteerWorkbench(page: Page): Promise<Locator> {
   return returnToVolunteerGuide(page);
 }
 
+function getCandidateCard(candidatePanel: Locator, text: string): Locator {
+  return candidatePanel.locator(".candidate-card").filter({ hasText: text }).first();
+}
+
+async function addCandidateCard(candidatePanel: Locator, text: string): Promise<void> {
+  await getCandidateCard(candidatePanel, text).getByRole("button", { name: "加入" }).click();
+}
+
 async function createVolunteerDraft(page: Page): Promise<{
   workbenchPanel: Locator;
   candidatePanel: Locator;
@@ -519,11 +527,12 @@ async function createVolunteerDraft(page: Page): Promise<{
   await workbenchPanel.getByRole("button", { name: "生成智能筛选" }).click();
   await expectToast(page, "智能筛选已生成");
   await expect(workbenchPanel.getByText("张三 · 普通生 · 2026届高一4月月考")).toBeVisible();
-  await expect(candidatePanel.locator(".el-table__row").filter({ hasText: "岭南科技大学" }).first()).toBeVisible();
+  await expect(getCandidateCard(candidatePanel, "岭南科技大学")).toBeVisible();
+  await expect(candidatePanel.getByText("近三年招生/录取情况").first()).toBeVisible();
 
-  await candidatePanel.locator(".el-table__row").filter({ hasText: "软件工程" }).first().getByRole("button", { name: "加入" }).click();
+  await addCandidateCard(candidatePanel, "软件工程");
   await expectToast(page, "已加入志愿表");
-  await candidatePanel.locator(".el-table__row").filter({ hasText: "人工智能" }).first().getByRole("button", { name: "加入" }).click();
+  await addCandidateCard(candidatePanel, "人工智能");
   await expectToast(page, "已加入志愿表");
 
   await expect(draftPanel.locator(".el-table__row").filter({ hasText: "软件工程" }).first()).toBeVisible();
@@ -605,6 +614,8 @@ export {
   fillVolunteerWorkbenchContext,
   gaokaoTargetYear,
   generateRecommendationScheme,
+  addCandidateCard,
+  getCandidateCard,
   importFixtureByApi,
   importQuestionDetailsByApi,
   invalidScoresFixture,

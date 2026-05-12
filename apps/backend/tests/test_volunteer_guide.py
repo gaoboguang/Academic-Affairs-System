@@ -5,6 +5,8 @@ from app.models import Student
 from tests.test_recommendation_workflow import (
     build_admission_workbook,
     build_enrollment_plan_workbook,
+    build_large_admission_workbook,
+    build_large_enrollment_plan_workbook,
     create_exam_with_scores,
 )
 
@@ -135,6 +137,60 @@ def test_volunteer_guide_preview_reports_missing_readiness_without_crashing(clie
     assert payload["groups"]["challenge"]["count"] == 0
     assert payload["groups"]["steady"]["count"] == 0
     assert payload["groups"]["safe"]["count"] == 0
+
+
+def test_volunteer_guide_truncated_results_are_warning_not_blocking(client) -> None:
+    exam_id = create_exam_with_scores(client)
+
+    plan_import_response = client.post(
+        "/api/enrollment-plans/import",
+        files={
+            "file": (
+                "large-enrollment-plans.xlsx",
+                build_large_enrollment_plan_workbook(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert plan_import_response.status_code == 200
+    admission_import_response = client.post(
+        "/api/admissions/import",
+        files={
+            "file": (
+                "large-admissions.xlsx",
+                build_large_admission_workbook(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert admission_import_response.status_code == 200
+
+    response = client.post(
+        "/api/recommendations/volunteer-guide/preview",
+        json={
+            "student_id": 1,
+            "exam_id": exam_id,
+            "province": "广东",
+            "target_year": 2026,
+            "batch": "本科批",
+            "exam_mode": "物理类",
+            "candidate_type": "general",
+            "score_input_mode": "actual_rank",
+            "student_rank_override": 31000,
+            "subject_combination": "物理+化学",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source_preview"]["candidate_count"] == 305
+    assert payload["source_preview"]["returned_candidate_count"] == 300
+    assert payload["source_preview"]["is_candidate_truncated"] is True
+    assert payload["readiness"]["status"] == "warning"
+    assert payload["readiness"]["blocking_count"] == 0
+    truncated_item = next(item for item in payload["readiness"]["items"] if item["code"] == "candidate_result_truncated")
+    assert truncated_item["level"] == "warning"
+    assert any(item["code"] == "add_to_draft" for item in payload["next_actions"])
 
 
 def test_volunteer_guide_preview_keeps_special_type_as_initial_screening(client, app) -> None:

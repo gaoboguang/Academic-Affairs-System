@@ -4,6 +4,7 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pandas as pd
 from sqlalchemy import text
 
 
@@ -110,6 +111,72 @@ def test_scraper_bundle_apply_imports_profiles_records_and_sources(app, test_set
     assert source_count >= 3
     assert raw_result_count == 1
     assert raw_plan_count == 1
+
+
+def test_scraper_bundle_parses_art_plan_detail_workbook_into_enrollment_plan(app, test_settings, tmp_path: Path) -> None:
+    module = _load_importer_module()
+    source_dir = _build_scraper_fixture(tmp_path)
+    docs_dir = source_dir / "data" / "all_toudang"
+    _write_art_plan_workbook(docs_dir / "6992.xls")
+
+    report = module.run_import(
+        source_dir=source_dir,
+        db_path=test_settings.db_path,
+        dry_run=False,
+        apply=True,
+        no_backup=True,
+    )
+
+    with app.state.db.session_scope() as session:
+        music_plan = session.execute(
+            text(
+                """
+                SELECT ep.year, ep.batch, ep.student_type, ep.major_group_code, ep.major_name_snapshot,
+                       ep.plan_count, ep.tuition_fee, ep.source_note, ep.import_batch_name
+                FROM enrollment_plan ep
+                JOIN college c ON c.id = ep.college_id
+                WHERE c.name = '吉林艺术学院' AND ep.major_group_code = '23'
+                """
+            )
+        ).mappings().one()
+        music_major = session.execute(
+            text(
+                """
+                SELECT m.name, m.is_art_related
+                FROM major m
+                JOIN enrollment_plan ep ON ep.major_id = m.id
+                JOIN college c ON c.id = ep.college_id
+                WHERE c.name = '吉林艺术学院' AND ep.major_group_code = '23'
+                """
+            )
+        ).mappings().one()
+        raw_plan_count = session.scalar(
+            text(
+                """
+                SELECT COUNT(*)
+                FROM gaokao_admission_plan
+                WHERE data_version_label = 'gaokao_scraper_art_plan_detail_20260511'
+                  AND year = 2025
+                """
+            )
+        )
+
+    assert report["art_plan_detail"]["parsed_rows"] == 2
+    assert report["art_plan_detail"]["positive_rows"] == 2
+    assert report["applied"]["art_plan_detail_rows_upserted"] == 2
+    assert report["applied"]["enrollment_plans_upserted"] >= 3
+    assert music_plan["year"] == 2025
+    assert music_plan["batch"] == "本科批"
+    assert music_plan["student_type"] == "art"
+    assert music_plan["major_group_code"] == "23"
+    assert music_plan["major_name_snapshot"].startswith("音乐表演(小号)")
+    assert music_plan["plan_count"] == 1
+    assert music_plan["tuition_fee"] == "13200"
+    assert "缺额/新增计划" in music_plan["source_note"]
+    assert music_plan["import_batch_name"] == "gaokao_scraper_art_plan_detail_20260511"
+    assert music_major["name"] == "音乐表演"
+    assert music_major["is_art_related"] == 1
+    assert raw_plan_count == 2
 
 
 def _build_scraper_fixture(tmp_path: Path) -> Path:
@@ -256,3 +323,15 @@ def _build_scraper_fixture(tmp_path: Path) -> Path:
     (docs_dir / "2025_fixture.html").write_text("<html>官方页面</html>", encoding="utf-8")
     (docs_dir / "2025_fixture.pdf").write_bytes(b"%PDF-1.4 fixture")
     return source_dir
+
+
+def _write_art_plan_workbook(path: Path) -> None:
+    rows = [
+        ["山东省2025年艺术类本科批第2次志愿院校专业计划", None, None, None, None, None],
+        ["本次公布的院校专业计划主要来源于：高校未完成的计划和新增计划。", None, None, None, None, None],
+        ["院校代号", "院校、专业（类）名称及备注", "考试科目要求", "学制（年）", "计划数", "年收费（元）"],
+        ["A209", "吉林艺术学院", None, None, 2, None],
+        [None, "23 音乐表演(小号)（（音乐类（音乐表演）统考成绩）招收器乐且技能项为小号的考生）", "不限", 4, 1, 13200],
+        [None, "34 音乐表演(流行电吉他)（（音乐类（音乐表演）统考成绩）招收器乐且技能项为电吉他的考生）（新增计划）", "不限", 4, 1, 13200],
+    ]
+    pd.DataFrame(rows).to_excel(path, index=False, header=False)

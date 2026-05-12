@@ -13,28 +13,39 @@ from app.schemas.recommendation import (
 
 
 ART_LEGACY_CANDIDATE_TYPE_TO_TRACK = {
-    "art": "fine_art_design",
     "fine_art": "fine_art_design",
     "fine_art_design": "fine_art_design",
     "美术": "fine_art_design",
     "美术类": "fine_art_design",
+    "美术与设计": "fine_art_design",
     "美术与设计类": "fine_art_design",
     "music": "music",
+    "音乐": "music",
     "音乐类": "music",
     "dance": "dance",
+    "舞蹈": "dance",
     "舞蹈类": "dance",
     "media": "broadcast_hosting",
     "传媒类": "broadcast_hosting",
     "broadcast": "broadcast_hosting",
     "broadcast_hosting": "broadcast_hosting",
+    "播音": "broadcast_hosting",
+    "播音主持": "broadcast_hosting",
+    "播音与主持": "broadcast_hosting",
     "播音与主持类": "broadcast_hosting",
     "calligraphy": "calligraphy",
+    "书法": "calligraphy",
     "书法类": "calligraphy",
     "performance": "performance_directing",
+    "表演": "performance_directing",
+    "表导": "performance_directing",
     "performance_directing": "performance_directing",
     "表导演": "performance_directing",
+    "表导演类": "performance_directing",
+    "表（导）演": "performance_directing",
     "表（导）演类": "performance_directing",
     "opera": "opera",
+    "戏曲": "opera",
     "戏曲类": "opera",
 }
 
@@ -47,6 +58,8 @@ ART_TRACK_LABELS = {
     "broadcast_hosting": "播音与主持类",
     "opera": "戏曲类",
 }
+
+VALID_ART_TRACKS = frozenset(ART_TRACK_LABELS)
 
 ART_SCORE_FORMULAS = {
     "fine_art_design": (0.5, 0.5, "文化成绩 * 50% + 专业成绩 * 750 / 300 * 50%"),
@@ -130,14 +143,15 @@ def normalize_art_track(value: str | None) -> str | None:
     normalized = (value or "").strip()
     if not normalized:
         return None
-    return ART_LEGACY_CANDIDATE_TYPE_TO_TRACK.get(normalized, normalized)
+    mapped = ART_LEGACY_CANDIDATE_TYPE_TO_TRACK.get(normalized, normalized)
+    return mapped if mapped in VALID_ART_TRACKS else None
 
 
 def infer_art_track_from_text(*values: str | None) -> str | None:
     text = " ".join((value or "").strip() for value in values if (value or "").strip())
     if not text:
         return None
-    for track in ("opera", "fine_art_design", "dance", "performance_directing", "broadcast_hosting", "calligraphy", "music"):
+    for track in ("opera", "fine_art_design", "dance", "music", "performance_directing", "broadcast_hosting", "calligraphy"):
         if any(keyword in text for keyword in ART_TRACK_INCLUSION_KEYWORDS[track]):
             return track
     return None

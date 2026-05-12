@@ -52,6 +52,7 @@ from ._recommendations_shared import _load_recommendation_settings_state, _seria
 from ._recommendations_special_type_rules import resolve_special_type_context
 from ._recommendations_volunteer_options import (
     ART_MANUAL_REVIEW_TRACKS,
+    ART_TRACK_LABELS,
     art_track_matches_text,
     calculate_art_comprehensive_score,
     compatible_batches,
@@ -131,6 +132,8 @@ def preview_volunteer_workbench(
         resolved_professional_score = art_context["professional_score"]
         resolved_comprehensive_score = art_context["comprehensive_score"]
         input_notes.append(str(art_context["note"]))
+        if candidate_art_track:
+            input_notes.append(f"当前艺术类别已按“{ART_TRACK_LABELS.get(candidate_art_track, candidate_art_track)}”标准口径筛选。")
     elif (payload.score_input_mode or "").strip() == "estimated_score":
         lookup_score = payload.comprehensive_score if payload.comprehensive_score is not None else payload.culture_score
         if lookup_score is not None:
@@ -257,15 +260,28 @@ def preview_volunteer_workbench(
     }
     whitelist_ids = set(settings.whitelist_college_ids)
     career_preference = _build_payload_career_preference_state(session, payload)
+    history_only_record_groups = _collect_history_only_record_groups(
+        admissions=admissions,
+        enrollment_plans=enrollment_plans,
+        student_type=student_type,
+        candidate_art_track=candidate_art_track,
+        use_historical_mapping=payload.use_historical_mapping,
+    )
     employment_mappings_by_major = _group_major_employment_mappings(
         session,
-        [plan.major_id for plan in enrollment_plans if plan.major_id],
+        [
+            *[plan.major_id for plan in enrollment_plans if plan.major_id],
+            *[records[0].major_id for records in history_only_record_groups if records and records[0].major_id],
+        ],
     )
     chapter_contexts = _load_chapter_rule_contexts(
         session,
         province=payload.province,
         target_year=target_year,
-        college_ids=[plan.college_id for plan in enrollment_plans],
+        college_ids=[
+            *[plan.college_id for plan in enrollment_plans],
+            *[records[0].college_id for records in history_only_record_groups if records],
+        ],
     )
     province_policy_context = load_province_policy_context(
         session,
@@ -407,6 +423,57 @@ def preview_volunteer_workbench(
                 batch_dict_context=batch_dict_context,
                 province_policy_context=province_policy_context,
                 candidate_art_track=candidate_art_track,
+            )
+        )
+
+    for records in history_only_record_groups:
+        latest = sorted(records, key=lambda item: item.year, reverse=True)[0]
+        career_alignment = evaluate_career_alignment(
+            major=latest.major,
+            mappings=employment_mappings_by_major.get(latest.major_id or 0, []),
+            preference=career_preference,
+            college_location=_build_college_location(
+                latest.college.city if latest.college else None,
+                latest.college.province if latest.college else None,
+            ),
+        )
+        evaluation = evaluate_recommendation_candidate(
+            student=student,
+            student_type=student_type,
+            student_rank=effective_rank,
+            score_value=score_value,
+            records=records,
+            thresholds=thresholds,
+            is_whitelisted=latest.college_id in whitelist_ids,
+            career_alignment=career_alignment,
+        )
+        if not evaluation:
+            continue
+        apply_input_context_to_evaluation(evaluation, input_context)
+        candidates.append(
+            _build_history_only_workbench_candidate(
+                session=session,
+                records=records,
+                payload=payload,
+                target_year=target_year,
+                evaluation=evaluation,
+                applicable_rules=applicable_rules,
+                chapter_context=chapter_contexts.get(latest.college_id),
+                candidate_art_track=candidate_art_track,
+            )
+        )
+    if history_only_record_groups:
+        detail = (
+            "已将缺少招生计划、但历史录取/投档中能确认艺术专业方向的院校补入“仅历史参考”候选；"
+            "这些条目不会当作正式招生计划，正式填报前仍需补齐招生计划。"
+        )
+        input_notes.append(detail)
+        rule_alerts.append(
+            VolunteerWorkbenchRuleAlertRead(
+                code="history_only_reference_candidates",
+                level="info",
+                title="已补入历史参考候选",
+                detail=detail,
             )
         )
 
@@ -676,6 +743,58 @@ def _match_reference_records(
     return fallback, bool(fallback)
 
 
+def _collect_history_only_record_groups(
+    *,
+    admissions: list[AdmissionRecord],
+    enrollment_plans: list[EnrollmentPlan],
+    student_type: str,
+    candidate_art_track: str | None,
+    use_historical_mapping: bool,
+) -> list[list[AdmissionRecord]]:
+    if student_type != "art" or not candidate_art_track or not use_historical_mapping:
+        return []
+
+    plan_exact_keys = {
+        (plan.college_id, plan.major_id)
+        for plan in enrollment_plans
+        if plan.major_id is not None
+    }
+    plan_name_keys = {
+        (plan.college_id, _canonical_history_major_name(_display_plan_major_name(plan)))
+        for plan in enrollment_plans
+        if _canonical_history_major_name(_display_plan_major_name(plan))
+    }
+    grouped: dict[tuple[int, int], list[AdmissionRecord]] = defaultdict(list)
+    for item in admissions:
+        if item.major_id is None:
+            continue
+        if (item.college_id, item.major_id) in plan_exact_keys:
+            continue
+        major_name = item.major.name if item.major else None
+        major_key = _canonical_history_major_name(major_name)
+        if major_key and (item.college_id, major_key) in plan_name_keys:
+            continue
+        if not _history_item_matches_art_track(
+            candidate_art_track,
+            major_name,
+            None,
+            item.source_note,
+            item.art_track,
+        ):
+            continue
+        grouped[(item.college_id, item.major_id)].append(item)
+
+    result = [sorted(records, key=lambda item: item.year, reverse=True) for records in grouped.values()]
+    result.sort(
+        key=lambda records: (
+            -(records[0].year if records else 0),
+            records[0].college.name if records and records[0].college else "",
+            records[0].major.name if records and records[0].major else "",
+        )
+    )
+    return result
+
+
 def _build_workbench_candidate(
     *,
     session: Session,
@@ -931,6 +1050,131 @@ def _build_workbench_candidate(
     )
 
 
+def _build_history_only_workbench_candidate(
+    *,
+    session: Session,
+    records: list[AdmissionRecord],
+    payload: VolunteerWorkbenchPreviewPayload,
+    target_year: int,
+    evaluation: dict[str, object],
+    applicable_rules: list,
+    chapter_context: ChapterRuleContext | None,
+    candidate_art_track: str | None,
+) -> VolunteerWorkbenchCandidateRead:
+    latest = sorted(records, key=lambda item: item.year, reverse=True)[0]
+    matched_rule = applicable_rules[0] if applicable_rules else None
+    reference_years = sorted({item.year for item in records}, reverse=True)[:3]
+    risk_flags = sorted(
+        set(
+            [
+                *(evaluation.get("risk_flags_json") or []),
+                "history_only_reference",
+                "missing_enrollment_plan",
+            ]
+        )
+    )
+    match_tags = ["仅历史参考", "缺招生计划", "历史录取参考"]
+    match_notes = [
+        "缺招生计划，仅历史参考：本条由历史录取/投档记录补入，当前未找到同校同专业招生计划。",
+        f"该条不能当作 {target_year} 年正式招生计划；正式填报前必须补齐招生计划并核对院校章程。",
+    ]
+    if candidate_art_track:
+        match_notes.append(f"当前已按“{ART_TRACK_LABELS.get(candidate_art_track, candidate_art_track)}”方向过滤历史记录。")
+    if matched_rule:
+        match_notes.append(
+            f"当前按 {matched_rule.province} {matched_rule.year} {matched_rule.exam_mode} {matched_rule.batch} 规则解释。"
+        )
+    chapter_restriction_notes = _build_chapter_restriction_notes(chapter_context)
+    if chapter_context and chapter_context.chapter_url:
+        match_tags.append("章程链路已接入")
+    elif chapter_context and not chapter_context.chapter_url and chapter_context.review_status:
+        risk_flags.append("chapter_pending_review")
+        match_tags.append("章程待补链")
+        match_notes.append("当前学校章程链路仍待人工补链，正式填报前建议核对招生章程。")
+    if chapter_restriction_notes:
+        risk_flags.append("chapter_special_requirement")
+        match_tags.append("章程限制已提取")
+        match_notes.extend(chapter_restriction_notes)
+
+    reason_segments = [
+        "缺少招生计划，本条只按历史录取/投档记录供老师参考。",
+        str(evaluation["reason_text"]),
+    ]
+    if latest.subject_requirement and not payload.subject_combination:
+        reason_segments.append(f"选科要求为“{latest.subject_requirement}”，填报前需人工核对。")
+
+    return VolunteerWorkbenchCandidateRead(
+        plan_id=-int(latest.id),
+        year=target_year,
+        province=latest.province,
+        batch=payload.batch or latest.batch,
+        exam_mode=payload.exam_mode or "3+3",
+        college_id=latest.college_id,
+        college_name=latest.college.name if latest.college else "",
+        college_code_snapshot=latest.college.college_code if latest.college else None,
+        major_id=latest.major_id,
+        major_name=latest.major.name if latest.major else None,
+        major_group_code=None,
+        major_code_snapshot=latest.major.major_code if latest.major else None,
+        major_direction=latest.major.direction if latest.major else None,
+        career_path=latest.major.career_path if latest.major else None,
+        major_note=latest.major.note if latest.major else None,
+        plan_count=0,
+        subject_requirement=latest.subject_requirement,
+        tuition_fee=None,
+        schooling_years=None,
+        training_location=None,
+        student_type=latest.student_type,
+        result_type=str(evaluation["result_type"]),
+        reference_rank=evaluation.get("reference_rank"),
+        latest_admission_year=evaluation.get("latest_year"),
+        latest_min_rank=evaluation.get("latest_min_rank"),
+        latest_min_score=evaluation.get("latest_min_score"),
+        score_basis=str(evaluation["score_basis"]),
+        reference_scope="history_only",
+        reference_years_json=reference_years,
+        reference_record_count=len(records),
+        reference_source_notes_json=_dedupe_notes([item.source_note for item in records if item.source_note]),
+        fallback_priority_score=None,
+        fallback_priority_label=None,
+        fallback_priority_notes_json=[],
+        fallback_category_label=None,
+        fallback_review_notes_json=["补齐同校同专业招生计划后再进入正式志愿表复核。"],
+        ratio=evaluation.get("ratio"),
+        career_match_score=evaluation.get("career_match_score"),
+        career_match_strength=evaluation.get("career_match_strength"),
+        career_match_summary=evaluation.get("career_match_summary"),
+        career_match_reasons_json=list(evaluation.get("career_match_reasons_json") or []),
+        matched_direction_names_json=list(evaluation.get("matched_direction_names_json") or []),
+        requires_postgraduate_path=evaluation.get("requires_postgraduate_path"),
+        requires_certificate_path=evaluation.get("requires_certificate_path"),
+        requires_long_training_path=evaluation.get("requires_long_training_path"),
+        matched_rule_exam_mode=matched_rule.exam_mode if matched_rule else None,
+        matched_rule_batch=matched_rule.batch if matched_rule else None,
+        matched_rule_candidate_type=matched_rule.candidate_type if matched_rule else None,
+        matched_rule_is_baseline=bool(matched_rule and matched_rule.note and "系统基线初始化生成" in matched_rule.note),
+        chapter_url=chapter_context.chapter_url if chapter_context else None,
+        chapter_review_status=chapter_context.review_status if chapter_context else None,
+        chapter_retrieval_status=chapter_context.retrieval_status if chapter_context else None,
+        chapter_campus_note=chapter_context.campus_note if chapter_context else None,
+        chapter_other_risk_note=chapter_context.other_risk_note if chapter_context else None,
+        chapter_language_requirement=chapter_context.language_requirement if chapter_context else None,
+        chapter_single_subject_requirement=chapter_context.single_subject_requirement if chapter_context else None,
+        chapter_gender_requirement=chapter_context.gender_requirement if chapter_context else None,
+        chapter_height_requirement=chapter_context.height_requirement if chapter_context else None,
+        chapter_vision_requirement=chapter_context.vision_requirement if chapter_context else None,
+        chapter_color_vision_requirement=chapter_context.color_vision_requirement if chapter_context else None,
+        chapter_physical_exam_requirement=chapter_context.physical_exam_requirement if chapter_context else None,
+        match_tags_json=_dedupe_notes(match_tags),
+        match_notes_json=_dedupe_notes(match_notes),
+        reason_text=" ".join(reason_segments),
+        risk_flags_json=sorted(set(risk_flags)),
+        source_note=latest.source_note,
+        import_batch_name="缺招生计划，仅历史参考",
+        recent_history_json=_build_history_only_candidate_history(records),
+    )
+
+
 def _build_recent_candidate_history(
     *,
     session: Session,
@@ -1021,6 +1265,30 @@ def _build_recent_candidate_history(
             }
         )
     return history
+
+
+def _build_history_only_candidate_history(records: list[AdmissionRecord]) -> list[dict]:
+    history: list[dict] = []
+    seen_years: set[int] = set()
+    for item in sorted(records, key=lambda row: (row.year, row.id), reverse=True):
+        if item.year in seen_years:
+            continue
+        seen_years.add(item.year)
+        history.append(
+            {
+                "year": item.year,
+                "batch": item.batch,
+                "plan_count": None,
+                "admission_count": item.plan_count,
+                "min_score": item.min_score,
+                "min_rank": item.min_rank,
+                "tuition_fee": None,
+            }
+        )
+        if len(history) >= 3:
+            break
+    return history
+
 
 
 def _history_item_matches_art_track(
@@ -1202,8 +1470,9 @@ def _select_candidate_rule(applicable_rules: list, plan: EnrollmentPlan):
 def _candidate_sort_key(
     item: VolunteerWorkbenchCandidateRead,
     rule_order_by_batch: dict[str, int],
-) -> tuple[int, int, float, float, int, float, int, str, str]:
+) -> tuple[int, int, int, float, float, int, float, int, str, str]:
     return (
+        _candidate_reference_sort_priority(item),
         rule_order_by_batch.get(item.batch, 999),
         *build_recommendation_sort_key(
             result_type=item.result_type,
@@ -1216,6 +1485,12 @@ def _candidate_sort_key(
             fallback_priority_score=item.fallback_priority_score,
         ),
     )
+
+
+def _candidate_reference_sort_priority(item: VolunteerWorkbenchCandidateRead) -> int:
+    if item.reference_scope == "history_only" or item.plan_id < 0 or item.plan_count <= 0:
+        return 1
+    return 0
 
 
 def _read_optional_float(value: object) -> float | None:

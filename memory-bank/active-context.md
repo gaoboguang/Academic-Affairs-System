@@ -2,18 +2,32 @@
 
 ## 当前状态
 
-- 2026-05-11 已完成“高考志愿推荐池：音乐类过滤与近三年录取展示修复”：
-  - 当前分支：`codex/gaokao-volunteer-history-art-filter-20260511`
-  - 本轮不新增数据库表、不新增迁移、不重新导入数据；只扩展现有志愿向导 preview 候选响应和前端候选表展示
+- 2026-05-12 已完成全项目体检并直接修复唯一真实安全项：
+  - 在核对 Electron 官方 breaking changes 后，将桌面壳 `apps/desktop/package.json` 的 `electron` 从 `37.3.1` 升级到 `42.0.1`，同步更新 `package-lock.json`
+  - 桌面壳仅使用 `BrowserWindow`、菜单、`dialog`、`shell.openPath/openExternal` 和本地 HTTP 代理，未使用本轮 Electron 38-42 breaking changes 中受影响的通知、offscreen、cookie changed、clearStorageData 旧签名或 renderer clipboard API
+  - 安全审计已清零：`npm audit --omit=dev --json` 和 `npm audit --json` 均为 0 vulnerabilities；`./.venv/bin/python -m pip_audit` 为 No known vulnerabilities（本地 editable 包 `local-edu-backend` 跳过属正常）
+  - 桌面验证通过：`npm run desktop:prepare` 与 `npm run desktop:dist:mac` 均通过，electron-builder 使用 `electron=42.0.1` 完成 mac dir 打包
+  - 全项目验证通过：SQLite `20260510_0032` / `integrity_check=ok` / 外键检查无输出；`npm run backend:data-health -- --json` 成功但保持已知数据 warning；`npm run --silent backend:p0-check -- --json` 为 `ok: true` 并新增 `data/backups/p0_delivery_backup_20260512_084637.zip`；`npm run check` 通过（后端 167 passed、前端 lint、前端 224 passed、前端构建）；`npm run check:e2e` 为 46 passed
+  - 当前剩余 warning 不是代码崩溃：单招 / 综评有计划但缺专门录取结果，只能初筛；2026 正式普通类招生计划、一分一段、省控线等待官方发布后导入
+  - 当前体积复核：`data/backups` 约 16G，`data/app.db` 约 813M，`data/` 约 17G，`dist/desktop` 约 311M
+
+- 2026-05-11 已完成“艺术类计划补导、历史参考候选、音乐类过滤与候选区 UI 修复”：
+  - 当前分支：`codex/gaokao-music-history-ui-fix-20260511`
+  - 本轮不新增数据库表、不新增迁移；已重新扫描 `/Users/gao/Desktop/高考志愿/gaokao-scraper`，将可确认的艺术类院校专业计划补入真实主库 `enrollment_plan` / `gaokao_admission_plan`
+  - 扫描确认：本地数据包里稳定符合“艺术类院校专业计划”结构的 Excel 只有 `data/all_toudang/6992.xls` 和 `data/all_toudang/7013.xls`；其余艺术类文件多为投档情况表，只能作为历史录取/投档参考，不能硬写成招生计划
+  - 已补入 `gaokao_scraper_art_plan_detail_20260511`：2025 本科批 65 条、35 校、23 专业、计划数 433；2025 专科批 90 条、46 校、26 专业、计划数 1416；其中音乐方向本科 27 条、专科 30 条
+  - 已把已有艺术类历史录取/投档中能确认专业方向、但缺同校同专业招生计划的记录补成 `history_only` 候选；页面标注“缺招生计划，仅历史参考”，加入草稿时不会把负 `plan_id` 当作真实计划保存
   - 后端在 `apps/backend/app/services/_recommendations_volunteer_options.py` 新增艺术类别文本识别：招生计划 / 录取记录缺结构化 `art_track` 时，从专业名、计划快照名和来源备注推断艺术类别；`opera` 优先识别，避免“戏曲音乐”误进音乐类
+  - `candidate_type=art` 但 `art_track` 缺失或异常时会阻断；旧中文简称如“音乐”会归一为 `music`，但泛艺术 `art` 不再退化为美术与设计类
   - 音乐类过滤已收紧为必须命中音乐、声乐、器乐、钢琴、音乐剧等正向关键词；没有音乐正向证据的艺术计划（如影视多媒体技术、广播影视节目制作、文物修复与保护等）不会进入音乐推荐池，美术与设计、舞蹈、表导、书法、播音、戏曲等也会被排除
   - `EnrollmentPlan.major_name_snapshot` 已纳入过滤和展示；当标准专业名过泛（如“表演”）但计划快照含“音乐剧 / 音乐类统考成绩”时，候选展示更具体的计划快照名，避免老师看不出类别口径
   - `VolunteerWorkbenchCandidateRead` 新增 `recent_history_json`，每条候选返回目标年前最近 3 个可用历史年份的计划人数、录取/投档人数、最低分、最低位次和学费；计划与录取专业 ID 不一致时，先按同校同艺术类别 + 规范化专业名补齐历史
-  - 前端候选表默认移除大段“依据”列，新增“近三年录取情况”紧凑表；旧草稿缺 `recent_history_json` 时会兼容为空，不崩溃
-  - 收口验证中发现“另存为新草稿”后已保存草稿列表偶发不显示新版本：根因是前端保存后立刻刷新列表，列表请求可能先于数据库提交可见；已在保存接口返回后先把草稿 upsert 到本地列表，再异步刷新服务端列表，避免新草稿短暂消失
-  - 真实库抽样：段立萌 / exam_id=2 / 山东 2026 / 艺术类本科批统考 / 音乐类 / 文化分 370.5 / 专业分 238 / 历史映射开启，当前返回 24 条音乐候选，`bad_design=[]`、`bad_non_music=[]`，其中 22 条带最低分、21 条带录取/投档人数
+  - 前端候选区已从拥挤表格改为全宽候选卡，上方候选池、下方草稿区；默认不再展示大段“依据”，改为展示“近三年招生/录取情况”分区，包含年份、批次、计划、录取/投档、最低分、最低位次、学费
+  - 窄屏下近三年明细表使用横向滚动并保持 7 个字段对齐，避免字段挤压、错位或文字竖排；旧草稿缺 `recent_history_json` 时会兼容为空，不崩溃
+  - 修复向导就绪度误判：`candidate_result_truncated` 只作为 warning，不再把“已命中 609 条、页面展示前 300 条”的场景打成 blocked
+  - 真实库抽样：段立萌 / exam_id=2 / 山东 2026 / 艺术类本科批统考 / 音乐类 / 文化分 370.5 / 专业分 238 / 历史映射开启，当前返回 609 条候选、展示前 300 条，`readiness=warning`、`blocking_count=0`，美术/设计/舞蹈/书法/播音/戏曲音乐混入数为 0
   - 当前艺术类最低位次大量为空是源数据事实：山东艺术类录取表多给综合最低分和人数，不稳定提供最低位次；系统不会伪造位次
-  - 最新验证通过：后端推荐专项 `24 passed`、前端志愿定向 `51 passed`、`frontend:lint`、`frontend:build`、高考志愿 E2E `11 passed`；草稿版本失败用例已定向复跑通过；`backend:data-health -- --json` 成功但保持已知 warning；SQLite `20260510_0032` / `integrity_check=ok` / 外键检查无输出；`git diff --check` 通过
+  - 最新验证通过：后端专项 `21 passed`；`npm run backend:test` 为 `167 passed`；`npm run frontend:test` 为 `42 files / 224 tests passed`；`npm run frontend:lint`、`npm run frontend:build` 通过；`npm run e2e -- tests/e2e/gaokao-volunteer.spec.ts` 为 `11 passed`；`npm run backend:data-health -- --json` 成功但保持已知 warning；SQLite `20260510_0032` / `integrity_check=ok` / 外键检查无输出；真实接口抽样和 `git diff --check` 通过
 
 - 2026-05-11 已修复“山东艺术类本科批统考仍无候选”的真实根因：
   - 根因不是批次规则缺失；真实库 `province_volunteer_rule` 已有山东 2026 `艺术类本科批统考` art 规则，截图条件能命中 1 条规则
@@ -21,7 +35,7 @@
   - 后端新增目标年计划选择逻辑：目标年有计划时使用目标年；目标年无计划且 `use_historical_mapping=true` 时，回退最近可用历史计划年做模拟候选；未开启历史映射时明确返回 `missing_target_year_enrollment_plan`
   - 历史模拟候选会显式标记 `historical_plan_simulation`，候选说明写明“按 2025 年历史招生计划模拟，不是 2026 年正式招生计划”，不可包装成正式录取把握
   - 前端风险标签新增中文文案“按历史计划模拟”，readiness 短摘要优先提示“先处理招生计划”，避免继续显示泛化“调整条件或补充数据”
-  - 真实接口复核：段立萌 / 202604高三二模 / 山东 2026 / 艺术类本科批统考 / 音乐类 / 文化分 370.5 / 专业分 238.96 / 历年映射开启时返回 143 条历史模拟候选；关闭时阻断并提示山东 2026 正式招生计划尚未导入
+  - 真实接口复核：段立萌 / 202604高三二模 / 山东 2026 / 艺术类本科批统考 / 音乐类 / 文化分约 370.5 / 专业分约 238，开启历年映射和 history-only 后返回 609 条候选、展示前 300 条；关闭历年映射时仍阻断并提示山东 2026 正式招生计划尚未导入
   - 已重启本地服务，当前前端 `http://127.0.0.1:5173`、后端 `http://127.0.0.1:8000`
   - 验证通过：后端推荐专项 `26 passed`、后端全量 `158 passed`、前端相关定向 `56 passed`、前端全量 `42 files / 220 tests passed`、`frontend:lint`、`frontend:build`、高考志愿 E2E `11 passed`、`backend:data-health -- --json` 成功但仍为已知 warning、SQLite `20260510_0032` / `integrity_check=ok` / 外键检查无输出
   - 当前健康警告仍是数据事实：2026 正式招生计划、一分一段、省控线待官方发布；单招 / 综评缺专门录取结果，只能初筛
@@ -94,7 +108,7 @@
   - `backend:p0-check -- --json` 为 `ok: true`，数据健康仍为已知 `warning`：单招 / 综评仍缺专门录取结果，只能初筛
   - 修复分析中心全景对比 E2E：`AnalyticsPage.vue` 在切到 `grade-panorama`、`class-panorama`、`teacher-panorama` 页签时首次自动加载数据，loading 中不重复请求，手动“查询 / 重置”仍保留；`tests/e2e/recommendations.spec.ts` 同步用稳定下拉 helper 修复 Element Plus 多选弹层偶发不稳定
   - 依赖安全：前端 `vite` 升到 `^6.4.2`、`postcss` 显式升到 `^8.5.14` 并用根 `overrides.postcss=8.5.14` 固定；桌面打包链 `electron-builder` 升到 `26.8.1`；后端依赖下限补 `mako>=1.3.12`、`python-multipart>=0.0.27`，dev 依赖 `pytest>=9.0.3,<10.0`，虚拟环境 `pip` 升到 `26.1.1`
-  - 审计结果：`npm audit --omit=dev --json` 为 0 漏洞；`npm audit --json` 仅剩 Electron 37.3.1 high 风险，修复需要升 Electron 42.x，已按计划留到后续桌面兼容任务；`pip-audit` 为 No known vulnerabilities，跳过本地 editable 包 `local-edu-backend`
+  - 审计结果：当时 `npm audit --omit=dev --json` 为 0 漏洞，`npm audit --json` 仅剩 Electron 37.3.1 high 风险；该风险已于 2026-05-12 升级 Electron 42.0.1 后清零；`pip-audit` 为 No known vulnerabilities，跳过本地 editable 包 `local-edu-backend`
   - 验证：目标 E2E `多学年全景` 通过；完整 `npm run check:e2e` 为 `46 passed`；`npm run backend:test` 为 `142 passed`；`npm run frontend:lint`、`npm run frontend:test`（39 files / 199 tests）、`npm run frontend:build` 通过；`npm run desktop:prepare` 与 `npm run desktop:dist:mac` 通过；最终 `npm run check` 通过
   - 打包边界：`desktop:dist:mac` 仍提示默认 Electron 图标和未签名，这是既有桌面交付边界；PyInstaller 的 `pysqlite2/MySQLdb/psycopg2` hidden import 警告与项目 SQLite 使用无冲突
 

@@ -11,7 +11,7 @@
     "dist": "node ./scripts/dist.cjs"
   },
   "devDependencies": {
-    "electron": "37.3.1",
+    "electron": "42.0.1",
     "electron-builder": "26.8.1"
   },
   "build": {

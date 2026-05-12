@@ -16,10 +16,11 @@ GENERAL_REFERENCE_FALLBACK_TYPES = {"spring_exam", "independent_recruitment", "c
 
 def detect_student_type(student: Student) -> str:
     normalized_student_type = (student.student_type or "").strip()
-    normalized_art_track = normalize_art_track(student.art_track) or ""
+    raw_art_track = (student.art_track or "").strip()
+    normalized_art_track = normalize_art_track(raw_art_track) or ""
     if normalized_student_type and normalized_student_type not in {"general", "repeat", "art", "sports"}:
         return normalized_student_type
-    if normalized_art_track == "sports" or normalized_student_type == "sports":
+    if raw_art_track == "sports" or normalized_student_type == "sports":
         return "sports"
     if normalized_art_track or normalized_student_type == "art":
         return "art"

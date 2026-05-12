@@ -417,7 +417,7 @@ export function buildVolunteerDraftPayload(
     selected_rule: selectedRule,
     items: items.map((item) => ({
       order: item.order,
-      plan_id: item.plan_id,
+      plan_id: item.candidate.reference_scope === "history_only" || item.plan_id < 0 ? null : item.plan_id,
       candidate: normalizeVolunteerCandidate(item.candidate),
     })),
   };
@@ -690,12 +690,16 @@ export function buildVolunteerCandidateReferenceCopy(candidate: VolunteerWorkben
       ? "省控线参考"
       : candidate.reference_scope === "plan_only"
         ? "计划清单参考"
+        : candidate.reference_scope === "history_only"
+          ? "缺招生计划，仅历史参考"
       : "专业线参考";
   const yearLabel = candidate.reference_years_json.length ? `${candidate.reference_years_json.join(" / ")} 年` : "年份待补";
   const sampleLabel = candidate.reference_scope === "score_line"
     ? "省级控制线口径"
     : candidate.reference_scope === "plan_only"
       ? "当年计划口径"
+      : candidate.reference_scope === "history_only"
+        ? `${candidate.reference_record_count} 条历史录取/投档样本`
       : `${candidate.reference_record_count} 条样本`;
   const sourceLabel = candidate.reference_source_notes_json.length
     ? `来源：${candidate.reference_source_notes_json.join("；")}`
@@ -733,6 +737,10 @@ export function buildVolunteerCandidateExplanationNotes(candidate: VolunteerWork
 
   if (candidate.reference_scope === "plan_only") {
     notes.push("当前结果只按当年招生计划清单做方向性初筛，不能直接作为冲稳保或录取把握判断。");
+  }
+
+  if (candidate.reference_scope === "history_only") {
+    notes.push("当前条目缺少同校同专业招生计划，只能按历史录取/投档记录参考；补齐招生计划前不能视作正式可填计划。");
   }
 
   if (candidate.reference_record_count > 0 && candidate.province.trim()) {

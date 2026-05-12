@@ -3,6 +3,9 @@ from __future__ import annotations
 from sqlalchemy import text
 
 from app.models import AdmissionRecord, College, EnrollmentPlan, Major, StudentPathwayProfile
+from app.schemas.recommendation import VolunteerWorkbenchCandidateRead
+from app.services._recommendations_workbench import _candidate_sort_key
+from app.services._recommendations_volunteer_options import infer_art_track_from_text
 
 from tests.test_recommendation_workflow import create_exam_with_scores
 
@@ -247,6 +250,66 @@ def _seed_mixed_art_plans_with_history(app) -> None:
         )
 
 
+def _seed_music_history_without_plan(app) -> None:
+    with app.state.db.session_scope() as session:
+        college = College(
+            name="山东历史音乐参考大学",
+            college_code="HISTM01",
+            province="山东",
+            city="青岛",
+            supports_art=True,
+            is_active=True,
+        )
+        music_major = Major(
+            name="音乐教育",
+            major_code="130212",
+            category="艺术学",
+            is_art_related=True,
+            is_active=True,
+        )
+        design_major = Major(
+            name="视觉传达设计",
+            major_code="130502",
+            category="艺术学",
+            is_art_related=True,
+            is_active=True,
+        )
+        session.add_all([college, music_major, design_major])
+        session.flush()
+        for year, score, count in ((2025, 486, 18), (2024, 481, 16), (2023, 478, 15)):
+            session.add(
+                AdmissionRecord(
+                    year=year,
+                    province="山东",
+                    batch="艺术类本科批",
+                    college_id=college.id,
+                    major_id=music_major.id,
+                    student_type="art",
+                    art_track="music",
+                    min_score=score,
+                    min_rank=None,
+                    plan_count=count,
+                    source_note="山东艺术类本科批音乐类投档历史；缺招生计划",
+                    is_active=True,
+                )
+            )
+        session.add(
+            AdmissionRecord(
+                year=2025,
+                province="山东",
+                batch="艺术类本科批",
+                college_id=college.id,
+                major_id=design_major.id,
+                student_type="art",
+                art_track="fine_art_design",
+                min_score=492,
+                plan_count=20,
+                source_note="山东艺术类本科批美术与设计类投档历史",
+                is_active=True,
+            )
+        )
+
+
 def test_missing_target_year_plan_uses_historical_plan_when_mapping_enabled(client, app) -> None:
     exam_id = create_exam_with_scores(client)
     _seed_art_plan(app, year=2025)
@@ -418,6 +481,193 @@ def test_art_candidate_type_can_come_from_pathway_profile(client, app) -> None:
     assert payload["readiness"]["status"] in {"ready", "warning"}
 
 
+def test_art_candidate_type_with_invalid_art_track_is_blocked(client, app) -> None:
+    exam_id = create_exam_with_scores(client)
+    _seed_mixed_art_plans_with_history(app)
+
+    response = client.post(
+        "/api/recommendations/volunteer-guide/preview",
+        json={
+            "student_id": 1,
+            "exam_id": exam_id,
+            "province": "山东",
+            "target_year": 2026,
+            "batch": "艺术类本科批统考",
+            "exam_mode": "3+3",
+            "candidate_type": "art",
+            "art_track": "art",
+            "score_input_mode": "estimated_score",
+            "culture_score": 370,
+            "professional_score": 240,
+            "use_historical_mapping": True,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["readiness"]["status"] == "blocked"
+    assert payload["source_preview"]["candidate_count"] == 0
+    assert any(item["code"] == "invalid_art_track" for item in payload["readiness"]["items"])
+
+
+def test_art_track_short_chinese_label_normalizes_to_music(client, app) -> None:
+    exam_id = create_exam_with_scores(client)
+    _seed_mixed_art_plans_with_history(app)
+
+    response = client.post(
+        "/api/recommendations/volunteer-guide/preview",
+        json={
+            "student_id": 1,
+            "exam_id": exam_id,
+            "province": "山东",
+            "target_year": 2026,
+            "batch": "艺术类本科批统考",
+            "exam_mode": "3+3",
+            "candidate_type": "art",
+            "art_track": "音乐",
+            "score_input_mode": "estimated_score",
+            "culture_score": 370,
+            "professional_score": 240,
+            "use_historical_mapping": True,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["art_track"] == "music"
+    assert payload["readiness"]["status"] in {"ready", "warning"}
+    assert any("音乐类" in item and "标准口径" in item for item in payload["input_notes"])
+    candidates = [
+        item["candidate"]
+        for group in payload["groups"].values()
+        for item in group["candidates"]
+    ]
+    assert candidates
+    assert all("设计" not in item["major_name"] for item in candidates)
+
+
+def test_music_history_without_enrollment_plan_returns_history_only_candidate(client, app) -> None:
+    exam_id = create_exam_with_scores(client)
+    _seed_music_history_without_plan(app)
+
+    response = client.post(
+        "/api/recommendations/volunteer-guide/preview",
+        json={
+            "student_id": 1,
+            "exam_id": exam_id,
+            "province": "山东",
+            "target_year": 2026,
+            "batch": "艺术类本科批统考",
+            "exam_mode": "3+3",
+            "candidate_type": "art",
+            "art_track": "music",
+            "score_input_mode": "estimated_score",
+            "culture_score": 370,
+            "professional_score": 240,
+            "use_historical_mapping": True,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    candidates = [
+        item["candidate"]
+        for group in payload["groups"].values()
+        for item in group["candidates"]
+    ]
+    music_candidate = next(
+        item
+        for item in candidates
+        if item["college_name"] == "山东历史音乐参考大学" and item["major_name"] == "音乐教育"
+    )
+    assert music_candidate["plan_id"] < 0
+    assert music_candidate["reference_scope"] == "history_only"
+    assert music_candidate["plan_count"] == 0
+    assert "history_only_reference" in music_candidate["risk_flags_json"]
+    assert "missing_enrollment_plan" in music_candidate["risk_flags_json"]
+    assert any("缺招生计划，仅历史参考" in item for item in music_candidate["match_notes_json"])
+    assert music_candidate["recent_history_json"] == [
+        {
+            "year": 2025,
+            "batch": "艺术类本科批",
+            "plan_count": None,
+            "admission_count": 18,
+            "min_score": 486.0,
+            "min_rank": None,
+            "tuition_fee": None,
+        },
+        {
+            "year": 2024,
+            "batch": "艺术类本科批",
+            "plan_count": None,
+            "admission_count": 16,
+            "min_score": 481.0,
+            "min_rank": None,
+            "tuition_fee": None,
+        },
+        {
+            "year": 2023,
+            "batch": "艺术类本科批",
+            "plan_count": None,
+            "admission_count": 15,
+            "min_score": 478.0,
+            "min_rank": None,
+            "tuition_fee": None,
+        },
+    ]
+    assert all(item["major_name"] != "视觉传达设计" for item in candidates)
+
+
+def test_candidate_sort_prioritizes_plan_candidates_over_history_only() -> None:
+    plan_candidate = VolunteerWorkbenchCandidateRead(
+        plan_id=100,
+        year=2025,
+        province="山东",
+        batch="本科批",
+        exam_mode="3+3",
+        college_id=100,
+        college_name="ZZZ音乐计划大学",
+        major_id=100,
+        major_name="音乐表演",
+        plan_count=12,
+        student_type="art",
+        result_type="challenge",
+        score_basis="score",
+        reference_scope="major",
+        reason_text="有招生计划和专业历史线。",
+    )
+    history_only_candidate = VolunteerWorkbenchCandidateRead(
+        plan_id=-200,
+        year=2026,
+        province="山东",
+        batch="艺术类本科批统考",
+        exam_mode="3+3",
+        college_id=200,
+        college_name="AAA历史参考大学",
+        major_id=200,
+        major_name="音乐教育",
+        plan_count=0,
+        student_type="art",
+        result_type="challenge",
+        score_basis="score",
+        reference_scope="history_only",
+        reason_text="缺招生计划，仅历史参考。",
+    )
+
+    ordered = sorted(
+        [history_only_candidate, plan_candidate],
+        key=lambda item: _candidate_sort_key(item, {"艺术类本科批统考": 1}),
+    )
+
+    assert ordered[0].reference_scope == "major"
+
+
+def test_art_track_infers_music_performance_direction_as_music() -> None:
+    assert infer_art_track_from_text("音乐表演(小号)") == "music"
+    assert infer_art_track_from_text("音乐表演(流行电吉他)") == "music"
+    assert infer_art_track_from_text("戏曲音乐(京剧)") == "opera"
+
+
 def test_art_preview_blocks_when_professional_score_missing(client, app) -> None:
     exam_id = create_exam_with_scores(client)
     _seed_art_plan(app)
@@ -539,3 +789,89 @@ def test_music_art_track_filters_design_and_opera_plans_and_returns_recent_histo
             "tuition_fee": "12000 元/年",
         },
     ]
+
+
+def test_music_art_track_rejects_art_generic_design_plan_without_history(client, app) -> None:
+    exam_id = create_exam_with_scores(client)
+    _seed_mixed_art_plans_with_history(app)
+    with app.state.db.session_scope() as session:
+        college = College(
+            name="山东交通学院截图复现",
+            college_code="A466",
+            province="山东",
+            city="济南",
+            supports_art=True,
+            is_active=True,
+        )
+        design_major = Major(
+            name="环境设计",
+            major_code="130503",
+            category="艺术学",
+            is_art_related=True,
+            is_active=True,
+        )
+        session.add_all([college, design_major])
+        session.flush()
+        session.add(
+            EnrollmentPlan(
+                year=2025,
+                province="山东",
+                batch="艺术类本科批统考",
+                exam_mode="3+3",
+                college_id=college.id,
+                major_id=design_major.id,
+                college_code_snapshot="A466",
+                major_group_code="D02",
+                major_name_snapshot="环境设计",
+                major_code_snapshot="130503",
+                plan_count=42,
+                student_type="art",
+                source_note="[gaokao-materialize]；candidate_type=艺术类；title=山东交通学院2025年山东省招生计划查询",
+                import_batch_name="sd-2025-1",
+                is_active=True,
+            )
+        )
+        session.add(
+            AdmissionRecord(
+                year=2025,
+                province="山东",
+                batch="艺术类本科批",
+                college_id=college.id,
+                major_id=design_major.id,
+                student_type="art",
+                art_track="美术与设计类",
+                min_score=489,
+                plan_count=42,
+                source_note="类别：美术与设计类；录取最低分为综合分",
+                is_active=True,
+            )
+        )
+
+    response = client.post(
+        "/api/recommendations/volunteer-guide/preview",
+        json={
+            "student_id": 1,
+            "exam_id": exam_id,
+            "province": "山东",
+            "target_year": 2026,
+            "batch": "艺术类本科批统考",
+            "exam_mode": "3+3",
+            "candidate_type": "art",
+            "art_track": "music",
+            "score_input_mode": "estimated_score",
+            "culture_score": 370,
+            "professional_score": 240,
+            "use_historical_mapping": True,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    candidates = [
+        item["candidate"]
+        for group in payload["groups"].values()
+        for item in group["candidates"]
+    ]
+    names = {(item["college_name"], item["major_name"]) for item in candidates}
+    assert ("山东交通学院截图复现", "环境设计") not in names
+    assert all("设计" not in item["major_name"] for item in candidates)

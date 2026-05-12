@@ -256,7 +256,9 @@ def _build_readiness(
 def _readiness_level_for_rule_alert(alert) -> str:
     if alert.code in MISSING_TARGET_YEAR_PLAN_CODES:
         return "blocking"
-    return "blocking" if alert.level == "warning" else "info"
+    if str(alert.code).startswith("missing_rule_"):
+        return "blocking"
+    return "warning" if alert.level == "warning" else "info"
 
 
 def _requires_rank(payload: VolunteerWorkbenchPreviewPayload) -> bool:
@@ -314,10 +316,14 @@ def _build_art_blocking_items(session: Session | None, normalized, payload: Volu
     if not normalized.art_track:
         items.append(
             VolunteerGuideReadinessItemRead(
-                code="missing_art_track",
+                code="invalid_art_track" if payload.art_track else "missing_art_track",
                 level="blocking",
-                title="缺少艺术类别",
-                detail="艺术类学生需要选择音乐类、美术与设计类等艺术类别后，才能按对应公式计算综合分。",
+                title="艺术类别不可用" if payload.art_track else "缺少艺术类别",
+                detail=(
+                    "当前艺术类别不是系统可识别的山东省统考类别；请重新选择音乐类、美术与设计类等标准类别。"
+                    if payload.art_track
+                    else "艺术类学生需要选择音乐类、美术与设计类等艺术类别后，才能按对应公式计算综合分。"
+                ),
             )
         )
     if normalized.art_track in {"opera"}:
