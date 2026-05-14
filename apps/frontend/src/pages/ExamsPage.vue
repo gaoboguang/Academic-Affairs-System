@@ -454,8 +454,12 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import ElMessage from "element-plus/es/components/message/index";
 import type { UploadFile } from "element-plus";
+import type { components as ExamApiSchemas } from "../types/api.generated";
+
+type ExamPayloadSchema = ExamApiSchemas["schemas"]["ExamPayload"];
 
 import { apiRequest, openFile, uploadFile } from "../api/client";
+import { api } from "../api/typedClient";
 import ImportFeedbackPanel from "../components/common/ImportFeedbackPanel.vue";
 import {
   buildExamSubjectOptions,
@@ -697,10 +701,15 @@ function resetExamForm(): void {
 
 async function loadExams(): Promise<void> {
   try {
-    const query = new URLSearchParams({ page: "1", page_size: "100" });
-    if (filters.name) query.set("name", filters.name);
-    if (filters.semester_id) query.set("semester_id", String(filters.semester_id));
-    Object.assign(exams, await apiRequest<ExamListResponse>(`/api/exams?${query.toString()}`));
+    const payload = await api.get("/api/exams", {
+      query: {
+        page: 1,
+        page_size: 100,
+        name: filters.name || null,
+        semester_id: filters.semester_id ?? null,
+      },
+    });
+    Object.assign(exams, payload);
   } catch (error) {
     ElMessage.error((error as Error).message);
   }
@@ -737,7 +746,9 @@ function openCreate(): void {
 
 async function openEdit(row: ExamItem): Promise<void> {
   try {
-    const detail = await apiRequest<ExamItem>(`/api/exams/${row.id}`);
+    const detail = await api.get("/api/exams/{exam_id}", {
+      path: { exam_id: row.id },
+    });
     editingExamId.value = row.id;
     resetExamForm();
     Object.assign(examForm, detail);
@@ -754,9 +765,14 @@ async function submitExam(): Promise<void> {
   }
   try {
     savingExam.value = true;
-    const method = editingExamId.value ? "PUT" : "POST";
-    const path = editingExamId.value ? `/api/exams/${editingExamId.value}` : "/api/exams";
-    await apiRequest(path, { method, body: JSON.stringify(examForm) });
+    if (editingExamId.value) {
+      await api.put("/api/exams/{exam_id}", {
+        path: { exam_id: editingExamId.value },
+        body: examForm as unknown as ExamPayloadSchema,
+      });
+    } else {
+      await api.post("/api/exams", { body: examForm as unknown as ExamPayloadSchema });
+    }
     ElMessage.success("考试保存成功");
     dialogVisible.value = false;
     await loadExams();

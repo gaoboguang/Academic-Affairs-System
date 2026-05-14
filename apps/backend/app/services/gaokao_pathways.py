@@ -13,7 +13,14 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.config import Settings
 from app.exporters.pathway_profiles import export_pathway_profile_template, export_pathway_profiles
 from app.importers.pathway_profiles import StudentPathwayProfileImporter
-from app.models import GaokaoPathway, GaokaoPathwayRule, Student, StudentPathwayEvaluation, StudentPathwayProfile
+from app.models import (
+    EmploymentDirection,
+    GaokaoPathway,
+    GaokaoPathwayRule,
+    Student,
+    StudentPathwayEvaluation,
+    StudentPathwayProfile,
+)
 from app.repositories.gaokao_pathways import (
     get_pathway,
     get_pathway_by_code,
@@ -1675,12 +1682,29 @@ def export_student_pathway_profiles(session: Session, settings: Settings) -> dic
                 "accept_early_batch": profile.accept_early_batch if profile else None,
                 "accept_service_commitment": profile.accept_service_commitment if profile else None,
                 "accept_interview_or_physical_test": profile.accept_interview_or_physical_test if profile else None,
-                "materials_json": profile.materials_json if profile else {},
+                "region_preferences_json": profile.region_preferences_json if profile else {},
+                "career_preferences_json": profile.career_preferences_json if profile else {},
+                "primary_direction_name": _resolve_direction_name(
+                    session, (profile.career_preferences_json or {}).get("primary_direction_id") if profile else None
+                ),
+                "secondary_direction_name": _resolve_direction_name(
+                    session, (profile.career_preferences_json or {}).get("secondary_direction_id") if profile else None
+                ),
+                "alternative_direction_name": _resolve_direction_name(
+                    session, (profile.career_preferences_json or {}).get("alternative_direction_id") if profile else None
+                ),
                 "known_body_limitations_json": profile.known_body_limitations_json if profile else {},
                 "note": profile.note if profile else None,
             }
         )
     return {"file_path": export_pathway_profiles(settings, rows)}
+
+
+def _resolve_direction_name(session: Session, direction_id: object) -> str | None:
+    if not isinstance(direction_id, int):
+        return None
+    direction = session.get(EmploymentDirection, direction_id)
+    return direction.name if direction else None
 
 
 def preview_student_pathway_evaluations(
@@ -1876,7 +1900,8 @@ def _build_missing_materials(rule_results: list[StudentPathwayRuleEvaluationRead
 
 
 def _count_required_material_gaps(rule_results: list[StudentPathwayRuleEvaluationRead]) -> int:
-    return sum(1 for item in rule_results if item.result != RULE_RESULT_PASSED and item.rule_type == "material_required")
+    # Material gating was retired; never penalize the score for material gaps.
+    return 0
 
 
 def _evaluate_condition(profile: StudentPathwayProfile, condition: dict[str, Any]) -> str:
@@ -1907,17 +1932,11 @@ def _evaluate_condition(profile: StudentPathwayProfile, condition: dict[str, Any
             return RULE_RESULT_UNKNOWN
         return RULE_RESULT_PASSED if bool(value) is bool(condition.get("value")) else RULE_RESULT_FAILED
     if condition_type == "material_present":
-        key = str(condition.get("key") or "")
-        value = (profile.materials_json or {}).get(key, _MISSING)
-        return RULE_RESULT_PASSED if _has_value(value) and bool(value) else RULE_RESULT_UNKNOWN
+        # Material gating was retired together with the 材料准备 UI; treat
+        # everything as already-prepared so it never blocks a pathway.
+        return RULE_RESULT_PASSED
     if condition_type == "material_present_when":
-        when = condition.get("when")
-        when_result = _evaluate_condition(profile, when if isinstance(when, dict) else {})
-        if when_result != RULE_RESULT_PASSED:
-            return RULE_RESULT_PASSED
-        key = str(condition.get("key") or "")
-        value = (profile.materials_json or {}).get(key, _MISSING)
-        return RULE_RESULT_PASSED if _has_value(value) and bool(value) else RULE_RESULT_UNKNOWN
+        return RULE_RESULT_PASSED
     if condition_type == "all":
         results = [_evaluate_condition(profile, item) for item in _condition_items(condition)]
         if any(item == RULE_RESULT_FAILED for item in results):

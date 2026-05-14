@@ -102,6 +102,7 @@ class StudentImporter:
                 self._normalize_header(header): value
                 for header, value in row_values.items()
             }
+            savepoint = self.session.begin_nested()
             try:
                 payload = self._parse_row(normalized_row)
                 existing = get_student_by_no(self.session, payload.student_no)
@@ -110,6 +111,7 @@ class StudentImporter:
                     if strategy == "create":
                         raise ValueError(f"学号 {payload.student_no} 已存在")
                     if strategy == "skip_existing":
+                        savepoint.rollback()
                         skipped_rows += 1
                         continue
                     self._apply(existing, payload)
@@ -121,8 +123,11 @@ class StudentImporter:
                     self._apply(student, payload)
                     created_rows += 1
 
+                savepoint.commit()
                 success_rows += 1
             except Exception as exc:
+                if savepoint.is_active:
+                    savepoint.rollback()
                 failed_rows += 1
                 row_errors.append(build_row_error(row_number=row_number, values=row_values, message=str(exc)))
 

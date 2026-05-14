@@ -78,6 +78,7 @@ def build_data_health_report(
     *,
     province: str = "山东",
     expected_years: tuple[int, ...] = DEFAULT_EXPECTED_YEARS,
+    sidecar_path: Path | None = None,
 ) -> dict[str, Any]:
     db_path = db_path.resolve()
     if not db_path.exists():
@@ -104,16 +105,25 @@ def build_data_health_report(
             "summary": "数据库文件不存在",
         }
 
+    resolved_sidecar = _resolve_sidecar_path(db_path, sidecar_path)
+
     with sqlite3.connect(str(db_path)) as conn:
         conn.row_factory = sqlite3.Row
-        schema = _Schema(conn)
-        table_stats = _build_table_stats(conn, schema)
-        coverage = _build_coverage(conn, schema, province=province, expected_years=expected_years)
-        gaps = _build_gap_summary(conn, schema, coverage, expected_years=expected_years)
-        audit_summary = _build_audit_summary(conn, schema, coverage, expected_years=expected_years)
-        special_type_risks = _build_special_type_risks(conn, schema, province=province)
-        publication_status = _build_2026_publication_status(conn, schema, province=province)
-        schema_version = _read_schema_version(conn, schema)
+        if resolved_sidecar is not None and resolved_sidecar.exists():
+            sidecar_str = str(resolved_sidecar).replace("'", "''")
+            conn.execute(f"ATTACH DATABASE '{sidecar_str}' AS gaokao")
+        try:
+            schema = _Schema(conn)
+            table_stats = _build_table_stats(conn, schema)
+            coverage = _build_coverage(conn, schema, province=province, expected_years=expected_years)
+            gaps = _build_gap_summary(conn, schema, coverage, expected_years=expected_years)
+            audit_summary = _build_audit_summary(conn, schema, coverage, expected_years=expected_years)
+            special_type_risks = _build_special_type_risks(conn, schema, province=province)
+            publication_status = _build_2026_publication_status(conn, schema, province=province)
+            schema_version = _read_schema_version(conn, schema)
+        finally:
+            if resolved_sidecar is not None and resolved_sidecar.exists():
+                conn.execute("DETACH DATABASE gaokao")
 
     return {
         "db_path": str(db_path),
@@ -137,6 +147,13 @@ def build_data_health_report(
         "gaps": gaps,
         "summary": _build_summary_line(table_stats, gaps),
     }
+
+
+def _resolve_sidecar_path(db_path: Path, sidecar_path: Path | None) -> Path | None:
+    if sidecar_path is not None:
+        return sidecar_path
+    candidate = db_path.parent / "local_edu_tool" / "local_edu.sqlite3"
+    return candidate if candidate.exists() else None
 
 
 def format_data_health_report(report: dict[str, Any]) -> str:
@@ -1445,10 +1462,18 @@ class _Schema:
     @property
     def tables(self) -> set[str]:
         if self._tables is None:
-            self._tables = {
-                row["name"]
-                for row in self._conn.execute(
-                    "SELECT name FROM sqlite_master WHERE type = 'table'"
+            schemas: set[str] = {"main"}
+            for row in self._conn.execute("PRAGMA database_list").fetchall():
+                # row -> (seq, name, file)
+                name = row[1] if not isinstance(row, sqlite3.Row) else row["name"]
+                schemas.add(str(name))
+            collected: set[str] = set()
+            for schema_name in schemas:
+                quoted_schema = schema_name if schema_name == "main" else f'"{schema_name}"'
+                rows = self._conn.execute(
+                    f"SELECT name FROM {quoted_schema}.sqlite_master WHERE type = 'table'"
                 ).fetchall()
-            }
+                for row in rows:
+                    collected.add(row[0] if not isinstance(row, sqlite3.Row) else row["name"])
+            self._tables = collected
         return self._tables

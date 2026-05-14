@@ -40,6 +40,14 @@ export interface VolunteerBatchOptionGroupInput {
   guideOptions?: VolunteerGuideOptions | null;
 }
 
+export interface VolunteerGuideDisplaySummary {
+  totalCandidateCount: number;
+  displayedCandidateCount: number;
+  groupedDisplayedCount: number;
+  isTruncated: boolean;
+  copy: string;
+}
+
 export function buildVolunteerGuideReadiness(
   guide: VolunteerGuidePreviewResponse | null,
 ): VolunteerGuideReadiness {
@@ -79,6 +87,32 @@ export function groupVolunteerGuideCandidates(
     count: 0,
     candidates: [],
   });
+}
+
+export function buildVolunteerGuideDisplaySummary(
+  guide: VolunteerGuidePreviewResponse | null,
+): VolunteerGuideDisplaySummary {
+  const groups = groupVolunteerGuideCandidates(guide);
+  const groupedDisplayedCount = groups.reduce((sum, group) => sum + group.count, 0);
+  const totalCandidateCount = guide?.source_preview.candidate_count ?? 0;
+  const displayedCandidateCount = guide?.source_preview.returned_candidate_count ?? groupedDisplayedCount;
+  const isTruncated = Boolean(
+    guide?.source_preview.is_candidate_truncated
+    || (displayedCandidateCount > 0 && totalCandidateCount > displayedCandidateCount),
+  );
+  const rankCopy = `生效位次 ${formatGuideSummaryValue(guide?.source_preview.effective_rank)}`;
+  const scoreCopy = guide?.source_preview.score_input_label ?? "成绩/位次来源待确认";
+  const countCopy = isTruncated
+    ? `共命中 ${totalCandidateCount} 条候选，当前展示前 ${displayedCandidateCount} 条；分组卡统计当前展示候选`
+    : `共 ${totalCandidateCount} 条候选`;
+
+  return {
+    totalCandidateCount,
+    displayedCandidateCount,
+    groupedDisplayedCount,
+    isTruncated,
+    copy: `${countCopy}；${rankCopy}；${scoreCopy}。`,
+  };
 }
 
 export function buildVolunteerGuideProgressSteps(
@@ -277,6 +311,11 @@ function groupLabel(key: VolunteerGuideGroupKey): string {
     watch: "仅关注",
   };
   return labels[key];
+}
+
+function formatGuideSummaryValue(value: number | string | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "暂无";
+  return String(value);
 }
 
 function uniqueOrderedStrings(values: Array<string | null | undefined>): string[] {

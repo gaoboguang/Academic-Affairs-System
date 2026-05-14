@@ -23,9 +23,12 @@ def materialize_gaokao_structured_tables(
     db_path: Path,
     *,
     backup_dir: Path | None = None,
+    sidecar_path: Path | None = None,
 ) -> dict[str, object]:
     if not db_path.exists():
         raise FileNotFoundError(f"database not found: {db_path}")
+
+    sidecar_path = _resolve_sidecar_path(db_path, sidecar_path)
 
     backup_path = None
     if backup_dir is not None:
@@ -38,30 +41,45 @@ def materialize_gaokao_structured_tables(
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
         conn.create_function("_compact_chinese_college_name", 1, _compact_chinese_college_name)
-        stats = {
-            "colleges_upserted": _upsert_colleges(conn),
-            "majors_upserted": _upsert_majors(conn),
-            "admission_records_upserted": _upsert_admission_records(conn),
-            "enrollment_plans_upserted": _upsert_enrollment_plans(conn),
-            "college_majors_upserted": _upsert_college_major_links(conn),
-        }
-        conn.commit()
+        if sidecar_path is not None and sidecar_path.exists():
+            sidecar_str = str(sidecar_path).replace("'", "''")
+            conn.execute(f"ATTACH DATABASE '{sidecar_str}' AS gaokao")
+        try:
+            stats = {
+                "colleges_upserted": _upsert_colleges(conn),
+                "majors_upserted": _upsert_majors(conn),
+                "admission_records_upserted": _upsert_admission_records(conn),
+                "enrollment_plans_upserted": _upsert_enrollment_plans(conn),
+                "college_majors_upserted": _upsert_college_major_links(conn),
+            }
+            conn.commit()
 
-        final_counts = {
-            "college": _count_rows(conn, "college"),
-            "college_alias": _count_rows(conn, "college_alias"),
-            "major": _count_rows(conn, "major"),
-            "admission_record": _count_rows(conn, "admission_record"),
-            "enrollment_plan": _count_rows(conn, "enrollment_plan"),
-            "college_major": _count_rows(conn, "college_major"),
-        }
+            final_counts = {
+                "college": _count_rows(conn, "college"),
+                "college_alias": _count_rows(conn, "college_alias"),
+                "major": _count_rows(conn, "major"),
+                "admission_record": _count_rows(conn, "admission_record"),
+                "enrollment_plan": _count_rows(conn, "enrollment_plan"),
+                "college_major": _count_rows(conn, "college_major"),
+            }
+        finally:
+            if sidecar_path is not None and sidecar_path.exists():
+                conn.execute("DETACH DATABASE gaokao")
 
     return {
         "db_path": str(db_path),
+        "sidecar_path": str(sidecar_path) if sidecar_path else None,
         "backup_path": str(backup_path) if backup_path else None,
         "stats": stats,
         "final_counts": final_counts,
     }
+
+
+def _resolve_sidecar_path(db_path: Path, sidecar_path: Path | None) -> Path | None:
+    if sidecar_path is not None:
+        return sidecar_path
+    candidate = db_path.parent / "local_edu_tool" / "local_edu.sqlite3"
+    return candidate if candidate.exists() else None
 
 
 def backup_sqlite_database(source_path: Path, backup_path: Path) -> None:

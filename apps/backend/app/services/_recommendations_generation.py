@@ -388,16 +388,7 @@ def _generate_for_student(session: Session, payload: RecommendationGeneratePaylo
             if score_line_fallback:
                 evaluation, score_line_reference = score_line_fallback
             else:
-                score_line_reference = None
-                plan_only_fallback = build_plan_only_reference_evaluation(
-                    province=province,
-                    target_year=target_year,
-                    student_type=student_type,
-                    plan=plan,
-                )
-                if not plan_only_fallback:
-                    continue
-                evaluation = plan_only_fallback
+                continue
             career_alignment = evaluate_career_alignment(
                 major=plan.major,
                 mappings=fallback_employment_mappings_by_major.get(plan.major_id or 0, []),
@@ -582,6 +573,7 @@ def _generate_for_student(session: Session, payload: RecommendationGeneratePaylo
         challenge=[item for item in serialized if item.result_type == "challenge"],
         steady=[item for item in serialized if item.result_type == "steady"],
         safe=[item for item in serialized if item.result_type == "safe"],
+        watch=[item for item in serialized if item.result_type == "watch"],
     )
 
 

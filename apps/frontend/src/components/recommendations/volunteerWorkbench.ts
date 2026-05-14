@@ -11,6 +11,7 @@ export {
   buildVolunteerRuleInsightCardsFromRules,
 } from "./volunteerWorkbenchInsights";
 import type {
+  CareerPriorityFocus,
   StudentCareerPreference,
   StudentCareerPreferencePayload,
   VolunteerDraftComparisonEntry,
@@ -142,6 +143,34 @@ export interface VolunteerExamScoreAutofillNotice {
   detail: string;
   tone: "success" | "warning" | "info";
   canApply: boolean;
+}
+
+export interface VolunteerCandidateFilterState {
+  region: string;
+  ownership: string;
+  musicSubTrack: string;
+  keyword: string;
+  page: number;
+  pageSize: number;
+}
+
+export interface VolunteerCandidateFilterOptions {
+  regions: string[];
+  ownerships: string[];
+  musicSubTracks: VolunteerCandidateMusicSubTrackOption[];
+}
+
+export interface VolunteerCandidateMusicSubTrackOption {
+  value: "vocal" | "instrumental";
+  label: string;
+  count: number;
+}
+
+export interface VolunteerCandidatePage {
+  items: VolunteerWorkbenchCandidate[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 const candidateTypeLabels: Record<string, string> = {
@@ -361,6 +390,146 @@ export function validateVolunteerDraftName(name: string, draftItems: VolunteerDr
   return null;
 }
 
+const VOCAL_KEYWORDS = [
+  "声乐",
+  "美声",
+  "民族唱法",
+  "民族演唱",
+  "通俗演唱",
+  "通俗唱法",
+  "流行演唱",
+  "流行唱法",
+  "演唱",
+];
+
+const INSTRUMENTAL_KEYWORDS = [
+  "器乐",
+  "钢琴",
+  "管弦",
+  "小提琴",
+  "中提琴",
+  "大提琴",
+  "低音提琴",
+  "小号",
+  "长号",
+  "圆号",
+  "次中音号",
+  "大号",
+  "长笛",
+  "短笛",
+  "双簧管",
+  "单簧管",
+  "巴松",
+  "萨克斯",
+  "打击乐",
+  "电子键盘",
+  "双排键",
+  "竖琴",
+  "古筝",
+  "古琴",
+  "扬琴",
+  "二胡",
+  "板胡",
+  "京胡",
+  "高胡",
+  "中胡",
+  "琵琶",
+  "柳琴",
+  "中阮",
+  "大阮",
+  "三弦",
+  "笛子",
+  "竹笛",
+  "笙",
+  "唢呐",
+  "管子",
+  "箫",
+  "葫芦丝",
+  "钢琴调律",
+];
+
+function buildCandidateMusicText(candidate: VolunteerWorkbenchCandidate): string {
+  return [
+    candidate.major_name,
+    candidate.major_direction,
+    candidate.major_note,
+    candidate.career_path,
+    candidate.source_note,
+    ...(candidate.reference_source_notes_json ?? []),
+    ...(candidate.match_notes_json ?? []),
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function detectMusicSubTrack(candidate: VolunteerWorkbenchCandidate): "vocal" | "instrumental" | null {
+  const text = buildCandidateMusicText(candidate);
+  if (!text) return null;
+  const hasVocal = VOCAL_KEYWORDS.some((keyword) => text.includes(keyword));
+  const hasInstrumental = INSTRUMENTAL_KEYWORDS.some((keyword) => text.includes(keyword));
+  if (hasInstrumental && !hasVocal) return "instrumental";
+  if (hasVocal && !hasInstrumental) return "vocal";
+  return null;
+}
+
+export function buildVolunteerCandidateFilterOptions(
+  candidates: VolunteerWorkbenchCandidate[],
+): VolunteerCandidateFilterOptions {
+  let vocalCount = 0;
+  let instrumentalCount = 0;
+  for (const candidate of candidates) {
+    const subTrack = detectMusicSubTrack(candidate);
+    if (subTrack === "vocal") vocalCount += 1;
+    else if (subTrack === "instrumental") instrumentalCount += 1;
+  }
+  const musicSubTracks: VolunteerCandidateMusicSubTrackOption[] = [];
+  if (vocalCount > 0) {
+    musicSubTracks.push({ value: "vocal", label: "声乐", count: vocalCount });
+  }
+  if (instrumentalCount > 0) {
+    musicSubTracks.push({ value: "instrumental", label: "器乐", count: instrumentalCount });
+  }
+  return {
+    regions: uniqueStrings(candidates.flatMap((candidate) => [candidate.college_province, candidate.college_city])),
+    ownerships: uniqueStrings(candidates.map((candidate) => candidate.college_ownership)),
+    musicSubTracks,
+  };
+}
+
+export function buildVolunteerCandidatePage(
+  candidates: VolunteerWorkbenchCandidate[],
+  filters: VolunteerCandidateFilterState,
+): VolunteerCandidatePage {
+  const region = normalizeOptionalString(filters.region);
+  const ownership = normalizeOptionalString(filters.ownership);
+  const musicSubTrack = normalizeOptionalString(filters.musicSubTrack);
+  const keyword = normalizeOptionalString(filters.keyword)?.toLowerCase();
+  const pageSize = Math.max(1, filters.pageSize);
+  const filtered = candidates.filter((candidate) => {
+    const regionMatched = !region || candidate.college_province === region || candidate.college_city === region;
+    const ownershipMatched = !ownership || candidate.college_ownership === ownership;
+    const subTrackMatched = !musicSubTrack || detectMusicSubTrack(candidate) === musicSubTrack;
+    const keywordText = [
+      candidate.college_name,
+      candidate.major_name,
+      candidate.major_code_snapshot,
+      candidate.college_code_snapshot,
+      candidate.major_group_code,
+    ].filter(Boolean).join(" ").toLowerCase();
+    const keywordMatched = !keyword || keywordText.includes(keyword);
+    return regionMatched && ownershipMatched && subTrackMatched && keywordMatched;
+  });
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const page = Math.min(Math.max(1, filters.page), pageCount);
+  const start = (page - 1) * pageSize;
+  return {
+    items: filtered.slice(start, start + pageSize),
+    total: filtered.length,
+    page,
+    pageSize,
+  };
+}
+
 export function buildVolunteerWorkbenchPayload(
   form: VolunteerWorkbenchFormState,
 ): VolunteerWorkbenchPreviewPayload {
@@ -444,6 +613,101 @@ export function applyStudentCareerPreferenceToForm(
   form.accepts_public_service = preference?.accepts_public_service ?? false;
   form.accepts_certificate = preference?.accepts_certificate ?? false;
   form.accepts_long_training = preference?.accepts_long_training ?? false;
+}
+
+interface StudentPathwayProfileLike {
+  province?: string | null;
+  candidate_type?: string | null;
+  art_track?: string | null;
+  subject_combination?: string | null;
+  art_professional_score?: number | null;
+  region_preferences_json?: Record<string, unknown> | null;
+  career_preferences_json?: Record<string, unknown> | null;
+}
+
+function readStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter((item): item is string => Boolean(item));
+}
+
+function readOptionalString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function readOptionalNumber(value: unknown): number | undefined {
+  return typeof value === "number" ? value : undefined;
+}
+
+function readOptionalBoolean(value: unknown): boolean {
+  return typeof value === "boolean" ? value : false;
+}
+
+const ALLOWED_PRIORITY_FOCUSES = new Set<CareerPriorityFocus>([
+  "stability",
+  "salary",
+  "interest",
+  "long_term",
+]);
+
+function readPriorityFocuses(value: unknown): CareerPriorityFocus[] {
+  if (!Array.isArray(value)) return [];
+  const result: CareerPriorityFocus[] = [];
+  for (const item of value) {
+    if (
+      typeof item === "string"
+      && ALLOWED_PRIORITY_FOCUSES.has(item as CareerPriorityFocus)
+      && !result.includes(item as CareerPriorityFocus)
+    ) {
+      result.push(item as CareerPriorityFocus);
+    }
+  }
+  return result;
+}
+
+/**
+ * Overwrites the workbench form with values from the student's pathway profile.
+ *
+ * Used when the user selects a student in the workbench: the saved profile
+ * supplies 考生条件 (province / candidate_type / art_track / subject_combination /
+ * professional score) and the full 意向偏好 region + career preference set via
+ * `region_preferences_json` and `career_preferences_json`.
+ */
+export function applyStudentPathwayProfileToForm(
+  form: VolunteerWorkbenchFormState,
+  profile: StudentPathwayProfileLike | null,
+): void {
+  if (!profile) {
+    return;
+  }
+  if (profile.province) {
+    form.province = profile.province;
+  }
+  form.candidate_type = profile.candidate_type ?? "";
+  form.art_track = profile.art_track ?? "";
+  form.subject_combination = profile.subject_combination ?? "";
+  if (profile.art_professional_score != null) {
+    form.professional_score = profile.art_professional_score;
+  }
+
+  const regionPrefs = profile.region_preferences_json ?? {};
+  form.target_regions_json = readStringList(regionPrefs["target_regions"]);
+  form.school_level_tags_json = readStringList(regionPrefs["school_level_tags"]);
+  form.major_keyword = readOptionalString(regionPrefs["major_keyword"]);
+
+  const careerPrefs = profile.career_preferences_json ?? {};
+  form.primary_direction_id = readOptionalNumber(careerPrefs["primary_direction_id"]);
+  form.secondary_direction_id = readOptionalNumber(careerPrefs["secondary_direction_id"]);
+  form.alternative_direction_id = readOptionalNumber(careerPrefs["alternative_direction_id"]);
+  form.priority_focuses_json = readPriorityFocuses(careerPrefs["priority_focuses"]);
+  form.preferred_industries_json = readStringList(careerPrefs["preferred_industries"]);
+  form.preferred_job_types_json = readStringList(careerPrefs["preferred_job_types"]);
+  form.target_employment_cities_json = readStringList(careerPrefs["target_employment_cities"]);
+  form.accepts_postgraduate = readOptionalBoolean(careerPrefs["accepts_postgraduate"]);
+  form.accepts_public_service = readOptionalBoolean(careerPrefs["accepts_public_service"]);
+  form.accepts_certificate = readOptionalBoolean(careerPrefs["accepts_certificate"]);
+  form.accepts_long_training = readOptionalBoolean(careerPrefs["accepts_long_training"]);
 }
 
 export function appendVolunteerDraftItem(

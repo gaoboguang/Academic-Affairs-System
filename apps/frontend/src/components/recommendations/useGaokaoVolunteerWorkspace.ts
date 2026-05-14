@@ -17,6 +17,7 @@ import {
 } from "./volunteerGuide";
 import {
   applyStudentCareerPreferenceToForm,
+  applyStudentPathwayProfileToForm,
   appendVolunteerDraftItem,
   applyVolunteerExamScoreAutofill,
   buildStudentCareerPreferencePayload,
@@ -257,7 +258,7 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
   watch(
     () => volunteerWorkbenchForm.student_id,
     () => {
-      void loadStudentCareerPreference();
+      void syncSelectedStudentProfile();
     },
     { immediate: true },
   );
@@ -605,19 +606,24 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
     }
   }
 
-  async function loadStudentCareerPreference(): Promise<void> {
-    if (!volunteerWorkbenchForm.student_id) {
+  async function syncSelectedStudentProfile(): Promise<void> {
+    const studentId = volunteerWorkbenchForm.student_id;
+    if (!studentId) {
       studentCareerPreference.value = null;
       return;
     }
+    const province = volunteerWorkbenchForm.province || "山东";
     try {
       loadingStudentCareerPreference.value = true;
-      studentCareerPreference.value = await apiRequest<StudentCareerPreference | null>(
-        `/api/students/${volunteerWorkbenchForm.student_id}/career-preference`,
-      );
+      const profile = await apiRequest<Record<string, unknown> | null>(
+        `/api/gaokao/students/${studentId}/pathway-profile?province=${encodeURIComponent(province)}`,
+      ).catch(() => null);
+      // Pathway profile is the single source of truth; we no longer mirror to
+      // a separate career-preference table here.
+      studentCareerPreference.value = null;
+      applyStudentPathwayProfileToForm(volunteerWorkbenchForm, profile as never);
     } catch (error) {
       reportError(error);
-      studentCareerPreference.value = null;
     } finally {
       loadingStudentCareerPreference.value = false;
     }

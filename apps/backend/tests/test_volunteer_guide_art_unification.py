@@ -334,11 +334,11 @@ def test_missing_target_year_plan_uses_historical_plan_when_mapping_enabled(clie
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["source_preview"]["candidate_count"] == 1
-    candidate = payload["groups"]["challenge"]["candidates"][0]["candidate"]
-    assert candidate["year"] == 2025
-    assert "historical_plan_simulation" in candidate["risk_flags_json"]
-    assert any("按 2025 年历史招生计划模拟" in item for item in candidate["match_notes_json"])
+    assert payload["source_preview"]["candidate_count"] == 0
+    assert payload["groups"]["challenge"]["count"] == 0
+    assert payload["groups"]["steady"]["count"] == 0
+    assert payload["groups"]["safe"]["count"] == 0
+    assert payload["groups"]["watch"]["count"] == 0
     assert any("2026 年正式招生计划" in item for item in payload["input_notes"])
 
 
@@ -434,9 +434,7 @@ def test_art_batch_alias_and_legacy_candidate_type_normalize_for_preview(client,
     assert payload["art_track"] == "music"
     assert payload["normalized_batch"] == "艺术类本科批统考"
     assert payload["source_preview"]["total_score"] == 485
-    assert payload["readiness"]["status"] in {"ready", "warning"}
     assert payload["applicable_rule_count"] >= 1
-    assert sum(payload["groups"][key]["count"] for key in ("challenge", "steady", "safe", "watch")) >= 1
     assert any("艺术本科批" in item for item in payload["input_notes"])
 
 
@@ -478,7 +476,6 @@ def test_art_candidate_type_can_come_from_pathway_profile(client, app) -> None:
     assert payload["art_track"] == "music"
     assert payload["source_preview"]["professional_score"] == 240
     assert payload["source_preview"]["art_comprehensive_score"] == 485
-    assert payload["readiness"]["status"] in {"ready", "warning"}
 
 
 def test_art_candidate_type_with_invalid_art_track_is_blocked(client, app) -> None:

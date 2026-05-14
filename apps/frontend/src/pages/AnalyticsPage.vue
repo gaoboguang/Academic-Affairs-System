@@ -353,6 +353,17 @@
               <div class="metric-value small-value">{{ getTargetGapSummary(studentAnalytics.target_line_gaps) }}</div>
             </div>
           </div>
+          <section v-if="studentAnalytics" class="enhanced-analytics-grid">
+            <StudentTrendCard
+              :trend-shape="studentAnalytics.trend_shape"
+              :stability="studentAnalytics.stability"
+              :trend-points="studentAnalytics.trend_points"
+              :subject-shapes="studentAnalytics.subject_trend_shapes"
+            />
+            <StudentStructureCard :structure="studentAnalytics.subject_structure" />
+            <StudentPeerCard :peer="studentAnalytics.peer_comparison" />
+            <StudentTargetProgressCard :progress="studentAnalytics.target_progress" />
+          </section>
           <div v-if="studentAnalytics" class="student-report-grid">
             <article class="soft-card inner-panel student-overview-panel">
               <h4>本次画像</h4>
@@ -646,6 +657,12 @@
             </div>
             <el-empty v-else description="当前班级暂无知识点讲评清单。请先导入题分明细。" />
           </article>
+          <ClassKnowledgeHeatmapCard
+            v-if="classAnalytics"
+            :heatmap="classKnowledgeHeatmap"
+            :loading="loadingClassKnowledgeHeatmap"
+            @refresh="loadClassKnowledgeHeatmap"
+          />
         </section>
       </el-tab-pane>
 
@@ -749,6 +766,16 @@
               :title="item"
             />
           </div>
+
+          <el-alert
+            v-if="gradeAnalytics?.exam_anomaly?.is_outlier"
+            class="exam-anomaly-alert"
+            type="warning"
+            show-icon
+            :closable="false"
+            :title="`异常考试提示：${gradeAnalytics.exam_anomaly.reason}`"
+            :description="gradeAnalytics.exam_anomaly.recommendation"
+          />
 
           <div v-if="gradeAnalytics?.target_line_summaries?.length" class="distribution-grid">
             <article class="soft-card distribution-card">
@@ -970,7 +997,12 @@ import {
   type AdviserRiskStudentItem,
 } from "../components/analytics/adviserDashboard";
 import ClassPanoramaPanel from "../components/analytics/ClassPanoramaPanel.vue";
+import ClassKnowledgeHeatmapCard from "../components/analytics/ClassKnowledgeHeatmapCard.vue";
 import GradePanoramaPanel from "../components/analytics/GradePanoramaPanel.vue";
+import StudentPeerCard from "../components/analytics/StudentPeerCard.vue";
+import StudentStructureCard from "../components/analytics/StudentStructureCard.vue";
+import StudentTargetProgressCard from "../components/analytics/StudentTargetProgressCard.vue";
+import StudentTrendCard from "../components/analytics/StudentTrendCard.vue";
 import {
   buildStudentRadarRows,
   filterKnowledgePointsBySubject,
@@ -1128,6 +1160,8 @@ const studentRadarOptions = [
 const studentAnalytics = ref<any>(null);
 const classAnalytics = ref<any>(null);
 const classKnowledgeBriefing = ref<any>(null);
+const classKnowledgeHeatmap = ref<any>(null);
+const loadingClassKnowledgeHeatmap = ref(false);
 const selectedClassKnowledgeIds = ref<number[]>([]);
 const loadingClassKnowledgeBriefing = ref(false);
 const studentKnowledgeTaskPreview = ref<any>(null);
@@ -1393,6 +1427,7 @@ async function loadClassAnalytics(): Promise<void> {
   try {
     classAnalytics.value = await apiRequest(`/api/analytics/classes/${selectedClassId.value}?exam_id=${selectedExamId.value}`);
     classKnowledgeBriefing.value = null;
+    classKnowledgeHeatmap.value = null;
     classKnowledgeTaskPreview.value = null;
     selectedClassKnowledgeIds.value = [];
   } catch (error) {
@@ -1412,6 +1447,22 @@ async function loadClassKnowledgeBriefing(): Promise<void> {
     ElMessage.error((error as Error).message);
   } finally {
     loadingClassKnowledgeBriefing.value = false;
+  }
+}
+
+async function loadClassKnowledgeHeatmap(): Promise<void> {
+  if (!selectedExamId.value || !selectedClassId.value) return;
+  try {
+    loadingClassKnowledgeHeatmap.value = true;
+    const query = new URLSearchParams({ exam_id: String(selectedExamId.value) });
+    if (classKnowledgeSubjectFilter.value) query.set("subject_id", String(classKnowledgeSubjectFilter.value));
+    classKnowledgeHeatmap.value = await apiRequest(
+      `/api/analytics/classes/${selectedClassId.value}/knowledge-heatmap?${query.toString()}`,
+    );
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  } finally {
+    loadingClassKnowledgeHeatmap.value = false;
   }
 }
 
@@ -1785,6 +1836,7 @@ function resetAnalyticsState(): void {
   knowledgeSubjectFilter.value = null;
   classAnalytics.value = null;
   classKnowledgeBriefing.value = null;
+  classKnowledgeHeatmap.value = null;
   classKnowledgeTaskPreview.value = null;
   studentKnowledgeTaskPreview.value = null;
   selectedClassKnowledgeIds.value = [];
@@ -1838,6 +1890,7 @@ watch(selectedExamId, async (examId) => {
   knowledgeSubjectFilter.value = null;
   classKnowledgeSubjectFilter.value = null;
   classKnowledgeBriefing.value = null;
+  classKnowledgeHeatmap.value = null;
   classKnowledgeTaskPreview.value = null;
   studentKnowledgeTaskPreview.value = null;
   selectedClassKnowledgeIds.value = [];
@@ -2116,6 +2169,23 @@ onMounted(async () => {
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   gap: 16px;
   margin-top: 16px;
+}
+
+.enhanced-analytics-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.exam-anomaly-alert {
+  margin-top: 8px;
+}
+
+@media (max-width: 1080px) {
+  .enhanced-analytics-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .student-overview-panel p {

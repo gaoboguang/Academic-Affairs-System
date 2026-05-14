@@ -4,6 +4,7 @@ import {
   guideToWorkbenchPreview,
 } from "../src/components/recommendations/useGaokaoVolunteerWorkspace";
 import {
+  buildVolunteerGuideDisplaySummary,
   buildVolunteerGuideOptionItems,
   buildVolunteerBatchOptionGroups,
   calculateVolunteerArtComprehensiveScore,
@@ -407,6 +408,31 @@ describe("volunteer guide helpers", () => {
 
     expect(groups.map((item) => item.key)).toEqual(["challenge", "steady", "safe", "watch"]);
     expect(groups[1].candidates[0].evidence.strength_label).toBe("专业历史线");
+  });
+
+  it("separates total hit count from currently displayed grouped candidates", () => {
+    const summary = buildVolunteerGuideDisplaySummary(buildGuide({
+      source_preview: {
+        ...buildGuide().source_preview,
+        candidate_count: 606,
+        returned_candidate_count: 300,
+        is_candidate_truncated: true,
+      },
+      groups: {
+        ...buildGuide().groups,
+        challenge: { key: "challenge", label: "冲刺", count: 213, candidates: [] },
+        steady: { key: "steady", label: "稳妥", count: 62, candidates: [] },
+        safe: { key: "safe", label: "保底", count: 25, candidates: [] },
+        watch: { key: "watch", label: "仅关注", count: 0, candidates: [] },
+      },
+    }));
+
+    expect(summary.totalCandidateCount).toBe(606);
+    expect(summary.displayedCandidateCount).toBe(300);
+    expect(summary.groupedDisplayedCount).toBe(300);
+    expect(summary.isTruncated).toBe(true);
+    expect(summary.copy).toContain("共命中 606 条候选");
+    expect(summary.copy).toContain("当前展示前 300 条");
   });
 
   it("keeps workbench rule and score context when adapting guide preview", () => {

@@ -443,6 +443,7 @@ class StudentRecommendationSummary(BaseModel):
     challenge_count: int
     steady_count: int
     safe_count: int
+    watch_count: int = 0
 
 
 class StudentAttachmentPayload(BaseModel):

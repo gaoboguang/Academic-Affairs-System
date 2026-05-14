@@ -10,6 +10,13 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.analytics.score_contexts import effective_class_id, effective_class_name, load_exam_context_map
 from app.analytics.scores import calculate_rate, safe_mean, safe_median, safe_stddev
+from app.services._analytics_metrics import (
+    compute_peer_radius,
+    compute_rank_trend_shape,
+    compute_stability,
+    detect_exam_anomaly,
+    estimate_target_reach_probability,
+)
 from app.models import (
     Exam,
     Grade,
@@ -52,6 +59,7 @@ from app.schemas.exam import (
     GradeClassContributionItem,
     GradeCriticalStudentItem,
     GradeDistributionItem,
+    GradeExamAnomaly,
     GradePanoramaExamPointRead,
     GradePanoramaResponse,
     GradePanoramaSubjectPointRead,
@@ -65,12 +73,22 @@ from app.schemas.exam import (
     StudentKnowledgePointAnalytics,
     StudentKnowledgeTrendAnalytics,
     StudentKnowledgeTrendPoint,
+    StudentPeerComparison,
+    StudentPeerSubjectGap,
+    StudentStabilityMetric,
     StudentSubjectAnalytics,
     StudentSubjectEffectiveTarget,
+    StudentSubjectLossConcentration,
+    StudentSubjectStructure,
+    StudentSubjectStructurePoint,
     StudentSubjectTrendPoint,
     StudentSubjectTrendSeries,
+    StudentSubjectTrendShape,
     StudentTargetLineGap,
+    StudentTargetProgress,
+    StudentTargetSubjectPlan,
     StudentTotalTrendPoint,
+    StudentTrendShape,
     SubjectAggregateItem,
     TeacherAnalyticsResponse,
     TeacherAssignmentAnalytics,
@@ -80,6 +98,9 @@ from app.schemas.knowledge import (
     ClassKnowledgeBriefingItem,
     ClassKnowledgeBriefingResponse,
     ClassKnowledgeBriefingStudent,
+    ClassKnowledgeHeatmapResponse,
+    ClassKnowledgeHeatmapStudent,
+    ClassKnowledgeHeatmapSubjectGroup,
     KnowledgeErrorTagStat,
 )
 
@@ -579,6 +600,25 @@ def get_student_analytics(session: Session, student_id: int, exam_id: int) -> St
         and total_snapshot.grade_rank is not None
         else None
     )
+    trend_shape = _build_student_trend_shape(trend_points)
+    stability_metric = _build_student_stability(trend_points)
+    subject_trend_shapes = _build_subject_trend_shapes(subjects, subject_trend_map)
+    subject_structure = _build_subject_structure(subjects, knowledge_points)
+    peer_comparison = _build_peer_comparison(
+        student_total_snapshot=total_snapshot,
+        all_total_snapshots=all_total_snapshots,
+        all_subject_snapshots=all_subject_snapshots,
+        subjects=subjects,
+        peer_subject_averages=peer_subject_averages,
+        peer_sample_count=peer_sample_count,
+        peer_sample_note=peer_sample_note,
+    )
+    target_progress = _build_student_target_progress(
+        target_line_gaps=target_line_gaps,
+        total_trend_points=trend_points,
+        subject_structure=subject_structure,
+        subjects=subjects,
+    )
 
     return StudentAnalyticsResponse(
         exam_id=exam.id,
@@ -614,6 +654,7 @@ def get_student_analytics(session: Session, student_id: int, exam_id: int) -> St
             target_line_gaps=target_line_gaps,
         ),
         target_line_gaps=target_line_gaps,
+        target_progress=target_progress,
         trend_points=trend_points,
         subject_trends=[
             StudentSubjectTrendSeries(
@@ -623,6 +664,11 @@ def get_student_analytics(session: Session, student_id: int, exam_id: int) -> St
             )
             for subject in subjects
         ],
+        trend_shape=trend_shape,
+        stability=stability_metric,
+        subject_trend_shapes=subject_trend_shapes,
+        subject_structure=subject_structure,
+        peer_comparison=peer_comparison,
         knowledge_points=knowledge_points,
         knowledge_trends=knowledge_trends,
         action_suggestions=action_suggestions,
@@ -950,6 +996,114 @@ def get_class_knowledge_briefing(
         generated_at=datetime.now(),
         items=rows,
         notices=[] if rows else ["当前班级暂无达到阈值的薄弱知识点。"],
+    )
+
+
+def get_class_knowledge_heatmap(
+    session: Session,
+    class_id: int,
+    exam_id: int,
+    subject_id: int | None = None,
+) -> ClassKnowledgeHeatmapResponse:
+    exam = get_exam(session, exam_id)
+    school_class = session.get(SchoolClass, class_id)
+    if not exam:
+        raise HTTPException(status_code=404, detail="考试不存在")
+    if not school_class:
+        raise HTTPException(status_code=404, detail="班级不存在")
+
+    context_map = load_exam_context_map(session, exam_id)
+    stmt = (
+        select(ScoreKnowledgeSnapshot)
+        .options(
+            joinedload(ScoreKnowledgeSnapshot.student),
+            joinedload(ScoreKnowledgeSnapshot.subject),
+            joinedload(ScoreKnowledgeSnapshot.knowledge_point),
+        )
+        .where(
+            ScoreKnowledgeSnapshot.exam_id == exam_id,
+            ScoreKnowledgeSnapshot.is_active.is_(True),
+        )
+    )
+    if subject_id is not None:
+        stmt = stmt.where(ScoreKnowledgeSnapshot.subject_id == subject_id)
+
+    snapshots = [
+        item
+        for item in session.scalars(stmt).all()
+        if item.student and effective_class_id(item.student, context_map.get(item.student_id)) == class_id
+    ]
+    if not snapshots:
+        return ClassKnowledgeHeatmapResponse(
+            exam_id=exam.id,
+            exam_name=exam.name,
+            class_id=school_class.id,
+            class_name=school_class.name,
+            notices=["当前班级暂无题分知识点快照，请先导入题分明细。"],
+        )
+
+    point_paths = _knowledge_paths_for_snapshots(session, snapshots)
+    subject_groups: list[ClassKnowledgeHeatmapSubjectGroup] = []
+    by_subject: dict[int, list[ScoreKnowledgeSnapshot]] = defaultdict(list)
+    for item in snapshots:
+        by_subject[item.subject_id].append(item)
+
+    for subject_key in sorted(by_subject.keys()):
+        items = by_subject[subject_key]
+        # Build student column ordering by name → student_no for stability
+        students_by_id: dict[int, ClassKnowledgeHeatmapStudent] = {}
+        for item in items:
+            if item.student_id in students_by_id or not item.student:
+                continue
+            students_by_id[item.student_id] = ClassKnowledgeHeatmapStudent(
+                student_id=item.student_id,
+                student_name=item.student.name,
+                student_no=item.student.student_no,
+            )
+        students = sorted(
+            students_by_id.values(),
+            key=lambda entry: (entry.student_no or "", entry.student_name),
+        )
+        # Build knowledge-point row ordering by overall lost_score (worst first)
+        point_loss: dict[int, float] = defaultdict(float)
+        point_label: dict[int, str] = {}
+        for item in items:
+            point_loss[item.knowledge_point_id] += item.lost_score or 0
+            label = (
+                point_paths.get(item.knowledge_point_id)
+                or (item.knowledge_point.name if item.knowledge_point else str(item.knowledge_point_id))
+            )
+            point_label[item.knowledge_point_id] = label
+        ordered_points = sorted(point_loss.keys(), key=lambda pid: point_loss[pid], reverse=True)
+        # Cap at 25 worst rows per subject so the chart stays usable
+        ordered_points = ordered_points[:25]
+        knowledge_paths = [point_label[pid] for pid in ordered_points]
+
+        rate_lookup: dict[tuple[int, int], float | None] = {}
+        for item in items:
+            rate_lookup[(item.knowledge_point_id, item.student_id)] = item.score_rate
+        cells = [
+            [rate_lookup.get((pid, student.student_id)) for student in students]
+            for pid in ordered_points
+        ]
+
+        subject_groups.append(
+            ClassKnowledgeHeatmapSubjectGroup(
+                subject_id=subject_key,
+                subject_name=items[0].subject.name if items[0].subject else str(subject_key),
+                knowledge_paths=knowledge_paths,
+                students=students,
+                cells=cells,
+            )
+        )
+
+    return ClassKnowledgeHeatmapResponse(
+        exam_id=exam.id,
+        exam_name=exam.name,
+        class_id=school_class.id,
+        class_name=school_class.name,
+        subject_groups=subject_groups,
+        notices=[],
     )
 
 
@@ -1317,6 +1471,307 @@ def _build_student_score_trends(
                 )
             )
     return total_points, subject_points
+
+
+def _build_student_trend_shape(total_points: list[StudentTotalTrendPoint]) -> StudentTrendShape:
+    ranks = [point.grade_rank for point in total_points]
+    shape = compute_rank_trend_shape(ranks)
+    return StudentTrendShape(label=shape.label, slope=shape.slope, summary=shape.summary)
+
+
+def _build_student_stability(total_points: list[StudentTotalTrendPoint]) -> StudentStabilityMetric:
+    ranks = [point.grade_rank for point in total_points]
+    scores = [point.total_score for point in total_points]
+    metric = compute_stability(ranks=ranks, scores=scores)
+    return StudentStabilityMetric(
+        level=metric.level,
+        rank_stddev=metric.rank_stddev,
+        score_cv=metric.score_cv,
+        sample_count=metric.sample_count,
+        summary=metric.summary,
+    )
+
+
+def _build_subject_trend_shapes(
+    subjects: list[StudentSubjectAnalytics],
+    subject_trend_map: dict[int, list[StudentSubjectTrendPoint]],
+) -> list[StudentSubjectTrendShape]:
+    shapes: list[StudentSubjectTrendShape] = []
+    for subject in subjects:
+        points = subject_trend_map.get(subject.subject_id, [])
+        ranks = [point.grade_rank for point in points]
+        scores = [point.score for point in points]
+        shape = compute_rank_trend_shape(ranks)
+        stability = compute_stability(ranks=ranks, scores=scores)
+        sparkline = [point.score for point in points]
+        shapes.append(
+            StudentSubjectTrendShape(
+                subject_id=subject.subject_id,
+                subject_name=subject.subject_name,
+                label=shape.label,
+                slope=shape.slope,
+                stability_level=stability.level,
+                sparkline=sparkline,
+            )
+        )
+    return shapes
+
+
+def _build_subject_structure(
+    subjects: list[StudentSubjectAnalytics],
+    knowledge_points: list[StudentKnowledgePointAnalytics],
+) -> StudentSubjectStructure:
+    if not subjects:
+        return StudentSubjectStructure(summary="本次考试暂无可对比的学科分数。")
+
+    radar_points = [
+        StudentSubjectStructurePoint(
+            subject_id=subject.subject_id,
+            subject_name=subject.subject_name,
+            student_t_score=subject.t_score,
+            class_average_t=50.0,
+            z_score=subject.z_score,
+        )
+        for subject in subjects
+    ]
+    strengths = [subject.subject_name for subject in subjects if subject.z_score is not None and subject.z_score >= 1.0]
+    weaknesses = [subject.subject_name for subject in subjects if subject.z_score is not None and subject.z_score <= -1.0]
+
+    loss_concentration: list[StudentSubjectLossConcentration] = []
+    grouped_loss: dict[int, list[StudentKnowledgePointAnalytics]] = defaultdict(list)
+    for point in knowledge_points:
+        if point.subject_id is None:
+            continue
+        grouped_loss[point.subject_id].append(point)
+    for subject in subjects:
+        points = grouped_loss.get(subject.subject_id, [])
+        if not points:
+            continue
+        sorted_points = sorted(
+            points,
+            key=lambda item: (item.lost_score if item.lost_score is not None else 0),
+            reverse=True,
+        )
+        top = sorted_points[:3]
+        total_loss = sum(item.lost_score or 0 for item in points)
+        top_loss = sum(item.lost_score or 0 for item in top)
+        share = round(top_loss / total_loss, 3) if total_loss > 0 else None
+        loss_concentration.append(
+            StudentSubjectLossConcentration(
+                subject_id=subject.subject_id,
+                subject_name=subject.subject_name,
+                top_paths=[item.knowledge_path for item in top if item.knowledge_path],
+                loss_share=share,
+            )
+        )
+
+    summary_parts: list[str] = []
+    if strengths:
+        summary_parts.append("强势：" + "、".join(strengths))
+    if weaknesses:
+        summary_parts.append("需补：" + "、".join(weaknesses))
+    if not summary_parts:
+        summary_parts.append("各科分布相对均衡，无明显偏科。")
+    return StudentSubjectStructure(
+        radar_points=radar_points,
+        strengths=strengths,
+        weaknesses=weaknesses,
+        loss_concentration=loss_concentration,
+        summary="；".join(summary_parts),
+    )
+
+
+def _build_peer_comparison(
+    *,
+    student_total_snapshot,
+    all_total_snapshots,
+    all_subject_snapshots,
+    subjects: list[StudentSubjectAnalytics],
+    peer_subject_averages: dict[int, float],
+    peer_sample_count: int,
+    peer_sample_note: str | None,
+) -> StudentPeerComparison:
+    grade_rank = student_total_snapshot.grade_rank if student_total_snapshot else None
+    radius = compute_peer_radius(grade_rank, len(all_total_snapshots))
+    if grade_rank is None or peer_sample_count == 0:
+        return StudentPeerComparison(
+            peer_count=peer_sample_count,
+            peer_radius=radius,
+            peer_total_average=None,
+            peer_sample_note=peer_sample_note or "缺少校内名次，未生成同分段对比。",
+            subject_gaps=[],
+            laggard_subjects=[],
+        )
+
+    peer_snapshots = _select_peer_total_snapshots(
+        [item for item in all_total_snapshots if item.grade_rank is not None],
+        grade_rank,
+        radius,
+    )
+    peer_ids = {item.student_id for item in peer_snapshots}
+    peer_total_scores = [item.total_score for item in peer_snapshots if item.total_score is not None]
+    peer_total_average = round(sum(peer_total_scores) / len(peer_total_scores), 2) if peer_total_scores else None
+
+    peer_subject_groups: dict[int, list[float]] = defaultdict(list)
+    for item in all_subject_snapshots:
+        if item.student_id in peer_ids and item.score is not None:
+            peer_subject_groups[item.subject_id].append(float(item.score))
+
+    subject_gaps: list[StudentPeerSubjectGap] = []
+    laggards: list[str] = []
+    for subject in subjects:
+        peer_scores = peer_subject_groups.get(subject.subject_id, [])
+        peer_average = peer_subject_averages.get(subject.subject_id)
+        gap_rank: int | None = None
+        if subject.score is not None and peer_scores:
+            higher = sum(1 for value in peer_scores if value > subject.score)
+            gap_rank = higher + 1
+        gap = (
+            round(subject.score - peer_average, 2)
+            if subject.score is not None and peer_average is not None
+            else None
+        )
+        if gap is not None and gap <= -8:
+            laggards.append(subject.subject_name)
+        subject_gaps.append(
+            StudentPeerSubjectGap(
+                subject_id=subject.subject_id,
+                subject_name=subject.subject_name,
+                student_score=subject.score,
+                peer_average=round(peer_average, 2) if peer_average is not None else None,
+                gap=gap,
+                gap_rank_in_peers=gap_rank,
+            )
+        )
+    return StudentPeerComparison(
+        peer_count=peer_sample_count,
+        peer_radius=radius,
+        peer_total_average=peer_total_average,
+        peer_sample_note=peer_sample_note,
+        subject_gaps=subject_gaps,
+        laggard_subjects=laggards,
+    )
+
+
+def _build_student_target_progress(
+    *,
+    target_line_gaps: list[StudentTargetLineGap],
+    total_trend_points: list[StudentTotalTrendPoint],
+    subject_structure: StudentSubjectStructure,
+    subjects: list[StudentSubjectAnalytics],
+) -> list[StudentTargetProgress]:
+    rows: list[StudentTargetProgress] = []
+    recent_scores = [
+        point.total_score
+        for point in total_trend_points
+        if point.total_score is not None
+    ]
+    score_slope: float | None = None
+    if len(recent_scores) >= 3:
+        score_slope = _safe_score_slope(recent_scores)
+
+    structure_lookup = {
+        item.subject_id: item
+        for item in subject_structure.loss_concentration
+    }
+    subject_lookup = {subject.subject_id: subject for subject in subjects}
+
+    for gap in target_line_gaps:
+        if gap.threshold_score is None:
+            rows.append(
+                StudentTargetProgress(
+                    line_id=gap.line_id,
+                    line_name=gap.line_name,
+                    line_kind="rank" if gap.gap_rank is not None else "score",
+                    current_score=None,
+                    target_score=None,
+                    gap=None,
+                    note="目标线缺少分数门槛，先按校排参考。",
+                )
+            )
+            continue
+        current_score = recent_scores[-1] if recent_scores else None
+        gap_value = gap.gap_score
+        level, probability = estimate_target_reach_probability(
+            target_score=gap.threshold_score,
+            recent_scores=recent_scores,
+        )
+        combos = _build_required_subject_combos(
+            target_gap=gap_value,
+            structure_lookup=structure_lookup,
+            subject_lookup=subject_lookup,
+        ) if gap_value is not None and gap_value < 0 else []
+        rows.append(
+            StudentTargetProgress(
+                line_id=gap.line_id,
+                line_name=gap.line_name,
+                line_kind="score",
+                current_score=current_score,
+                target_score=gap.threshold_score,
+                gap=gap_value,
+                trend_estimate=round(score_slope, 2) if score_slope is not None else None,
+                reach_probability_level=level,
+                reach_probability=probability,
+                required_subject_combos=combos,
+                note="按近 3 次趋势估算，仅供参考。" if score_slope is not None else "历史样本不足，未估趋势。",
+            )
+        )
+    return rows
+
+
+def _safe_score_slope(values: list[float]) -> float | None:
+    n = len(values)
+    if n < 2:
+        return None
+    x_mean = (n - 1) / 2
+    y_mean = sum(values) / n
+    numerator = sum((i - x_mean) * (v - y_mean) for i, v in enumerate(values))
+    denominator = sum((i - x_mean) ** 2 for i in range(n))
+    if denominator == 0:
+        return None
+    return numerator / denominator
+
+
+def _build_required_subject_combos(
+    *,
+    target_gap: float,
+    structure_lookup: dict[int, StudentSubjectLossConcentration],
+    subject_lookup: dict[int, StudentSubjectAnalytics],
+) -> list[StudentTargetSubjectPlan]:
+    """Pick up to 3 subjects with most headroom that together close `target_gap`."""
+    needed = abs(target_gap)
+    candidates: list[tuple[float, StudentSubjectAnalytics, StudentSubjectLossConcentration | None]] = []
+    for subject in subject_lookup.values():
+        if subject.score is None:
+            continue
+        loss = structure_lookup.get(subject.subject_id)
+        headroom = loss.loss_share if loss and loss.loss_share is not None else 0.5
+        candidates.append((headroom, subject, loss))
+    candidates.sort(key=lambda item: item[0], reverse=True)
+
+    plans: list[StudentTargetSubjectPlan] = []
+    cumulative = 0.0
+    for headroom, subject, loss in candidates:
+        if cumulative >= needed:
+            break
+        gain = round(min(needed - cumulative, max(needed / 3.0, 5.0)), 1)
+        feasibility = "high" if headroom >= 0.6 else "medium" if headroom >= 0.3 else "low"
+        note_bits: list[str] = []
+        if loss and loss.top_paths:
+            note_bits.append("聚焦 " + "、".join(loss.top_paths[:2]))
+        plans.append(
+            StudentTargetSubjectPlan(
+                subject_id=subject.subject_id,
+                subject_name=subject.subject_name,
+                gain_needed=gain,
+                feasibility=feasibility,
+                note="；".join(note_bits) if note_bits else "",
+            )
+        )
+        cumulative += gain
+        if len(plans) >= 3:
+            break
+    return plans
 
 
 def _calculate_z_score(score: float | None, mean_score: float, stddev: float) -> float | None:
@@ -2098,6 +2553,13 @@ def get_grade_analytics(session: Session, grade_id: int, exam_id: int) -> GradeA
     critical_students = _build_critical_students(target_lines, total_snapshots, context_map)
     class_contributions = _build_class_contributions(class_group, subject_snapshots, target_lines, context_map)
     rank_audit_summary = _build_rank_audit_summary(session, exam, len(total_snapshots), context_map)
+    exam_anomaly = _build_grade_exam_anomaly(
+        session=session,
+        exam=exam,
+        grade_id=grade_id,
+        context_map=context_map,
+        current_total_scores=total_scores,
+    )
 
     return GradeAnalyticsResponse(
         exam_id=exam.id,
@@ -2119,6 +2581,61 @@ def get_grade_analytics(session: Session, grade_id: int, exam_id: int) -> GradeA
         critical_students=critical_students,
         class_contributions=class_contributions,
         rank_audit_summary=rank_audit_summary,
+        exam_anomaly=exam_anomaly,
+    )
+
+
+def _build_grade_exam_anomaly(
+    *,
+    session: Session,
+    exam: Exam,
+    grade_id: int,
+    context_map: dict,
+    current_total_scores: list[float],
+) -> GradeExamAnomaly:
+    if not current_total_scores:
+        return GradeExamAnomaly(
+            is_outlier=False,
+            sample_size=0,
+            reason="本次考试缺少有效总分。",
+            recommendation="请先确认成绩快照已生成。",
+        )
+
+    history_exams = [
+        item
+        for item in _list_panorama_exams(session)
+        if item.is_trend_enabled and item.exam_date < exam.exam_date
+    ][-3:]
+
+    history_medians: list[float] = []
+    history_stddevs: list[float] = []
+    for past_exam in history_exams:
+        past_snapshots = [
+            snap
+            for snap in get_total_snapshots_for_exam(session, past_exam.id)
+            if snap.student and _snapshot_matches_grade(snap, past_exam, grade_id, context_map)
+        ]
+        if not past_snapshots:
+            continue
+        past_scores = [snap.total_score for snap in past_snapshots]
+        history_medians.append(float(safe_median(past_scores)))
+        history_stddevs.append(float(safe_stddev(past_scores)))
+
+    current_median = float(safe_median(current_total_scores))
+    current_stddev = float(safe_stddev(current_total_scores))
+    anomaly = detect_exam_anomaly(
+        current_median=current_median,
+        current_stddev=current_stddev,
+        history_medians=history_medians,
+        history_stddevs=history_stddevs,
+    )
+    return GradeExamAnomaly(
+        is_outlier=anomaly.is_outlier,
+        median_drop=anomaly.median_drop,
+        spread_change=anomaly.spread_change,
+        sample_size=len(history_medians),
+        reason=anomaly.reason,
+        recommendation=anomaly.recommendation,
     )
 
 

@@ -1,6 +1,6 @@
 import type { ImportFeedbackResult } from "../../utils/importFeedback";
 
-export type ResultGroupKey = "challenge" | "steady" | "safe";
+export type ResultGroupKey = "challenge" | "steady" | "safe" | "watch";
 
 export interface CollegeItem {
   id: number;
@@ -14,7 +14,7 @@ export interface CollegeItem {
   website?: string | null;
   supports_art: boolean;
   note?: string | null;
-  alias_names?: string[] | null;
+  alias_names?: string[];
   is_active: boolean;
 }
 
@@ -60,10 +60,10 @@ export interface EmploymentDirectionItem {
   id: number;
   name: string;
   category?: string | null;
-  alias_names_json?: string[] | null;
+  alias_names_json?: string[];
   description?: string | null;
-  common_job_types_json?: string[] | null;
-  common_industries_json?: string[] | null;
+  common_job_types_json?: string[];
+  common_industries_json?: string[];
   prefers_postgraduate: boolean;
   requires_certificate: boolean;
   requires_long_cycle: boolean;
@@ -129,7 +129,7 @@ export interface MajorEmploymentMappingItem {
   recommendation_note?: string | null;
   requires_postgraduate: boolean;
   requires_certificate: boolean;
-  supported_student_types_json?: string[] | null;
+  supported_student_types_json?: string[];
   supports_art: boolean;
   note?: string | null;
   is_active: boolean;
@@ -168,6 +168,7 @@ export interface RecommendationGenerateResponse {
   challenge: RecommendationResult[];
   steady: RecommendationResult[];
   safe: RecommendationResult[];
+  watch: RecommendationResult[];
 }
 
 export interface BatchGenerateResponse {
@@ -307,6 +308,7 @@ export interface RecommendationHistoryItem {
   challenge_count: number;
   steady_count: number;
   safe_count: number;
+  watch_count: number;
 }
 
 export interface RecommendationResult {
@@ -630,6 +632,10 @@ export interface ShandongRushStableSafeCandidate {
   college_id: number;
   college_name: string;
   college_code_snapshot?: string | null;
+  college_province?: string | null;
+  college_city?: string | null;
+  college_school_type?: string | null;
+  college_ownership?: string | null;
   major_id?: number | null;
   major_name?: string | null;
   major_code_snapshot?: string | null;
@@ -783,6 +789,10 @@ export interface VolunteerWorkbenchCandidate {
   college_id: number;
   college_name: string;
   college_code_snapshot?: string | null;
+  college_province?: string | null;
+  college_city?: string | null;
+  college_school_type?: string | null;
+  college_ownership?: string | null;
   major_id?: number | null;
   major_name?: string | null;
   major_group_code?: string | null;
@@ -1259,3 +1269,42 @@ export interface StrategyPresetFormState {
   name: string;
   note: string;
 }
+
+// ---------------------------------------------------------------------------
+// 编译期兼容性检查：本文件里与后端 OpenAPI 一一对应的类型，必须是生成类型的子集。
+// 当 `npm run gen:api` 之后这一块标红，说明后端 schema 变了，先把手写类型对齐，
+// 再让错误扩散到页面里修。
+// ---------------------------------------------------------------------------
+
+import type { components as _ApiComponents } from "../../types/api.generated";
+
+type _SchemasForRecommendations = _ApiComponents["schemas"];
+
+type _IsAssignable<L, R> = [L] extends [R] ? true : false;
+
+interface _RecommendationSchemaAssertions {
+  college: _IsAssignable<CollegeItem, _SchemasForRecommendations["CollegeRead"]>;
+  major: _IsAssignable<MajorItem, _SchemasForRecommendations["MajorRead"]>;
+  employmentDirection: _IsAssignable<
+    EmploymentDirectionItem,
+    _SchemasForRecommendations["EmploymentDirectionRead"]
+  >;
+  majorEmploymentMapping: _IsAssignable<
+    MajorEmploymentMappingItem,
+    _SchemasForRecommendations["MajorEmploymentMappingRead"]
+  >;
+  admissionRecord: _IsAssignable<
+    AdmissionRecord,
+    _SchemasForRecommendations["AdmissionRecordRead"]
+  >;
+  enrollmentPlan: _IsAssignable<
+    EnrollmentPlanItem,
+    _SchemasForRecommendations["EnrollmentPlanRead"]
+  >;
+}
+
+type _RecommendationsAllTrue<T> = { [K in keyof T]: T[K] extends true ? T[K] : never };
+type _RecommendationSchemaCompatOk = _RecommendationsAllTrue<_RecommendationSchemaAssertions>;
+const _recommendationSchemaCompatOk: _RecommendationSchemaCompatOk =
+  {} as _RecommendationSchemaCompatOk;
+void _recommendationSchemaCompatOk;

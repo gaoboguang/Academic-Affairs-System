@@ -426,6 +426,92 @@ class StudentActionSuggestion(BaseModel):
     priority: int = 0
 
 
+class StudentTrendShape(BaseModel):
+    label: str = "数据不足"
+    slope: float | None = None
+    summary: str = ""
+
+
+class StudentStabilityMetric(BaseModel):
+    level: str = "unknown"
+    rank_stddev: float | None = None
+    score_cv: float | None = None
+    sample_count: int = 0
+    summary: str = ""
+
+
+class StudentSubjectTrendShape(BaseModel):
+    subject_id: int
+    subject_name: str
+    label: str = "数据不足"
+    slope: float | None = None
+    stability_level: str = "unknown"
+    sparkline: list[float | None] = Field(default_factory=list)
+
+
+class StudentSubjectStructurePoint(BaseModel):
+    subject_id: int
+    subject_name: str
+    student_t_score: float | None = None
+    class_average_t: float = 50.0
+    z_score: float | None = None
+
+
+class StudentSubjectLossConcentration(BaseModel):
+    subject_id: int
+    subject_name: str
+    top_paths: list[str] = Field(default_factory=list)
+    loss_share: float | None = None  # 0..1, share of subject's lost points by top knowledge points
+
+
+class StudentSubjectStructure(BaseModel):
+    radar_points: list[StudentSubjectStructurePoint] = Field(default_factory=list)
+    strengths: list[str] = Field(default_factory=list)
+    weaknesses: list[str] = Field(default_factory=list)
+    loss_concentration: list[StudentSubjectLossConcentration] = Field(default_factory=list)
+    summary: str = ""
+
+
+class StudentPeerSubjectGap(BaseModel):
+    subject_id: int
+    subject_name: str
+    student_score: float | None = None
+    peer_average: float | None = None
+    gap: float | None = None  # student - peer (negative = behind)
+    gap_rank_in_peers: int | None = None  # 1 = top of the peer cohort
+
+
+class StudentPeerComparison(BaseModel):
+    peer_count: int = 0
+    peer_radius: int = 0
+    peer_total_average: float | None = None
+    peer_sample_note: str | None = None
+    subject_gaps: list[StudentPeerSubjectGap] = Field(default_factory=list)
+    laggard_subjects: list[str] = Field(default_factory=list)
+
+
+class StudentTargetSubjectPlan(BaseModel):
+    subject_id: int
+    subject_name: str
+    gain_needed: float
+    feasibility: str = "unknown"  # high / medium / low / unknown
+    note: str = ""
+
+
+class StudentTargetProgress(BaseModel):
+    line_id: int | None = None
+    line_name: str
+    line_kind: str = "score"  # score / rank
+    current_score: float | None = None
+    target_score: float | None = None
+    gap: float | None = None
+    trend_estimate: float | None = None  # projected change in score over next exam
+    reach_probability_level: str = "unknown"
+    reach_probability: float | None = None
+    required_subject_combos: list[StudentTargetSubjectPlan] = Field(default_factory=list)
+    note: str = ""
+
+
 class StudentAnalyticsResponse(BaseModel):
     exam_id: int
     exam_name: str
@@ -445,8 +531,14 @@ class StudentAnalyticsResponse(BaseModel):
     grade_rank_delta: int | None = None
     overview_sentence: str = ""
     target_line_gaps: list[StudentTargetLineGap] = Field(default_factory=list)
+    target_progress: list[StudentTargetProgress] = Field(default_factory=list)
     trend_points: list[StudentTotalTrendPoint] = Field(default_factory=list)
     subject_trends: list[StudentSubjectTrendSeries] = Field(default_factory=list)
+    trend_shape: StudentTrendShape = Field(default_factory=StudentTrendShape)
+    stability: StudentStabilityMetric = Field(default_factory=StudentStabilityMetric)
+    subject_trend_shapes: list[StudentSubjectTrendShape] = Field(default_factory=list)
+    subject_structure: StudentSubjectStructure = Field(default_factory=StudentSubjectStructure)
+    peer_comparison: StudentPeerComparison = Field(default_factory=StudentPeerComparison)
     knowledge_points: list[StudentKnowledgePointAnalytics] = Field(default_factory=list)
     knowledge_trends: list[StudentKnowledgeTrendAnalytics] = Field(default_factory=list)
     action_suggestions: list[StudentActionSuggestion] = Field(default_factory=list)
@@ -573,6 +665,15 @@ class GradeRankAuditSummary(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class GradeExamAnomaly(BaseModel):
+    is_outlier: bool = False
+    median_drop: float | None = None
+    spread_change: float | None = None
+    sample_size: int = 0
+    reason: str = ""
+    recommendation: str = ""
+
+
 class GradeAnalyticsResponse(BaseModel):
     exam_id: int
     exam_name: str
@@ -593,6 +694,7 @@ class GradeAnalyticsResponse(BaseModel):
     critical_students: list[GradeCriticalStudentItem] = Field(default_factory=list)
     class_contributions: list[GradeClassContributionItem] = Field(default_factory=list)
     rank_audit_summary: GradeRankAuditSummary | None = None
+    exam_anomaly: GradeExamAnomaly = Field(default_factory=GradeExamAnomaly)
 
 
 class GradePanoramaExamPointRead(BaseModel):

@@ -96,10 +96,26 @@ class _SchemaSnapshot:
     _table_names: set[str] = field(default_factory=set)
     _columns: dict[str, set[str]] = field(default_factory=dict)
     _inspector: object = field(init=False, repr=False)
+    _bind: object = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
-        inspector = inspect(self.session.get_bind())
-        self._table_names = set(inspector.get_table_names())
+        bind = self.session.get_bind()
+        inspector = inspect(bind)
+        self._bind = bind
+        names: set[str] = set()
+        # Collect tables from the main schema plus any ATTACHed schemas (e.g.
+        # the gaokao sidecar). SQLAlchemy's default inspector only sees the
+        # main schema, so we enumerate via sqlite_master for each alias.
+        with bind.connect() as connection:
+            raw = connection.connection
+            for row in raw.execute("PRAGMA database_list").fetchall():
+                schema_name = row[1]
+                quoted = schema_name if schema_name == "main" else f'"{schema_name}"'
+                for table_row in raw.execute(
+                    f"SELECT name FROM {quoted}.sqlite_master WHERE type='table'"
+                ).fetchall():
+                    names.add(table_row[0])
+        self._table_names = names
         self._inspector = inspector
 
     def has_table(self, table_name: str) -> bool:
@@ -110,10 +126,23 @@ class _SchemaSnapshot:
             if not self.has_table(table_name):
                 self._columns[table_name] = set()
             else:
-                self._columns[table_name] = {
-                    item["name"]
-                    for item in self._inspector.get_columns(table_name)
-                }
+                with self._bind.connect() as connection:
+                    raw = connection.connection
+                    # Ask every schema in turn, since the table may live in
+                    # main or in an ATTACHed database.
+                    cols: set[str] = set()
+                    for row in raw.execute("PRAGMA database_list").fetchall():
+                        schema_name = row[1]
+                        quoted = (
+                            schema_name if schema_name == "main" else f'"{schema_name}"'
+                        )
+                        result = raw.execute(
+                            f'PRAGMA {quoted}.table_info("{table_name}")'
+                        ).fetchall()
+                        if result:
+                            cols.update(item[1] for item in result)
+                            break
+                    self._columns[table_name] = cols
         return self._columns[table_name]
 
     def pick_column(self, table_name: str, *candidates: str) -> str | None:

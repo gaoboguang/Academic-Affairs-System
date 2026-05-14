@@ -5,6 +5,7 @@ import {
   buildVolunteerBoundaryInsightCards,
   buildVolunteerDraftBoundaryInsightCards,
   applyStudentCareerPreferenceToForm,
+  applyStudentPathwayProfileToForm,
   appendVolunteerDraftItem,
   buildStudentCareerPreferencePayload,
   buildVolunteerDraftComparison,
@@ -15,6 +16,8 @@ import {
   applyVolunteerExamScoreAutofill,
   buildVolunteerExamScoreAutofillNotice,
   buildVolunteerEmploymentProfile,
+  buildVolunteerCandidateFilterOptions,
+  buildVolunteerCandidatePage,
   buildVolunteerDraftPayload,
   buildVolunteerRuleInsightCards,
   buildVolunteerRuleInsightCardsFromRules,
@@ -115,6 +118,10 @@ function buildCandidate(planId: number, overrides: Partial<VolunteerWorkbenchCan
     college_id: 10 + planId,
     college_name: `院校 ${planId}`,
     college_code_snapshot: `C${planId.toString().padStart(3, "0")}`,
+    college_province: "广东",
+    college_city: "广州",
+    college_school_type: "公办本科",
+    college_ownership: "公办",
     major_id: 20 + planId,
     major_name: `专业 ${planId}`,
     major_group_code: `${planId}`,
@@ -264,6 +271,12 @@ describe("volunteer workbench helpers", () => {
     expect(template).toContain('class="candidate-card-list"');
     expect(template).toContain("近三年招生/录取情况");
     expect(template).toContain("录取/投档");
+    expect(template).toContain("guideDisplaySummary.copy");
+    expect(template).toContain("统计口径是当前页面已展示的候选");
+    expect(template).toContain("当前展示分布");
+    expect(template).toContain("候选筛选");
+    expect(template).toContain("办学性质");
+    expect(template).toContain("candidatePagination.pageSize");
     expect(template).toContain("暂无同类别同专业近三年招生/录取记录");
     expect(template).toContain("缺招生计划，仅历史参考");
     expect(template).toContain("candidatePlanCountLabel");
@@ -271,6 +284,101 @@ describe("volunteer workbench helpers", () => {
     expect(template).not.toContain("workbench-grid");
     expect(template).not.toContain('label="近三年录取情况"');
     expect(template).not.toContain('el-table-column label="依据"');
+  });
+
+  it("filters candidate cards by region and ownership with 30 items per page by default", () => {
+    const candidates = Array.from({ length: 35 }, (_, index) =>
+      buildCandidate(index + 1, {
+        college_province: index % 2 === 0 ? "山东" : "广东",
+        college_city: index % 2 === 0 ? "济南" : "广州",
+        college_ownership: index % 3 === 0 ? "民办" : "公办",
+      }),
+    );
+    const options = buildVolunteerCandidateFilterOptions(candidates);
+    expect(options.regions).toEqual(["山东", "济南", "广东", "广州"]);
+    expect(options.ownerships).toEqual(["民办", "公办"]);
+
+    const filtered = buildVolunteerCandidatePage(candidates, {
+      region: "山东",
+      ownership: "民办",
+      musicSubTrack: "",
+      keyword: "",
+      page: 1,
+      pageSize: 30,
+    });
+    expect(filtered.total).toBe(6);
+    expect(filtered.items).toHaveLength(6);
+    expect(filtered.items.every((item) => item.college_province === "山东")).toBe(true);
+    expect(filtered.items.every((item) => item.college_ownership === "民办")).toBe(true);
+
+    const firstPage = buildVolunteerCandidatePage(candidates, {
+      region: "",
+      ownership: "",
+      musicSubTrack: "",
+      keyword: "",
+      page: 1,
+      pageSize: 30,
+    });
+    expect(firstPage.items).toHaveLength(30);
+    expect(firstPage.total).toBe(35);
+    expect(firstPage.pageSize).toBe(30);
+  });
+
+  it("detects music vocal/instrumental sub-tracks and filters accordingly", () => {
+    const vocalCandidate = buildCandidate(1, {
+      major_name: "音乐表演(声乐)（招收声乐考生）",
+    });
+    const instrumentalCandidate = buildCandidate(2, {
+      major_name: "音乐表演(器乐)（招收钢琴考生）",
+    });
+    const ambiguousCandidate = buildCandidate(3, {
+      major_name: "音乐表演",
+    });
+    const candidates = [vocalCandidate, instrumentalCandidate, ambiguousCandidate];
+
+    const options = buildVolunteerCandidateFilterOptions(candidates);
+    expect(options.musicSubTracks).toEqual([
+      { value: "vocal", label: "声乐", count: 1 },
+      { value: "instrumental", label: "器乐", count: 1 },
+    ]);
+
+    const vocalPage = buildVolunteerCandidatePage(candidates, {
+      region: "",
+      ownership: "",
+      musicSubTrack: "vocal",
+      keyword: "",
+      page: 1,
+      pageSize: 30,
+    });
+    expect(vocalPage.total).toBe(1);
+    expect(vocalPage.items[0].plan_id).toBe(1);
+
+    const instrumentalPage = buildVolunteerCandidatePage(candidates, {
+      region: "",
+      ownership: "",
+      musicSubTrack: "instrumental",
+      keyword: "",
+      page: 1,
+      pageSize: 30,
+    });
+    expect(instrumentalPage.total).toBe(1);
+    expect(instrumentalPage.items[0].plan_id).toBe(2);
+
+    const noFilter = buildVolunteerCandidatePage(candidates, {
+      region: "",
+      ownership: "",
+      musicSubTrack: "",
+      keyword: "",
+      page: 1,
+      pageSize: 30,
+    });
+    expect(noFilter.total).toBe(3);
+  });
+
+  it("hides music sub-track options when no candidate maps to vocal or instrumental", () => {
+    const candidates = [buildCandidate(1, { major_name: "音乐表演" })];
+    const options = buildVolunteerCandidateFilterOptions(candidates);
+    expect(options.musicSubTracks).toEqual([]);
   });
 
   it("formats volunteer workbench presentation copy", () => {
@@ -658,6 +766,66 @@ describe("volunteer workbench helpers", () => {
     expect(target.priority_focuses_json).toEqual(["stability", "salary"]);
     expect(target.preferred_industries_json).toEqual(["人工智能", "智能制造"]);
     expect(target.accepts_certificate).toBe(true);
+  });
+
+  it("overwrites 考生条件 fields when applying a pathway profile", () => {
+    const target = buildForm({
+      province: "山东",
+      candidate_type: "general",
+      art_track: "",
+      subject_combination: "",
+      target_regions_json: ["江苏"],
+      school_level_tags_json: ["双一流"],
+      major_keyword: "原值",
+      professional_score: undefined,
+    });
+    applyStudentPathwayProfileToForm(target, {
+      province: "河南",
+      candidate_type: "art",
+      art_track: "music",
+      subject_combination: "物理,化学,生物",
+      art_professional_score: 245,
+      region_preferences_json: {
+        target_regions: ["山东", "河南"],
+        school_level_tags: ["公办本科", "民办本科"],
+        major_keyword: "音乐表演",
+      },
+    });
+    expect(target.province).toBe("河南");
+    expect(target.candidate_type).toBe("art");
+    expect(target.art_track).toBe("music");
+    expect(target.subject_combination).toBe("物理,化学,生物");
+    expect(target.professional_score).toBe(245);
+    expect(target.target_regions_json).toEqual(["山东", "河南"]);
+    expect(target.school_level_tags_json).toEqual(["公办本科", "民办本科"]);
+    expect(target.major_keyword).toBe("音乐表演");
+  });
+
+  it("clears region preferences when profile has no preferences json", () => {
+    const target = buildForm({
+      target_regions_json: ["保留值"],
+      school_level_tags_json: ["保留值"],
+      major_keyword: "保留值",
+    });
+    applyStudentPathwayProfileToForm(target, {
+      province: "山东",
+      candidate_type: "general",
+    });
+    expect(target.target_regions_json).toEqual([]);
+    expect(target.school_level_tags_json).toEqual([]);
+    expect(target.major_keyword).toBe("");
+  });
+
+  it("does nothing when profile is null", () => {
+    const target = buildForm({
+      candidate_type: "art",
+      art_track: "music",
+      target_regions_json: ["山东"],
+    });
+    applyStudentPathwayProfileToForm(target, null);
+    expect(target.candidate_type).toBe("art");
+    expect(target.art_track).toBe("music");
+    expect(target.target_regions_json).toEqual(["山东"]);
   });
 
   it("reorders volunteer draft items", () => {

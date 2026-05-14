@@ -12,6 +12,7 @@
         <el-tag type="danger" effect="light">冲 {{ groupedResults.challenge.length }}</el-tag>
         <el-tag type="warning" effect="light">稳 {{ groupedResults.steady.length }}</el-tag>
         <el-tag type="success" effect="light">保 {{ groupedResults.safe.length }}</el-tag>
+        <el-tag type="info" effect="light">关注 {{ groupedResults.watch.length }}</el-tag>
         <el-button
           type="primary"
           plain
@@ -371,9 +372,9 @@
         <el-table-column label="方案" prop="scheme_name" min-width="180" />
         <el-table-column label="生成时间" prop="generated_at" min-width="170" />
         <el-table-column label="结果数" prop="result_count" width="80" />
-        <el-table-column label="冲/稳/保" min-width="120">
+        <el-table-column label="冲/稳/保/关注" min-width="140">
           <template #default="{ row }">
-            {{ row.challenge_count }} / {{ row.steady_count }} / {{ row.safe_count }}
+            {{ row.challenge_count }} / {{ row.steady_count }} / {{ row.safe_count }} / {{ row.watch_count }}
           </template>
         </el-table-column>
         <el-table-column label="新增" prop="added_count" width="80" />
@@ -471,6 +472,7 @@ interface MultiSchemeComparisonRow {
   challenge_count: number;
   steady_count: number;
   safe_count: number;
+  watch_count: number;
   added_count: number;
   removed_count: number;
   changed_count: number;
@@ -514,6 +516,7 @@ const resultColumns: Array<{ key: ResultGroupKey; label: string; tip: string }> 
   { key: "challenge", label: "冲刺", tip: "略高于当前位次，需接受风险" },
   { key: "steady", label: "稳妥", tip: "与历史基线接近，适合作为主干" },
   { key: "safe", label: "保底", tip: "优于历史基线较多，风险相对更低" },
+  { key: "watch", label: "仅关注", tip: "只有计划或资格线等初筛证据，不能判断录取把握" },
 ];
 
 function openCollegeDetail(collegeId: number): void {
@@ -545,6 +548,7 @@ const groupedResults = computed<Record<ResultGroupKey, RecommendationResult[]>>(
   challenge: props.selectedSchemeResults.filter((item) => item.result_type === "challenge"),
   steady: props.selectedSchemeResults.filter((item) => item.result_type === "steady"),
   safe: props.selectedSchemeResults.filter((item) => item.result_type === "safe"),
+  watch: props.selectedSchemeResults.filter((item) => item.result_type === "watch"),
 }));
 
 const selectedCompareSchemeMeta = computed(
@@ -581,6 +585,7 @@ const multiSchemeComparisonRows = computed<MultiSchemeComparisonRow[]>(() =>
         challenge_count: meta.challenge_count,
         steady_count: meta.steady_count,
         safe_count: meta.safe_count,
+        watch_count: meta.watch_count,
         added_count: summary.added.length,
         removed_count: summary.removed.length,
         changed_count: summary.changed.length,
@@ -1001,7 +1006,7 @@ function riskFlagText(flag: string): string {
 
 .result-board-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   margin-top: 18px;
 }
@@ -1023,6 +1028,10 @@ function riskFlagText(flag: string): string {
 
 .result-column.safe {
   box-shadow: inset 0 4px 0 rgba(69, 141, 105, 0.8);
+}
+
+.result-column.watch {
+  box-shadow: inset 0 4px 0 rgba(105, 126, 148, 0.74);
 }
 
 .result-column-head {

@@ -104,3 +104,47 @@ export interface MajorDetail {
   subject_requirement_samples: string[];
   source_documents: GaokaoProfileSource[];
 }
+
+// ---------------------------------------------------------------------------
+// 编译期兼容性检查：与后端 OpenAPI 1:1 对应的几个 Detail 类型必须是生成类型的子集。
+// 如果 `npm run gen:api` 之后这一块标红，说明后端 schema 改了，先把上面的 interface
+// 对齐再继续。
+// ---------------------------------------------------------------------------
+
+import type { components as _ApiComponents } from "../../types/api.generated";
+
+type _DetailSchemas = _ApiComponents["schemas"];
+type _DetailIsAssignable<L, R> = [L] extends [R] ? true : false;
+
+interface _DetailSchemaAssertions {
+  collegeProfile: _DetailIsAssignable<
+    CollegeProfileDetail,
+    _DetailSchemas["CollegeProfileDetailRead"]
+  >;
+  collegeYearSummary: _DetailIsAssignable<
+    CollegeYearSummary,
+    _DetailSchemas["CollegeYearSummaryRead"]
+  >;
+  majorProfile: _DetailIsAssignable<
+    MajorProfileDetail,
+    _DetailSchemas["MajorProfileDetailRead"]
+  >;
+  collegeMajorProfile: _DetailIsAssignable<
+    CollegeMajorProfile,
+    _DetailSchemas["CollegeMajorProfileRead"]
+  >;
+  gaokaoProfileSource: _DetailIsAssignable<
+    GaokaoProfileSource,
+    _DetailSchemas["GaokaoProfileSourceRead"]
+  >;
+  collegeDetail: _DetailIsAssignable<
+    CollegeDetail,
+    _DetailSchemas["CollegeDetailRead"]
+  >;
+  majorDetail: _DetailIsAssignable<MajorDetail, _DetailSchemas["MajorDetailRead"]>;
+}
+
+type _DetailAllTrue<T> = { [K in keyof T]: T[K] extends true ? T[K] : never };
+type _DetailSchemaCompatOk = _DetailAllTrue<_DetailSchemaAssertions>;
+const _detailSchemaCompatOk: _DetailSchemaCompatOk = {} as _DetailSchemaCompatOk;
+void _detailSchemaCompatOk;

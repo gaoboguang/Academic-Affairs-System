@@ -581,6 +581,10 @@ class ShandongRushStableSafeCandidateRead(BaseModel):
     college_id: int
     college_name: str
     college_code_snapshot: str | None = None
+    college_province: str | None = None
+    college_city: str | None = None
+    college_school_type: str | None = None
+    college_ownership: str | None = None
     major_id: int | None = None
     major_name: str | None = None
     major_code_snapshot: str | None = None
@@ -704,6 +708,10 @@ class VolunteerWorkbenchCandidateRead(BaseModel):
     college_id: int
     college_name: str
     college_code_snapshot: str | None = None
+    college_province: str | None = None
+    college_city: str | None = None
+    college_school_type: str | None = None
+    college_ownership: str | None = None
     major_id: int | None = None
     major_name: str | None = None
     major_group_code: str | None = None
@@ -1083,6 +1091,7 @@ class RecommendationGenerateResponse(BaseModel):
     challenge: list[RecommendationResultRead]
     steady: list[RecommendationResultRead]
     safe: list[RecommendationResultRead]
+    watch: list[RecommendationResultRead] = Field(default_factory=list)
 
 
 class RecommendationBatchGenerateItem(BaseModel):
@@ -1119,6 +1128,7 @@ class RecommendationHistoryItem(BaseModel):
     challenge_count: int
     steady_count: int
     safe_count: int
+    watch_count: int = 0
 
 
 class RecommendationCollegeOption(BaseModel):

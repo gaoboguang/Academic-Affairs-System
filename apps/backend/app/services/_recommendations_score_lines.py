@@ -61,7 +61,7 @@ def build_plan_only_reference_evaluation(
         "该结果不能直接作为冲稳保或录取把握判断。"
     )
     return {
-        "result_type": "challenge",
+        "result_type": "watch",
         "reference_rank": None,
         "student_rank": None,
         "score_basis": "plan_only",
@@ -146,7 +146,7 @@ def build_score_line_reference_evaluation(
         risk_flags.append("manual_formula_check")
 
     evaluation = {
-        "result_type": "challenge",
+        "result_type": "watch",
         "reference_rank": None,
         "student_rank": None,
         "score_basis": reference.score_basis,
@@ -224,8 +224,17 @@ def get_best_score_line_reference(
     if not rows:
         return None
 
-    available_years = sorted({int(row["year"]) for row in rows if row.get("year") is not None}, reverse=True)
-    preferred_years = [year for year in available_years if year <= target_year] or available_years
+    available_years: set[int] = set()
+    for row in rows:
+        raw_year = row.get("year")
+        if raw_year is None:
+            continue
+        try:
+            available_years.add(int(raw_year))
+        except (TypeError, ValueError):
+            continue
+    sorted_years = sorted(available_years, reverse=True)
+    preferred_years = [year for year in sorted_years if year <= target_year] or sorted_years
     preferred_pairs = _preferred_score_line_pairs(
         student_type=student_type,
         batch=batch,
@@ -238,27 +247,31 @@ def get_best_score_line_reference(
                 (
                     item
                     for item in rows
-                    if int(item["year"]) == year
-                    and str(item["batch_name"] or "").strip() == batch_name
-                    and str(item["line_type"] or "").strip() == line_type
+                    if _safe_int(item.get("year")) == year
+                    and str(item.get("batch_name") or "").strip() == batch_name
+                    and str(item.get("line_type") or "").strip() == line_type
                 ),
                 None,
             )
             if not row:
                 continue
-            current_line_type = str(row["line_type"]).strip()
+            current_line_type = str(row.get("line_type") or "").strip()
+            row_score = _safe_float(row.get("score"))
+            row_year = _safe_int(row.get("year"))
+            if row_score is None or row_year is None:
+                continue
             return ScoreLineReference(
-                year=int(row["year"]),
+                year=row_year,
                 province=province,
                 candidate_type=candidate_type,
-                batch_name=str(row["batch_name"]).strip(),
+                batch_name=str(row.get("batch_name") or "").strip(),
                 line_type=current_line_type,
                 line_label=LINE_TYPE_LABELS.get(current_line_type, current_line_type),
-                score=float(row["score"]),
+                score=row_score,
                 score_basis=_score_basis_for_line_type(current_line_type),
-                remark=_clean_optional_text(row["remark"]),
-                source_title=_clean_optional_text(row["source_title"]),
-                source_url=_clean_optional_text(row["source_url"]),
+                remark=_clean_optional_text(row.get("remark")),
+                source_title=_clean_optional_text(row.get("source_title")),
+                source_url=_clean_optional_text(row.get("source_url")),
             )
     return None
 
@@ -380,3 +393,21 @@ def _clean_optional_text(value: object) -> str | None:
         return None
     current = str(value).strip()
     return current or None
+
+
+def _safe_int(value: object) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_float(value: object) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None

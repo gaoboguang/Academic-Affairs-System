@@ -41,9 +41,17 @@ def export_pathway_profiles(settings: Settings, rows: list[dict[str, object]]) -
     sheet.title = "数据"
     sheet.append(PATHWAY_PROFILE_TEMPLATE_HEADERS)
     for row in rows:
-        materials = row.get("materials_json") if isinstance(row.get("materials_json"), dict) else {}
         body_limitations = row.get("known_body_limitations_json")
         body_note = body_limitations.get("note") if isinstance(body_limitations, dict) else None
+        region_pref = row.get("region_preferences_json") if isinstance(row.get("region_preferences_json"), dict) else {}
+        career_pref = row.get("career_preferences_json") if isinstance(row.get("career_preferences_json"), dict) else {}
+
+        def _list_cell(value: object) -> str:
+            return ",".join(value) if isinstance(value, list) else ""
+
+        def _bool_cell(value: object) -> str | None:
+            return format_pathway_profile_bool(value) if isinstance(value, bool) else None
+
         sheet.append(
             [
                 row.get("student_no"),
@@ -60,33 +68,32 @@ def export_pathway_profiles(settings: Settings, rows: list[dict[str, object]]) -
                 row.get("art_score_source"),
                 row.get("art_score_note"),
                 row.get("sports_track"),
-                format_pathway_profile_bool(row.get("has_gaokao_registration") if isinstance(row.get("has_gaokao_registration"), bool) else None),
-                format_pathway_profile_bool(row.get("is_fresh_graduate") if isinstance(row.get("is_fresh_graduate"), bool) else None),
-                format_pathway_profile_bool(row.get("is_vocational_student") if isinstance(row.get("is_vocational_student"), bool) else None),
-                format_pathway_profile_bool(row.get("is_social_candidate") if isinstance(row.get("is_social_candidate"), bool) else None),
-                format_pathway_profile_bool(row.get("has_high_school_equivalent") if isinstance(row.get("has_high_school_equivalent"), bool) else None),
-                format_pathway_profile_bool(row.get("accept_junior_college") if isinstance(row.get("accept_junior_college"), bool) else None),
-                format_pathway_profile_bool(row.get("accept_private_college") if isinstance(row.get("accept_private_college"), bool) else None),
-                format_pathway_profile_bool(row.get("accept_sino_foreign") if isinstance(row.get("accept_sino_foreign"), bool) else None),
-                format_pathway_profile_bool(row.get("accept_outside_province") if isinstance(row.get("accept_outside_province"), bool) else None),
-                format_pathway_profile_bool(row.get("accept_early_batch") if isinstance(row.get("accept_early_batch"), bool) else None),
-                format_pathway_profile_bool(row.get("accept_service_commitment") if isinstance(row.get("accept_service_commitment"), bool) else None),
-                format_pathway_profile_bool(
-                    row.get("accept_interview_or_physical_test")
-                    if isinstance(row.get("accept_interview_or_physical_test"), bool)
-                    else None
-                ),
-                format_pathway_profile_bool(materials.get("gaokao_registration") if isinstance(materials.get("gaokao_registration"), bool) else None),
-                format_pathway_profile_bool(
-                    materials.get("comprehensive_quality_evaluation")
-                    if isinstance(materials.get("comprehensive_quality_evaluation"), bool)
-                    else None
-                ),
-                format_pathway_profile_bool(
-                    materials.get("single_exam_college_chapter_plan")
-                    if isinstance(materials.get("single_exam_college_chapter_plan"), bool)
-                    else None
-                ),
+                _bool_cell(row.get("has_gaokao_registration")),
+                _bool_cell(row.get("is_fresh_graduate")),
+                _bool_cell(row.get("is_vocational_student")),
+                _bool_cell(row.get("is_social_candidate")),
+                _bool_cell(row.get("has_high_school_equivalent")),
+                _bool_cell(row.get("accept_junior_college")),
+                _bool_cell(row.get("accept_private_college")),
+                _bool_cell(row.get("accept_sino_foreign")),
+                _bool_cell(row.get("accept_outside_province")),
+                _bool_cell(row.get("accept_early_batch")),
+                _bool_cell(row.get("accept_service_commitment")),
+                _bool_cell(row.get("accept_interview_or_physical_test")),
+                _list_cell(region_pref.get("target_regions")),
+                _list_cell(region_pref.get("school_level_tags")),
+                region_pref.get("major_keyword") if isinstance(region_pref.get("major_keyword"), str) else "",
+                row.get("primary_direction_name") or "",
+                row.get("secondary_direction_name") or "",
+                row.get("alternative_direction_name") or "",
+                _list_cell(career_pref.get("priority_focuses")),
+                _list_cell(career_pref.get("preferred_industries")),
+                _list_cell(career_pref.get("preferred_job_types")),
+                _list_cell(career_pref.get("target_employment_cities")),
+                _bool_cell(career_pref.get("accepts_postgraduate")),
+                _bool_cell(career_pref.get("accepts_public_service")),
+                _bool_cell(career_pref.get("accepts_certificate")),
+                _bool_cell(career_pref.get("accepts_long_training")),
                 body_note,
                 row.get("note"),
             ]

@@ -1398,6 +1398,7 @@ import { computed, onMounted, reactive, ref } from "vue";
 import ElMessage from "element-plus/es/components/message/index";
 
 import { apiRequest, openFile } from "../api/client";
+import { api } from "../api/typedClient";
 import AppPage from "../components/ui/AppPage.vue";
 import AppStatGrid from "../components/ui/AppStatGrid.vue";
 import type { PageMetaItem, StatCardItem } from "../components/ui/types";
@@ -1650,20 +1651,16 @@ async function reloadAll(): Promise<void> {
 }
 
 async function loadOverview(): Promise<void> {
-  const payload = await apiRequest<GaokaoDataOverview>(
-    "/api/gaokao/data-overview",
-  );
+  const payload = await api.get("/api/gaokao/data-overview");
   Object.assign(overview, payload);
 }
 
 async function loadImportBatches(): Promise<void> {
-  importBatches.value = await apiRequest<GaokaoImportBatch[]>(
-    "/api/gaokao/import-batches",
-  );
+  importBatches.value = await api.get("/api/gaokao/import-batches");
 }
 
 async function loadDataHealth(): Promise<void> {
-  const payload = await apiRequest<GaokaoDataHealth>("/api/gaokao/data-health");
+  const payload = await api.get("/api/gaokao/data-health");
   Object.assign(dataHealth, payload);
 }
 
@@ -1681,15 +1678,15 @@ function openDataCoverageReportPrintPreview(): void {
 }
 
 async function loadReviewSummary(): Promise<void> {
-  const params = new URLSearchParams({ status: reviewFilter.value });
-  params.set("focus", reviewFocus.value);
-  params.set("sort", reviewSort.value);
-  if (reviewKeyword.value.trim()) {
-    params.set("keyword", reviewKeyword.value.trim());
-  }
-  const payload = await apiRequest<GaokaoReviewSummary>(
-    `/api/gaokao/review-summary?${params.toString()}`,
-  );
+  const keyword = reviewKeyword.value.trim();
+  const payload = await api.get("/api/gaokao/review-summary", {
+    query: {
+      status: reviewFilter.value,
+      focus: reviewFocus.value,
+      sort: reviewSort.value,
+      keyword: keyword || null,
+    },
+  });
   Object.assign(reviewSummary, payload);
   reviewFilter.value = payload.active_filter;
   reviewFocus.value = payload.active_focus;
@@ -1702,9 +1699,7 @@ async function applyReviewFocus(focusCode: string): Promise<void> {
 }
 
 async function loadShandongMonitor(): Promise<void> {
-  const payload = await apiRequest<GaokaoShandongMonitor>(
-    "/api/gaokao/shandong-monitor",
-  );
+  const payload = await api.get("/api/gaokao/shandong-monitor");
   Object.assign(shandongMonitor, payload);
 }
 

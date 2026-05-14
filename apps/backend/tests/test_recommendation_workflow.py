@@ -908,6 +908,7 @@ def test_art_score_line_fallback_supports_preview_and_generation(client, app) ->
     preview_payload = preview_response.json()
     assert preview_payload["candidate_count"] == 1
     candidate = preview_payload["candidates"][0]
+    assert candidate["result_type"] == "watch"
     assert candidate["reference_scope"] == "score_line"
     assert candidate["reference_years_json"] == [2025]
     assert candidate["reference_record_count"] == 0
@@ -943,8 +944,11 @@ def test_art_score_line_fallback_supports_preview_and_generation(client, app) ->
     assert generate_response.status_code == 200
     generate_payload = generate_response.json()
     assert generate_payload["result_count"] == 1
-    assert len(generate_payload["challenge"]) == 1
-    result = generate_payload["challenge"][0]
+    assert len(generate_payload["challenge"]) == 0
+    assert len(generate_payload["steady"]) == 0
+    assert len(generate_payload["safe"]) == 0
+    assert len(generate_payload["watch"]) == 1
+    result = generate_payload["watch"][0]
     assert result["score_basis"] == "culture_score"
     assert result["fallback_priority_label"] in {"重点比较", "优先核看"}
     assert any("省级控制线" in note for note in result["fallback_priority_notes_json"])
@@ -1134,23 +1138,8 @@ def test_plan_only_fallback_supports_special_workbench_preview_and_generation(cl
     )
     assert preview_response.status_code == 200
     preview_payload = preview_response.json()
-    assert preview_payload["candidate_count"] == 2
-    candidate = preview_payload["candidates"][0]
-    assert candidate["college_name"] == "山东综评测试大学"
-    assert candidate["reference_scope"] == "plan_only"
-    assert candidate["reference_years_json"] == [2026]
-    assert candidate["reference_record_count"] == 0
-    assert candidate["score_basis"] == "plan_only"
-    assert candidate["fallback_priority_label"] in {"重点比较", "优先核看"}
-    assert candidate["fallback_priority_score"] > preview_payload["candidates"][1]["fallback_priority_score"]
-    assert any("计划数 20" in note for note in candidate["fallback_priority_notes_json"])
-    assert candidate["fallback_category_label"] == "综评工科方向"
-    assert any("核对综合评价报名条件" in note for note in candidate["fallback_review_notes_json"])
-    assert "计划清单初筛" in candidate["match_tags_json"]
-    assert "plan_only_reference" in (candidate["risk_flags_json"] or [])
-    assert any("当年招生计划清单" in note for note in candidate["match_notes_json"])
-    assert any("批次词典：" in note for note in candidate["match_notes_json"])
-    assert any("政策摘要：" in note for note in candidate["match_notes_json"])
+    assert preview_payload["candidate_count"] == 0
+    assert preview_payload["candidates"] == []
 
     generate_response = client.post(
         "/api/recommendations/generate",
@@ -1162,26 +1151,7 @@ def test_plan_only_fallback_supports_special_workbench_preview_and_generation(cl
             "score_input_mode": "actual_rank",
         },
     )
-    assert generate_response.status_code == 200
-    generate_payload = generate_response.json()
-    assert generate_payload["result_count"] == 2
-    assert len(generate_payload["challenge"]) == 2
-    result = generate_payload["challenge"][0]
-    assert result["college_name"] == "山东综评测试大学"
-    assert result["reference_scope"] == "plan_only"
-    assert result["reference_years_json"] == [2026]
-    assert result["reference_record_count"] == 0
-    assert result["score_basis"] == "plan_only"
-    assert result["fallback_priority_label"] in {"重点比较", "优先核看"}
-    assert result["fallback_priority_score"] > generate_payload["challenge"][1]["fallback_priority_score"]
-    assert any("计划数 20" in note for note in result["fallback_priority_notes_json"])
-    assert result["fallback_category_label"] == "综评工科方向"
-    assert any("核对综合评价报名条件" in note for note in result["fallback_review_notes_json"])
-    assert "plan_only_reference" in (result["risk_flags_json"] or [])
-    assert result["snapshot_json"]["plan_only_reference"] is True
-    assert result["snapshot_json"]["reference_scope"] == "plan_only"
-    assert result["snapshot_json"]["batch_dict_note"] == "综合评价招生专科批需结合学校综合测试与高考成绩。"
-    assert result["snapshot_json"]["province_policy_summary"] == "综合评价招生需结合高校测试和高考成绩综合认定，正式填报前需核对学校章程。"
+    assert generate_response.status_code == 404
 
 
 def test_special_type_rule_dictionary_bootstrap_and_list(client) -> None:

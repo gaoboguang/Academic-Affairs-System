@@ -17,7 +17,7 @@ from app.schemas.exam import (
     TeacherAnalyticsResponse,
     TeacherPanoramaResponse,
 )
-from app.schemas.knowledge import ClassKnowledgeBriefingResponse
+from app.schemas.knowledge import ClassKnowledgeBriefingResponse, ClassKnowledgeHeatmapResponse
 from app.schemas.student_followup import AdviserDashboardResponse, StudentRiskResponse
 from app.services import analytics as service
 from app.services import student_followup as student_followup_service
@@ -118,6 +118,16 @@ def get_class_knowledge_briefing(
     session: Session = Depends(get_db_session),
 ) -> ClassKnowledgeBriefingResponse:
     return service.get_class_knowledge_briefing(session, class_id, exam_id, subject_id=subject_id)
+
+
+@router.get("/classes/{class_id}/knowledge-heatmap", response_model=ClassKnowledgeHeatmapResponse)
+def get_class_knowledge_heatmap(
+    class_id: int,
+    exam_id: int = Query(..., ge=1),
+    subject_id: int | None = Query(default=None, ge=1),
+    session: Session = Depends(get_db_session),
+) -> ClassKnowledgeHeatmapResponse:
+    return service.get_class_knowledge_heatmap(session, class_id, exam_id, subject_id=subject_id)
 
 
 @router.get("/classes/{class_id}/panorama", response_model=ClassPanoramaResponse)

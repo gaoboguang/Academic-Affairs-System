@@ -261,6 +261,17 @@ def test_question_import_error_tags_student_analysis_and_class_briefing(client, 
     assert top_item["error_tag_stats"]
     assert top_item["weak_students"][0]["student_name"] == "张三"
 
+    heatmap_response = client.get(f"/api/analytics/classes/1/knowledge-heatmap?exam_id={exam_id}")
+    assert heatmap_response.status_code == 200
+    heatmap_payload = heatmap_response.json()
+    assert heatmap_payload["subject_groups"]
+    first_group = heatmap_payload["subject_groups"][0]
+    assert first_group["students"]
+    assert first_group["knowledge_paths"]
+    assert len(first_group["cells"]) == len(first_group["knowledge_paths"])
+    if first_group["cells"]:
+        assert len(first_group["cells"][0]) == len(first_group["students"])
+
     export_response = client.post(
         "/api/reports/export",
         json={"report_type": "class_knowledge_briefing", "exam_id": exam_id, "class_id": 1},

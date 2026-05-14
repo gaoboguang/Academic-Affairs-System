@@ -20,13 +20,6 @@
     </header>
 
     <section class="overview-grid">
-      <article class="soft-card overview-panel">
-        <div class="overview-kicker">数据底座</div>
-        <h3>所有业务页都从这里读取主数据，不在前端重复维护映射</h3>
-        <p>
-          学年、学期、年级、班级、学科和字典配置共用同一套主数据来源，后续学生、教师、考试、工作量和推荐都直接复用。
-        </p>
-      </article>
       <article v-for="item in overviewCards" :key="item.label" class="soft-card overview-card" :class="item.tone">
         <span>{{ item.label }}</span>
         <strong>{{ item.value }}</strong>
@@ -307,47 +300,12 @@ onMounted(reloadAll);
 <style scoped>
 .overview-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) repeat(3, minmax(0, 0.75fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 16px;
 }
 
-.overview-panel,
 .overview-card {
   padding: 24px;
-}
-
-.overview-panel {
-  background:
-    radial-gradient(circle at top left, rgba(180, 219, 243, 0.32), transparent 28%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.99), rgba(244, 248, 252, 0.94));
-}
-
-.overview-kicker {
-  display: inline-flex;
-  padding: 7px 10px;
-  border-radius: 999px;
-  background: rgba(31, 108, 152, 0.1);
-  color: #1f6c98;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.overview-panel h3 {
-  margin: 14px 0 0;
-  color: #1f3448;
-  font-size: 28px;
-  line-height: 1.25;
-}
-
-.overview-panel p {
-  margin: 12px 0 0;
-  color: #62788c;
-  line-height: 1.7;
-}
-
-.overview-card {
   display: grid;
   align-content: end;
   gap: 10px;

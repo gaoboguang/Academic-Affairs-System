@@ -678,7 +678,7 @@ def test_recommendation_export_includes_history_comparison_rows(test_settings) -
         "历史对照摘要",
         "历史方案差异",
         "相对“历史方案 A”（2026-04-10），当前方案新增 1 条、移除 1 条、分组调整 1 条",
-        "冲刺 0 对 1（-1）；稳妥 1 对 0（+1）；保底 1 对 1（0）；保留 0 条可比结果。",
+        "冲刺 0 对 1（-1）；稳妥 1 对 0（+1）；保底 1 对 1（0）；仅关注 0 对 0（0）；保留 0 条可比结果。",
     ) in risk_rows
     assert (
         "历史对照摘要",
@@ -696,7 +696,7 @@ def test_recommendation_export_includes_history_comparison_rows(test_settings) -
         "历史对照摘要",
         "历史方案差异",
         "相对“历史方案 A”（2026-04-10），当前方案新增 1 条、移除 1 条、分组调整 1 条",
-        "冲刺 0 对 1（-1）；稳妥 1 对 0（+1）；保底 1 对 1（0）；保留 0 条可比结果。",
+        "冲刺 0 对 1（-1）；稳妥 1 对 0（+1）；保底 1 对 1（0）；仅关注 0 对 0（0）；保留 0 条可比结果。",
     ) in overview_rows
 
 

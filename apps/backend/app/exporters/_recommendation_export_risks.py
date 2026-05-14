@@ -368,6 +368,7 @@ def _build_recommendation_group_delta_detail(
         ("challenge", "冲刺"),
         ("steady", "稳妥"),
         ("safe", "保底"),
+        ("watch", "仅关注"),
     ]:
         current = current_group_counts.get(key, 0)
         compare = compare_group_counts.get(key, 0)
@@ -377,7 +378,7 @@ def _build_recommendation_group_delta_detail(
 
 
 def _build_recommendation_group_counts(rows: list[dict[str, object]]) -> dict[str, int]:
-    counts = {"challenge": 0, "steady": 0, "safe": 0}
+    counts = {"challenge": 0, "steady": 0, "safe": 0, "watch": 0}
     for row in rows:
         result_type = row.get("result_type")
         if result_type in counts:
@@ -533,5 +534,4 @@ def _get_latest_reference_year(reference_years: list[object]) -> int | None:
     if not numeric_years:
         return None
     return max(numeric_years)
-
 

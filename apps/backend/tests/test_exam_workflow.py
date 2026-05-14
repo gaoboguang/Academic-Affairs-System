@@ -119,6 +119,20 @@ def test_exam_score_import_and_analytics(client) -> None:
     assert student_payload["total_score"] == 243.0
     assert student_payload["class_rank"] == 1
     assert student_payload["grade_rank"] == 1
+    assert "trend_shape" in student_payload
+    assert student_payload["trend_shape"]["label"] in {
+        "数据不足",
+        "稳定",
+        "稳步上升",
+        "下滑",
+        "剧烈波动",
+        "U型反弹",
+    }
+    assert student_payload["stability"]["level"] in {"unknown", "high", "medium", "low"}
+    assert isinstance(student_payload["subject_trend_shapes"], list)
+    assert isinstance(student_payload["subject_structure"]["radar_points"], list)
+    assert isinstance(student_payload["peer_comparison"]["subject_gaps"], list)
+    assert isinstance(student_payload["target_progress"], list)
 
     class_analytics = client.get(f"/api/analytics/classes/1?exam_id={exam_id}")
     assert class_analytics.status_code == 200

@@ -1,5 +1,69 @@
 # 交接说明
 
+## 最新高考志愿候选区筛选（2026-05-13 地区 / 办学性质 / 默认30条）
+
+- 已按用户要求给志愿向导候选区增加筛选和分页：
+  - 候选区新增“候选筛选”，支持按地区（院校省份或城市）、办学性质（公办 / 民办）和关键词（院校名、专业名、代码）筛选当前已返回候选
+  - 候选卡新增“地区 / 办学性质”展示；识别不到办学性质时显示“未维护”
+  - 候选列表默认每页 30 条，可切换 30 / 60 / 100；筛选条件或候选池刷新后自动回到第 1 页
+- 后端已补字段：
+  - `VolunteerWorkbenchCandidateRead` 与 `ShandongRushStableSafeCandidateRead` 增加 `college_province`、`college_city`、`college_school_type`、`college_ownership`
+  - 志愿工作台普通候选和 `history_only` 候选都会从 `College` 与 `CollegeProfileDetail` 构建展示上下文
+  - `college_ownership` 仅按现有 `school_level_tags_json`、`school_type`、`note`、`college_profile_detail.raw_json.attr_list` / 相关字段 / 简介推断；不要新增硬编码前端猜测
+- 前端已补 helper：
+  - `buildVolunteerCandidateFilterOptions()`
+  - `buildVolunteerCandidatePage()`
+  - 类型 `VolunteerCandidateFilterState`
+- 验证通过：
+  - `npm run backend:test -- apps/backend/tests/test_recommendation_workflow.py -q`：16 passed
+  - `npm run frontend:test -- tests/volunteer-workbench.test.ts`：44 passed
+  - `npm run frontend:lint`：通过
+  - `npm run frontend:build`：通过
+  - `git diff --check`：通过
+- 后续注意：当前筛选针对“后端已返回 / 页面已展示候选”做本地过滤；若未来要筛选全部数据库候选，需要新增后端查询参数和服务端分页，本轮没有做。
+
+## 最新高考志愿展示口径修复（2026-05-13 筛选摘要总数与分组数）
+
+- 已修复用户截图中“共 606 条候选，但四个分组只合计 300 条，看起来对不上”的展示问题：
+  - 这不是数据库错乱；后端 `source_preview.candidate_count` 表示全部命中候选数，`source_preview.returned_candidate_count` 表示页面实际返回/展示条数
+  - 志愿向导候选返回上限为 300 条，`guideGroups` 的冲刺 / 稳妥 / 保底 / 仅关注统计基于当前展示的前 300 条，所以 213+62+25+0=300 是当前展示分布
+- 已补前端 helper 和页面文案：
+  - `apps/frontend/src/components/recommendations/volunteerGuide.ts` 新增 `buildVolunteerGuideDisplaySummary()`
+  - `apps/frontend/src/components/recommendations/RecommendationVolunteerWorkbenchPanel.vue` 的筛选摘要改为显示“共命中 N 条候选，当前展示前 M 条；分组卡统计当前展示候选”
+  - 截断时四个分组卡标注“当前展示分布”，并在卡片上方提示四个分层合计数的统计口径
+- 已补测试：
+  - `apps/frontend/tests/volunteer-guide.test.ts` 覆盖 606 命中、300 展示、分组合计 300 的摘要口径
+  - `apps/frontend/tests/volunteer-workbench.test.ts` 覆盖模板中存在当前展示口径提示
+- 验证通过：
+  - `npm run frontend:test -- tests/volunteer-guide.test.ts tests/volunteer-workbench.test.ts`：53 passed
+  - `npm run frontend:lint`：通过
+  - `npm run frontend:build`：通过
+  - 相关文件 `git diff --check`：通过
+- 后续注意：不要把截断提醒解释为数据缺失；如果用户需要看全部候选，应增加筛选条件或后续做分页/加载更多，而不是把分组卡强行统计全部命中候选。
+
+## 最新高考志愿口径修复（2026-05-13 无最低分/位次不得显示冲刺）
+
+- 已修复用户截图中“没有参考最低分、最低位次却显示冲刺”的问题：
+  - 根因在后端兜底评估：`build_plan_only_reference_evaluation()` 和 `build_score_line_reference_evaluation()` 曾返回 `result_type=challenge`
+  - 这两类数据只有招生计划清单或省控线 / 资格线，不能判断院校 / 专业录取把握，因此现在统一返回 `result_type=watch`
+- 新业务口径：
+  - 有同校同专业或院校历史最低位次 / 最低分，才允许进入冲刺 / 稳妥 / 保底
+  - 只有历史招生计划、计划清单初筛、历史计划模拟、省控线资格参考的候选，只能进入“仅关注”
+  - 页面上仍可展示计划、学费、风险标签和近三年计划行，但不能显示为“冲刺”
+- 同步改动：
+  - 旧 `/api/recommendations/generate` 响应新增 `watch`
+  - 推荐历史 `RecommendationHistoryItem` 和学生详情推荐摘要新增 `watch_count`
+  - 前端旧方案结果页、推荐打印页、方案对比、导出风险对比都支持“关注 / 仅关注”
+- 验证通过：
+  - `npm run backend:test -- apps/backend/tests/test_recommendation_workflow.py apps/backend/tests/test_volunteer_guide_art_unification.py -q`：30 passed
+  - `npm run frontend:test -- tests/recommendation-comparison.test.ts tests/recommendation-output-guards.test.ts tests/volunteer-workbench.test.ts`：52 passed
+  - `npm run frontend:lint`：通过
+  - `npm run frontend:build`：通过
+  - `npm run backend:data-health -- --json`：成功，仍为既有 warning（单招 / 综评只有计划、缺专门录取结果，只能初筛）
+  - SQLite：Alembic `20260510_0032`、`integrity_check=ok`、外键检查无输出
+  - `git diff --check`：通过
+- 后续注意：不要再把 `plan_only_reference`、`score_line_reference_only` 或 `historical_plan_simulation` 解释成录取把握；这些只能作为“仅关注 / 初筛参考”。
+
 ## 最新备份清理（2026-05-12 院校库收口后）
 
 - 用户要求“合并提交到 main，然后把之前的备份清理一下”，已先清理旧备份：

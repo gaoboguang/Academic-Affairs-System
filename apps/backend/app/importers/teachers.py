@@ -88,6 +88,7 @@ class TeacherImporter:
         row_errors: list[RowError] = []
 
         for row_number, row_values in rows:
+            savepoint = self.session.begin_nested()
             try:
                 payload = self._parse_row(row_values)
                 existing = get_teacher_by_no(self.session, payload.teacher_no)
@@ -95,6 +96,7 @@ class TeacherImporter:
                     if strategy == "create":
                         raise ValueError(f"工号 {payload.teacher_no} 已存在")
                     if strategy == "skip_existing":
+                        savepoint.rollback()
                         skipped_rows += 1
                         continue
                     self._apply(existing, payload)
@@ -105,8 +107,11 @@ class TeacherImporter:
                     self.session.flush()
                     self._apply(teacher, payload)
                     created_rows += 1
+                savepoint.commit()
                 success_rows += 1
             except Exception as exc:
+                if savepoint.is_active:
+                    savepoint.rollback()
                 failed_rows += 1
                 row_errors.append(build_row_error(row_number=row_number, values=row_values, message=str(exc)))
 

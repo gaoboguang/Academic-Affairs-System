@@ -332,6 +332,7 @@
                 <el-table-column label="冲" prop="challenge_count" width="70" />
                 <el-table-column label="稳" prop="steady_count" width="70" />
                 <el-table-column label="保" prop="safe_count" width="70" />
+                <el-table-column label="关注" prop="watch_count" width="76" />
               </el-table>
             </div>
             <el-empty v-if="!profile.recommendation_history.length" description="暂无推荐历史" />
@@ -491,6 +492,7 @@ interface RecommendationHistoryItem {
   challenge_count?: number | null;
   steady_count?: number | null;
   safe_count?: number | null;
+  watch_count?: number | null;
 }
 
 interface AttachmentItem {

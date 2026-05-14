@@ -1137,6 +1137,7 @@ def get_student_profile(session: Session, student_id: int) -> StudentProfileRead
             challenge_count=row.challenge_count,
             steady_count=row.steady_count,
             safe_count=row.safe_count,
+            watch_count=row.watch_count,
         )
         for row in recommendation_service.list_recommendation_history(session, student_id=student_id)[:8]
     ]

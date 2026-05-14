@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from app.models import AdmissionRecord, EnrollmentPlan, Student, StudentPathwayProfile
+from app.models import AdmissionRecord, College, CollegeProfileDetail, EnrollmentPlan, Student, StudentPathwayProfile
 from app.repositories.exams import get_exam
 from app.repositories.recommendations import (
     build_compatible_exam_modes,
@@ -79,6 +79,14 @@ class ChapterRuleContext:
     vision_requirement: str | None = None
     color_vision_requirement: str | None = None
     physical_exam_requirement: str | None = None
+
+
+@dataclass
+class CollegeDisplayContext:
+    province: str | None = None
+    city: str | None = None
+    school_type: str | None = None
+    ownership: str | None = None
 
 
 def preview_volunteer_workbench(
@@ -346,7 +354,8 @@ def preview_volunteer_workbench(
                         )
                     career_summary = str(career_alignment.get("career_match_summary") or "").strip()
                     if career_summary:
-                        evaluation["reason_text"] = f"{evaluation['reason_text']} {career_summary}"
+                        existing_reason = str(evaluation.get("reason_text") or "")
+                        evaluation["reason_text"] = f"{existing_reason} {career_summary}".strip()
                     snapshot_json = dict(evaluation.get("snapshot_json") or {})
                     snapshot_json.update(
                         {
@@ -362,46 +371,7 @@ def preview_volunteer_workbench(
                     )
                     evaluation["snapshot_json"] = snapshot_json
             else:
-                plan_only_fallback = build_plan_only_reference_evaluation(
-                    province=payload.province,
-                    target_year=target_year,
-                    student_type=student_type,
-                    plan=plan,
-                )
-                if not plan_only_fallback:
-                    continue
-                evaluation = plan_only_fallback
-                used_plan_only_reference = True
-                if career_alignment:
-                    evaluation["career_match_score"] = career_alignment.get("career_match_score")
-                    evaluation["career_match_strength"] = career_alignment.get("career_match_strength")
-                    evaluation["career_match_summary"] = career_alignment.get("career_match_summary")
-                    evaluation["career_match_reasons_json"] = career_alignment.get("career_match_reasons_json") or []
-                    evaluation["matched_direction_names_json"] = career_alignment.get("matched_direction_names_json") or []
-                    evaluation["requires_postgraduate_path"] = career_alignment.get("requires_postgraduate_path")
-                    evaluation["requires_certificate_path"] = career_alignment.get("requires_certificate_path")
-                    evaluation["requires_long_training_path"] = career_alignment.get("requires_long_training_path")
-                    if career_alignment.get("risk_flags_json"):
-                        evaluation["risk_flags_json"] = sorted(
-                            set([*(evaluation.get("risk_flags_json") or []), *list(career_alignment.get("risk_flags_json") or [])])
-                        )
-                    career_summary = str(career_alignment.get("career_match_summary") or "").strip()
-                    if career_summary:
-                        evaluation["reason_text"] = f"{evaluation['reason_text']} {career_summary}"
-                    snapshot_json = dict(evaluation.get("snapshot_json") or {})
-                    snapshot_json.update(
-                        {
-                            "career_match_score": career_alignment.get("career_match_score"),
-                            "career_match_strength": career_alignment.get("career_match_strength"),
-                            "career_match_summary": career_alignment.get("career_match_summary"),
-                            "career_match_reasons_json": career_alignment.get("career_match_reasons_json"),
-                            "matched_direction_names_json": career_alignment.get("matched_direction_names_json"),
-                            "requires_postgraduate_path": career_alignment.get("requires_postgraduate_path"),
-                            "requires_certificate_path": career_alignment.get("requires_certificate_path"),
-                            "requires_long_training_path": career_alignment.get("requires_long_training_path"),
-                        }
-                    )
-                    evaluation["snapshot_json"] = snapshot_json
+                continue
         if not evaluation:
             continue
         apply_input_context_to_evaluation(evaluation, input_context)
@@ -961,11 +931,12 @@ def _build_workbench_candidate(
     reason_segments = []
     if used_college_fallback and plan.major_id is not None:
         reason_segments.append("当前专业缺少历史专业线，先按院校近年录取基线参考。")
-    reason_segments.append(str(evaluation["reason_text"]))
+    reason_segments.append(str(evaluation.get("reason_text") or ""))
     if plan.subject_requirement and not payload.subject_combination:
         reason_segments.append(f"选科要求为“{plan.subject_requirement}”，填报前需人工核对。")
     if used_general_reference_fallback:
         reason_segments.append("当前缺少该类别专门录取结果，先按普通类录取结果参考。")
+    college_context = _build_college_display_context(session, plan.college)
     return VolunteerWorkbenchCandidateRead(
         plan_id=plan.id,
         year=plan.year,
@@ -975,6 +946,10 @@ def _build_workbench_candidate(
         college_id=plan.college_id,
         college_name=plan.college.name if plan.college else "",
         college_code_snapshot=plan.college_code_snapshot,
+        college_province=college_context.province,
+        college_city=college_context.city,
+        college_school_type=college_context.school_type,
+        college_ownership=college_context.ownership,
         major_id=plan.major_id,
         major_name=major_name,
         major_group_code=plan.major_group_code or None,
@@ -988,12 +963,12 @@ def _build_workbench_candidate(
         schooling_years=plan.schooling_years,
         training_location=plan.training_location,
         student_type=plan.student_type,
-        result_type=str(evaluation["result_type"]),
+        result_type=str(evaluation.get("result_type") or "watch"),
         reference_rank=evaluation.get("reference_rank"),
         latest_admission_year=evaluation.get("latest_year"),
         latest_min_rank=evaluation.get("latest_min_rank"),
         latest_min_score=evaluation.get("latest_min_score"),
-        score_basis=str(evaluation["score_basis"]),
+        score_basis=str(evaluation.get("score_basis") or "rank"),
         reference_scope=reference_scope,
         reference_years_json=reference_years,
         reference_record_count=0 if (score_line_reference or used_plan_only_reference) else len(records),
@@ -1098,10 +1073,11 @@ def _build_history_only_workbench_candidate(
 
     reason_segments = [
         "缺少招生计划，本条只按历史录取/投档记录供老师参考。",
-        str(evaluation["reason_text"]),
+        str(evaluation.get("reason_text") or ""),
     ]
     if latest.subject_requirement and not payload.subject_combination:
         reason_segments.append(f"选科要求为“{latest.subject_requirement}”，填报前需人工核对。")
+    college_context = _build_college_display_context(session, latest.college)
 
     return VolunteerWorkbenchCandidateRead(
         plan_id=-int(latest.id),
@@ -1112,6 +1088,10 @@ def _build_history_only_workbench_candidate(
         college_id=latest.college_id,
         college_name=latest.college.name if latest.college else "",
         college_code_snapshot=latest.college.college_code if latest.college else None,
+        college_province=college_context.province,
+        college_city=college_context.city,
+        college_school_type=college_context.school_type,
+        college_ownership=college_context.ownership,
         major_id=latest.major_id,
         major_name=latest.major.name if latest.major else None,
         major_group_code=None,
@@ -1125,12 +1105,12 @@ def _build_history_only_workbench_candidate(
         schooling_years=None,
         training_location=None,
         student_type=latest.student_type,
-        result_type=str(evaluation["result_type"]),
+        result_type=str(evaluation.get("result_type") or "watch"),
         reference_rank=evaluation.get("reference_rank"),
         latest_admission_year=evaluation.get("latest_year"),
         latest_min_rank=evaluation.get("latest_min_rank"),
         latest_min_score=evaluation.get("latest_min_score"),
-        score_basis=str(evaluation["score_basis"]),
+        score_basis=str(evaluation.get("score_basis") or "rank"),
         reference_scope="history_only",
         reference_years_json=reference_years,
         reference_record_count=len(records),
@@ -1288,6 +1268,51 @@ def _build_history_only_candidate_history(records: list[AdmissionRecord]) -> lis
         if len(history) >= 3:
             break
     return history
+
+
+def _build_college_display_context(session: Session, college: College | None) -> CollegeDisplayContext:
+    if not college:
+        return CollegeDisplayContext()
+    profile = session.scalar(
+        select(CollegeProfileDetail)
+        .where(
+            CollegeProfileDetail.college_id == college.id,
+            CollegeProfileDetail.is_active.is_(True),
+        )
+    )
+    return CollegeDisplayContext(
+        province=college.province,
+        city=college.city,
+        school_type=college.school_type,
+        ownership=_infer_college_ownership(college, profile),
+    )
+
+
+def _infer_college_ownership(college: College, profile: CollegeProfileDetail | None) -> str | None:
+    values: list[str] = []
+    if college.school_level_tags_json:
+        values.extend(str(item) for item in college.school_level_tags_json if item)
+    if college.school_type:
+        values.append(college.school_type)
+    if college.note:
+        values.append(college.note)
+    if profile:
+        raw = profile.raw_json or {}
+        attr_list = raw.get("attr_list") if isinstance(raw, dict) else None
+        if isinstance(attr_list, list):
+            values.extend(str(item) for item in attr_list if item)
+        for key in ("nature", "school_nature", "办学性质", "ownership"):
+            value = raw.get(key) if isinstance(raw, dict) else None
+            if value:
+                values.append(str(value))
+        if profile.summary:
+            values.append(profile.summary)
+    text_value = " ".join(values)
+    if "民办" in text_value:
+        return "民办"
+    if "公办" in text_value or "教育部直属" in text_value or "省属" in text_value:
+        return "公办"
+    return None
 
 
 

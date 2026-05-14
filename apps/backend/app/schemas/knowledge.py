@@ -187,3 +187,26 @@ class ClassKnowledgeBriefingResponse(BaseModel):
     generated_at: datetime
     items: list[ClassKnowledgeBriefingItem] = Field(default_factory=list)
     notices: list[str] = Field(default_factory=list)
+
+
+class ClassKnowledgeHeatmapStudent(BaseModel):
+    student_id: int
+    student_name: str
+    student_no: str | None = None
+
+
+class ClassKnowledgeHeatmapSubjectGroup(BaseModel):
+    subject_id: int
+    subject_name: str
+    knowledge_paths: list[str] = Field(default_factory=list)
+    students: list[ClassKnowledgeHeatmapStudent] = Field(default_factory=list)
+    cells: list[list[float | None]] = Field(default_factory=list)
+
+
+class ClassKnowledgeHeatmapResponse(BaseModel):
+    exam_id: int
+    exam_name: str
+    class_id: int
+    class_name: str
+    subject_groups: list[ClassKnowledgeHeatmapSubjectGroup] = Field(default_factory=list)
+    notices: list[str] = Field(default_factory=list)

@@ -189,28 +189,9 @@
       <div class="section-head compact">
         <div>
           <h3>2 意向偏好</h3>
-          <p>偏好只影响同层排序，不覆盖省份、批次、科类、选科等硬条件。</p>
-        </div>
-        <div class="action-row">
-          <el-button
-            :disabled="!studentCareerPreference"
-            :loading="loadingStudentCareerPreference"
-            @click="emit('apply-student-career-preference')"
-          >
-            载入学生偏好
-          </el-button>
-          <el-button
-            type="primary"
-            :disabled="!form.student_id"
-            :loading="savingStudentCareerPreference"
-            @click="emit('save-student-career-preference')"
-          >
-            保存为学生偏好
-          </el-button>
+          <p>选中学生后系统会从「学生中心 / 升学画像」自动带入；这里所做的修改只对当次推荐生效，不会回写画像。</p>
         </div>
       </div>
-
-      <p class="career-preference-status">{{ careerPreferenceStatusCopy }}</p>
 
       <div class="career-grid">
         <el-select
@@ -354,17 +335,17 @@
         <div class="section-head compact">
           <div>
             <h3>筛选摘要</h3>
-            <p>
-              共 {{ guidePreview.source_preview.candidate_count }} 条候选；
-              生效位次 {{ guidePreview.source_preview.effective_rank ?? "暂无" }}；
-              {{ guidePreview.source_preview.score_input_label }}。
-            </p>
+            <p>{{ guideDisplaySummary.copy }}</p>
           </div>
         </div>
+        <p v-if="guideDisplaySummary.isTruncated" class="guide-summary-hint">
+          下方四个分层合计 {{ guideDisplaySummary.groupedDisplayedCount }} 条，统计口径是当前页面已展示的候选，不是全部命中候选。
+        </p>
         <div class="guide-group-grid">
           <article v-for="group in guideGroups" :key="group.key" class="guide-group-card">
             <span>{{ group.label }}</span>
             <strong>{{ group.count }} 条</strong>
+            <small v-if="guideDisplaySummary.isTruncated">当前展示分布</small>
             <p v-if="group.candidates[0]">{{ group.candidates[0].evidence.summary }}</p>
             <p v-else>当前没有该分层候选。</p>
           </article>
@@ -589,8 +570,51 @@
           </div>
         </div>
 
-        <div v-if="preview?.candidates.length" class="candidate-card-list">
-          <article v-for="row in preview.candidates" :key="row.plan_id" class="candidate-card">
+        <section v-if="preview?.candidates.length" class="candidate-filter-card">
+          <div>
+            <strong>候选筛选</strong>
+            <p>筛选当前已展示候选，默认每页展示 30 条。</p>
+          </div>
+          <div
+            class="candidate-filter-grid"
+            :class="{ 'has-sub-track': candidateFilterOptions.musicSubTracks.length > 0 }"
+          >
+            <el-select v-model="candidateFilters.region" clearable filterable placeholder="地区">
+              <el-option
+                v-for="item in candidateFilterOptions.regions"
+                :key="`candidate-region-${item}`"
+                :label="item"
+                :value="item"
+              />
+            </el-select>
+            <el-select v-model="candidateFilters.ownership" clearable filterable placeholder="办学性质">
+              <el-option
+                v-for="item in candidateFilterOptions.ownerships"
+                :key="`candidate-ownership-${item}`"
+                :label="item"
+                :value="item"
+              />
+            </el-select>
+            <el-select
+              v-if="candidateFilterOptions.musicSubTracks.length"
+              v-model="candidateFilters.musicSubTrack"
+              clearable
+              placeholder="音乐方向"
+            >
+              <el-option
+                v-for="item in candidateFilterOptions.musicSubTracks"
+                :key="`candidate-sub-track-${item.value}`"
+                :label="`${item.label}（${item.count}）`"
+                :value="item.value"
+              />
+            </el-select>
+            <el-input v-model="candidateFilters.keyword" clearable placeholder="院校 / 专业 / 代码" />
+            <el-button @click="resetCandidateFilters">重置筛选</el-button>
+          </div>
+        </section>
+
+        <div v-if="preview?.candidates.length && pagedCandidates.items.length" class="candidate-card-list">
+          <article v-for="row in pagedCandidates.items" :key="row.plan_id" class="candidate-card">
             <header class="candidate-card-head">
               <div class="candidate-layer">
                 <el-tag :type="resultTagType(row.result_type)" effect="dark">
@@ -632,6 +656,8 @@
             </header>
 
             <div class="candidate-card-meta">
+              <span><strong>地区</strong>{{ candidateRegionLabel(row) }}</span>
+              <span><strong>办学性质</strong>{{ row.college_ownership || "未维护" }}</span>
               <span><strong>计划</strong>{{ candidatePlanCountLabel(row) }}</span>
               <span><strong>学费</strong>{{ row.tuition_fee || "待补" }}</span>
               <span><strong>参考最低分</strong>{{ formatOptionalValue(row.latest_min_score) }}</span>
@@ -684,6 +710,21 @@
               <span v-if="!row.risk_flags_json.length" class="muted-copy">无额外风险标签</span>
             </div>
           </article>
+        </div>
+        <el-pagination
+          v-if="preview?.candidates.length && candidatePage.total"
+          class="candidate-pagination"
+          background
+          layout="total, sizes, prev, pager, next"
+          :current-page="candidatePage.page"
+          :page-size="candidatePagination.pageSize"
+          :page-sizes="[30, 60, 100]"
+          :total="candidatePage.total"
+          @current-change="handleCandidatePageChange"
+          @size-change="handleCandidatePageSizeChange"
+        />
+        <div v-else-if="preview?.candidates.length" class="comparison-placeholder">
+          当前筛选条件下暂无候选，请调整地区、办学性质或关键词。
         </div>
         <div v-else class="comparison-placeholder">
           {{ preview ? "当前条件下暂无可加入志愿表的候选计划，请查看生成前复核提示。" : "选择学生与考试后生成智能筛选，这里会显示可报计划。" }}
@@ -1166,7 +1207,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 
 import {
@@ -1178,12 +1219,15 @@ import {
 } from "./helpers";
 import {
   buildVolunteerBoundaryInsightCards,
+  buildVolunteerCandidateFilterOptions,
+  buildVolunteerCandidatePage,
   buildVolunteerDraftViewSections,
   buildVolunteerEmploymentProfile,
   buildVolunteerRuleInsightCards,
 } from "./volunteerWorkbench";
 import {
   buildVolunteerBatchOptionGroups,
+  buildVolunteerGuideDisplaySummary,
   buildVolunteerGuideOptionItems,
   buildVolunteerGuideActionItems,
   buildVolunteerGuideProgressSteps,
@@ -1192,6 +1236,7 @@ import {
 } from "./volunteerGuide";
 import type {
   VolunteerExamScoreAutofillNotice,
+  VolunteerCandidateFilterState,
 } from "./volunteerWorkbench";
 import { getRecommendationRiskFlagText } from "./recommendationCopy";
 import {
@@ -1204,7 +1249,6 @@ import {
   formatComparisonOrderChange,
   formatComparisonType,
   formatComparisonTypeChange,
-  formatDateTime,
   formatEmploymentHintStatus,
   formatEmploymentMatchStrength,
   formatStudentType,
@@ -1314,8 +1358,20 @@ const compareDraftIdModel = computed<number | undefined>({
   set: (value) => emit("compare-draft-change", value),
 });
 const draftViewMode = ref<VolunteerDraftViewMode>("batch");
+const candidateFilters = reactive<VolunteerCandidateFilterState>({
+  region: "",
+  ownership: "",
+  musicSubTrack: "",
+  keyword: "",
+  page: 1,
+  pageSize: 30,
+});
+const candidatePagination = computed(() => ({
+  pageSize: candidateFilters.pageSize,
+}));
 const guideProgressSteps = computed(() => buildVolunteerGuideProgressSteps(props.guidePreview, props.draft.length));
 const guideReadiness = computed(() => buildVolunteerGuideReadiness(props.guidePreview));
+const guideDisplaySummary = computed(() => buildVolunteerGuideDisplaySummary(props.guidePreview));
 const compactReadinessItems = computed(() => summarizeVolunteerReadinessItems(guideReadiness.value.items));
 const compactGuideActions = computed(() => buildVolunteerGuideActionItems(props.guidePreview));
 const batchOptionGroups = computed(() =>
@@ -1381,6 +1437,9 @@ const ruleInsightCards = computed<VolunteerRuleInsightCard[]>(() =>
 const boundaryInsightCards = computed<VolunteerBoundaryInsightCard[]>(() =>
   buildVolunteerBoundaryInsightCards(props.preview),
 );
+const candidateFilterOptions = computed(() => buildVolunteerCandidateFilterOptions(props.preview?.candidates ?? []));
+const candidatePage = computed(() => buildVolunteerCandidatePage(props.preview?.candidates ?? [], candidateFilters));
+const pagedCandidates = candidatePage;
 const draggingPlanId = ref<number | null>(null);
 const dragTargetPlanId = ref<number | null>(null);
 const selectedEmploymentColumns = ref<VolunteerEmploymentColumnKey[]>(["target_direction", "match_strength"]);
@@ -1404,6 +1463,20 @@ const employmentColumnOptions: Array<{ key: VolunteerEmploymentColumnKey; label:
   { key: "summary", label: "说明摘要" },
 ];
 
+watch(
+  () => props.preview?.candidates,
+  () => {
+    candidateFilters.page = 1;
+  },
+);
+
+watch(
+  () => [candidateFilters.region, candidateFilters.ownership, candidateFilters.musicSubTrack, candidateFilters.keyword],
+  () => {
+    candidateFilters.page = 1;
+  },
+);
+
 function openCollegeDetail(collegeId: number): void {
   void router.push(`/colleges/${collegeId}`);
 }
@@ -1412,19 +1485,6 @@ function openMajorDetail(majorId: number): void {
   void router.push(`/majors/${majorId}`);
 }
 const employmentColumnSet = computed(() => new Set(selectedEmploymentColumns.value));
-const careerPreferenceStatusCopy = computed(() => {
-  if (!props.form.student_id) {
-    return "先选择学生，再读取或保存职业意向。";
-  }
-  if (props.loadingStudentCareerPreference) {
-    return "正在读取该学生已保存的职业意向。";
-  }
-  if (!props.studentCareerPreference) {
-    return "当前学生还没有已保存的职业意向，可直接填写后保存为学生偏好。";
-  }
-  return `已存在学生级职业意向，最近更新于 ${formatDateTime(props.studentCareerPreference.updated_at)}。`;
-});
-
 function formatRiskFlag(value: string): string {
   return getRecommendationRiskFlagText(value);
 }
@@ -1441,6 +1501,10 @@ function formatRankValue(value: number | null | undefined): string {
 
 function candidateRecentHistory(candidate: VolunteerWorkbenchCandidate) {
   return candidate.recent_history_json ?? [];
+}
+
+function candidateRegionLabel(candidate: VolunteerWorkbenchCandidate): string {
+  return [candidate.college_province, candidate.college_city].filter(Boolean).join(" / ") || "未维护";
 }
 
 function candidateReferenceScopeLabel(candidate: VolunteerWorkbenchCandidate): string {
@@ -1460,6 +1524,23 @@ function candidatePlanCountLabel(candidate: VolunteerWorkbenchCandidate): string
     return "缺招生计划";
   }
   return `${candidate.plan_count} 人`;
+}
+
+function resetCandidateFilters(): void {
+  candidateFilters.region = "";
+  candidateFilters.ownership = "";
+  candidateFilters.musicSubTrack = "";
+  candidateFilters.keyword = "";
+  candidateFilters.page = 1;
+}
+
+function handleCandidatePageChange(page: number): void {
+  candidateFilters.page = page;
+}
+
+function handleCandidatePageSizeChange(pageSize: number): void {
+  candidateFilters.pageSize = pageSize;
+  candidateFilters.page = 1;
 }
 
 function handleDraftDragStart(event: DragEvent, planId: number): void {
@@ -1667,6 +1748,13 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
   border: 1px solid rgba(126, 143, 158, 0.14);
 }
 
+.guide-summary-hint {
+  margin: 4px 0 12px;
+  color: #4f6578;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .exam-score-autofill-bar {
   display: flex;
   align-items: center;
@@ -1722,6 +1810,13 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
   display: block;
   margin-top: 6px;
   color: #20364b;
+}
+
+.guide-group-card small {
+  display: block;
+  margin-top: 4px;
+  color: #7b8fa1;
+  font-size: 12px;
 }
 
 .guide-group-card p,
@@ -2071,6 +2166,38 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
   flex-wrap: wrap;
 }
 
+.candidate-filter-card {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(126, 143, 158, 0.12);
+}
+
+.candidate-filter-card strong {
+  color: #20364b;
+}
+
+.candidate-filter-card p {
+  margin: 6px 0 0;
+  color: #6a8094;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.candidate-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(150px, 0.8fr) minmax(220px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.candidate-filter-grid.has-sub-track {
+  grid-template-columns: minmax(140px, 0.7fr) minmax(140px, 0.7fr) minmax(140px, 0.7fr) minmax(200px, 1fr) auto;
+}
+
 .draft-head-actions {
   display: grid;
   gap: 10px;
@@ -2175,7 +2302,7 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
 
 .candidate-card-meta {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -2252,6 +2379,11 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
 
 .candidate-risk-tags {
   padding-top: 2px;
+}
+
+.candidate-pagination {
+  justify-content: flex-end;
+  margin-top: 14px;
 }
 
 .reason-copy {
@@ -2631,6 +2763,7 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
   .guide-progress-strip,
   .compact-readiness-list,
   .insight-grid,
+  .candidate-filter-grid,
   .candidate-card-head,
   .candidate-card-meta {
     grid-template-columns: 1fr;

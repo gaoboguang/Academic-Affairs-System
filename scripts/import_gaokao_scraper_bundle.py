@@ -32,6 +32,7 @@ def run_import(
     apply: bool = False,
     json_output: bool = False,
     no_backup: bool = False,
+    sidecar_path: Path | None = None,
 ) -> dict[str, Any]:
     source_dir = source_dir.expanduser().resolve()
     db_path = db_path.expanduser().resolve()
@@ -39,12 +40,17 @@ def run_import(
         raise FileNotFoundError(f"source dir not found: {source_dir}")
     if not db_path.exists():
         raise FileNotFoundError(f"database not found: {db_path}")
+    if sidecar_path is None:
+        candidate = db_path.parent / "local_edu_tool" / "local_edu.sqlite3"
+        if candidate.exists():
+            sidecar_path = candidate
     if apply and dry_run:
         dry_run = False
     bundle = _load_bundle(source_dir)
     report = _build_report(source_dir, bundle)
     report["mode"] = "apply" if apply and not dry_run else "dry-run"
     report["db_path"] = str(db_path)
+    report["sidecar_path"] = str(sidecar_path) if sidecar_path else None
     report["backup_path"] = None
     if dry_run or not apply:
         return report
@@ -57,11 +63,18 @@ def run_import(
     with sqlite3.connect(str(db_path)) as conn:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
-        _ensure_raw_tables(conn)
-        _ensure_required_profile_tables(conn)
-        context = _ApplyContext(conn=conn, source_dir=source_dir, bundle=bundle, report=report)
-        context.apply()
-        conn.commit()
+        if sidecar_path is not None and sidecar_path.exists():
+            sidecar_str = str(sidecar_path).replace("'", "''")
+            conn.execute(f"ATTACH DATABASE '{sidecar_str}' AS gaokao")
+        try:
+            _ensure_raw_tables(conn)
+            _ensure_required_profile_tables(conn)
+            context = _ApplyContext(conn=conn, source_dir=source_dir, bundle=bundle, report=report)
+            context.apply()
+            conn.commit()
+        finally:
+            if sidecar_path is not None and sidecar_path.exists():
+                conn.execute("DETACH DATABASE gaokao")
     return report
 
 
@@ -1747,6 +1760,10 @@ def _build_complete_specialty_score_map(items: list[dict[str, Any]]) -> dict[tup
 
 
 def _ensure_raw_tables(conn: sqlite3.Connection) -> None:
+    if _table_exists_in_any_schema(conn, "gaokao_admission_result") and _table_exists_in_any_schema(
+        conn, "gaokao_admission_plan"
+    ):
+        return
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS gaokao_admission_result (
@@ -1858,6 +1875,19 @@ def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
             (table_name,),
         ).fetchone()
     )
+
+
+def _table_exists_in_any_schema(conn: sqlite3.Connection, table_name: str) -> bool:
+    for row in conn.execute("PRAGMA database_list").fetchall():
+        schema_name = row[1]
+        quoted = schema_name if schema_name == "main" else f'"{schema_name}"'
+        result = conn.execute(
+            f"SELECT 1 FROM {quoted}.sqlite_master WHERE type='table' AND name=?",
+            (table_name,),
+        ).fetchone()
+        if result:
+            return True
+    return False
 
 
 def _table_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:

@@ -2,6 +2,27 @@
 
 ## 当前状态
 
+- 2026-05-13 已完成高考志愿推荐候选区筛选与分页：
+  - 后端 `VolunteerWorkbenchCandidateRead` 和山东普通类候选响应补充 `college_province`、`college_city`、`college_school_type`、`college_ownership`，志愿工作台候选可直接携带院校地区、类型和办学性质
+  - 办学性质不新增数据库字段，按院校标签、院校类型、备注和 `college_profile_detail.raw_json.attr_list` 等现有画像文本推断；能确认“民办”显示民办，能确认“公办 / 教育部直属 / 省属”显示公办，识别不到前端显示“未维护”
+  - 前端候选区新增“候选筛选”，支持按地区、省市、办学性质和关键词筛选当前已返回候选；候选卡增加地区和办学性质展示
+  - 候选区改为分页展示，默认每页 30 条，可切换 30 / 60 / 100；筛选条件变化或候选刷新时自动回到第 1 页
+  - 验证通过：后端推荐流程专项 16 passed，前端工作台单测 44 passed，`frontend:lint`、`frontend:build`、`git diff --check` 均通过
+
+- 2026-05-13 已修复高考志愿“筛选摘要候选数看起来对不上”的前端展示口径：
+  - 根因确认：后端 `source_preview.candidate_count` 是全部命中候选数，`returned_candidate_count` 是页面实际返回/展示条数；推荐向导候选返回上限为 300 条，分组卡只统计当前展示候选，所以截图中 606 与 213+62+25+0=300 并非数据库错乱
+  - 前端新增 `buildVolunteerGuideDisplaySummary()`，把“共命中 N 条 / 当前展示前 M 条 / 分组卡统计当前展示候选”分开展示；截断时分组卡标注“当前展示分布”
+  - `RecommendationVolunteerWorkbenchPanel.vue` 已改用统一摘要 helper，不再直接把总命中数和分组展示数混在一个口径里
+  - 验证通过：`npm run frontend:test -- tests/volunteer-guide.test.ts tests/volunteer-workbench.test.ts` 为 53 passed；`frontend:lint`、`frontend:build` 通过；相关文件 `git diff --check` 通过
+
+- 2026-05-13 已修复高考志愿候选“无最低录取成绩 / 位次却显示冲刺”的口径问题：
+  - 根因确认：`plan_only`（只有招生计划、没有录取线）和 `score_line`（仅省控线 / 资格线参考）兜底评估此前返回 `result_type=challenge`，前端按后端分组如实显示为“冲刺”，造成“没有最低分/位次也判断冲刺”的误导
+  - 后端已改为：计划清单初筛、历史计划模拟且缺同校同专业录取线、省控线资格参考，一律返回 `result_type=watch`，只进入“仅关注”，不得进入冲刺 / 稳妥 / 保底
+  - 旧 `/api/recommendations/generate` 响应新增 `watch` 分组；推荐历史、学生详情推荐记录、方案对比、打印预览、导出风险对比均同步识别“仅关注”
+  - 前端旧方案结果页增加“关注”统计与“仅关注”列；打印页摘要改为“冲 / 稳 / 保 / 关注”
+  - 业务口径：只有招生计划或资格线时只能说明“可关注、需人工核对、不能判断录取把握”；只有院校/专业历史最低分或最低位次时，才允许进入冲稳保分层
+  - 验证通过：后端推荐专项 `30 passed`；前端相关定向 `52 passed`；`frontend:lint`；`frontend:build`；`backend:data-health -- --json` 成功但保持既有单招/综评 warning；SQLite `20260510_0032` / `integrity_check=ok` / 外键检查无输出；`git diff --check`
+
 - 2026-05-12 已追加完成院校库“带空格旧名 / 别名污染成活跃山东副本”的二次核查与修复：
   - 前次核查漏掉一层：部分 `gaokao_college` / raw 快照中的旧写法在中文院校名中带内部空格，例如 `东华理工 大学`、`中国人民 公安大学`、`中国人民 警察大学`、`宁夏工商职业 技术学院`；旧链路会把这些旧名当成独立活跃院校，并沿用山东招生记录上下文，导致院校库仍出现“山东 / 北京市、南昌市、廊坊市”等异常地区
   - 真实主库已备份到 `data/backups/app_before_college_space_name_cleanup_20260512_155114.db`；已停用带空格旧名山东副本，`宁夏工商职业 技术学院` 已规范为 `宁夏工商职业技术学院`，旧带空格写法保留为 `college_alias`，保证搜索兼容但不作为院校本体展示
