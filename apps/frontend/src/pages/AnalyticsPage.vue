@@ -89,7 +89,7 @@
           <div class="filter-grid adviser-filter-grid">
             <el-select v-model="adviserGradeId" clearable filterable placeholder="年级">
               <el-option
-                v-for="grade in referenceStore.grades"
+                v-for="grade in examScopedGradeOptions"
                 :key="grade.id"
                 :label="grade.name"
                 :value="grade.id"
@@ -97,7 +97,7 @@
             </el-select>
             <el-select v-model="adviserClassId" clearable filterable placeholder="班级">
               <el-option
-                v-for="schoolClass in referenceStore.classes"
+                v-for="schoolClass in examScopedClassOptions"
                 :key="schoolClass.id"
                 :label="schoolClass.name"
                 :value="schoolClass.id"
@@ -204,7 +204,7 @@
           <div class="filter-grid score-report-filter-grid">
             <el-select v-model="scoreReportClassId" clearable filterable placeholder="全部班级">
               <el-option
-                v-for="schoolClass in referenceStore.classes"
+                v-for="schoolClass in examScopedClassOptions"
                 :key="schoolClass.id"
                 :label="schoolClass.name"
                 :value="schoolClass.id"
@@ -566,7 +566,7 @@
           <div class="action-row">
             <el-select v-model="selectedClassId" filterable placeholder="选择班级" style="width: 280px">
               <el-option
-                v-for="schoolClass in referenceStore.classes"
+                v-for="schoolClass in examScopedClassOptions"
                 :key="schoolClass.id"
                 :label="schoolClass.name"
                 :value="schoolClass.id"
@@ -677,7 +677,7 @@
           <div class="action-row">
             <el-select v-model="selectedGradeId" filterable placeholder="选择年级" style="width: 280px">
               <el-option
-                v-for="grade in referenceStore.grades"
+                v-for="grade in examScopedGradeOptions"
                 :key="grade.id"
                 :label="grade.name"
                 :value="grade.id"
@@ -998,6 +998,10 @@ import {
 } from "../components/analytics/adviserDashboard";
 import ClassPanoramaPanel from "../components/analytics/ClassPanoramaPanel.vue";
 import ClassKnowledgeHeatmapCard from "../components/analytics/ClassKnowledgeHeatmapCard.vue";
+import {
+  filterOptionsByExamParticipants,
+  pickScopedOptionId,
+} from "../components/analytics/examParticipantOptions";
 import GradePanoramaPanel from "../components/analytics/GradePanoramaPanel.vue";
 import StudentPeerCard from "../components/analytics/StudentPeerCard.vue";
 import StudentStructureCard from "../components/analytics/StudentStructureCard.vue";
@@ -1054,6 +1058,9 @@ interface StudentOption {
   id: number;
   student_no: string;
   name: string;
+  current_grade_id?: number | null;
+  current_grade_name?: string | null;
+  current_class_id?: number | null;
   current_class_name?: string | null;
   total_score?: number | null;
   grade_rank?: number | null;
@@ -1176,6 +1183,16 @@ const classPanorama = ref<ClassPanoramaResponse | null>(null);
 const teacherPanorama = ref<TeacherPanoramaResponse | null>(null);
 const selectedExamName = computed(
   () => examOptions.value.find((item) => item.id === selectedExamId.value)?.name ?? "未选择考试",
+);
+const examScopedClassOptions = computed(() =>
+  selectedExamId.value
+    ? filterOptionsByExamParticipants(referenceStore.classes, studentOptions.value, "current_class_id")
+    : referenceStore.classes,
+);
+const examScopedGradeOptions = computed(() =>
+  selectedExamId.value
+    ? filterOptionsByExamParticipants(referenceStore.grades, studentOptions.value, "current_grade_id")
+    : referenceStore.grades,
 );
 const analyticsPageMeta = computed(() => [
   { label: "考试", value: examOptions.value.length },
@@ -1338,12 +1355,7 @@ async function loadOptions(): Promise<void> {
   if (selectedExamId.value) {
     await loadExamStudentOptions({ preserveCurrent: true });
   }
-  if (!selectedClassId.value && referenceStore.classes.length) {
-    selectedClassId.value = referenceStore.classes[0].id;
-  }
-  if (!selectedGradeId.value && referenceStore.grades.length) {
-    selectedGradeId.value = referenceStore.grades[0].id;
-  }
+  syncExamScopedSelections();
   if (!selectedTeacherId.value && teacherOptions.value.length) {
     selectedTeacherId.value = teacherOptions.value[0].id;
   }
@@ -1355,9 +1367,6 @@ async function loadOptions(): Promise<void> {
   }
   if (!selectedPanoramaTeacherId.value && teacherOptions.value.length) {
     selectedPanoramaTeacherId.value = teacherOptions.value[0].id;
-  }
-  if (!adviserGradeId.value && referenceStore.grades.length) {
-    adviserGradeId.value = referenceStore.grades[0].id;
   }
 }
 
@@ -1381,12 +1390,26 @@ async function loadExamStudentOptions(options: { preserveCurrent?: boolean } = {
       selectedStudentId.value = nextStudentId;
       studentAnalytics.value = null;
     }
+    syncExamScopedSelections();
   } catch (error) {
     studentOptions.value = [];
     selectedStudentId.value = null;
     studentAnalytics.value = null;
     ElMessage.error((error as Error).message);
   }
+}
+
+function pickOptionalScopedOptionId<T extends { id: number }>(options: T[], currentId: number | null): number | null {
+  if (!currentId) return null;
+  return options.some((item) => item.id === currentId) ? currentId : null;
+}
+
+function syncExamScopedSelections(): void {
+  selectedClassId.value = pickScopedOptionId(examScopedClassOptions.value, selectedClassId.value);
+  selectedGradeId.value = pickScopedOptionId(examScopedGradeOptions.value, selectedGradeId.value);
+  adviserGradeId.value = pickScopedOptionId(examScopedGradeOptions.value, adviserGradeId.value);
+  adviserClassId.value = pickOptionalScopedOptionId(examScopedClassOptions.value, adviserClassId.value);
+  scoreReportClassId.value = pickOptionalScopedOptionId(examScopedClassOptions.value, scoreReportClassId.value);
 }
 
 async function loadStudentAnalytics(): Promise<void> {

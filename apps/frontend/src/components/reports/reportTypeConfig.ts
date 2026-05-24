@@ -361,8 +361,19 @@ export function getGroupedReportCatalog(): Array<ReportDomainGroup & { items: Re
     items: Object.values(REPORT_TYPE_CONFIGS)
       .filter((config) => config.domain === group.key)
       .map((config) => getReportCatalogItem(config.value))
-      .filter((item): item is ReportTypeCatalogItem => Boolean(item)),
+    .filter((item): item is ReportTypeCatalogItem => Boolean(item)),
   })).filter((group) => group.items.length > 0);
+}
+
+export function getReportDomainForType(reportType: string): ReportDomain | null {
+  return REPORT_TYPE_CONFIGS[reportType]?.domain ?? null;
+}
+
+export function getReportCatalogItemsByDomain(domain: ReportDomain): ReportTypeCatalogItem[] {
+  return Object.values(REPORT_TYPE_CONFIGS)
+    .filter((config) => config.domain === domain)
+    .map((config) => getReportCatalogItem(config.value))
+    .filter((item): item is ReportTypeCatalogItem => Boolean(item));
 }
 
 export function getReportTypeLabel(reportType: string): string {

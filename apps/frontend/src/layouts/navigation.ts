@@ -43,13 +43,13 @@ export const navSections: AppNavSection[] = [
   {
     id: "home",
     title: "总览",
-    summary: "先看全局状态，再进入具体业务页面。",
+    summary: "查看今日常用入口。",
     items: [
       {
         path: "/",
         label: "工作台",
-        description: "查看最近考试、导入记录、备份状态和数据质量提醒。",
-        helper: "建议先确认全局状态，再进入考试、分析、推荐或系统设置。",
+        description: "查看学生、教师、考试、成绩和最近导入情况。",
+        helper: "从这里进入日常高频工作。",
         icon: HomeFilled,
         tags: ["全局状态", "最近考试", "导入记录"],
       },

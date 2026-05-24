@@ -1,5 +1,58 @@
 # 交接说明
 
+## 最新报表中心整理（2026-05-24）
+
+- 已按用户反馈整理 `/reports`：
+  - `apps/frontend/src/pages/ReportsPage.vue` 标题统一为“报表中心”，删除首屏“导出流 / 考试依赖 / 规则版本 / 最近导出”等重复概况卡
+  - 报表目录从所有业务域完整铺开，改为左侧按场景切换；右侧显示当前报表摘要、动态参数、生成报表和打印预览
+  - 当前报表用途、必要参数、数据来源、格式和风险标签集中显示，不再在每张目录卡里重复展开
+  - 刷新记录保留在页面右上角，表单区不再重复放“刷新记录”按钮；导出记录表继续保留
+  - `apps/frontend/src/components/reports/reportTypeConfig.ts` 新增 `getReportDomainForType()`、`getReportCatalogItemsByDomain()`，用于紧凑目录和测试
+  - `tests/e2e/reports.spec.ts`、`tests/e2e/adviser-dashboard.spec.ts`、`tests/e2e/planning.spec.ts` 的页面标题断言已同步为“报表中心”
+- 已验证：
+  - `npm run frontend:test -- tests/report-type-config.test.ts`：8 passed
+  - `npm run frontend:lint`：通过
+  - `npm run frontend:build`：通过，仍有既有 chunk size warning
+  - `npm run e2e -- tests/e2e/reports.spec.ts`：6 passed
+  - `npm run e2e -- tests/e2e/adviser-dashboard.spec.ts tests/e2e/planning.spec.ts`：2 passed
+  - `git diff --check`：通过
+  - 浏览器刷新 `http://127.0.0.1:5173/reports`：新“选择报表 / 当前报表 / 报表参数”结构可见，旧“导出流 / 输出目录”不再出现；切换“高考推荐”场景正常；控制台错误数 0
+- 本轮只改前端展示与测试，不改报表导出接口、打印页、数据库或运行数据。
+
+## 最新分析中心考试班级联动（2026-05-24）
+
+- 已按用户反馈修复“选择高三二模后，下面班级下拉仍能看到高一高二班级”的问题：
+  - `apps/frontend/src/components/analytics/examParticipantOptions.ts` 新增考试参与者选项 helper，按 `/api/analytics/exams/{exam_id}/students` 返回的 `current_class_id` / `current_grade_id` 收窄班级和年级选项
+  - `apps/frontend/src/pages/AnalyticsPage.vue` 中班主任驾驶舱、成绩报表、班级分析、年级分析的年级 / 班级下拉已改用考试参与范围；切换考试后，如果原选择不属于新考试，会自动换到第一个参与范围或清空可选班级筛选
+  - `apps/frontend/tests/analytics-exam-options.test.ts` 覆盖“只保留参与考试班级”和“旧班级选择自动重置”
+  - 全景对比和班级全景刻意保留全量班级，因为它们承担跨学年 / 跨 cohort 对比，不应被当前考试单独收窄
+- 已验证：
+  - `npm run frontend:test -- tests/analytics-exam-options.test.ts`：2 passed
+  - `npm run frontend:lint`：通过
+  - `npm run frontend:build`：通过，仍有既有 chunk size warning
+  - `npm run e2e -- tests/e2e/exams-analytics.spec.ts`：6 passed
+  - `git diff --check`：通过
+  - 浏览器刷新 `http://127.0.0.1:5173/analytics` 后选中 `202604高三二模`：班级下拉可见项仅为 `202301` 到 `202313` 13 个参考试班级，无高一高二班级，控制台错误数 0
+- 本轮未改后端接口、数据库或运行数据；修复复用现有学生可分析接口里的考试时点班级 / 年级字段。
+
+## 最新首页和全局顶部简化（2026-05-24）
+
+- 已按用户浏览器批注移除首页内部“工作台 / 今日教务决策台”大横幅：
+  - `apps/frontend/src/pages/DashboardPage.vue` 不再渲染横幅标题、说明、meta 标签和横幅操作按钮，首屏直接进入关键数据卡片
+  - 首页概况卡片保留学生、教师、考试、成绩、最近导入；已移除“最近备份 / 数据健康 / P0 缺口”等开发或验收视角卡片
+  - `apps/frontend/src/components/dashboard/dashboardDecisions.ts` 不再把系统备份和 P0 数据健康作为首页待处理事项；教师少量提醒改为“教师台账待补充”，ready 状态改为“可以开始日常使用”
+  - `apps/frontend/src/layouts/AppLayout.vue` 移除所有页面顶部右侧“使用提示”块；`apps/frontend/src/layouts/navigation.ts` 同步将工作台描述改为使用者视角
+  - `apps/frontend/src/components/ui/AppPage.vue` 新增 `hideHeader` prop；隐藏视觉 header 时仍输出屏幕阅读器可读的 `h1`，避免页面失去语义标题
+  - `tests/e2e/dashboard.spec.ts`、`apps/frontend/tests/dashboard-decisions.test.ts` 和 `apps/frontend/tests/navigation.test.ts` 已更新
+- 已验证：
+  - `npm run frontend:test -- tests/navigation.test.ts tests/dashboard-decisions.test.ts`：9 passed
+  - `npm run frontend:lint`：通过
+  - `npm run frontend:build`：通过，仍有既有 chunk size warning
+  - `npm run e2e -- tests/e2e/dashboard.spec.ts`：1 passed
+  - `git diff --check`：通过
+  - 浏览器刷新 `http://127.0.0.1:5173/`：旧横幅、开发视角卡片和“使用提示”均已移除，日常卡片存在，控制台错误数 0
+- 注意：本轮未改后端、数据库、导航结构或运行数据；当前工作区仍有既有未跟踪 `.superpowers/`，本轮未处理。
+
 ## 最新高考志愿候选区筛选（2026-05-13 地区 / 办学性质 / 默认30条）
 
 - 已按用户要求给志愿向导候选区增加筛选和分页：

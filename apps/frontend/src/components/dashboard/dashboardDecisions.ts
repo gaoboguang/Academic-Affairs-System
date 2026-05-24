@@ -58,8 +58,8 @@ export function buildDashboardNextSteps(summary: DashboardDecisionSummary): Dash
   if (summary.teacher_total < 5) {
     steps.push({
       code: "teacher_too_few",
-      title: "教师台账样本偏少",
-      detail: "教师数量偏少时，任教分析、工作量和评教对比只能做流程验证。",
+      title: "教师台账待补充",
+      detail: "先补齐教师信息和任教关系，后续查看工作量、评教和教师分析会更顺手。",
       actionLabel: "维护教师",
       path: "/teachers",
       severity: "info",
@@ -75,20 +75,6 @@ export function buildDashboardNextSteps(summary: DashboardDecisionSummary): Dash
       actionLabel: "补齐导入数据",
       path: "/import-center",
       severity: "warning",
-    });
-  }
-
-  if (summary.data_health && (summary.data_health.status !== "pass" || summary.data_health.p0_gap_count > 0)) {
-    steps.push({
-      code: "gaokao_data_warning",
-      title: "高考数据仍有风险提示",
-      detail:
-        summary.data_health.p0_gap_count > 0
-          ? `当前还有 ${summary.data_health.p0_gap_count} 条 P0 数据缺口，推荐和志愿结果需要保留人工复核。`
-          : summary.data_health.summary,
-      actionLabel: "查看高考数据",
-      path: "/gaokao-data",
-      severity: summary.data_health.status === "blocked" ? "danger" : "warning",
     });
   }
 
@@ -121,24 +107,13 @@ export function buildDashboardNextSteps(summary: DashboardDecisionSummary): Dash
     });
   }
 
-  if (!summary.latest_backup) {
-    steps.push({
-      code: "backup_missing",
-      title: "还没有系统备份",
-      detail: "导入真实数据、修复数据或恢复前，建议先创建一个本地备份包。",
-      actionLabel: "创建备份",
-      path: "/system-tools",
-      severity: "warning",
-    });
-  }
-
   if (steps.length === 0) {
     steps.push({
       code: "ready_for_trial",
-      title: "可以进入试用流程",
-      detail: "关键入口已有数据基础，建议按导入中心、分析中心、报表中心的顺序做一次完整复核。",
-      actionLabel: "进入导入中心",
-      path: "/import-center",
+      title: "可以开始日常使用",
+      detail: "已有学生、教师、考试和成绩基础数据，可以继续查看分析或导出报表。",
+      actionLabel: "进入分析中心",
+      path: "/analytics",
       severity: "info",
     });
   }

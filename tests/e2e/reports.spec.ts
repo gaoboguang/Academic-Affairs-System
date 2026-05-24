@@ -11,7 +11,7 @@ test("报表主流程：导出学生分析单并写入导出记录", async ({ pa
   await ensureExamWithScores(page);
 
   await page.goto("/reports");
-  await expect(page.getByRole("heading", { name: "输出中心" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "报表中心" })).toBeVisible();
 
   const reportPanel = page.locator(".panel-block").filter({ hasText: "报表参数" });
   const selects = reportPanel.locator(".filter-grid .el-select");
@@ -46,7 +46,7 @@ test("报表打印扩展：班级/年级/教师分析预览可打开", async ({ 
   await ensureExamWithScores(page);
 
   await page.goto("/reports");
-  await expect(page.getByRole("heading", { name: "输出中心" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "报表中心" })).toBeVisible();
 
   const reportPanel = page.locator(".panel-block").filter({ hasText: "报表参数" });
   const reportTypeSelect = reportPanel.locator(".filter-grid .el-select").first();
@@ -96,7 +96,7 @@ test("报表打印扩展：班级/年级/教师分析预览可打开", async ({ 
 
 test("报表打印扩展：工作量/评教/班主任量化预览可打开", async ({ page }) => {
   await page.goto("/reports");
-  await expect(page.getByRole("heading", { name: "输出中心" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "报表中心" })).toBeVisible();
 
   const reportPanel = page.locator(".panel-block").filter({ hasText: "报表参数" });
   const reportTypeSelect = reportPanel.locator(".filter-grid .el-select").first();
@@ -143,7 +143,7 @@ test("报表中心：可按志愿草稿打印预览并导出报表", async ({ pa
   const { draftName } = await createVolunteerDraft(page);
 
   await page.goto("/reports");
-  await expect(page.getByRole("heading", { name: "输出中心" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "报表中心" })).toBeVisible();
 
   const reportPanel = page.locator(".panel-block").filter({ hasText: "报表参数" });
   const selects = reportPanel.locator(".filter-grid .el-select");
@@ -198,7 +198,7 @@ test("报表中心：推荐报告与志愿草稿在导出前显示摘要", async
   expect(generateResponse.ok()).toBeTruthy();
 
   await page.goto("/reports");
-  await expect(page.getByRole("heading", { name: "输出中心" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "报表中心" })).toBeVisible();
 
   const reportPanel = page.locator(".panel-block").filter({ hasText: "报表参数" });
   await selectDropdownOption(page, reportPanel.locator(".filter-grid .el-select").first(), "学生推荐报告");
@@ -221,7 +221,7 @@ test("报表中心：推荐报告与志愿草稿在导出前显示摘要", async
 
 test("报表异常提示：缺少必填参数时阻止导出", async ({ page }) => {
   await page.goto("/reports");
-  await expect(page.getByRole("heading", { name: "输出中心" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "报表中心" })).toBeVisible();
 
   const reportPanel = page.locator(".panel-block").filter({ hasText: "报表参数" });
   const selects = reportPanel.locator(".filter-grid .el-select");

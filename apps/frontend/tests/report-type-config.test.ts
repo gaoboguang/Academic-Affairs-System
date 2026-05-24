@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildReportExportPayload,
   formatReportExportParams,
+  getReportCatalogItemsByDomain,
+  getReportDomainForType,
   getGroupedReportCatalog,
   getReportCatalogItem,
   getMissingRequiredReportFields,
@@ -50,6 +52,19 @@ describe("report type config", () => {
       requiredParams: ["考试", "班级"],
       formats: ["Excel", "打印预览"],
     });
+  });
+
+  it("supports compact report selection by domain", () => {
+    expect(getReportDomainForType("student_analysis")).toBe("students");
+    expect(getReportDomainForType("class_analysis")).toBe("scores");
+    expect(getReportDomainForType("unknown_report")).toBeNull();
+
+    expect(getReportCatalogItemsByDomain("scores").map((item) => item.value)).toEqual([
+      "class_knowledge_briefing",
+      "class_analysis",
+      "grade_summary",
+    ]);
+    expect(getReportCatalogItemsByDomain("system")).toEqual([]);
   });
 
   it("knows which fields each report type uses", () => {

@@ -46,10 +46,6 @@
           <strong>{{ activeNavItem.label }}</strong>
           <p>{{ activeNavItem.description }}</p>
         </div>
-        <div class="content-topbar-hint">
-          <span>使用提示</span>
-          <p>{{ activeNavItem.helper }}</p>
-        </div>
       </div>
 
       <div class="content-stage">
@@ -267,28 +263,6 @@ function handleSelect(path: string): void {
   line-height: 1.55;
 }
 
-.content-topbar-hint {
-  max-width: 320px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-soft);
-}
-
-.content-topbar-hint span {
-  color: var(--text-soft);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0;
-}
-
-.content-topbar-hint p {
-  margin: 6px 0 0;
-  color: var(--text-muted);
-  line-height: 1.55;
-  font-size: 13px;
-}
-
 .content-stage {
   min-width: 0;
   width: 100%;
@@ -315,10 +289,6 @@ function handleSelect(path: string): void {
     position: static;
   }
 
-  .content-topbar-hint {
-    max-width: none;
-    width: 100%;
-  }
 }
 
 @media (max-width: 640px) {

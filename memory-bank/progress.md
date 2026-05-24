@@ -6,6 +6,30 @@
 - 后端与前端基础功能已覆盖多个业务域，README 中已记录到 M0-M6 的实现范围。
 - 后端测试与前端构建在此前环境中已验证通过。
 
+## 2026-05-24 新增
+
+- 已整理报表中心首屏与报表目录：
+  - 页面标题统一为“报表中心”，去掉首屏“导出流 / 考试依赖 / 规则版本 / 最近导出”等重复概况卡
+  - 报表选择从“所有业务域一次性铺满卡片”改为左侧按场景切换，右侧只展示当前报表参数和摘要
+  - 当前报表的用途、必要参数、数据来源、导出格式和风险标签集中到一条摘要区，不再在每张目录卡里重复展开
+  - 表单操作收敛为“生成报表 / 打印预览”，刷新记录保留在页面右上角，导出记录区域继续保留下载和复现入口
+  - 新增 `getReportDomainForType()`、`getReportCatalogItemsByDomain()` 供紧凑目录使用；同步更新报表相关 E2E 标题断言
+  - 验证：`npm run frontend:test -- tests/report-type-config.test.ts`、`npm run frontend:lint`、`npm run frontend:build`、`npm run e2e -- tests/e2e/reports.spec.ts`、`npm run e2e -- tests/e2e/adviser-dashboard.spec.ts tests/e2e/planning.spec.ts`、`git diff --check` 均通过；浏览器确认旧“导出流 / 输出目录”不再出现，场景切换正常，控制台错误数 0
+
+- 已按浏览器批注简化首页工作台首屏：
+  - 移除 `DashboardPage` 内部“工作台 / 今日教务决策台”大横幅、说明文案、重复 meta 标签和横幅按钮，让首页直接从学生、教师、考试、成绩、最近导入等日常卡片开始
+  - 继续移除首页“最近备份 / 数据健康 / P0 缺口”等开发或验收视角卡片，待处理事项不再推送系统备份或 P0 数据健康提醒
+  - 全局顶部移除“使用提示”说明块，工作台导航文案改成使用者视角，避免每个页面都出现操作说明式噪音
+  - `AppPage` 新增 `hideHeader` 支持，隐藏视觉横幅时仍保留仅供读屏器和语义使用的页面标题
+  - 更新首页 E2E、导航和 dashboard decision 单测，不再依赖被移除的横幅、备份和 P0 文案
+  - 验证：`npm run frontend:test -- tests/navigation.test.ts tests/dashboard-decisions.test.ts`、`npm run frontend:lint`、`npm run frontend:build`、`npm run e2e -- tests/e2e/dashboard.spec.ts`、`git diff --check` 均通过；浏览器刷新确认旧横幅、开发视角卡片和“使用提示”均已移除且无控制台错误
+
+- 已修复分析中心考试联动班级 / 年级下拉：
+  - 新增 `examParticipantOptions` 前端 helper，按所选考试可分析学生的 `current_class_id` / `current_grade_id` 过滤下拉选项
+  - 班主任驾驶舱、成绩报表、班级分析、年级分析不再展示未参与当前考试的班级或年级；旧选择不属于当前考试时会自动切到第一个参与班级 / 年级，或清空可选班级筛选
+  - 全景对比和班级全景仍保留全量班级口径，因为它们用于跨学年 / 跨 cohort 对比，不跟随当前考试收窄
+  - 验证：`npm run frontend:test -- tests/analytics-exam-options.test.ts`、`npm run frontend:lint`、`npm run frontend:build`、`npm run e2e -- tests/e2e/exams-analytics.spec.ts`、`git diff --check` 均通过；浏览器在 `202604高三二模` 下确认班级下拉仅显示 `202301`-`202313` 13 个参考试班级，无高一高二班级，控制台错误数 0
+
 ## 2026-05-13 新增
 
 - 已完成高考志愿推荐候选区筛选与默认 30 条分页：
