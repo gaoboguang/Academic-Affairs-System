@@ -165,6 +165,7 @@ class StudentBulkDeleteAssociationSummary(BaseModel):
     score_count: int = 0
     score_snapshot_count: int = 0
     growth_record_count: int = 0
+    teacher_comment_count: int = 0
     attachment_count: int = 0
     class_history_count: int = 0
     recommendation_count: int = 0
@@ -467,6 +468,54 @@ class StudentAttachmentSummary(BaseModel):
     source_type: str | None = None
     created_at: str
     download_url: str | None = None
+
+
+class StudentTeacherCommentPayload(BaseModel):
+    subject_id: int | None = None
+    content: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("content")
+    @classmethod
+    def trim_content(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("教师评语不能为空")
+        return normalized
+
+
+class StudentTeacherCommentSubjectOption(BaseModel):
+    subject_id: int
+    subject_name: str
+    teacher_id: int
+    teacher_name: str
+    class_id: int | None = None
+    class_name: str | None = None
+    semester_id: int | None = None
+    semester_name: str | None = None
+
+
+class StudentTeacherCommentRead(BaseModel):
+    id: int
+    student_id: int
+    teacher_id: int
+    teacher_name: str
+    subject_id: int | None = None
+    subject_name: str | None = None
+    class_id: int | None = None
+    class_name: str | None = None
+    semester_id: int | None = None
+    semester_name: str | None = None
+    content: str
+    commented_at: datetime
+    created_at: datetime
+    updated_at: datetime
+    is_active: bool
+
+
+class StudentTeacherCommentListResponse(BaseModel):
+    items: list[StudentTeacherCommentRead] = Field(default_factory=list)
+    can_comment: bool = False
+    available_subjects: list[StudentTeacherCommentSubjectOption] = Field(default_factory=list)
 
 
 class StudentPerformanceSummary(BaseModel):

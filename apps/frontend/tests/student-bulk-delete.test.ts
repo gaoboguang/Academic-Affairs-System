@@ -13,6 +13,7 @@ const emptyCounts = {
   score_count: 0,
   score_snapshot_count: 0,
   growth_record_count: 0,
+  teacher_comment_count: 0,
   attachment_count: 0,
   class_history_count: 0,
   recommendation_count: 0,
@@ -29,10 +30,11 @@ describe("student bulk delete helpers", () => {
         ...emptyCounts,
         score_count: 12,
         growth_record_count: 2,
+        teacher_comment_count: 3,
         volunteer_draft_count: 1,
         pathway_profile_count: 1,
       }),
-    ).toEqual(["成绩记录 12 条", "成长档案 2 条", "志愿草稿 1 条", "升学画像 1 条"]);
+    ).toEqual(["成绩记录 12 条", "成长档案 2 条", "教师评语 3 条", "志愿草稿 1 条", "升学画像 1 条"]);
   });
 
   it("keeps empty association summaries explicit", () => {

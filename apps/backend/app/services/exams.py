@@ -50,6 +50,19 @@ from app.schemas.exam import (
     ScoreTargetLinePayload,
     ScoreTargetLineRead,
 )
+from app.services.auth import AuthContext
+
+
+def _audit_actor_kwargs(actor: AuthContext | None) -> dict[str, object]:
+    if actor is None:
+        return {}
+    return {
+        "actor_user_id": actor.user_id,
+        "actor_username": actor.username,
+        "client_ip": actor.client_ip,
+    }
+
+
 def _serialize_exam_with_grade_map(item: Exam, grade_map: dict[int, str]) -> ExamRead:
     semester_name = None
     if item.semester and item.semester.academic_year:
@@ -242,6 +255,8 @@ def import_scores(
     mapping_json: str | None = None,
     profile_id: int | None = None,
     save_profile_name: str | None = None,
+    scope_class_ids: set[int] | None = None,
+    actor: AuthContext | None = None,
 ) -> ScoreImportResponse:
     exam = get_exam(session, exam_id)
     if not exam:
@@ -266,7 +281,7 @@ def import_scores(
     job = create_import_job(session, "scores", filename)
     job.started_at = datetime.now()
 
-    importer = ScoreImporter(session, settings, exam)
+    importer = ScoreImporter(session, settings, exam, allowed_class_ids=scope_class_ids)
     try:
         result = importer.execute(filename=filename, content=content, strategy=strategy, batch=batch, mapping=mapping)
     except ValueError as exc:
@@ -292,6 +307,7 @@ def import_scores(
         target_type="score_import_batch",
         target_id=str(batch.id),
         detail_json=job.result_json,
+        **_audit_actor_kwargs(actor),
     )
     return ScoreImportResponse(
         batch_id=batch.id,

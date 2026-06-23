@@ -6,6 +6,36 @@
 - 后端与前端基础功能已覆盖多个业务域，README 中已记录到 M0-M6 的实现范围。
 - 后端测试与前端构建在此前环境中已验证通过。
 
+## 2026-06-23 新增
+
+- 已完成账号权限与教师评语阶段的 GitHub 发布前整理：
+  - 统一确认相对远程 `main` 待同步 24 个本地阶段提交、316 个项目文件；最新阶段覆盖后端认证 / RBAC、教师评语、两条 Alembic 迁移、前端登录与账号管理、E2E 登录态、README 和服务器部署说明
+  - 运行数据库、备份、导入导出文件、日志、上传附件和 `.superpowers/` 本地工具产物继续受 `.gitignore` 保护，没有纳入发布集合
+  - `npm run check:all` 通过：后端 `217 passed`、前端 `46 files / 245 tests passed`、前端生产构建通过、Playwright `50 passed`
+  - 临时空库从零迁移到 `20260601_0034 (head)`，没有修改真实 `data/app.db`
+  - `git diff --check` 通过，未发现私钥或 GitHub token 文件进入待提交集合
+
+## 2026-06-01 新增
+
+- 已落地学校服务器账号与权限第一版：
+  - 新增 `app_user`、`app_session`、`app_user_class_scope`，并为 `audit_log` 增加操作者与客户端 IP 字段
+  - 新增登录、退出、当前用户、首次改密、管理员账号管理、重置密码、启用 / 禁用账号 API
+  - 登录会话使用服务端随机 token，数据库只存 token 哈希；浏览器只保存 HttpOnly Cookie；写操作增加 CSRF 校验
+  - 密码哈希使用 `pwdlib[argon2]`；登录失败提示统一为“账号或密码错误”
+  - 新增 `npm run backend:init-admin -- --username admin`，用于服务器首次初始化管理员账号
+  - 教师账号由管理员创建，首次登录必须改密；教师班级范围来自班主任班级、任教班级和管理员补充授权
+  - 学生列表、详情、创建 / 编辑和成绩导入已按教师范围限制；范围外学生访问返回 `403`，成绩导入范围外学生进入错误报告且不写成绩
+  - 前端新增登录页、首次改密页、无权限页、auth Pinia store、账号管理页、Cookie/CSRF 请求封装和菜单权限过滤
+  - 新增服务器上线文档 `docs/server-deployment-and-roles.md`，并更新 README、开发规格和 memory-bank
+  - 已验证：后端全量 214 passed、前端 lint、前端全量 45 files / 242 tests、前端构建、临时空库迁移、完整跨端 E2E 50 passed、`git diff --check`
+
+- 已新增学生详情“教师评语”板块：
+  - 新增 `student_teacher_comment` 表，保留学生、教师、科目、班级、学期、发布时间和评语正文
+  - 新增 `GET /api/students/{student_id}/teacher-comments` 与 `POST /api/students/{student_id}/teacher-comments`
+  - 普通教师可查看本人范围内学生的历史评语；发布评语时必须关联教师档案，并且任教关系覆盖该学生当前或历史班级的对应科目
+  - 管理员可查看评语；未关联教师档案的管理员不能冒充任课教师发布
+  - 学生详情页新增“教师评语”页签，任课教师可选择可评价科目并发布留言，新教师可在同页查看历史评语
+
 ## 2026-05-24 新增
 
 - 已整理报表中心首屏与报表目录：

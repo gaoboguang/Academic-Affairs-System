@@ -534,4 +534,3 @@ def _get_latest_reference_year(reference_years: list[object]) -> int | None:
     if not numeric_years:
         return None
     return max(numeric_years)
-

@@ -2,7 +2,7 @@ import path from "node:path";
 import fs from "node:fs";
 
 import { expect } from "@playwright/test";
-import type { Locator, Page } from "@playwright/test";
+import type { APIRequestContext, APIResponse, Locator, Page } from "@playwright/test";
 
 const scoresFixture = path.resolve(process.cwd(), "tests/e2e/fixtures/scores-import.xlsx");
 const invalidScoresFixture = path.resolve(process.cwd(), "tests/e2e/fixtures/scores-invalid.xlsx");
@@ -70,12 +70,38 @@ interface VolunteerWorkbenchContextOptions {
   fillRankOverride?: boolean;
 }
 
+type ApiRequestOptions = Parameters<APIRequestContext["post"]>[1];
+
+async function getCsrfToken(page: Page): Promise<string> {
+  const response = await page.request.get("/api/auth/me");
+  expect(response.ok()).toBeTruthy();
+  const payload = (await response.json()) as { csrf_token?: string };
+  expect(payload.csrf_token).toBeTruthy();
+  return payload.csrf_token as string;
+}
+
+async function withCsrf(page: Page, options: ApiRequestOptions = {}): Promise<ApiRequestOptions> {
+  const headers = {
+    ...((options.headers as Record<string, string> | undefined) ?? {}),
+    "X-CSRF-Token": await getCsrfToken(page),
+  };
+  return { ...options, headers };
+}
+
+async function apiPost(page: Page, url: string, options: ApiRequestOptions = {}): Promise<APIResponse> {
+  return page.request.post(url, await withCsrf(page, options));
+}
+
+async function apiPut(page: Page, url: string, options: ApiRequestOptions = {}): Promise<APIResponse> {
+  return page.request.put(url, await withCsrf(page, options));
+}
+
 async function expectToast(page: Page, text: string): Promise<void> {
   await expect(page.locator(".el-message__content").filter({ hasText: text }).last()).toBeVisible();
 }
 
 async function importFixtureByApi(page: Page, url: string, fixturePath: string): Promise<void> {
-  const response = await page.request.post(url, {
+  const response = await apiPost(page, url, {
     multipart: {
       file: {
         name: path.basename(fixturePath),
@@ -108,7 +134,7 @@ async function getCoreSubjectIds(page: Page): Promise<{ chineseId: number; mathI
 }
 
 async function importScoresByApi(page: Page, examId: number, fixturePath: string): Promise<void> {
-  const response = await page.request.post(`/api/exams/${examId}/scores/import`, {
+  const response = await apiPost(page, `/api/exams/${examId}/scores/import`, {
     multipart: {
       strategy: "overwrite",
       rebuild: "true",
@@ -131,7 +157,7 @@ async function ensureExamWithSubjectsByApi(page: Page, examName: string, examDat
   let examId = existing?.id;
   if (!examId) {
     const semesterId = await getCurrentSemesterId(page);
-    const createResponse = await page.request.post("/api/exams", {
+    const createResponse = await apiPost(page, "/api/exams", {
       data: {
         name: examName,
         exam_type: "阶段测试",
@@ -150,7 +176,7 @@ async function ensureExamWithSubjectsByApi(page: Page, examName: string, examDat
   }
 
   const { chineseId, mathId } = await getCoreSubjectIds(page);
-  const subjectResponse = await page.request.post(`/api/exams/${examId}/subjects`, {
+  const subjectResponse = await apiPost(page, `/api/exams/${examId}/subjects`, {
     data: [
       {
         subject_id: chineseId,
@@ -177,7 +203,7 @@ async function ensureExamWithSubjectsByApi(page: Page, examName: string, examDat
 }
 
 async function importQuestionDetailsByApi(page: Page, examId: number, fixturePath: string): Promise<void> {
-  const response = await page.request.post(`/api/exams/${examId}/score-questions/import`, {
+  const response = await apiPost(page, `/api/exams/${examId}/score-questions/import`, {
     multipart: {
       strategy: "overwrite",
       file: {
@@ -326,7 +352,7 @@ async function ensureStudentOriginProvince(page: Page, studentId = 1, province =
     return;
   }
 
-  const updateResponse = await page.request.put(`/api/students/${studentId}`, {
+  const updateResponse = await apiPut(page, `/api/students/${studentId}`, {
     data: {
       ...payload,
       origin_province: province,
@@ -384,8 +410,8 @@ async function ensureVolunteerRuleConfigured(page: Page, options: VolunteerRuleO
   const rules = (await listResponse.json()) as ProvinceVolunteerRuleRead[];
   const existing = rules.find((rule) => rule.batch === config.batch && rule.candidate_type === "");
   const response = existing
-    ? await page.request.put(`/api/province-volunteer-rules/${existing.id}`, { data: payload })
-    : await page.request.post("/api/province-volunteer-rules", { data: payload });
+    ? await apiPut(page, `/api/province-volunteer-rules/${existing.id}`, { data: payload })
+    : await apiPost(page, "/api/province-volunteer-rules", { data: payload });
   expect(response.ok()).toBeTruthy();
 
   const saved = (await response.json()) as ProvinceVolunteerRuleRead;
@@ -564,7 +590,7 @@ async function ensureMajorEmploymentProfile(
   }>;
   const targetMajor = majorsPayload.find((item) => item.name === majorName);
   if (!targetMajor) {
-    const createResponse = await page.request.post("/api/majors", {
+    const createResponse = await apiPost(page, "/api/majors", {
       data: {
         name: majorName,
         major_code: null,
@@ -580,7 +606,7 @@ async function ensureMajorEmploymentProfile(
     return;
   }
 
-  const updateResponse = await page.request.put(`/api/majors/${targetMajor?.id}`, {
+  const updateResponse = await apiPut(page, `/api/majors/${targetMajor?.id}`, {
     data: {
       name: targetMajor?.name,
       major_code: targetMajor?.major_code ?? null,
@@ -596,6 +622,8 @@ async function ensureMajorEmploymentProfile(
 }
 
 export {
+  apiPost,
+  apiPut,
   confirmDialogIfVisible,
   createVolunteerDraft,
   e2eExamName,

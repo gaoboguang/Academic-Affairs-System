@@ -1,5 +1,43 @@
 # 交接说明
 
+## GitHub 发布前复核（2026-06-23）
+
+- 当前发布分支：`codex/server-auth-rbac-20260601`。相对远程 `main` 共待同步 24 个本地阶段提交、316 个项目文件；最新阶段为账号权限、教师评语及对应前后端、迁移、测试和部署文档。
+- 已重新执行 `npm run check:all`：后端 `217 passed`、前端 `46 files / 245 tests passed`、前端生产构建通过、Playwright `50 passed`；构建仅保留既有 chunk size warning。
+- 已用临时空库从零执行 `npm run backend:migrate`，Alembic 成功升级到 `20260601_0034 (head)`；未改动真实 `data/app.db`。
+- 完整待同步差异已通过 `git diff --check`；不含数据库、备份、导入导出表、日志、上传附件、环境变量或私钥。
+- `data/app.db`、`data/local_edu_tool/` 等运行数据和 `.superpowers/` 本地工具产物继续按 `.gitignore` 留在本机，避免学生、成绩、账号、会话与临时状态进入 GitHub。
+
+## 最新账号与权限上线底座（2026-06-01）
+
+- 当前分支：`codex/server-auth-rbac-20260601`
+- 追加完成学生详情“教师评语”板块：
+  - 新增迁移 `20260601_0034_student_teacher_comments.py` 与模型 `StudentTeacherComment`
+  - 新增接口 `GET /api/students/{student_id}/teacher-comments`、`POST /api/students/{student_id}/teacher-comments`
+  - 教师发布评语必须有关联 `teacher_id`，且任教关系覆盖该生当前或历史班级的对应科目；管理员可查看，未关联教师档案不能发布
+  - 前端 `StudentDetailPage.vue` 新增“教师评语”页签；helper `components/students/teacherComments.ts` 负责提交载荷和元信息格式化
+  - 批量删除关联统计新增 `teacher_comment_count`，软删除学生主档时保留教师评语
+- 已完成“学校服务器 HTTPS 部署 + 管理员 / 教师账号”第一版：
+  - 后端新增 `app_user`、`app_session`、`app_user_class_scope`；`audit_log` 增加 `actor_user_id`、`actor_username`、`client_ip`
+  - 新增认证与账号 API：登录、退出、当前用户、修改密码、管理员账号列表 / 创建 / 更新 / 重置密码 / 禁用 / 启用
+  - 新增 `npm run backend:init-admin -- --username admin` 初始化管理员
+  - 会话使用服务端 token 哈希 + HttpOnly Cookie；写操作后端校验 CSRF；密码使用 Argon2
+  - 教师班级范围来自班主任班级、任教班级和管理员补充授权；学生列表、学生详情、学生编辑和成绩导入已限制到本人范围
+  - 前端新增登录、首次改密、无权限和账号管理页面，`auth` store，带 Cookie/CSRF 的请求封装，导航按权限过滤
+  - E2E 临时后端种子和 Playwright storage state 已补管理员登录
+  - 文档新增 `docs/server-deployment-and-roles.md`，README 和开发规格已同步“学校服务器受控多人使用”口径
+- 已验证：
+  - `npm run backend:test -- apps/backend/tests/test_auth_rbac.py -q`：7 passed
+  - `npm run backend:test -- apps/backend/tests/test_auth_rbac.py apps/backend/tests/test_api_m1.py apps/backend/tests/test_student_bulk_delete.py apps/backend/tests/test_exam_workflow.py -q`：21 passed
+  - `npm run backend:test`：214 passed
+  - `npm run frontend:lint`：通过
+  - `npm run frontend:test`：45 files / 242 tests passed
+  - `npm run frontend:build`：通过，保留既有 chunk size warning
+  - `env LOCAL_EDU_DATA_DIR="$(mktemp -d)" npm run backend:migrate`：通过
+  - `npm run check:e2e`：50 passed
+  - `git diff --check`：通过
+- 注意：现有真实环境升级后默认需要登录；正式服务器上线前必须先执行迁移和 `backend:init-admin`。公网部署要设置 `LOCAL_EDU_AUTH_COOKIE_SECURE=true`，并通过 Nginx/HTTPS 反代 `/api`。
+
 ## 最新报表中心整理（2026-05-24）
 
 - 已按用户反馈整理 `/reports`：

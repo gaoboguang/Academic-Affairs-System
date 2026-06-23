@@ -22,6 +22,7 @@ handoffs/*
 playwright-report/
 test-results/
 .specstory/
+.superpowers/
 .tmp/
 .claude/worktrees/
 apps/desktop/.dist/

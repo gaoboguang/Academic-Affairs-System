@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+  apiPost,
   createVolunteerDraft,
   e2eExamName,
   ensureExamWithScores,
@@ -181,7 +182,7 @@ test("报表中心：推荐报告与志愿草稿在导出前显示摘要", async
   const currentExam = examsPayload.items.find((item) => item.name === e2eExamName);
   expect(currentExam).toBeTruthy();
 
-  const generateResponse = await page.request.post("/api/recommendations/generate", {
+  const generateResponse = await apiPost(page, "/api/recommendations/generate", {
     data: {
       student_id: 1,
       exam_id: currentExam?.id,

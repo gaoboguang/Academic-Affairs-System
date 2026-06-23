@@ -10,6 +10,7 @@ from app.models.evaluation import (
     EvaluationTemplate,
 )
 from app.models.archive import StudentGrowthAttachment, StudentGrowthRecord
+from app.models.auth import AppSession, AppUser, AppUserClassScope
 from app.models.base import Base
 from app.models.base_data import AcademicYear, DictItem, DictType, Grade, SchoolClass, Semester, Subject
 from app.models.class_profile import ClassHonor
@@ -72,6 +73,7 @@ from app.models.student import (
     StudentClassTransferBatch,
     StudentClassTransferItem,
     StudentGuardian,
+    StudentTeacherComment,
 )
 from app.models.system import AuditLog, BackupRecord, ConfigItem, ImportJob, ReportExportRecord, StoredFile
 from app.models.teacher import (
@@ -96,6 +98,9 @@ __all__ = [
     "AdviserQuantRecordAttachment",
     "AdviserQuantRuleItem",
     "AdviserQuantRuleVersion",
+    "AppSession",
+    "AppUser",
+    "AppUserClassScope",
     "AuditLog",
     "AdmissionRecord",
     "BackupRecord",
@@ -160,6 +165,7 @@ __all__ = [
     "StudentGrowthAttachment",
     "StudentGrowthRecord",
     "StudentGuardian",
+    "StudentTeacherComment",
     "StudentPathwayEvaluation",
     "StudentPathwayProfile",
     "StudentPlanningGoal",

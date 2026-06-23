@@ -23,6 +23,7 @@ export interface AppNavItem {
   helper: string;
   icon: Component;
   tags: string[];
+  requiredPermission?: string;
   matchPrefixes?: string[];
 }
 
@@ -52,6 +53,7 @@ export const navSections: AppNavSection[] = [
         helper: "从这里进入日常高频工作。",
         icon: HomeFilled,
         tags: ["全局状态", "最近考试", "导入记录"],
+        requiredPermission: "dashboard:read",
       },
     ],
   },
@@ -67,6 +69,7 @@ export const navSections: AppNavSection[] = [
         helper: "多数业务页面依赖这里的数据，修改前请确认影响范围。",
         icon: Files,
         tags: ["学年学期", "字典", "班级结构"],
+        requiredPermission: "base:manage",
       },
       {
         path: "/classes",
@@ -75,6 +78,7 @@ export const navSections: AppNavSection[] = [
         helper: "这里是班级对象入口；基础数据页仍负责主数据配置。",
         icon: OfficeBuilding,
         tags: ["年级", "班级档案", "班级荣誉"],
+        requiredPermission: "base:manage",
         matchPrefixes: ["/classes/", "/grades/"],
       },
       {
@@ -84,6 +88,7 @@ export const navSections: AppNavSection[] = [
         helper: "学生数据准确后，成绩分析、成长档案和升学推荐结果才可靠。",
         icon: UserFilled,
         tags: ["学生档案", "导入导出", "学生详情"],
+        requiredPermission: "students:read",
         matchPrefixes: ["/students/"],
       },
       {
@@ -93,6 +98,7 @@ export const navSections: AppNavSection[] = [
         helper: "适合在学生主档稳定后补录，避免和基础录入混在一起。",
         icon: Notebook,
         tags: ["成长记录", "附件", "时间线"],
+        requiredPermission: "students:write",
       },
       {
         path: "/teachers",
@@ -101,6 +107,7 @@ export const navSections: AppNavSection[] = [
         helper: "教师与任教关系会影响工作量、评教和教师分析结果。",
         icon: Reading,
         tags: ["教师档案", "任教关系", "教师画像"],
+        requiredPermission: "teachers:manage",
         matchPrefixes: ["/teachers/"],
       },
     ],
@@ -117,6 +124,7 @@ export const navSections: AppNavSection[] = [
         helper: "完成考试与成绩导入后，再进入分析中心查看结果。",
         icon: EditPen,
         tags: ["考试配置", "成绩导入", "快照"],
+        requiredPermission: "scores:import",
       },
       {
         path: "/analytics",
@@ -125,6 +133,7 @@ export const navSections: AppNavSection[] = [
         helper: "分析结果依赖考试快照与基础数据，请先确认源数据准确。",
         icon: DataAnalysis,
         tags: ["学生分析", "班级分析", "教师分析"],
+        requiredPermission: "analytics:read",
       },
       {
         path: "/knowledge-base",
@@ -133,6 +142,7 @@ export const navSections: AppNavSection[] = [
         helper: "先维护标准知识点和平台别名，再导入题分明细，诊断结果会更稳定。",
         icon: Notebook,
         tags: ["知识点树", "别名", "错因标签"],
+        requiredPermission: "base:manage",
       },
       {
         path: "/import-center",
@@ -141,6 +151,7 @@ export const navSections: AppNavSection[] = [
         helper: "导入完成后先看这里确认是否成功，再进入对应业务页面修正。",
         icon: UploadFilled,
         tags: ["模板下载", "批次记录", "错误报告"],
+        requiredPermission: "scores:import",
       },
       {
         path: "/workload",
@@ -149,6 +160,7 @@ export const navSections: AppNavSection[] = [
         helper: "遇到未匹配项时先修正，再执行计算和导出。",
         icon: Histogram,
         tags: ["课表导入", "映射修正", "工作量"],
+        requiredPermission: "teachers:manage",
       },
       {
         path: "/evaluation-quant",
@@ -157,6 +169,7 @@ export const navSections: AppNavSection[] = [
         helper: "先确认学期、模板和规则版本，再导入批次或录入量化数据。",
         icon: Tickets,
         tags: ["评教模板", "量化规则", "批次汇总"],
+        requiredPermission: "teachers:manage",
       },
     ],
   },
@@ -172,6 +185,7 @@ export const navSections: AppNavSection[] = [
         helper: "这里是只读看板，用来判断当前数据能支持哪些使用场景，不直接修改底层数据。",
         icon: DataAnalysis,
         tags: ["数据来源", "只读看板", "山东覆盖"],
+        requiredPermission: "admin:*",
       },
       {
         path: "/gaokao-pathways",
@@ -180,6 +194,7 @@ export const navSections: AppNavSection[] = [
         helper: "先补齐学生画像和资格材料，再进入普通类推荐或逐校核对。",
         icon: School,
         tags: ["山东路径", "材料缺口", "人工复核"],
+        requiredPermission: "admin:*",
       },
       {
         path: "/recommendations",
@@ -188,6 +203,7 @@ export const navSections: AppNavSection[] = [
         helper: "围绕学生生成候选和志愿草稿；底层数据维护仍在页面内的数据与规则中心。",
         icon: School,
         tags: ["智能筛选", "草稿篮", "风险复核"],
+        requiredPermission: "admin:*",
         matchPrefixes: ["/majors/"],
       },
       {
@@ -197,6 +213,7 @@ export const navSections: AppNavSection[] = [
         helper: "先在这里查院校与招生数据，再进入详情核对计划和录取历史。",
         icon: OfficeBuilding,
         tags: ["院校浏览", "招生计划", "录取历史"],
+        requiredPermission: "admin:*",
         matchPrefixes: ["/colleges/"],
       },
       {
@@ -206,6 +223,16 @@ export const navSections: AppNavSection[] = [
         helper: "报表导出前建议回源页面复核关键数据。",
         icon: Document,
         tags: ["统一导出", "汇总材料", "结果复核"],
+        requiredPermission: "reports:read",
+      },
+      {
+        path: "/admin/users",
+        label: "账号管理",
+        description: "创建教师账号、重置密码、停用账号和维护教师班级范围。",
+        helper: "教师不支持自助注册，账号统一由管理员开设。",
+        icon: UserFilled,
+        tags: ["管理员", "教师账号", "权限范围"],
+        requiredPermission: "accounts:manage",
       },
       {
         path: "/system-tools",
@@ -214,6 +241,7 @@ export const navSections: AppNavSection[] = [
         helper: "执行修复、恢复或批量调整前，建议先创建备份。",
         icon: Setting,
         tags: ["参数配置", "修复工具", "备份恢复"],
+        requiredPermission: "system:manage",
       },
     ],
   },
@@ -236,4 +264,19 @@ export function resolveNavItem(path: string): ResolvedAppNavItem {
     item.matchPrefixes?.some((prefix) => path.startsWith(prefix)),
   );
   return prefixMatch ?? flatNavItems[0];
+}
+
+export function canAccessPermission(permissions: string[], permission?: string): boolean {
+  if (!permission) return true;
+  if (permissions.includes("admin:*")) return true;
+  return permissions.includes(permission);
+}
+
+export function filterNavSectionsForPermissions(permissions: string[]): AppNavSection[] {
+  return navSections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => canAccessPermission(permissions, item.requiredPermission)),
+    }))
+    .filter((section) => section.items.length > 0);
 }

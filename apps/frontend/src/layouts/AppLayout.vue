@@ -17,7 +17,7 @@
       </div>
 
       <div class="nav-sections">
-        <section v-for="section in navSections" :key="section.id" class="nav-section">
+        <section v-for="section in visibleNavSections" :key="section.id" class="nav-section">
           <div class="nav-section-head">
             <strong>{{ section.title }}</strong>
             <p>{{ section.summary }}</p>
@@ -46,6 +46,11 @@
           <strong>{{ activeNavItem.label }}</strong>
           <p>{{ activeNavItem.description }}</p>
         </div>
+        <div class="account-panel" v-if="auth.user">
+          <span>{{ auth.user.display_name }}</span>
+          <small>{{ auth.user.role === "admin" ? "管理员" : "教师" }}</small>
+          <ElButton text type="primary" @click="handleLogout">退出</ElButton>
+        </div>
       </div>
 
       <div class="content-stage">
@@ -59,17 +64,25 @@
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
-import { navSections, resolveNavItem } from "./navigation";
+import { useAuthStore } from "../stores/auth";
+import { filterNavSectionsForPermissions, resolveNavItem } from "./navigation";
 
 const route = useRoute();
 const router = useRouter();
+const auth = useAuthStore();
 
 const activeNavItem = computed(() => resolveNavItem(route.path));
 const activeMenuPath = computed(() => activeNavItem.value.path);
+const visibleNavSections = computed(() => filterNavSectionsForPermissions(auth.permissions));
 
 function handleSelect(path: string): void {
   if (path === route.path) return;
   void router.push(path);
+}
+
+async function handleLogout(): Promise<void> {
+  await auth.logout();
+  await router.push("/login");
 }
 </script>
 
@@ -261,6 +274,18 @@ function handleSelect(path: string): void {
   margin: 0;
   color: var(--text-muted);
   line-height: 1.55;
+}
+
+.account-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-main);
+  white-space: nowrap;
+}
+
+.account-panel small {
+  color: var(--text-muted);
 }
 
 .content-stage {

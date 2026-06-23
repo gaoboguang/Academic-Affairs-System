@@ -68,6 +68,7 @@ function printUsage() {
   gaokao-import-shandong-core  导入 2023-2025 山东官方投档表、一分一段和省控线
   gaokao-import-scraper-bundle  导入本地 gaokao-scraper 数据包
   data-health  检查 data/app.db 的 P0 数据健康状态
+  init-admin 初始化或重置管理员账号
   p0-check  执行 P0 本地交付验收
   init-demo  初始化模板、基础数据和演示数据
   test       运行后端测试
@@ -177,6 +178,14 @@ switch (command) {
       "请先创建 `.venv` 并安装后端依赖，例如运行 `./scripts/dev.sh` 或手工执行 `pip install -e \"./apps/backend[dev]\"`。",
     );
     run(python, ["scripts/check_data_health.py", ...extraArgs]);
+    break;
+  }
+  case "init-admin": {
+    const python = requireExecutable(
+      "python",
+      "请先创建 `.venv` 并安装后端依赖，例如运行 `./scripts/dev.sh` 或手工执行 `pip install -e \"./apps/backend[dev]\"`。",
+    );
+    run(python, ["scripts/init_admin.py", ...extraArgs]);
     break;
   }
   case "p0-check": {

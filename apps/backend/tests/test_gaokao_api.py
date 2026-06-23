@@ -97,6 +97,7 @@ def test_gaokao_data_overview_uses_separate_gaokao_db_when_configured(tmp_path) 
         db_path=data_dir / "app.db",
         gaokao_db_path=gaokao_db_path,
         allowed_origins=["http://127.0.0.1:5173"],
+        auth_required=False,
         debug=False,
     )
     app = create_app(settings)
@@ -163,6 +164,7 @@ def test_create_app_prefers_embedded_gaokao_tables_over_external_snapshot(tmp_pa
         db_path=app_db_path,
         # leave sidecar path at default; file does not exist so ATTACH is skipped.
         allowed_origins=["http://127.0.0.1:5173"],
+        auth_required=False,
         debug=False,
     )
     app = create_app(settings)
@@ -244,6 +246,7 @@ def test_gaokao_data_overview_marks_app_tables_partial_when_raw_tables_have_data
         db_path=data_dir / "app.db",
         gaokao_db_path=gaokao_db_path,
         allowed_origins=["http://127.0.0.1:5173"],
+        auth_required=False,
         debug=False,
     )
     app = create_app(settings)

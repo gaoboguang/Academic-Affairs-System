@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { navSections, resolveNavItem } from "../src/layouts/navigation";
+import { filterNavSectionsForPermissions, navSections, resolveNavItem } from "../src/layouts/navigation";
 
 describe("navigation", () => {
   it("exposes stable top-level sections", () => {
@@ -51,5 +51,26 @@ describe("navigation", () => {
 
   it("falls back to dashboard for unknown paths", () => {
     expect(resolveNavItem("/unknown").path).toBe("/");
+  });
+
+  it("filters teacher navigation to the teaching class package", () => {
+    const filtered = filterNavSectionsForPermissions([
+      "dashboard:read",
+      "students:read",
+      "students:write",
+      "scores:import",
+      "analytics:read",
+      "reports:read",
+    ]);
+    const labels = filtered.flatMap((section) => section.items.map((item) => item.label));
+
+    expect(labels).toContain("工作台");
+    expect(labels).toContain("学生中心");
+    expect(labels).toContain("考试成绩");
+    expect(labels).toContain("分析中心");
+    expect(labels).toContain("报表中心");
+    expect(labels).not.toContain("系统设置");
+    expect(labels).not.toContain("教师中心");
+    expect(labels).not.toContain("高考数据");
   });
 });

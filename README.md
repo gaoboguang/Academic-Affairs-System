@@ -1,6 +1,6 @@
 # 本地教务工具
 
-本项目用于实现一个面向高中场景的本地单机教务决策台，遵循 `AGENTS.md` 与 [`docs/local_edu_tool_dev_spec.md`](./docs/local_edu_tool_dev_spec.md)。
+本项目用于实现一个面向高中场景的教务决策台，默认本地优先运行，也支持学校服务器 HTTPS 受控多人使用，遵循 `AGENTS.md` 与 [`docs/local_edu_tool_dev_spec.md`](./docs/local_edu_tool_dev_spec.md)。
 
 ## 快速导航
 
@@ -14,6 +14,8 @@
   直接用 `npm run start:local`、`npm run dev`、`npm run clean:local`、`npm run clean:slim`、`npm run check`、`npm run check:all`
 - 只想在 Mac 上双击启动：
   看 [`docs/mac-user-startup-guide.md`](./docs/mac-user-startup-guide.md)，开发窗口看 [`docs/mac-developer-checklist.md`](./docs/mac-developer-checklist.md)
+- 准备部署到学校服务器：
+  看 [`docs/server-deployment-and-roles.md`](./docs/server-deployment-and-roles.md)，包含 HTTPS/Nginx、初始化管理员、创建教师账号和权限边界
 - 只想做 P0 交付验收：
   直接用 `npm run backend:p0-check`，步骤说明见 [`docs/p0_delivery_runbook_2026-04-24.md`](./docs/p0_delivery_runbook_2026-04-24.md)
 - 只想看测试布局：
@@ -30,7 +32,7 @@
 - 已规划并初始化 monorepo 结构
 - 后端采用 `FastAPI + SQLAlchemy + SQLite + Alembic`
 - 前端采用 `Vue 3 + TypeScript + Vite + Element Plus`
-- 当前实现重点为基础数据、学生、教师、任教关系、考试管理、成绩导入与分析、课表与工作量、成长档案、升学推荐、评教量化、报表中心、本地备份恢复
+- 当前实现重点为基础数据、学生、教师、任教关系、考试管理、成绩导入与分析、课表与工作量、成长档案、教师评语、升学推荐、评教量化、报表中心、本地备份恢复、账号登录与角色权限
 - 已提供演示数据、自动化测试和前端生产构建能力
 
 ## 当前主线
@@ -61,6 +63,8 @@
 - 系统安全与输出链继续收口：备份恢复路径已纳入允许目录校验；推荐打印页 / 报表中心已统一通过共享 helper 组装推荐解释入参，跨省历史方案差异不会再在打印链路丢失；`grade_summary` 与 `teacher_analysis` Excel 导出也已补齐和打印页一致的摘要结构
 - 高复杂模块继续按“小步抽 helper”收口：Stage B 工作台边界/规则摘要已拆到 `apps/frontend/src/components/recommendations/volunteerWorkbenchInsights.ts`，评教批次统计已拆到 `apps/backend/app/services/_evaluation_batch_stats.py`，工作量逐教师计算已拆到 `apps/backend/app/services/_workload_calculation.py`；现有接口、页面入口和导出链保持不变
 - 当前开发顺序以 [`gaokao_dev_bundle_v3/gaokao_dev_doc_v3.md`](./gaokao_dev_bundle_v3/gaokao_dev_doc_v3.md) 为准：Stage A 已基本收尾，Stage B 的“全国省份规则基线装载”和“生源地 / 预估分数正式建模”第一轮已落地，批量混合生源地前端跨端回归、“缺少年份规则”解释和 `3+1+2 -> 物理类/历史类` 模式兼容回退也已补齐，下一步优先补更多省份/年份边界和结果解释细化
+- 2026-06-01 已新增服务器上线账号与权限底座：后端支持 `admin` / `teacher` 两类账号、服务端会话 Cookie、CSRF 校验、管理员账号初始化命令和账号管理 API；教师按任教 / 班主任 / 管理员补充分配的班级范围访问学生与成绩，前端新增登录、首次改密、无权限页、账号管理页和菜单权限过滤
+- 2026-06-01 已在学生详情新增“教师评语”板块：任课教师可在任教范围内给学生留下轻量评语，调班后的新教师可在学生详情查看历史留言；后端新增 `student_teacher_comment` 表与 `/api/students/{student_id}/teacher-comments` 接口，访问仍受教师班级范围和任教关系约束
 
 ## 目录结构
 
@@ -196,11 +200,14 @@ npm run backend:bootstrap-special-types -- --year 2025 --year 2026
 npm run backend:bootstrap-pathways -- --target-year 2026
 npm run backend:data-health
 npm run backend:p0-check
+npm run backend:init-admin -- --username admin
 npm run backend:init-demo
 npm run backend:test
 npm run backend:dev
 npm run dev
 ```
+
+服务器首次上线时，先执行 `npm run backend:migrate`，再执行 `npm run backend:init-admin -- --username admin` 创建管理员。教师账号不开放注册，管理员登录后在“系统设置 / 账号管理”中创建。
 
 ## 测试
 
@@ -291,7 +298,7 @@ npm run desktop:dist:win:nsis
 - 工作台增强：最近考试摘要、快捷入口、数据质量提醒
 - 基础数据管理：学年、学期、年级、班级、学科、字典
 - 学生管理：列表、详情、创建、更新、模板下载、Excel 导入导出
-- 学生详情页：家庭联系人、学籍历史、成绩摘要、成长档案、推荐记录、附件聚合
+- 学生详情页：家庭联系人、学籍历史、成绩摘要、成长档案、教师评语、推荐记录、附件聚合
 - 学生附件管理：独立挂接、下载、删除，与成长档案附件引用分开展示
 - 教师管理：列表、详情、创建、更新、模板下载、Excel 导入导出
 - 教师画像：职称历史维护、任教安排、考试趋势、同学科横向对比
@@ -317,6 +324,7 @@ npm run desktop:dist:win:nsis
 - 报表中心：学生分析、班级分析、年级汇总、教师分析、工作量、成长档案摘要、推荐报告、评教汇总、班主任量化统一导出与记录
 - 系统工具：本地文件上传、备份列表、创建备份、恢复备份、审计日志查看
 - 系统设置：参数配置、模板管理、数据修复工具
+- 账号与权限：管理员初始化、登录/退出、首次改密、教师账号管理、角色菜单过滤、教师班级范围内学生和成绩导入限制
 - 系统安全收口：上传分类校验、下载路径边界校验、重复系统模板路由清理
 - 高考数据只读驾驶舱：总览、审阅、院校证据页、山东监控页，以及对应只读接口与空态 / 演示态 fallback
 - 报表导出摘要统一：`grade_summary` 现已复用 `get_grade_analytics()` 输出 `年级概况 -> 班级汇总 -> 学科汇总`，`teacher_analysis` 导出已补“任教拆分”摘要

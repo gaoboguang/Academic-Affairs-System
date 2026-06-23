@@ -12,9 +12,11 @@ from app.core.bootstrap import ensure_runtime_directories
 from app.core.config import Settings, get_settings
 from app.db.session import DatabaseManager
 from app.exporters.templates import generate_import_templates
+from app.services.auth import PUBLIC_API_PATHS, build_context_from_token
 
 
 _logger = logging.getLogger("local_edu.unhandled")
+_UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 
 def _build_attach_databases(settings: Settings) -> dict[str, "Path"]:  # type: ignore[name-defined]
@@ -74,6 +76,49 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    def _is_teacher_forbidden(path: str, method: str) -> str | None:
+        if path.startswith("/api/admin"):
+            return "需要管理员权限"
+        if path.startswith("/api/system"):
+            return "需要管理员权限"
+        if path.startswith("/api/teachers"):
+            return "需要管理员权限"
+        if path.startswith("/api/recommendations") or path.startswith("/api/gaokao"):
+            return "需要管理员权限"
+        if path.startswith("/api/base") and method.upper() != "GET":
+            return "需要管理员权限"
+        if path.startswith("/api/students/bulk-") or path.startswith("/api/students/class-transfer"):
+            return "需要管理员权限"
+        return None
+
+    @app.middleware("http")
+    async def _auth_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
+        if not settings.auth_required or not request.url.path.startswith(settings.api_prefix):
+            return await call_next(request)
+        if request.method.upper() == "OPTIONS" or request.url.path in PUBLIC_API_PATHS:
+            return await call_next(request)
+
+        token = request.cookies.get(settings.auth_cookie_name)
+        if not token:
+            return JSONResponse(status_code=401, content={"detail": "请先登录"})
+
+        with db_manager.session_scope() as auth_session:
+            context = build_context_from_token(
+                auth_session,
+                token,
+                request.headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
+                or (request.client.host if request.client else None),
+            )
+            if context is None:
+                return JSONResponse(status_code=401, content={"detail": "登录已失效，请重新登录"})
+            forbidden_detail = None if context.is_admin else _is_teacher_forbidden(request.url.path, request.method)
+            if forbidden_detail:
+                return JSONResponse(status_code=403, content={"detail": forbidden_detail})
+            if request.method.upper() in _UNSAFE_METHODS and request.headers.get("x-csrf-token") != context.csrf_token:
+                return JSONResponse(status_code=403, content={"detail": "CSRF 校验失败，请刷新页面后重试"})
+            request.state.auth_context = context
+        return await call_next(request)
 
     @app.exception_handler(Exception)
     async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:

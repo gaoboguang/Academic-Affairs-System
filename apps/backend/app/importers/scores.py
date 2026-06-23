@@ -57,10 +57,18 @@ class ScoreImporter:
         "备注",
     ]
 
-    def __init__(self, session: Session, settings: Settings, exam: Exam) -> None:
+    def __init__(
+        self,
+        session: Session,
+        settings: Settings,
+        exam: Exam,
+        *,
+        allowed_class_ids: set[int] | None = None,
+    ) -> None:
         self.session = session
         self.settings = settings
         self.exam = exam
+        self.allowed_class_ids = allowed_class_ids
         self.student_map = {
             item.student_no: item
             for item in session.scalars(select(Student)).all()
@@ -213,6 +221,8 @@ class ScoreImporter:
             raise ValueError(f"学号不存在: {student_no}")
         if student.name != student_name:
             raise ValueError(f"学号与姓名不匹配: {student_no}")
+        if self.allowed_class_ids is not None and student.current_class_id not in self.allowed_class_ids:
+            raise ValueError("无权导入该学生成绩")
         subject = self.subject_map.get(subject_text)
         if subject is None or subject.id not in self.exam_subject_map:
             raise ValueError(f"考试未配置科目: {subject_text}")

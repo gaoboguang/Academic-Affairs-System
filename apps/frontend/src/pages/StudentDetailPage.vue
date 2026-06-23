@@ -8,7 +8,7 @@
           <span v-if="profile" class="title-meta">{{ profile.student.student_no }}</span>
         </h2>
         <p class="page-subtitle">
-          把学籍、成绩、成长档案、推荐记录和附件归到同一页，减少来回切换。
+          把学籍、成绩、成长档案、教师评语、推荐记录和附件归到同一页，减少来回切换。
         </p>
         <div v-if="profile" class="page-chip-row">
           <span class="page-chip"><strong>当前班级</strong>{{ currentClassLabel }}</span>
@@ -321,6 +321,61 @@
           </section>
         </el-tab-pane>
 
+        <el-tab-pane label="教师评语" name="teacher-comments">
+          <section class="soft-card detail-card">
+            <div class="section-head compact">
+              <div>
+                <h3>教师评语</h3>
+                <p>{{ teacherComments.items.length }} 条留言</p>
+              </div>
+            </div>
+            <div v-if="teacherComments.can_comment" class="teacher-comment-editor">
+              <el-select
+                v-model="teacherCommentDraft.subjectId"
+                placeholder="评价科目"
+                :disabled="teacherComments.available_subjects.length <= 1"
+              >
+                <el-option
+                  v-for="item in teacherComments.available_subjects"
+                  :key="`${item.subject_id}-${item.class_id}-${item.semester_id}`"
+                  :label="item.subject_name"
+                  :value="item.subject_id"
+                >
+                  <span>{{ item.subject_name }}</span>
+                  <small class="option-meta">{{ [item.class_name, item.semester_name].filter(Boolean).join(" · ") }}</small>
+                </el-option>
+              </el-select>
+              <el-input
+                v-model="teacherCommentDraft.content"
+                type="textarea"
+                :rows="3"
+                maxlength="2000"
+                show-word-limit
+                placeholder="写下课堂表现、学习习惯或接手建议"
+              />
+              <el-button type="primary" :loading="submittingTeacherComment" @click="submitTeacherComment">
+                发布评语
+              </el-button>
+            </div>
+            <div v-else class="teacher-comment-readonly-note">
+              <el-tag type="info" effect="light">只读</el-tag>
+              <span>当前账号没有该生任课评价权限</span>
+            </div>
+            <div v-if="teacherComments.items.length" class="teacher-comment-list">
+              <article v-for="item in teacherComments.items" :key="item.id" class="teacher-comment-card">
+                <div class="teacher-comment-card-head">
+                  <strong>{{ item.subject_name ?? "教师评语" }}</strong>
+                  <div class="teacher-comment-meta">
+                    <span v-for="meta in buildTeacherCommentMeta(item)" :key="`${item.id}-${meta}`">{{ meta }}</span>
+                  </div>
+                </div>
+                <p>{{ item.content }}</p>
+              </article>
+            </div>
+            <el-empty v-else description="暂无教师评语" />
+          </section>
+        </el-tab-pane>
+
         <el-tab-pane label="推荐记录" name="recommendations">
           <section class="soft-card detail-card">
             <div class="table-shell">
@@ -410,6 +465,11 @@ import {
   formatClassTransferRoute,
   type ClassTransferHistoryItem,
 } from "../components/students/studentClassTransfer";
+import {
+  buildTeacherCommentMeta,
+  buildTeacherCommentRequest,
+  type TeacherCommentMetaSource,
+} from "../components/students/teacherComments";
 import {
   buildStudent360Actions,
   buildStudent360RiskTags,
@@ -545,6 +605,36 @@ interface StudentRiskSummary {
   };
 }
 
+interface TeacherCommentSubjectOption {
+  subject_id: number;
+  subject_name: string;
+  teacher_id: number;
+  teacher_name: string;
+  class_id?: number | null;
+  class_name?: string | null;
+  semester_id?: number | null;
+  semester_name?: string | null;
+}
+
+interface TeacherCommentItem extends TeacherCommentMetaSource {
+  id: number;
+  student_id: number;
+  teacher_id: number;
+  subject_id?: number | null;
+  class_id?: number | null;
+  semester_id?: number | null;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  is_active: boolean;
+}
+
+interface TeacherCommentListResponse {
+  items: TeacherCommentItem[];
+  can_comment: boolean;
+  available_subjects: TeacherCommentSubjectOption[];
+}
+
 interface ReportExportRecord {
   download_url: string;
 }
@@ -553,15 +643,25 @@ const route = useRoute();
 const router = useRouter();
 const profile = ref<StudentProfile | null>(null);
 const classTransferHistory = ref<ClassTransferHistoryItem[]>([]);
+const teacherComments = ref<TeacherCommentListResponse>({
+  items: [],
+  can_comment: false,
+  available_subjects: [],
+});
 const studentRisk = ref<StudentRiskSummary | null>(null);
 const studentId = computed(() => Number(route.params.studentId));
 const activeProfileTab = ref(String(route.query.tab || "basic"));
 const uploadingAttachment = ref(false);
 const exportingFollowupPackage = ref(false);
+const submittingTeacherComment = ref(false);
 const attachmentDraft = reactive({
   title: "",
   attachment_type: "",
   note: "",
+});
+const teacherCommentDraft = reactive({
+  subjectId: null as number | null,
+  content: "",
 });
 
 const currentClassLabel = computed(() => {
@@ -720,6 +820,20 @@ async function loadClassTransferHistory(): Promise<void> {
   }
 }
 
+async function loadTeacherComments(): Promise<void> {
+  try {
+    teacherComments.value = await apiRequest<TeacherCommentListResponse>(
+      `/api/students/${studentId.value}/teacher-comments`,
+    );
+    const optionIds = teacherComments.value.available_subjects.map((item) => item.subject_id);
+    if (!teacherCommentDraft.subjectId || !optionIds.includes(teacherCommentDraft.subjectId)) {
+      teacherCommentDraft.subjectId = optionIds[0] ?? null;
+    }
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  }
+}
+
 async function loadStudentRisk(): Promise<void> {
   try {
     const query = new URLSearchParams();
@@ -732,8 +846,34 @@ async function loadStudentRisk(): Promise<void> {
 }
 
 async function loadDetail(): Promise<void> {
-  await Promise.all([loadProfile(), loadClassTransferHistory()]);
+  await Promise.all([loadProfile(), loadClassTransferHistory(), loadTeacherComments()]);
   await loadStudentRisk();
+}
+
+async function submitTeacherComment(): Promise<void> {
+  const request = buildTeacherCommentRequest(teacherCommentDraft);
+  if (!request) {
+    ElMessage.warning("请填写教师评语");
+    return;
+  }
+  if (teacherComments.value.available_subjects.length && !request.subject_id) {
+    ElMessage.warning("请选择评价科目");
+    return;
+  }
+  try {
+    submittingTeacherComment.value = true;
+    await apiRequest(`/api/students/${studentId.value}/teacher-comments`, {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    teacherCommentDraft.content = "";
+    ElMessage.success("教师评语已发布");
+    await loadTeacherComments();
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  } finally {
+    submittingTeacherComment.value = false;
+  }
 }
 
 async function handleAttachmentUpload(uploadFileItem: UploadFile): Promise<void> {
@@ -1147,6 +1287,74 @@ onMounted(loadDetail);
   margin-bottom: 16px;
 }
 
+.teacher-comment-editor {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 18px;
+}
+
+.teacher-comment-readonly-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  color: #617487;
+}
+
+.teacher-comment-list {
+  display: grid;
+  gap: 12px;
+}
+
+.teacher-comment-card {
+  padding: 16px;
+  border: 1px solid rgba(114, 132, 150, 0.16);
+  border-radius: 8px;
+  background: rgba(248, 251, 253, 0.86);
+}
+
+.teacher-comment-card-head {
+  display: grid;
+  gap: 8px;
+}
+
+.teacher-comment-card-head strong {
+  color: #1f3448;
+  font-size: 16px;
+}
+
+.teacher-comment-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.teacher-comment-meta span {
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(31, 108, 152, 0.08);
+  color: #446176;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.teacher-comment-card p {
+  margin: 12px 0 0;
+  color: #344f64;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.option-meta {
+  float: right;
+  margin-left: 20px;
+  color: #8494a4;
+  font-size: 12px;
+}
+
 @media (max-width: 1180px) {
   .profile-hero-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1163,6 +1371,7 @@ onMounted(loadDetail);
   .student-risk-grid,
   .tag-row,
   .attachment-toolbar,
+  .teacher-comment-editor,
   .hero-meta-grid {
     grid-template-columns: 1fr;
   }

@@ -6,6 +6,7 @@ const pythonCommand = process.platform === "win32" ? ".\\.venv\\Scripts\\python.
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  globalSetup: "./tests/e2e/global-setup.ts",
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
@@ -17,12 +18,13 @@ export default defineConfig({
   reporter: "list",
   use: {
     baseURL: `http://127.0.0.1:${frontendPort}`,
+    storageState: ".tmp/e2e-auth-state.json",
     trace: "retain-on-failure",
   },
   webServer: [
     {
       command: `${pythonCommand} scripts/run_e2e_backend.py`,
-      url: `http://127.0.0.1:${backendPort}/api/dashboard/summary`,
+      url: `http://127.0.0.1:${backendPort}/api/system/health`,
       name: "Backend",
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,

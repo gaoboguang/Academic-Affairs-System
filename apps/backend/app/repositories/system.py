@@ -29,6 +29,9 @@ def write_audit_log(
     action: str,
     target_type: str | None = None,
     target_id: str | None = None,
+    actor_user_id: int | None = None,
+    actor_username: str | None = None,
+    client_ip: str | None = None,
     detail_json: dict | None = None,
 ) -> AuditLog:
     log = AuditLog(
@@ -36,6 +39,9 @@ def write_audit_log(
         action=action,
         target_type=target_type,
         target_id=target_id,
+        actor_user_id=actor_user_id,
+        actor_username=actor_username,
+        client_ip=client_ip,
         detail_json=detail_json,
     )
     session.add(log)

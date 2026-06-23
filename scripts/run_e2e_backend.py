@@ -20,10 +20,11 @@ if str(BACKEND_DIR) not in sys.path:
 
 from app.core.bootstrap import ensure_runtime_directories
 from app.core.config import Settings
+from app.core.security import hash_password
 from app.db.session import DatabaseManager
 from app.exporters.templates import generate_import_templates
 from app.main import create_app
-from app.models import AcademicYear, Base, Exam, Semester, TeachingAssignment
+from app.models import AcademicYear, AppUser, Base, Exam, Semester, TeachingAssignment
 from app.services.bootstrap import seed_demo_data, seed_reference_data
 from app.services import exams as exams_service
 from app.services import evaluation as evaluation_service
@@ -294,6 +295,15 @@ def prepare_demo_data(settings: Settings) -> None:
     with db_manager.session_scope() as session:
         seed_reference_data(session)
         seed_demo_data(session)
+        session.add(
+            AppUser(
+                username="admin",
+                display_name="E2E 管理员",
+                role="admin",
+                password_hash=hash_password("AdminPass123!"),
+                must_change_password=False,
+            )
+        )
     seed_extended_demo_data(settings, db_manager)
     db_manager.dispose()
 

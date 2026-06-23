@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.routes import (
     archives,
     analytics,
+    auth,
     base_data,
     classes,
     dashboard,
@@ -21,6 +22,7 @@ from app.api.routes import (
 )
 
 api_router = APIRouter()
+api_router.include_router(auth.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(base_data.router)
 api_router.include_router(classes.router)

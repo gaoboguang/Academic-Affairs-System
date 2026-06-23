@@ -1,14 +1,12 @@
 /**
- * Standalone analytics smoke test against the running dev servers (:8000 + :5173).
+ * Analytics smoke test against the Playwright-managed frontend server.
  */
 import { expect, test, type Page } from "@playwright/test";
-
-const FRONTEND = "http://localhost:5173";
 
 test.describe.configure({ mode: "serial" });
 
 async function gotoAnalytics(page: Page): Promise<void> {
-  await page.goto(`${FRONTEND}/analytics`, { waitUntil: "networkidle" });
+  await page.goto("/analytics", { waitUntil: "networkidle" });
   // Page already auto-selects the latest exam; just wait for the tablist.
   await page.getByRole("tab", { name: "学生分析" }).waitFor({ timeout: 10_000 });
 }
