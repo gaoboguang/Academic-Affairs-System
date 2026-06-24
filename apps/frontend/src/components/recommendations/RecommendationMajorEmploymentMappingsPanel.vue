@@ -79,6 +79,18 @@
         </template>
       </el-table-column>
     </el-table>
+    <el-pagination
+      v-if="pagination.total"
+      class="table-pagination"
+      background
+      layout="total, sizes, prev, pager, next"
+      :current-page="pagination.page"
+      :page-size="pagination.page_size"
+      :page-sizes="[50, 100, 200]"
+      :total="pagination.total"
+      @current-change="emit('page-change', $event)"
+      @size-change="emit('page-size-change', $event)"
+    />
     <el-empty v-if="!mappings.length" description="暂无专业就业映射" />
   </section>
 </template>
@@ -86,7 +98,7 @@
 <script setup lang="ts">
 import { recommendationStudentTypeOptions } from "./helpers";
 
-import type { EmploymentDirectionItem, MajorEmploymentMappingItem, MajorItem } from "./types";
+import type { EmploymentDirectionItem, MajorEmploymentMappingItem, MajorItem, PaginationState } from "./types";
 
 interface MajorEmploymentMappingFiltersState {
   keyword: string;
@@ -98,6 +110,7 @@ interface MajorEmploymentMappingFiltersState {
 defineProps<{
   mappings: MajorEmploymentMappingItem[];
   filters: MajorEmploymentMappingFiltersState;
+  pagination: PaginationState;
   majorOptions: MajorItem[];
   directionOptions: EmploymentDirectionItem[];
   strengthOptions: Array<{ value: string; label: string }>;
@@ -106,6 +119,8 @@ defineProps<{
 const emit = defineEmits<{
   load: [];
   reset: [];
+  "page-change": [value: number];
+  "page-size-change": [value: number];
   create: [];
   edit: [value: MajorEmploymentMappingItem];
 }>();
@@ -141,6 +156,11 @@ function studentTypeLabel(value: string): string {
 
 .toolbar-row {
   margin-bottom: 16px;
+}
+
+.table-pagination {
+  margin-top: 16px;
+  justify-content: flex-end;
 }
 
 .name-stack {

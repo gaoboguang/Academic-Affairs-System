@@ -7,17 +7,27 @@ from app.api.deps import get_db_session, get_settings
 from app.core.config import Settings
 from app.schemas.recommendation import (
     AdmissionImportResponse,
+    AdmissionRecordPageRead,
     AdmissionRecordRead,
+    CollegeCatalogPageRead,
     CollegePayload,
+    CollegeAdmissionHistoryRead,
+    CollegeDetailRead,
+    CollegePageRead,
     CollegeRead,
     EmploymentDirectionPayload,
     EmploymentDirectionRead,
     EmploymentDirectionBootstrapResponse,
     EnrollmentPlanImportResponse,
+    EnrollmentPlanPageRead,
     EnrollmentPlanRead,
+    MajorPageRead,
+    MajorAdmissionHistoryRead,
+    MajorDetailRead,
     MajorPayload,
     MajorRead,
     MajorEmploymentMappingPayload,
+    MajorEmploymentMappingPageRead,
     MajorEmploymentMappingRead,
     MajorEmploymentMappingBootstrapResponse,
     ProvinceVolunteerRuleBootstrapResponse,
@@ -48,6 +58,8 @@ from app.schemas.recommendation import (
     VolunteerDraftPayload,
     VolunteerDraftRead,
     VolunteerDraftSummaryRead,
+    VolunteerGuideOptionsRead,
+    VolunteerGuidePreviewResponse,
     VolunteerWorkbenchPreviewPayload,
     VolunteerWorkbenchPreviewResponse,
 )
@@ -64,6 +76,50 @@ def list_colleges(
     session: Session = Depends(get_db_session),
 ) -> list[CollegeRead]:
     return service.list_colleges(session, keyword=keyword, province=province, supports_art=supports_art)
+
+
+@router.get("/colleges/page", response_model=CollegePageRead)
+def list_colleges_page(
+    keyword: str | None = Query(default=None),
+    province: str | None = Query(default=None),
+    supports_art: bool | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    session: Session = Depends(get_db_session),
+) -> CollegePageRead:
+    return service.list_colleges_page(
+        session,
+        keyword=keyword,
+        province=province,
+        supports_art=supports_art,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/colleges/catalog/page", response_model=CollegeCatalogPageRead)
+def list_college_catalog_page(
+    keyword: str | None = Query(default=None),
+    province: str | None = Query(default=None),
+    school_type: str | None = Query(default=None),
+    level_tag: str | None = Query(default=None),
+    has_profile: bool | None = Query(default=None),
+    has_admission_data: bool | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    session: Session = Depends(get_db_session),
+) -> CollegeCatalogPageRead:
+    return service.list_college_catalog_page(
+        session,
+        keyword=keyword,
+        province=province,
+        school_type=school_type,
+        level_tag=level_tag,
+        has_profile=has_profile,
+        has_admission_data=has_admission_data,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.post("/colleges", response_model=CollegeRead)
@@ -83,6 +139,22 @@ def update_college(
     return service.update_college(session, college_id, payload)
 
 
+@router.get("/colleges/{college_id}/detail", response_model=CollegeDetailRead)
+def get_college_detail(
+    college_id: int,
+    session: Session = Depends(get_db_session),
+) -> CollegeDetailRead:
+    return service.get_college_detail(session, college_id)
+
+
+@router.get("/colleges/{college_id}/admission-history", response_model=CollegeAdmissionHistoryRead)
+def get_college_admission_history(
+    college_id: int,
+    session: Session = Depends(get_db_session),
+) -> CollegeAdmissionHistoryRead:
+    return service.get_college_admission_history(session, college_id)
+
+
 @router.get("/majors", response_model=list[MajorRead])
 def list_majors(
     keyword: str | None = Query(default=None),
@@ -90,6 +162,23 @@ def list_majors(
     session: Session = Depends(get_db_session),
 ) -> list[MajorRead]:
     return service.list_majors(session, keyword=keyword, is_art_related=is_art_related)
+
+
+@router.get("/majors/page", response_model=MajorPageRead)
+def list_majors_page(
+    keyword: str | None = Query(default=None),
+    is_art_related: bool | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    session: Session = Depends(get_db_session),
+) -> MajorPageRead:
+    return service.list_majors_page(
+        session,
+        keyword=keyword,
+        is_art_related=is_art_related,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.post("/majors", response_model=MajorRead)
@@ -107,6 +196,22 @@ def update_major(
     session: Session = Depends(get_db_session),
 ) -> MajorRead:
     return service.update_major(session, major_id, payload)
+
+
+@router.get("/majors/{major_id}/detail", response_model=MajorDetailRead)
+def get_major_detail(
+    major_id: int,
+    session: Session = Depends(get_db_session),
+) -> MajorDetailRead:
+    return service.get_major_detail(session, major_id)
+
+
+@router.get("/majors/{major_id}/admission-history", response_model=MajorAdmissionHistoryRead)
+def get_major_admission_history(
+    major_id: int,
+    session: Session = Depends(get_db_session),
+) -> MajorAdmissionHistoryRead:
+    return service.get_major_admission_history(session, major_id)
 
 
 @router.get("/employment-directions", response_model=list[EmploymentDirectionRead])
@@ -159,6 +264,27 @@ def list_major_employment_mappings(
     )
 
 
+@router.get("/major-employment-maps/page", response_model=MajorEmploymentMappingPageRead)
+def list_major_employment_mappings_page(
+    major_id: int | None = Query(default=None),
+    direction_id: int | None = Query(default=None),
+    strength: str | None = Query(default=None),
+    keyword: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    session: Session = Depends(get_db_session),
+) -> MajorEmploymentMappingPageRead:
+    return service.list_major_employment_mappings_page(
+        session,
+        major_id=major_id,
+        direction_id=direction_id,
+        strength=strength,
+        keyword=keyword,
+        page=page,
+        page_size=page_size,
+    )
+
+
 @router.post("/major-employment-maps", response_model=MajorEmploymentMappingRead)
 def create_major_employment_mapping(
     payload: MajorEmploymentMappingPayload,
@@ -187,6 +313,7 @@ def update_major_employment_mapping(
 def list_admission_records(
     year: int | None = Query(default=None),
     province: str | None = Query(default=None),
+    batch: str | None = Query(default=None),
     college_id: int | None = Query(default=None),
     student_type: str | None = Query(default=None),
     session: Session = Depends(get_db_session),
@@ -195,8 +322,32 @@ def list_admission_records(
         session,
         year=year,
         province=province,
+        batch=batch,
         college_id=college_id,
         student_type=student_type,
+    )
+
+
+@router.get("/admissions/page", response_model=AdmissionRecordPageRead)
+def list_admission_records_page(
+    year: int | None = Query(default=None),
+    province: str | None = Query(default=None),
+    batch: str | None = Query(default=None),
+    college_id: int | None = Query(default=None),
+    student_type: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    session: Session = Depends(get_db_session),
+) -> AdmissionRecordPageRead:
+    return service.list_admission_records_page(
+        session,
+        year=year,
+        province=province,
+        batch=batch,
+        college_id=college_id,
+        student_type=student_type,
+        page=page,
+        page_size=page_size,
     )
 
 
@@ -228,6 +379,31 @@ def list_enrollment_plans(
         college_id=college_id,
         student_type=student_type,
         keyword=keyword,
+    )
+
+
+@router.get("/enrollment-plans/page", response_model=EnrollmentPlanPageRead)
+def list_enrollment_plans_page(
+    year: int | None = Query(default=None),
+    province: str | None = Query(default=None),
+    batch: str | None = Query(default=None),
+    college_id: int | None = Query(default=None),
+    student_type: str | None = Query(default=None),
+    keyword: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    session: Session = Depends(get_db_session),
+) -> EnrollmentPlanPageRead:
+    return service.list_enrollment_plans_page(
+        session,
+        year=year,
+        province=province,
+        batch=batch,
+        college_id=college_id,
+        student_type=student_type,
+        keyword=keyword,
+        page=page,
+        page_size=page_size,
     )
 
 
@@ -457,6 +633,23 @@ def preview_volunteer_workbench(
     session: Session = Depends(get_db_session),
 ) -> VolunteerWorkbenchPreviewResponse:
     return service.preview_volunteer_workbench(session, payload)
+
+
+@router.get("/recommendations/volunteer-guide/options", response_model=VolunteerGuideOptionsRead)
+def get_volunteer_guide_options(
+    province: str = Query(default="山东"),
+    year: int | None = Query(default=None),
+    session: Session = Depends(get_db_session),
+) -> VolunteerGuideOptionsRead:
+    return service.get_volunteer_guide_options(session, province=province, year=year)
+
+
+@router.post("/recommendations/volunteer-guide/preview", response_model=VolunteerGuidePreviewResponse)
+def preview_volunteer_guide(
+    payload: VolunteerWorkbenchPreviewPayload,
+    session: Session = Depends(get_db_session),
+) -> VolunteerGuidePreviewResponse:
+    return service.preview_volunteer_guide(session, payload)
 
 
 @router.get("/recommendations/volunteer-drafts", response_model=list[VolunteerDraftSummaryRead])

@@ -14,11 +14,27 @@ from app.repositories.recommendations import (
     get_major,
     get_major_by_name,
     list_admission_records as repo_list_admission_records,
+    list_admission_records_page as repo_list_admission_records_page,
+    list_college_catalog_page as repo_list_college_catalog_page,
     list_colleges as repo_list_colleges,
+    list_colleges_page as repo_list_colleges_page,
     list_majors as repo_list_majors,
+    list_majors_page as repo_list_majors_page,
 )
 from app.repositories.system import create_import_job, write_audit_log
-from app.schemas.recommendation import AdmissionImportResponse, AdmissionRecordRead, CollegePayload, CollegeRead, MajorPayload, MajorRead
+from app.schemas.recommendation import (
+    AdmissionImportResponse,
+    AdmissionRecordPageRead,
+    AdmissionRecordRead,
+    CollegeCatalogItemRead,
+    CollegeCatalogPageRead,
+    CollegePayload,
+    CollegePageRead,
+    CollegeRead,
+    MajorPageRead,
+    MajorPayload,
+    MajorRead,
+)
 
 from ._recommendations_shared import _serialize_admission_record, _serialize_college, _serialize_major
 
@@ -34,6 +50,88 @@ def list_colleges(
         _serialize_college(item)
         for item in repo_list_colleges(session, keyword=keyword, province=province, supports_art=supports_art)
     ]
+
+
+def list_colleges_page(
+    session: Session,
+    *,
+    keyword: str | None = None,
+    province: str | None = None,
+    supports_art: bool | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> CollegePageRead:
+    items, total = repo_list_colleges_page(
+        session,
+        keyword=keyword,
+        province=province,
+        supports_art=supports_art,
+        page=page,
+        page_size=page_size,
+    )
+    return CollegePageRead(
+        items=[_serialize_college(item) for item in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+def list_college_catalog_page(
+    session: Session,
+    *,
+    keyword: str | None = None,
+    province: str | None = None,
+    school_type: str | None = None,
+    level_tag: str | None = None,
+    has_profile: bool | None = None,
+    has_admission_data: bool | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> CollegeCatalogPageRead:
+    rows, total = repo_list_college_catalog_page(
+        session,
+        keyword=keyword,
+        province=province,
+        school_type=school_type,
+        level_tag=level_tag,
+        has_profile=has_profile,
+        has_admission_data=has_admission_data,
+        page=page,
+        page_size=page_size,
+    )
+    items = [
+        _serialize_college_catalog_item(
+            college,
+            has_profile=profile_college_id is not None,
+            plan_count=plan_count,
+            latest_plan_year=latest_plan_year,
+            admission_count=admission_count,
+            latest_admission_year=latest_admission_year,
+        )
+        for college, profile_college_id, plan_count, latest_plan_year, admission_count, latest_admission_year in rows
+    ]
+    return CollegeCatalogPageRead(items=items, total=total, page=page, page_size=page_size)
+
+
+def _serialize_college_catalog_item(
+    item: College,
+    *,
+    has_profile: bool,
+    plan_count: int,
+    latest_plan_year: int | None,
+    admission_count: int,
+    latest_admission_year: int | None,
+) -> CollegeCatalogItemRead:
+    base = _serialize_college(item).model_dump()
+    return CollegeCatalogItemRead(
+        **base,
+        has_profile=has_profile,
+        plan_count=plan_count,
+        admission_count=admission_count,
+        latest_plan_year=latest_plan_year,
+        latest_admission_year=latest_admission_year,
+    )
 
 
 def create_college(session: Session, payload: CollegePayload) -> CollegeRead:
@@ -85,6 +183,29 @@ def list_majors(session: Session, *, keyword: str | None = None, is_art_related:
     return [_serialize_major(item) for item in repo_list_majors(session, keyword=keyword, is_art_related=is_art_related)]
 
 
+def list_majors_page(
+    session: Session,
+    *,
+    keyword: str | None = None,
+    is_art_related: bool | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> MajorPageRead:
+    items, total = repo_list_majors_page(
+        session,
+        keyword=keyword,
+        is_art_related=is_art_related,
+        page=page,
+        page_size=page_size,
+    )
+    return MajorPageRead(
+        items=[_serialize_major(item) for item in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
 def create_major(session: Session, payload: MajorPayload) -> MajorRead:
     existing = get_major_by_name(session, payload.name)
     if existing:
@@ -117,6 +238,7 @@ def list_admission_records(
     *,
     year: int | None = None,
     province: str | None = None,
+    batch: str | None = None,
     college_id: int | None = None,
     student_type: str | None = None,
 ) -> list[AdmissionRecordRead]:
@@ -126,10 +248,40 @@ def list_admission_records(
             session,
             year=year,
             province=province,
+            batch=batch,
             college_id=college_id,
             student_type=student_type,
         )
     ]
+
+
+def list_admission_records_page(
+    session: Session,
+    *,
+    year: int | None = None,
+    province: str | None = None,
+    batch: str | None = None,
+    college_id: int | None = None,
+    student_type: str | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> AdmissionRecordPageRead:
+    items, total = repo_list_admission_records_page(
+        session,
+        year=year,
+        province=province,
+        batch=batch,
+        college_id=college_id,
+        student_type=student_type,
+        page=page,
+        page_size=page_size,
+    )
+    return AdmissionRecordPageRead(
+        items=[_serialize_admission_record(item) for item in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 def import_admissions(

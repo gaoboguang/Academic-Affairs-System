@@ -31,6 +31,9 @@ const RECOMMENDATION_RISK_FLAG_LABELS: Record<string, string> = {
   score_line_reference_only: "缺少专门录取结果，按省控线初筛",
   cross_year_score_line_reference: "省控线按跨年份参考",
   plan_only_reference: "缺少专门结果，仅按计划清单初筛",
+  historical_plan_simulation: "按历史计划模拟",
+  history_only_reference: "仅历史参考",
+  missing_enrollment_plan: "缺招生计划",
   chapter_pending_review: "章程待补链",
   chapter_special_requirement: "章程限制已提取",
   art_recommendation: "艺体推荐",
@@ -83,7 +86,7 @@ export function buildRecommendationSimulationNote(context: RecommendationInsight
     return "当前按正式成绩/位次生成";
   }
   if (context.score_confidence === "score_only") {
-    return "当前按分数模式估算";
+    return "当前按成绩/位次来源估算";
   }
   if (context.score_confidence === "estimated" || context.score_confidence === "range_estimated") {
     return "当前结果为模拟测算";

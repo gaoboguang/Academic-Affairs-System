@@ -84,10 +84,23 @@ describe("import center helpers", () => {
       "3. 导入学生与教师",
       "4. 维护任教关系",
       "5. 创建考试并导入成绩",
-      "6. 导入考勤",
-      "7. 导入行为",
-      "8. 查看驾驶舱",
-      "9. 导出报表",
+      "6. 维护成长与规划",
+      "7. 查看驾驶舱",
+      "8. 导出报表",
     ]);
+  });
+
+  it("models the pathway profile template as a student-center upload entry", () => {
+    const pathwayProfileBatch: ImportCenterBatch = {
+      ...baseBatch,
+      job_type: "pathway_profiles",
+      job_type_label: "升学画像导入",
+      business_path: "/students",
+      template_download_url: "/api/system/files?path=data%2Ftemplates%2Fstudent_pathway_profiles_import_template.xlsx",
+    };
+
+    expect(pathwayProfileBatch.job_type_label).toBe("升学画像导入");
+    expect(pathwayProfileBatch.business_path).toBe("/students");
+    expect(pathwayProfileBatch.template_download_url).toContain("student_pathway_profiles_import_template.xlsx");
   });
 });

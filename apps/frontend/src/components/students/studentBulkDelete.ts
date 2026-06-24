@@ -2,6 +2,7 @@ export interface StudentBulkDeleteAssociationCounts {
   score_count: number;
   score_snapshot_count: number;
   growth_record_count: number;
+  teacher_comment_count: number;
   attachment_count: number;
   class_history_count: number;
   recommendation_count: number;
@@ -67,6 +68,7 @@ const associationFields: Array<{
   { key: "score_count", label: "成绩记录" },
   { key: "score_snapshot_count", label: "成绩快照" },
   { key: "growth_record_count", label: "成长档案" },
+  { key: "teacher_comment_count", label: "教师评语" },
   { key: "attachment_count", label: "附件" },
   { key: "class_history_count", label: "班级历史" },
   { key: "recommendation_count", label: "推荐记录" },

@@ -329,7 +329,7 @@ def seed_demo_data(session: Session) -> None:
             current_class_id=class_two.id,
             status="active",
             student_type="art",
-            art_track="art",
+            art_track="fine_art_design",
             phone="13800000003",
         ),
     ]

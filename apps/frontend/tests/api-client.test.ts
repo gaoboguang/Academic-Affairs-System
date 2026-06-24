@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { apiRequest, openFile, uploadFile } from "../src/api/client";
+import { setCsrfToken } from "../src/api/authSession";
 
 describe("api client", () => {
   afterEach(() => {
+    setCsrfToken(null);
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -30,6 +32,25 @@ describe("api client", () => {
     expect(init?.method).toBe("POST");
     expect(headers.get("Content-Type")).toBe("application/json");
     expect(headers.get("Authorization")).toBe("Bearer token");
+    expect(init?.credentials).toBe("include");
+  });
+
+  it("adds CSRF headers for unsafe JSON requests", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    setCsrfToken("csrf-token");
+
+    await apiRequest("/api/demo", { method: "PUT" });
+
+    const [, init] = fetchMock.mock.calls[0] ?? [];
+    const headers = init?.headers as Headers;
+    expect(headers.get("X-CSRF-Token")).toBe("csrf-token");
+    expect(init?.credentials).toBe("include");
   });
 
   it("surfaces backend detail messages on request failure", async () => {
@@ -65,6 +86,7 @@ describe("api client", () => {
     const formData = init?.body as FormData;
 
     expect(init?.method).toBe("POST");
+    expect(init?.credentials).toBe("include");
     expect(formData.get("file")).toBe(file);
     expect(formData.get("category")).toBe("archives");
   });

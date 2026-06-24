@@ -19,6 +19,7 @@ from app.schemas.recommendation import (
 )
 from ._recommendations_shared import _serialize_province_volunteer_rule
 from ._recommendations_workbench import _load_applicable_rules
+from ._recommendations_volunteer_options import normalize_volunteer_fields
 
 
 def list_volunteer_drafts(
@@ -39,15 +40,23 @@ def get_volunteer_draft_detail(session: Session, draft_id: int) -> VolunteerDraf
 
 def create_volunteer_draft(session: Session, payload: VolunteerDraftPayload) -> VolunteerDraftRead:
     _validate_volunteer_draft_payload(session, payload)
+    normalized = normalize_volunteer_fields(
+        province=payload.province,
+        candidate_type=payload.candidate_type,
+        art_track=payload.art_track,
+        batch=payload.batch,
+        detected_candidate_type=payload.candidate_type or "general",
+    )
     draft = VolunteerDraft(
         name=payload.name.strip(),
         student_id=payload.student_id,
         exam_id=payload.exam_id,
         province=payload.province.strip(),
         target_year=payload.target_year,
-        batch=_normalize_optional_string(payload.batch),
+        batch=_normalize_optional_string(normalized.batch),
         exam_mode=_normalize_optional_string(payload.exam_mode),
-        candidate_type=payload.candidate_type.strip(),
+        candidate_type=normalized.candidate_type.strip(),
+        art_track=_normalize_optional_string(normalized.art_track),
         score_input_mode=payload.score_input_mode.strip() or "actual_rank",
         score_range_min=payload.score_range_min,
         score_range_max=payload.score_range_max,
@@ -98,6 +107,13 @@ def create_volunteer_draft(session: Session, payload: VolunteerDraftPayload) -> 
 
 def update_volunteer_draft(session: Session, draft_id: int, payload: VolunteerDraftPayload) -> VolunteerDraftRead:
     _validate_volunteer_draft_payload(session, payload)
+    normalized = normalize_volunteer_fields(
+        province=payload.province,
+        candidate_type=payload.candidate_type,
+        art_track=payload.art_track,
+        batch=payload.batch,
+        detected_candidate_type=payload.candidate_type or "general",
+    )
     draft = get_volunteer_draft(session, draft_id)
     if not draft or not draft.is_active:
         raise HTTPException(status_code=404, detail="志愿草稿不存在")
@@ -106,9 +122,10 @@ def update_volunteer_draft(session: Session, draft_id: int, payload: VolunteerDr
     draft.exam_id = payload.exam_id
     draft.province = payload.province.strip()
     draft.target_year = payload.target_year
-    draft.batch = _normalize_optional_string(payload.batch)
+    draft.batch = _normalize_optional_string(normalized.batch)
     draft.exam_mode = _normalize_optional_string(payload.exam_mode)
-    draft.candidate_type = payload.candidate_type.strip()
+    draft.candidate_type = normalized.candidate_type.strip()
+    draft.art_track = _normalize_optional_string(normalized.art_track)
     draft.score_input_mode = payload.score_input_mode.strip() or "actual_rank"
     draft.score_range_min = payload.score_range_min
     draft.score_range_max = payload.score_range_max
@@ -211,6 +228,7 @@ def _serialize_volunteer_draft_summary(item: VolunteerDraft) -> VolunteerDraftSu
         batch=item.batch,
         exam_mode=item.exam_mode,
         candidate_type=item.candidate_type,
+        art_track=item.art_track,
         score_input_mode=item.score_input_mode,
         item_count=len([draft_item for draft_item in item.items if draft_item.is_active]),
         created_at=item.created_at,

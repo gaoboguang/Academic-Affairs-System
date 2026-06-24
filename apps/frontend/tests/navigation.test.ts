@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { navSections, resolveNavItem } from "../src/layouts/navigation";
+import { filterNavSectionsForPermissions, navSections, resolveNavItem } from "../src/layouts/navigation";
 
 describe("navigation", () => {
   it("exposes stable top-level sections", () => {
@@ -33,7 +33,44 @@ describe("navigation", () => {
     expect(pathwayItem.label).toBe("升学方案");
   });
 
+  it("keeps college and major detail pages under the recommendation workbench", () => {
+    const catalogItem = resolveNavItem("/colleges");
+    const collegeItem = resolveNavItem("/colleges/1");
+    const majorItem = resolveNavItem("/majors/2");
+
+    expect(catalogItem.path).toBe("/colleges");
+    expect(catalogItem.sectionId).toBe("decision");
+    expect(catalogItem.label).toBe("院校库");
+    expect(collegeItem.path).toBe("/colleges");
+    expect(collegeItem.sectionId).toBe("decision");
+    expect(collegeItem.label).toBe("院校库");
+    expect(majorItem.path).toBe("/recommendations");
+    expect(majorItem.sectionId).toBe("decision");
+    expect(majorItem.label).toBe("高考志愿工作台");
+  });
+
   it("falls back to dashboard for unknown paths", () => {
     expect(resolveNavItem("/unknown").path).toBe("/");
+  });
+
+  it("filters teacher navigation to the teaching class package", () => {
+    const filtered = filterNavSectionsForPermissions([
+      "dashboard:read",
+      "students:read",
+      "students:write",
+      "scores:import",
+      "analytics:read",
+      "reports:read",
+    ]);
+    const labels = filtered.flatMap((section) => section.items.map((item) => item.label));
+
+    expect(labels).toContain("工作台");
+    expect(labels).toContain("学生中心");
+    expect(labels).toContain("考试成绩");
+    expect(labels).toContain("分析中心");
+    expect(labels).toContain("报表中心");
+    expect(labels).not.toContain("系统设置");
+    expect(labels).not.toContain("教师中心");
+    expect(labels).not.toContain("高考数据");
   });
 });

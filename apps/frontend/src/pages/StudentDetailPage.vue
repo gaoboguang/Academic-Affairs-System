@@ -8,7 +8,7 @@
           <span v-if="profile" class="title-meta">{{ profile.student.student_no }}</span>
         </h2>
         <p class="page-subtitle">
-          把学籍、成绩、成长档案、推荐记录和附件归到同一页，减少来回切换。
+          把学籍、成绩、成长档案、教师评语、推荐记录和附件归到同一页，减少来回切换。
         </p>
         <div v-if="profile" class="page-chip-row">
           <span class="page-chip"><strong>当前班级</strong>{{ currentClassLabel }}</span>
@@ -73,11 +73,11 @@
           <strong>{{ currentClassLabel }}</strong>
         </article>
         <article class="soft-card stat-card">
-          <span>最近考试总分</span>
+          <span>最近考试总分{{ profile.performance_summary.latest_score_value_label ? `（${profile.performance_summary.latest_score_value_label}）` : "" }}</span>
           <strong>{{ profile.performance_summary.latest_total_score ?? "-" }}</strong>
         </article>
         <article class="soft-card stat-card">
-          <span>最近年级名次</span>
+          <span>最近校内名次</span>
           <strong>{{ profile.performance_summary.latest_grade_rank ?? "-" }}</strong>
         </article>
         <article class="soft-card stat-card">
@@ -108,15 +108,15 @@
           <article class="student-risk-card">
             <span>风险等级</span>
             <strong>{{ studentRisk?.risk_label ?? "未计算" }}</strong>
-            <p>{{ studentRisk?.reasons.join(" / ") ?? "加载后显示考勤、行为和成绩综合判断。" }}</p>
+            <p>{{ studentRisk?.reasons.join(" / ") ?? "加载后显示成绩、成长档案和规划任务综合判断。" }}</p>
           </article>
           <article class="student-risk-card">
-            <span>近 30 天考勤</span>
-            <strong>{{ studentRisk ? formatAttendanceSummary(studentRisk.attendance_summary) : "未加载" }}</strong>
+            <span>成长档案</span>
+            <strong>{{ studentRisk ? formatStudentGrowthSummary(studentRisk.growth_summary) : "未加载" }}</strong>
           </article>
           <article class="student-risk-card">
-            <span>近 30 天行为</span>
-            <strong>{{ studentRisk ? formatBehaviorSummary(studentRisk.behavior_summary) : "未加载" }}</strong>
+            <span>规划任务</span>
+            <strong>{{ studentRisk ? formatStudentPlanningSummary(studentRisk.planning_summary) : "未加载" }}</strong>
           </article>
         </div>
         <div class="action-card-grid">
@@ -263,13 +263,30 @@
             </div>
             <div class="table-shell">
               <el-table :data="profile.exam_trends" stripe>
+                <el-table-column type="expand" width="46">
+                  <template #default="{ row }">
+                    <div class="subject-score-panel">
+                      <span
+                        v-for="subject in row.subjects"
+                        :key="`${row.exam_id}-${subject.subject_id}`"
+                        class="subject-score-pill"
+                      >
+                        <strong>{{ subject.subject_name }}</strong>
+                        <em>{{ subject.score ?? "-" }}</em>
+                        <small>{{ subject.score_value_label }}</small>
+                      </span>
+                      <span v-if="!row.subjects?.length" class="muted-copy">暂无分科成绩</span>
+                    </div>
+                  </template>
+                </el-table-column>
                 <el-table-column label="考试" prop="exam_name" min-width="190" />
                 <el-table-column label="时间" prop="exam_date" width="120" />
                 <el-table-column label="总分" prop="total_score" width="100" />
+                <el-table-column label="口径" prop="score_value_label" width="90" />
                 <el-table-column label="班名" prop="class_rank" width="90" />
-                <el-table-column label="年名" prop="grade_rank" width="90" />
+                <el-table-column label="校内名" prop="grade_rank" width="90" />
                 <el-table-column label="班百分位" prop="class_percentile" width="110" />
-                <el-table-column label="年百分位" prop="grade_percentile" width="110" />
+                <el-table-column label="校内百分位" prop="grade_percentile" width="120" />
               </el-table>
             </div>
             <el-empty v-if="!profile.exam_trends.length" description="暂无考试趋势数据" />
@@ -304,6 +321,61 @@
           </section>
         </el-tab-pane>
 
+        <el-tab-pane label="教师评语" name="teacher-comments">
+          <section class="soft-card detail-card">
+            <div class="section-head compact">
+              <div>
+                <h3>教师评语</h3>
+                <p>{{ teacherComments.items.length }} 条留言</p>
+              </div>
+            </div>
+            <div v-if="teacherComments.can_comment" class="teacher-comment-editor">
+              <el-select
+                v-model="teacherCommentDraft.subjectId"
+                placeholder="评价科目"
+                :disabled="teacherComments.available_subjects.length <= 1"
+              >
+                <el-option
+                  v-for="item in teacherComments.available_subjects"
+                  :key="`${item.subject_id}-${item.class_id}-${item.semester_id}`"
+                  :label="item.subject_name"
+                  :value="item.subject_id"
+                >
+                  <span>{{ item.subject_name }}</span>
+                  <small class="option-meta">{{ [item.class_name, item.semester_name].filter(Boolean).join(" · ") }}</small>
+                </el-option>
+              </el-select>
+              <el-input
+                v-model="teacherCommentDraft.content"
+                type="textarea"
+                :rows="3"
+                maxlength="2000"
+                show-word-limit
+                placeholder="写下课堂表现、学习习惯或接手建议"
+              />
+              <el-button type="primary" :loading="submittingTeacherComment" @click="submitTeacherComment">
+                发布评语
+              </el-button>
+            </div>
+            <div v-else class="teacher-comment-readonly-note">
+              <el-tag type="info" effect="light">只读</el-tag>
+              <span>当前账号没有该生任课评价权限</span>
+            </div>
+            <div v-if="teacherComments.items.length" class="teacher-comment-list">
+              <article v-for="item in teacherComments.items" :key="item.id" class="teacher-comment-card">
+                <div class="teacher-comment-card-head">
+                  <strong>{{ item.subject_name ?? "教师评语" }}</strong>
+                  <div class="teacher-comment-meta">
+                    <span v-for="meta in buildTeacherCommentMeta(item)" :key="`${item.id}-${meta}`">{{ meta }}</span>
+                  </div>
+                </div>
+                <p>{{ item.content }}</p>
+              </article>
+            </div>
+            <el-empty v-else description="暂无教师评语" />
+          </section>
+        </el-tab-pane>
+
         <el-tab-pane label="推荐记录" name="recommendations">
           <section class="soft-card detail-card">
             <div class="table-shell">
@@ -315,6 +387,7 @@
                 <el-table-column label="冲" prop="challenge_count" width="70" />
                 <el-table-column label="稳" prop="steady_count" width="70" />
                 <el-table-column label="保" prop="safe_count" width="70" />
+                <el-table-column label="关注" prop="watch_count" width="76" />
               </el-table>
             </div>
             <el-empty v-if="!profile.recommendation_history.length" description="暂无推荐历史" />
@@ -385,12 +458,6 @@ import type { UploadFile } from "element-plus";
 import { useRoute, useRouter } from "vue-router";
 
 import { apiRequest, openFile, uploadFile } from "../api/client";
-import {
-  formatAttendanceSummary,
-  formatBehaviorSummary,
-  type AttendanceRiskSummary,
-  type BehaviorRiskSummary,
-} from "../components/analytics/adviserDashboard";
 import StudentPathwayProfilePanel from "../components/students/StudentPathwayProfilePanel.vue";
 import StudentPlanningPanel from "../components/students/StudentPlanningPanel.vue";
 import {
@@ -398,6 +465,11 @@ import {
   formatClassTransferRoute,
   type ClassTransferHistoryItem,
 } from "../components/students/studentClassTransfer";
+import {
+  buildTeacherCommentMeta,
+  buildTeacherCommentRequest,
+  type TeacherCommentMetaSource,
+} from "../components/students/teacherComments";
 import {
   buildStudent360Actions,
   buildStudent360RiskTags,
@@ -440,14 +512,28 @@ interface ClassHistoryItem {
   reason?: string | null;
 }
 
+interface ExamSubjectScoreItem {
+  subject_id: number;
+  subject_name?: string | null;
+  score?: number | null;
+  score_value_type?: string | null;
+  score_value_label?: string | null;
+  class_rank?: number | null;
+  grade_rank?: number | null;
+}
+
 interface ExamTrendItem {
+  exam_id?: number | null;
   exam_name?: string | null;
   exam_date?: string | null;
   total_score?: number | null;
+  score_value_type?: string | null;
+  score_value_label?: string | null;
   class_rank?: number | null;
   grade_rank?: number | null;
   class_percentile?: number | null;
   grade_percentile?: number | null;
+  subjects?: ExamSubjectScoreItem[];
 }
 
 interface GrowthRecordItem {
@@ -466,6 +552,7 @@ interface RecommendationHistoryItem {
   challenge_count?: number | null;
   steady_count?: number | null;
   safe_count?: number | null;
+  watch_count?: number | null;
 }
 
 interface AttachmentItem {
@@ -485,6 +572,8 @@ interface StudentProfile {
   performance_summary: {
     latest_exam_id?: number | null;
     latest_total_score?: number | null;
+    latest_score_value_type?: string | null;
+    latest_score_value_label?: string | null;
     latest_grade_rank?: number | null;
     latest_exam_name?: string | null;
     exam_count: number;
@@ -502,8 +591,48 @@ interface StudentRiskSummary {
   risk_label: string;
   reasons: string[];
   suggested_actions: string[];
-  attendance_summary: AttendanceRiskSummary;
-  behavior_summary: BehaviorRiskSummary;
+  growth_summary: {
+    record_count: number;
+    latest_record_date?: string | null;
+  };
+  planning_summary: {
+    open_task_count: number;
+    overdue_task_count: number;
+    due_soon_task_count: number;
+    high_priority_open_count: number;
+    no_goal: boolean;
+    next_due_date?: string | null;
+  };
+}
+
+interface TeacherCommentSubjectOption {
+  subject_id: number;
+  subject_name: string;
+  teacher_id: number;
+  teacher_name: string;
+  class_id?: number | null;
+  class_name?: string | null;
+  semester_id?: number | null;
+  semester_name?: string | null;
+}
+
+interface TeacherCommentItem extends TeacherCommentMetaSource {
+  id: number;
+  student_id: number;
+  teacher_id: number;
+  subject_id?: number | null;
+  class_id?: number | null;
+  semester_id?: number | null;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  is_active: boolean;
+}
+
+interface TeacherCommentListResponse {
+  items: TeacherCommentItem[];
+  can_comment: boolean;
+  available_subjects: TeacherCommentSubjectOption[];
 }
 
 interface ReportExportRecord {
@@ -514,15 +643,25 @@ const route = useRoute();
 const router = useRouter();
 const profile = ref<StudentProfile | null>(null);
 const classTransferHistory = ref<ClassTransferHistoryItem[]>([]);
+const teacherComments = ref<TeacherCommentListResponse>({
+  items: [],
+  can_comment: false,
+  available_subjects: [],
+});
 const studentRisk = ref<StudentRiskSummary | null>(null);
 const studentId = computed(() => Number(route.params.studentId));
 const activeProfileTab = ref(String(route.query.tab || "basic"));
 const uploadingAttachment = ref(false);
 const exportingFollowupPackage = ref(false);
+const submittingTeacherComment = ref(false);
 const attachmentDraft = reactive({
   title: "",
   attachment_type: "",
   note: "",
+});
+const teacherCommentDraft = reactive({
+  subjectId: null as number | null,
+  content: "",
 });
 
 const currentClassLabel = computed(() => {
@@ -553,7 +692,7 @@ const weaknessSummary = computed(() => {
 const studentNarrative = computed(() => {
   if (!profile.value) return "暂无学生画像";
   const rank = profile.value.performance_summary.latest_grade_rank ?? "未出名次";
-  return `${currentClassLabel.value}，已累计 ${profile.value.performance_summary.exam_count} 次考试记录，最近一次年级名次为 ${rank}。`;
+  return `${currentClassLabel.value}，已累计 ${profile.value.performance_summary.exam_count} 次考试记录，最近一次校内名次为 ${rank}。`;
 });
 
 const studentHeroCards = computed(() => {
@@ -595,8 +734,6 @@ const studentRiskTags = computed(() => {
     attachmentCount: profile.value.attachments.length,
     classTransferCount: classTransferHistory.value.length,
     studentType: profile.value.student.student_type,
-    attendanceImported: studentRisk.value?.attendance_summary.imported,
-    behaviorImported: studentRisk.value?.behavior_summary.imported,
     riskLevel: studentRisk.value?.risk_level,
   });
 });
@@ -623,6 +760,16 @@ function formatStudentType(value?: string | null): string {
     repeat: "复读生",
   };
   return mapping[value] ?? value;
+}
+
+function formatStudentGrowthSummary(summary: StudentRiskSummary["growth_summary"]): string {
+  if (summary.record_count <= 0) return "暂无成长档案记录";
+  return `${summary.record_count} 条，最近 ${summary.latest_record_date ?? "-"}`;
+}
+
+function formatStudentPlanningSummary(summary: StudentRiskSummary["planning_summary"]): string {
+  if (summary.open_task_count <= 0) return summary.no_goal ? "尚未建立规划目标" : "暂无开放任务";
+  return `开放 ${summary.open_task_count} 项，逾期 ${summary.overdue_task_count}`;
 }
 
 function openStudentGrowthReport(): void {
@@ -673,6 +820,20 @@ async function loadClassTransferHistory(): Promise<void> {
   }
 }
 
+async function loadTeacherComments(): Promise<void> {
+  try {
+    teacherComments.value = await apiRequest<TeacherCommentListResponse>(
+      `/api/students/${studentId.value}/teacher-comments`,
+    );
+    const optionIds = teacherComments.value.available_subjects.map((item) => item.subject_id);
+    if (!teacherCommentDraft.subjectId || !optionIds.includes(teacherCommentDraft.subjectId)) {
+      teacherCommentDraft.subjectId = optionIds[0] ?? null;
+    }
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  }
+}
+
 async function loadStudentRisk(): Promise<void> {
   try {
     const query = new URLSearchParams();
@@ -685,8 +846,34 @@ async function loadStudentRisk(): Promise<void> {
 }
 
 async function loadDetail(): Promise<void> {
-  await Promise.all([loadProfile(), loadClassTransferHistory()]);
+  await Promise.all([loadProfile(), loadClassTransferHistory(), loadTeacherComments()]);
   await loadStudentRisk();
+}
+
+async function submitTeacherComment(): Promise<void> {
+  const request = buildTeacherCommentRequest(teacherCommentDraft);
+  if (!request) {
+    ElMessage.warning("请填写教师评语");
+    return;
+  }
+  if (teacherComments.value.available_subjects.length && !request.subject_id) {
+    ElMessage.warning("请选择评价科目");
+    return;
+  }
+  try {
+    submittingTeacherComment.value = true;
+    await apiRequest(`/api/students/${studentId.value}/teacher-comments`, {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    teacherCommentDraft.content = "";
+    ElMessage.success("教师评语已发布");
+    await loadTeacherComments();
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  } finally {
+    submittingTeacherComment.value = false;
+  }
 }
 
 async function handleAttachmentUpload(uploadFileItem: UploadFile): Promise<void> {
@@ -1065,11 +1252,107 @@ onMounted(loadDetail);
   font-size: 13px;
 }
 
+.subject-score-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 8px;
+}
+
+.subject-score-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(243, 247, 251, 0.92);
+  color: #355067;
+}
+
+.subject-score-pill em {
+  color: #111827;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.subject-score-pill small {
+  color: #6e8295;
+}
+
 .attachment-toolbar {
   display: grid;
   grid-template-columns: 1.1fr 1fr 1.2fr auto;
   gap: 12px;
   margin-bottom: 16px;
+}
+
+.teacher-comment-editor {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 18px;
+}
+
+.teacher-comment-readonly-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  color: #617487;
+}
+
+.teacher-comment-list {
+  display: grid;
+  gap: 12px;
+}
+
+.teacher-comment-card {
+  padding: 16px;
+  border: 1px solid rgba(114, 132, 150, 0.16);
+  border-radius: 8px;
+  background: rgba(248, 251, 253, 0.86);
+}
+
+.teacher-comment-card-head {
+  display: grid;
+  gap: 8px;
+}
+
+.teacher-comment-card-head strong {
+  color: #1f3448;
+  font-size: 16px;
+}
+
+.teacher-comment-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.teacher-comment-meta span {
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(31, 108, 152, 0.08);
+  color: #446176;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.teacher-comment-card p {
+  margin: 12px 0 0;
+  color: #344f64;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.option-meta {
+  float: right;
+  margin-left: 20px;
+  color: #8494a4;
+  font-size: 12px;
 }
 
 @media (max-width: 1180px) {
@@ -1088,6 +1371,7 @@ onMounted(loadDetail);
   .student-risk-grid,
   .tag-row,
   .attachment-toolbar,
+  .teacher-comment-editor,
   .hero-meta-grid {
     grid-template-columns: 1fr;
   }

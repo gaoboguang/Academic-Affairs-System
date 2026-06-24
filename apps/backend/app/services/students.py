@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections import defaultdict
 from datetime import date, datetime
 from zipfile import BadZipFile
 
@@ -34,7 +35,9 @@ from app.models import (
     StudentGrowthRecord,
     StudentPathwayEvaluation,
     StudentPathwayProfile,
+    StudentTeacherComment,
     Subject,
+    TeachingAssignment,
     VolunteerDraft,
 )
 from app.repositories.archive import list_growth_records as repo_list_growth_records
@@ -66,6 +69,7 @@ from app.schemas.student import (
     StudentClassTransferPreviewItem,
     StudentClassTransferPreviewRequest,
     StudentClassTransferPreviewResponse,
+    StudentExamSubjectItem,
     StudentExamTrendItem,
     StudentGuardianPayload,
     StudentGuardianRead,
@@ -76,7 +80,12 @@ from app.schemas.student import (
     StudentProfileRead,
     StudentRecommendationSummary,
     StudentRead,
+    StudentTeacherCommentListResponse,
+    StudentTeacherCommentPayload,
+    StudentTeacherCommentRead,
+    StudentTeacherCommentSubjectOption,
 )
+from app.services.auth import AuthContext
 from app.services import recommendations as recommendation_service
 
 
@@ -200,6 +209,7 @@ def list_students(
     student_type: str | None = None,
     art_track: str | None = None,
     include_inactive: bool = False,
+    scope_class_ids: set[int] | None = None,
 ) -> StudentListResponse:
     items, total = repo_list_students(
         session,
@@ -213,6 +223,7 @@ def list_students(
         student_type=student_type,
         art_track=art_track,
         include_inactive=include_inactive,
+        scope_class_ids=scope_class_ids,
     )
     return StudentListResponse(
         items=[_serialize_student(item) for item in items],
@@ -222,11 +233,236 @@ def list_students(
     )
 
 
-def get_student_detail(session: Session, student_id: int) -> StudentRead:
+def _ensure_student_scope_access(
+    item: Student,
+    scope_class_ids: set[int] | None,
+    *,
+    detail: str = "无权访问该学生",
+) -> None:
+    if scope_class_ids is None:
+        return
+    if item.current_class_id not in scope_class_ids:
+        raise HTTPException(status_code=403, detail=detail)
+
+
+def get_student_detail(
+    session: Session,
+    student_id: int,
+    *,
+    scope_class_ids: set[int] | None = None,
+) -> StudentRead:
     item = get_student(session, student_id)
     if not item:
         raise HTTPException(status_code=404, detail="学生不存在")
+    _ensure_student_scope_access(item, scope_class_ids)
     return _serialize_student(item)
+
+
+def _student_comment_class_ids(student: Student) -> set[int]:
+    class_ids = {student.current_class_id} if student.current_class_id else set()
+    class_ids.update(
+        history.class_id
+        for history in student.class_histories
+        if history.is_active and history.class_id is not None
+    )
+    return class_ids
+
+
+def _assignment_can_comment_now(assignment: TeachingAssignment) -> bool:
+    if not assignment.is_active or assignment.subject_id is None:
+        return False
+    semester = assignment.semester
+    if not semester or not semester.is_active:
+        return False
+    if semester.is_current:
+        return True
+    today = date.today()
+    return semester.start_date <= today <= semester.end_date
+
+
+def _load_teacher_comment_assignments(
+    session: Session,
+    student: Student,
+    *,
+    teacher_id: int | None,
+) -> list[TeachingAssignment]:
+    if teacher_id is None:
+        return []
+    class_ids = _student_comment_class_ids(student)
+    if not class_ids:
+        return []
+    assignments = session.scalars(
+        select(TeachingAssignment)
+        .options(
+            joinedload(TeachingAssignment.teacher),
+            joinedload(TeachingAssignment.subject),
+            joinedload(TeachingAssignment.school_class),
+            joinedload(TeachingAssignment.semester),
+        )
+        .where(
+            TeachingAssignment.teacher_id == teacher_id,
+            TeachingAssignment.class_id.in_(class_ids),
+            TeachingAssignment.is_active.is_(True),
+        )
+        .order_by(TeachingAssignment.semester_id.desc(), TeachingAssignment.subject_id)
+    ).all()
+    deduped: list[TeachingAssignment] = []
+    seen_subject_ids: set[int] = set()
+    for assignment in assignments:
+        if not _assignment_can_comment_now(assignment):
+            continue
+        if assignment.subject_id is None or assignment.subject_id in seen_subject_ids:
+            continue
+        seen_subject_ids.add(assignment.subject_id)
+        deduped.append(assignment)
+    return deduped
+
+
+def _serialize_teacher_comment_subject_option(
+    assignment: TeachingAssignment,
+) -> StudentTeacherCommentSubjectOption:
+    return StudentTeacherCommentSubjectOption(
+        subject_id=assignment.subject_id or 0,
+        subject_name=assignment.subject.name if assignment.subject else "未维护科目",
+        teacher_id=assignment.teacher_id,
+        teacher_name=assignment.teacher.name if assignment.teacher else "未维护教师",
+        class_id=assignment.class_id,
+        class_name=assignment.school_class.name if assignment.school_class else None,
+        semester_id=assignment.semester_id,
+        semester_name=assignment.semester.name if assignment.semester else None,
+    )
+
+
+def _serialize_student_teacher_comment(item: StudentTeacherComment) -> StudentTeacherCommentRead:
+    return StudentTeacherCommentRead(
+        id=item.id,
+        student_id=item.student_id,
+        teacher_id=item.teacher_id,
+        teacher_name=item.teacher.name if item.teacher else "未维护教师",
+        subject_id=item.subject_id,
+        subject_name=item.subject.name if item.subject else None,
+        class_id=item.class_id,
+        class_name=item.school_class.name if item.school_class else None,
+        semester_id=item.semester_id,
+        semester_name=item.semester.name if item.semester else None,
+        content=item.content,
+        commented_at=item.commented_at,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
+        is_active=item.is_active,
+    )
+
+
+def list_student_teacher_comments(
+    session: Session,
+    student_id: int,
+    *,
+    actor: AuthContext,
+    scope_class_ids: set[int] | None = None,
+) -> StudentTeacherCommentListResponse:
+    student = get_student(session, student_id)
+    if not student:
+        raise HTTPException(status_code=404, detail="学生不存在")
+    _ensure_student_scope_access(student, scope_class_ids)
+
+    comments = session.scalars(
+        select(StudentTeacherComment)
+        .options(
+            joinedload(StudentTeacherComment.teacher),
+            joinedload(StudentTeacherComment.subject),
+            joinedload(StudentTeacherComment.school_class),
+            joinedload(StudentTeacherComment.semester),
+        )
+        .where(
+            StudentTeacherComment.student_id == student_id,
+            StudentTeacherComment.is_active.is_(True),
+        )
+        .order_by(StudentTeacherComment.commented_at.desc(), StudentTeacherComment.id.desc())
+    ).all()
+    assignments = _load_teacher_comment_assignments(
+        session,
+        student,
+        teacher_id=actor.teacher_id,
+    )
+    return StudentTeacherCommentListResponse(
+        items=[_serialize_student_teacher_comment(item) for item in comments],
+        can_comment=bool(assignments),
+        available_subjects=[
+            _serialize_teacher_comment_subject_option(assignment)
+            for assignment in assignments
+            if assignment.subject_id is not None
+        ],
+    )
+
+
+def create_student_teacher_comment(
+    session: Session,
+    student_id: int,
+    payload: StudentTeacherCommentPayload,
+    *,
+    actor: AuthContext,
+    scope_class_ids: set[int] | None = None,
+) -> StudentTeacherCommentRead:
+    student = get_student(session, student_id)
+    if not student:
+        raise HTTPException(status_code=404, detail="学生不存在")
+    _ensure_student_scope_access(student, scope_class_ids)
+    if actor.teacher_id is None:
+        raise HTTPException(status_code=403, detail="当前账号未关联教师档案，无法发布教师评语")
+
+    assignments = _load_teacher_comment_assignments(
+        session,
+        student,
+        teacher_id=actor.teacher_id,
+    )
+    if not assignments:
+        raise HTTPException(status_code=403, detail="当前账号不是该生任课教师，无法发布评语")
+
+    selected_assignment: TeachingAssignment | None = None
+    if payload.subject_id is None:
+        subject_ids = {assignment.subject_id for assignment in assignments}
+        if len(subject_ids) == 1:
+            selected_assignment = assignments[0]
+        else:
+            raise HTTPException(status_code=400, detail="请选择评价科目")
+    else:
+        selected_assignment = next(
+            (assignment for assignment in assignments if assignment.subject_id == payload.subject_id),
+            None,
+        )
+        if selected_assignment is None:
+            raise HTTPException(status_code=403, detail="当前账号不是该生该科任课教师，无法发布评语")
+
+    comment = StudentTeacherComment(
+        student_id=student_id,
+        teacher_id=actor.teacher_id,
+        subject_id=selected_assignment.subject_id,
+        class_id=selected_assignment.class_id,
+        semester_id=selected_assignment.semester_id,
+        commented_at=datetime.now(),
+        content=payload.content,
+    )
+    session.add(comment)
+    session.flush()
+    session.refresh(comment)
+    write_audit_log(
+        session,
+        module="students",
+        action="create_teacher_comment",
+        target_type="student_teacher_comment",
+        target_id=str(comment.id),
+        actor_user_id=actor.user_id,
+        actor_username=actor.username,
+        client_ip=actor.client_ip,
+        detail_json={
+            "student_id": student_id,
+            "teacher_id": actor.teacher_id,
+            "subject_id": comment.subject_id,
+            "class_id": comment.class_id,
+            "semester_id": comment.semester_id,
+        },
+    )
+    return _serialize_student_teacher_comment(comment)
 
 
 def preview_student_bulk_delete(
@@ -290,7 +526,7 @@ def execute_student_bulk_delete(
                 student_no=student.student_no,
                 student_name=student.name,
                 status="success",
-                message="已停用学生主档，成绩、成长档案、附件、推荐记录和升学画像均保留",
+                message="已停用学生主档，成绩、成长档案、教师评语、附件、推荐记录和升学画像均保留",
                 before_snapshot_json=before_snapshot,
                 after_snapshot_json=after_snapshot,
                 association_counts=preview_item.association_counts,
@@ -332,7 +568,7 @@ def execute_student_bulk_delete(
     )
     message = (
         f"已停用 {len(success_items)} 名学生主档；"
-        f"{len(failed_items)} 名未处理。历史成绩、成长档案、附件、推荐记录和升学画像均未删除。"
+        f"{len(failed_items)} 名未处理。历史成绩、成长档案、教师评语、附件、推荐记录和升学画像均未删除。"
     )
     return StudentBulkDeleteExecuteResponse(
         total=preview.total,
@@ -355,6 +591,7 @@ _ASSOCIATION_LABELS = [
     ("score_count", "成绩记录"),
     ("score_snapshot_count", "成绩分析快照"),
     ("growth_record_count", "成长档案"),
+    ("teacher_comment_count", "教师评语"),
     ("attachment_count", "附件"),
     ("class_history_count", "班级历史"),
     ("recommendation_count", "推荐记录"),
@@ -446,6 +683,7 @@ def _load_bulk_delete_association_counts(
         _count_active_by_student(session, ScoreSubjectSnapshot, student_ids),
     )
     growth_counts = _count_active_by_student(session, StudentGrowthRecord, student_ids)
+    teacher_comment_counts = _count_active_by_student(session, StudentTeacherComment, student_ids)
     attachment_counts = _count_active_by_student(session, StudentAttachment, student_ids)
     class_history_counts = _count_active_by_student(session, StudentClassHistory, student_ids)
     recommendation_counts = _count_active_by_student(session, RecommendationResult, student_ids)
@@ -458,6 +696,7 @@ def _load_bulk_delete_association_counts(
             score_count=score_counts.get(student_id, 0),
             score_snapshot_count=score_snapshot_counts.get(student_id, 0),
             growth_record_count=growth_counts.get(student_id, 0),
+            teacher_comment_count=teacher_comment_counts.get(student_id, 0),
             attachment_count=attachment_counts.get(student_id, 0),
             class_history_count=class_history_counts.get(student_id, 0),
             recommendation_count=recommendation_counts.get(student_id, 0),
@@ -1135,6 +1374,7 @@ def get_student_profile(session: Session, student_id: int) -> StudentProfileRead
             challenge_count=row.challenge_count,
             steady_count=row.steady_count,
             safe_count=row.safe_count,
+            watch_count=row.watch_count,
         )
         for row in recommendation_service.list_recommendation_history(session, student_id=student_id)[:8]
     ]
@@ -1288,12 +1528,20 @@ def delete_student_attachment(session: Session, student_id: int, attachment_id: 
     return {"message": "学生附件已删除"}
 
 
-def create_student(session: Session, payload: StudentPayload) -> StudentRead:
+def create_student(
+    session: Session,
+    payload: StudentPayload,
+    *,
+    scope_class_ids: set[int] | None = None,
+    actor: AuthContext | None = None,
+) -> StudentRead:
     existing = get_student_by_no(session, payload.student_no)
     if existing:
         raise HTTPException(status_code=400, detail="学号已存在")
 
     grade_id, class_id = _ensure_grade_class(session, payload.current_grade_id, payload.current_class_id)
+    if scope_class_ids is not None and class_id not in scope_class_ids:
+        raise HTTPException(status_code=403, detail="无权在该班级创建学生")
     item = Student(student_no=payload.student_no, name=payload.name)
     session.add(item)
     session.flush()
@@ -1304,12 +1552,22 @@ def create_student(session: Session, payload: StudentPayload) -> StudentRead:
         action="create",
         target_type="student",
         target_id=str(item.id),
+        actor_user_id=actor.user_id if actor else None,
+        actor_username=actor.username if actor else None,
+        client_ip=actor.client_ip if actor else None,
         detail_json={"student_no": item.student_no},
     )
     return _serialize_student(item)
 
 
-def update_student(session: Session, student_id: int, payload: StudentPayload) -> StudentRead:
+def update_student(
+    session: Session,
+    student_id: int,
+    payload: StudentPayload,
+    *,
+    scope_class_ids: set[int] | None = None,
+    actor: AuthContext | None = None,
+) -> StudentRead:
     item = get_student(session, student_id)
     if not item:
         raise HTTPException(status_code=404, detail="学生不存在")
@@ -1318,6 +1576,9 @@ def update_student(session: Session, student_id: int, payload: StudentPayload) -
         raise HTTPException(status_code=400, detail="学号已存在")
 
     grade_id, class_id = _ensure_grade_class(session, payload.current_grade_id, payload.current_class_id)
+    _ensure_student_scope_access(item, scope_class_ids)
+    if scope_class_ids is not None and class_id not in scope_class_ids:
+        raise HTTPException(status_code=403, detail="无权把学生调整到该班级")
     _apply_student_payload(session, item, payload, grade_id=grade_id, class_id=class_id)
     write_audit_log(
         session,
@@ -1325,6 +1586,9 @@ def update_student(session: Session, student_id: int, payload: StudentPayload) -
         action="update",
         target_type="student",
         target_id=str(item.id),
+        actor_user_id=actor.user_id if actor else None,
+        actor_username=actor.username if actor else None,
+        client_ip=actor.client_ip if actor else None,
         detail_json={"student_no": item.student_no},
     )
     return _serialize_student(item)
@@ -1482,6 +1746,10 @@ def _serialize_class_histories(
     ]
 
 
+def _score_value_label(score_value_type: str | None) -> str:
+    return "赋分" if score_value_type == "converted" else "原始分"
+
+
 def _load_student_exam_trends(session: Session, student_id: int, *, limit: int) -> list[StudentExamTrendItem]:
     rows = session.execute(
         select(ScoreTotalSnapshot, Exam)
@@ -1490,16 +1758,42 @@ def _load_student_exam_trends(session: Session, student_id: int, *, limit: int) 
         .order_by(Exam.exam_date.desc(), Exam.id.desc())
         .limit(limit)
     ).all()
+    exam_ids = [exam.id for _, exam in rows]
+    subject_rows = session.execute(
+        select(ScoreSubjectSnapshot, Subject)
+        .join(Subject, Subject.id == ScoreSubjectSnapshot.subject_id)
+        .where(
+            ScoreSubjectSnapshot.student_id == student_id,
+            ScoreSubjectSnapshot.exam_id.in_(exam_ids),
+        )
+        .order_by(ScoreSubjectSnapshot.exam_id, ScoreSubjectSnapshot.subject_id)
+    ).all() if exam_ids else []
+    subjects_by_exam: dict[int, list[StudentExamSubjectItem]] = defaultdict(list)
+    for snapshot, subject in subject_rows:
+        subjects_by_exam[snapshot.exam_id].append(
+            StudentExamSubjectItem(
+                subject_id=snapshot.subject_id,
+                subject_name=subject.name if subject else str(snapshot.subject_id),
+                score=snapshot.score,
+                score_value_type=snapshot.score_value_type,
+                score_value_label=_score_value_label(snapshot.score_value_type),
+                class_rank=snapshot.class_rank,
+                grade_rank=snapshot.grade_rank,
+            )
+        )
     return [
         StudentExamTrendItem(
             exam_id=exam.id,
             exam_name=exam.name,
             exam_date=exam.exam_date,
             total_score=snapshot.total_score,
+            score_value_type=snapshot.score_value_type,
+            score_value_label=_score_value_label(snapshot.score_value_type),
             class_rank=snapshot.class_rank,
             grade_rank=snapshot.grade_rank,
             class_percentile=snapshot.class_percentile,
             grade_percentile=snapshot.grade_percentile,
+            subjects=subjects_by_exam.get(exam.id, []),
         )
         for snapshot, exam in rows
     ]
@@ -1524,6 +1818,8 @@ def _build_performance_summary(
         latest_exam_name=latest.exam_name if latest else None,
         latest_exam_date=latest.exam_date if latest else None,
         latest_total_score=latest.total_score if latest else None,
+        latest_score_value_type=latest.score_value_type if latest else None,
+        latest_score_value_label=latest.score_value_label if latest else None,
         latest_class_rank=latest.class_rank if latest else None,
         latest_grade_rank=latest.grade_rank if latest else None,
         exam_count=exam_count,

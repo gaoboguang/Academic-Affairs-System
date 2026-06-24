@@ -1,48 +1,25 @@
 <template>
-  <div class="page-shell">
-    <header class="page-header">
-      <div>
-        <div class="page-eyebrow">基础台账 / 教师中心</div>
-        <h2 class="page-title">教师中心</h2>
-        <p class="page-subtitle">
-          当前支持教师列表、详情页、导入导出和任教关系维护，为教学分析、职称历史和工作量计算做数据底座。
-        </p>
-        <div class="page-chip-row">
-          <span class="page-chip"><strong>教师总数</strong>{{ teachers.total }}</span>
-          <span class="page-chip"><strong>当前页记录</strong>{{ teachers.items.length }}</span>
-          <span class="page-chip"><strong>任教关系</strong>{{ assignments.length }}</span>
-          <span class="page-chip"><strong>导入策略</strong>{{ importStrategyLabel }}</span>
-        </div>
-      </div>
+  <AppPage
+    title="教师中心"
+    eyebrow="基础台账 / 教师中心"
+    description="维护教师基础信息、导入导出和任教关系，为教学分析、职称历史和工作量计算提供同一条数据链。"
+    :meta="teacherPageMeta"
+  >
+    <template #actions>
       <div class="action-row">
         <el-button @click="openFile('/api/teachers/template')">模板下载</el-button>
         <el-button @click="openFile('/api/teachers/export')">导出列表</el-button>
         <el-button type="primary" @click="openCreate">新增教师</el-button>
       </div>
-    </header>
+    </template>
 
-    <section class="overview-grid">
-      <article class="soft-card overview-panel">
-        <div class="overview-kicker">教学台账</div>
-        <h3>教师信息、任教关系和后续分析保持同一条数据链</h3>
-        <p>
-          列表页先确认教师基础信息和当前任教范围，再进入详情维护职称历史、考试趋势和同科对比，避免信息断层。
-        </p>
-      </article>
-      <article v-for="item in overviewCards" :key="item.label" class="soft-card overview-card" :class="item.tone">
-        <span>{{ item.label }}</span>
-        <strong>{{ item.value }}</strong>
-        <p>{{ item.help }}</p>
-      </article>
-    </section>
+    <AppStatGrid :items="overviewCards" :columns="4" />
 
-    <section class="soft-card panel-block">
-      <div class="section-head compact">
-        <div>
-          <h3>筛选与导入</h3>
-          <p>先按工号、姓名或学科缩小范围，再处理批量导入和任教关系维护。</p>
-        </div>
-      </div>
+    <AppFilterBar
+      title="筛选与导入"
+      description="先按工号、姓名或学科缩小范围，再处理批量导入和任教关系维护。"
+      sticky
+    >
       <div class="filter-grid">
         <el-input v-model="filters.teacher_no" placeholder="按工号筛选" />
         <el-input v-model="filters.name" placeholder="按姓名筛选" />
@@ -55,7 +32,7 @@
           />
         </el-select>
       </div>
-      <div class="action-row import-row">
+      <template #actions>
         <el-button type="primary" @click="loadTeachers">查询</el-button>
         <el-button @click="resetFilters">重置</el-button>
         <el-select v-model="importStrategy" style="width: 180px">
@@ -71,20 +48,18 @@
           <el-button>导入教师</el-button>
         </el-upload>
         <el-button @click="openAssignmentDialog">维护任教关系</el-button>
-      </div>
+      </template>
       <ImportFeedbackPanel :result="importResult" />
-    </section>
+    </AppFilterBar>
 
-    <section class="soft-card panel-block">
-      <div class="section-head compact">
-        <div>
-          <h3>教师列表</h3>
-          <p>列表先给出身份、学科和岗位视图，详情页再承接职称历史与考试表现。</p>
-        </div>
+    <AppTableShell
+      title="教师列表"
+      description="列表先给出身份、学科和岗位视图，详情页再承接职称历史与考试表现。"
+    >
+      <template #actions>
         <span class="panel-caption">共 {{ teachers.total }} 条</span>
-      </div>
-      <div class="table-shell">
-        <el-table :data="teachers.items" stripe>
+      </template>
+      <el-table :data="teachers.items" stripe>
           <el-table-column label="工号" prop="teacher_no" min-width="110" />
           <el-table-column label="姓名" prop="name" min-width="100" />
           <el-table-column label="性别" prop="gender" width="80" />
@@ -111,11 +86,10 @@
             <template #default="{ row }">
               <el-button link @click="openDetail(row)">详情</el-button>
               <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
-    </section>
+          </template>
+        </el-table-column>
+      </el-table>
+    </AppTableShell>
 
     <el-dialog
       v-model="dialogVisible"
@@ -314,17 +288,25 @@
         </template>
       </el-dialog>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import ElMessage from "element-plus/es/components/message/index";
 import type { UploadFile } from "element-plus";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 
 import { apiRequest, openFile, uploadFile } from "../api/client";
 import ImportFeedbackPanel from "../components/common/ImportFeedbackPanel.vue";
+import {
+  AppFilterBar,
+  AppPage,
+  AppStatGrid,
+  AppTableShell,
+  type PageMetaItem,
+  type StatCardItem,
+} from "../components/ui";
 import { useReferenceStore } from "../stores/reference";
 import type { ImportFeedbackResult } from "../utils/importFeedback";
 
@@ -359,6 +341,7 @@ interface AssignmentItem {
 }
 
 const referenceStore = useReferenceStore();
+const route = useRoute();
 const router = useRouter();
 const importStrategy = ref("skip_existing");
 const dialogVisible = ref(false);
@@ -418,24 +401,36 @@ const importStrategyLabel = computed(() => {
   };
   return mapping[importStrategy.value] ?? importStrategy.value;
 });
-const overviewCards = computed(() => [
+const teacherPageMeta = computed<PageMetaItem[]>(() => [
+  { label: "教师总数", value: teachers.total },
+  { label: "当前页", value: teachers.items.length },
+  { label: "任教关系", value: assignments.value.length },
+  { label: "导入策略", value: importStrategyLabel.value },
+]);
+const overviewCards = computed<StatCardItem[]>(() => [
+  {
+    label: "教师总数",
+    value: teachers.total,
+    help: "当前筛选条件下的教师记录数量。",
+    tone: "primary",
+  },
   {
     label: "学科覆盖",
     value: new Set(teachers.items.map((item) => item.subject_name).filter(Boolean)).size,
     help: "当前结果页覆盖的学科数量。",
-    tone: "tone-blue",
+    tone: "info",
   },
   {
     label: "班主任",
     value: teachers.items.filter((item) => item.is_head_teacher).length,
     help: "当前结果页里标记为班主任的教师。",
-    tone: "tone-green",
+    tone: "success",
   },
   {
     label: "联系电话",
     value: teachers.items.filter((item) => item.phone).length,
     help: "当前结果页里已填写联系电话的教师。",
-    tone: "tone-slate",
+    tone: "neutral",
   },
 ]);
 
@@ -506,6 +501,16 @@ function openCreate(): void {
 async function openAssignmentDialog(): Promise<void> {
   await loadAssignments();
   assignmentDialogVisible.value = true;
+}
+
+function shouldOpenAssignmentsFromRoute(): boolean {
+  const value = route.query.assignments;
+  return value === "1" || value === "true";
+}
+
+async function applyRouteIntent(): Promise<void> {
+  if (!shouldOpenAssignmentsFromRoute() || assignmentDialogVisible.value) return;
+  await openAssignmentDialog();
 }
 
 async function openEdit(row: TeacherItem): Promise<void> {
@@ -618,7 +623,15 @@ function handleAssignmentDialogClosed(): void {
 onMounted(async () => {
   await referenceStore.loadAll();
   await Promise.all([loadTeachers(), loadAssignments()]);
+  await applyRouteIntent();
 });
+
+watch(
+  () => route.query.assignments,
+  () => {
+    void applyRouteIntent();
+  },
+);
 </script>
 
 <style scoped>

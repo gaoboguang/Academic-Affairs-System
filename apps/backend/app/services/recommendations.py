@@ -5,8 +5,12 @@ from ._recommendations_catalog import (
     create_major,
     import_admissions,
     list_admission_records,
+    list_admission_records_page,
+    list_college_catalog_page,
     list_colleges,
+    list_colleges_page,
     list_majors,
+    list_majors_page,
     update_college,
     update_major,
 )
@@ -17,6 +21,12 @@ from ._recommendations_drafts import (
     list_volunteer_drafts,
     update_volunteer_draft,
 )
+from ._recommendations_details import (
+    get_college_admission_history,
+    get_college_detail,
+    get_major_admission_history,
+    get_major_detail,
+)
 from ._recommendations_employment import (
     bootstrap_employment_directions,
     bootstrap_major_employment_mappings,
@@ -24,6 +34,7 @@ from ._recommendations_employment import (
     create_major_employment_mapping,
     list_employment_directions,
     list_major_employment_mappings,
+    list_major_employment_mappings_page,
     update_employment_direction,
     update_major_employment_mapping,
 )
@@ -38,6 +49,7 @@ from ._recommendations_history import (
 from ._recommendations_plans import (
     import_enrollment_plans,
     list_enrollment_plans,
+    list_enrollment_plans_page,
 )
 from ._recommendations_rules import (
     bootstrap_province_score_transform_rules,
@@ -71,6 +83,8 @@ from ._recommendations_settings import (
 )
 from ._recommendations_shared import _load_recommendation_thresholds
 from ._recommendations_shandong_rush_stable_safe import preview_shandong_rush_stable_safe_recommendations
+from ._recommendations_volunteer_guide import preview_volunteer_guide
+from ._recommendations_volunteer_options import get_volunteer_guide_options
 from ._recommendations_workbench import preview_volunteer_workbench
 
 
@@ -96,21 +110,33 @@ __all__ = [
     "delete_volunteer_draft",
     "generate_recommendations",
     "get_gaokao_score_projection",
+    "get_college_admission_history",
+    "get_college_detail",
+    "get_major_admission_history",
+    "get_major_detail",
     "get_recommendation_settings",
     "get_volunteer_draft_detail",
+    "get_volunteer_guide_options",
     "import_admissions",
     "import_enrollment_plans",
     "list_admission_records",
+    "list_admission_records_page",
+    "list_college_catalog_page",
     "list_colleges",
+    "list_colleges_page",
     "list_employment_directions",
     "list_enrollment_plans",
+    "list_enrollment_plans_page",
     "list_gaokao_score_projections",
     "list_major_employment_mappings",
+    "list_major_employment_mappings_page",
     "list_majors",
+    "list_majors_page",
     "list_province_score_transform_rules",
     "list_special_type_rules",
     "preview_volunteer_workbench",
     "preview_shandong_rush_stable_safe_recommendations",
+    "preview_volunteer_guide",
     "list_province_volunteer_rules",
     "list_recommendation_history",
     "list_subject_requirement_dicts",

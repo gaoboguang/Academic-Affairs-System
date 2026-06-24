@@ -17,6 +17,11 @@ from app.schemas.planning import (
     PlanningTaskUpdatePayload,
     StudentPlanningResponse,
 )
+from app.schemas.knowledge import (
+    KnowledgeTaskGeneratePayload,
+    KnowledgeTaskGenerateResponse,
+    KnowledgeTaskPreviewResponse,
+)
 from app.services import planning as service
 
 router = APIRouter(prefix="/planning", tags=["planning"])
@@ -72,6 +77,56 @@ def bulk_create_tasks_from_pathway(
     session: Session = Depends(get_db_session),
 ) -> PlanningBulkCreateResult:
     return service.bulk_create_tasks_from_pathway(session, payload)
+
+
+@router.get("/students/{student_id}/knowledge-tasks/preview", response_model=KnowledgeTaskPreviewResponse)
+def preview_student_knowledge_tasks(
+    student_id: int,
+    exam_id: int = Query(..., ge=1),
+    session: Session = Depends(get_db_session),
+) -> KnowledgeTaskPreviewResponse:
+    return service.preview_student_knowledge_tasks(session, student_id, exam_id)
+
+
+@router.post("/students/{student_id}/knowledge-tasks/generate", response_model=KnowledgeTaskGenerateResponse)
+def generate_student_knowledge_tasks(
+    student_id: int,
+    payload: KnowledgeTaskGeneratePayload,
+    exam_id: int = Query(..., ge=1),
+    session: Session = Depends(get_db_session),
+) -> KnowledgeTaskGenerateResponse:
+    return service.generate_student_knowledge_tasks(session, student_id, exam_id, due_date=payload.due_date)
+
+
+@router.get("/classes/{class_id}/knowledge-tasks/preview", response_model=KnowledgeTaskPreviewResponse)
+def preview_class_knowledge_tasks(
+    class_id: int,
+    exam_id: int = Query(..., ge=1),
+    knowledge_point_ids: list[int] | None = Query(default=None),
+    session: Session = Depends(get_db_session),
+) -> KnowledgeTaskPreviewResponse:
+    return service.preview_class_knowledge_tasks(
+        session,
+        class_id,
+        exam_id,
+        knowledge_point_ids=knowledge_point_ids,
+    )
+
+
+@router.post("/classes/{class_id}/knowledge-tasks/generate", response_model=KnowledgeTaskGenerateResponse)
+def generate_class_knowledge_tasks(
+    class_id: int,
+    payload: KnowledgeTaskGeneratePayload,
+    exam_id: int = Query(..., ge=1),
+    session: Session = Depends(get_db_session),
+) -> KnowledgeTaskGenerateResponse:
+    return service.generate_class_knowledge_tasks(
+        session,
+        class_id,
+        exam_id,
+        knowledge_point_ids=payload.knowledge_point_ids,
+        due_date=payload.due_date,
+    )
 
 
 @router.post("/notes", response_model=PlanningNoteRead)

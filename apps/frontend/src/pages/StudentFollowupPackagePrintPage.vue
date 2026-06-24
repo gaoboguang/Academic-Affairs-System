@@ -22,8 +22,8 @@
         </div>
         <div class="print-summary-grid">
           <div class="print-summary-item"><span>风险等级</span><strong>{{ risk.risk_label }}</strong></div>
-          <div class="print-summary-item"><span>考勤记录</span><strong>{{ risk.attendance_summary.total_records }}</strong></div>
-          <div class="print-summary-item"><span>行为记录</span><strong>{{ risk.behavior_summary.total_records }}</strong></div>
+          <div class="print-summary-item"><span>成长记录</span><strong>{{ risk.growth_summary.record_count }}</strong></div>
+          <div class="print-summary-item"><span>开放任务</span><strong>{{ risk.planning_summary.open_task_count }}</strong></div>
         </div>
       </header>
 
@@ -50,11 +50,10 @@
       </section>
 
       <section class="print-section">
-        <div class="print-section-head"><h2>考勤与行为</h2></div>
+        <div class="print-section-head"><h2>成长与规划</h2></div>
         <div class="summary-lines">
-          <p>考勤：{{ formatAttendanceSummary(risk.attendance_summary) }}</p>
-          <p>行为：{{ formatBehaviorSummary(risk.behavior_summary) }}</p>
           <p>成长档案：{{ risk.growth_summary.record_count }} 条，最近记录 {{ risk.growth_summary.latest_record_date ?? "-" }}</p>
+          <p>规划任务：开放 {{ risk.planning_summary.open_task_count }} 项，逾期 {{ risk.planning_summary.overdue_task_count }} 项，7 天内到期 {{ risk.planning_summary.due_soon_task_count }} 项。</p>
         </div>
       </section>
     </article>
@@ -66,13 +65,6 @@ import { onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 
 import { apiRequest } from "../api/client";
-import {
-  formatAttendanceSummary,
-  formatBehaviorSummary,
-  type AttendanceRiskSummary,
-  type BehaviorRiskSummary,
-} from "../components/analytics/adviserDashboard";
-
 interface StudentRiskResponse {
   student_name: string;
   student_no?: string | null;
@@ -90,11 +82,17 @@ interface StudentRiskResponse {
     class_rank?: number | null;
     grade_rank?: number | null;
   };
-  attendance_summary: AttendanceRiskSummary;
-  behavior_summary: BehaviorRiskSummary;
   growth_summary: {
     record_count: number;
     latest_record_date?: string | null;
+  };
+  planning_summary: {
+    open_task_count: number;
+    overdue_task_count: number;
+    due_soon_task_count: number;
+    high_priority_open_count: number;
+    no_goal: boolean;
+    next_due_date?: string | null;
   };
 }
 

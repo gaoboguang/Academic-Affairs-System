@@ -18,6 +18,7 @@ def build_student_query(
     student_type: str | None = None,
     art_track: str | None = None,
     include_inactive: bool = False,
+    scope_class_ids: set[int] | None = None,
 ) -> Select[tuple[Student]]:
     stmt = select(Student).options(
         joinedload(Student.current_grade),
@@ -34,6 +35,11 @@ def build_student_query(
         stmt = stmt.where(Student.current_grade_id == grade_id)
     if class_id:
         stmt = stmt.where(Student.current_class_id == class_id)
+    if scope_class_ids is not None:
+        if not scope_class_ids:
+            stmt = stmt.where(Student.id == -1)
+        else:
+            stmt = stmt.where(Student.current_class_id.in_(scope_class_ids))
     if status:
         stmt = stmt.where(Student.status == status)
     if student_type:

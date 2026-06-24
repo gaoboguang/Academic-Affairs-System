@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, BigInteger, DateTime, String, Text, UniqueConstraint
+from sqlalchemy import JSON, BigInteger, DateTime, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import ActiveMixin, Base, PrimaryKeyMixin, TimestampMixin
@@ -39,6 +39,9 @@ class AuditLog(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     action: Mapped[str] = mapped_column(String(50), nullable=False)
     target_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     target_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    actor_user_id: Mapped[int | None] = mapped_column(ForeignKey("app_user.id"), nullable=True)
+    actor_username: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    client_ip: Mapped[str | None] = mapped_column(String(80), nullable=True)
     detail_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 

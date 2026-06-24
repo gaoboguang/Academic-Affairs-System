@@ -16,11 +16,13 @@ from app.exporters.reports import (
     export_adviser_weekly_summary_report,
     export_adviser_quant_summary_report,
     export_class_analysis_report,
+    export_class_knowledge_briefing_report,
     export_evaluation_summary_report,
     export_grade_summary_report,
     export_planning_followup_report,
     export_student_analysis_report,
     export_student_followup_package,
+    export_student_knowledge_report,
     export_teacher_analysis_report,
 )
 from app.exporters.workload import export_workload_results
@@ -42,13 +44,15 @@ from app.services import archive as archive_service
 from app.services import evaluation as evaluation_service
 from app.services import planning as planning_service
 from app.services import recommendations as recommendation_service
-from app.services import student_events as student_event_service
+from app.services import student_followup as student_followup_service
 from app.services import workload as workload_service
 
 
 REPORT_TYPE_NAME_MAP = {
     "student_analysis": "学生成绩分析单",
+    "student_knowledge_plan": "学生知识点学习清单",
     "class_analysis": "班级成绩分析报表",
+    "class_knowledge_briefing": "班级知识点讲评清单",
     "grade_summary": "年级成绩汇总表",
     "teacher_analysis": "教师任教分析报表",
     "teacher_workload": "教师课时与工作量报表",
@@ -222,11 +226,27 @@ def _export_report_file(session: Session, settings, payload: ReportExportPayload
         data = analytics_service.get_student_analytics(session, payload.student_id, payload.exam_id)
         return export_student_analysis_report(settings, data.model_dump(mode="json"))
 
+    if payload.report_type == "student_knowledge_plan":
+        if not payload.exam_id or not payload.student_id:
+            raise HTTPException(status_code=400, detail="学生知识点学习清单需要考试和学生参数")
+        data = analytics_service.get_student_analytics(session, payload.student_id, payload.exam_id)
+        if not data.knowledge_points:
+            raise HTTPException(status_code=404, detail="该学生暂无本次考试知识点题分明细")
+        return export_student_knowledge_report(settings, data.model_dump(mode="json"))
+
     if payload.report_type == "class_analysis":
         if not payload.exam_id or not payload.class_id:
             raise HTTPException(status_code=400, detail="班级分析报表需要考试和班级参数")
         data = analytics_service.get_class_analytics(session, payload.class_id, payload.exam_id)
         return export_class_analysis_report(settings, data.model_dump(mode="json"))
+
+    if payload.report_type == "class_knowledge_briefing":
+        if not payload.exam_id or not payload.class_id:
+            raise HTTPException(status_code=400, detail="班级知识点讲评清单需要考试和班级参数")
+        data = analytics_service.get_class_knowledge_briefing(session, payload.class_id, payload.exam_id)
+        if not data.items:
+            raise HTTPException(status_code=404, detail="该班级暂无知识点讲评清单")
+        return export_class_knowledge_briefing_report(settings, data.model_dump(mode="json"))
 
     if payload.report_type == "grade_summary":
         if not payload.exam_id or not payload.grade_id:
@@ -462,7 +482,7 @@ def _export_report_file(session: Session, settings, payload: ReportExportPayload
         )
 
     if payload.report_type == "adviser_weekly_summary":
-        dashboard = student_event_service.get_adviser_dashboard(
+        dashboard = student_followup_service.get_adviser_dashboard(
             session,
             grade_id=payload.grade_id,
             class_id=payload.class_id,
@@ -477,7 +497,7 @@ def _export_report_file(session: Session, settings, payload: ReportExportPayload
     if payload.report_type == "student_followup_package":
         if not payload.student_id:
             raise HTTPException(status_code=400, detail="学生跟进包需要学生参数")
-        summary = student_event_service.get_student_risk(
+        summary = student_followup_service.get_student_risk(
             session,
             payload.student_id,
             exam_id=payload.exam_id,

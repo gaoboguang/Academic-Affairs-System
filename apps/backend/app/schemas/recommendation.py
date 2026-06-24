@@ -38,6 +38,28 @@ class CollegeRead(ORMModel):
     is_active: bool
 
 
+class CollegePageRead(BaseModel):
+    items: list[CollegeRead]
+    total: int
+    page: int
+    page_size: int
+
+
+class CollegeCatalogItemRead(CollegeRead):
+    has_profile: bool
+    plan_count: int = 0
+    admission_count: int = 0
+    latest_plan_year: int | None = None
+    latest_admission_year: int | None = None
+
+
+class CollegeCatalogPageRead(BaseModel):
+    items: list[CollegeCatalogItemRead]
+    total: int
+    page: int
+    page_size: int
+
+
 class MajorPayload(BaseModel):
     name: str
     major_code: str | None = None
@@ -59,6 +81,126 @@ class MajorRead(ORMModel):
     is_art_related: bool
     note: str | None = None
     is_active: bool
+
+
+class MajorPageRead(BaseModel):
+    items: list[MajorRead]
+    total: int
+    page: int
+    page_size: int
+
+
+class CollegeProfileDetailRead(ORMModel):
+    id: int
+    college_id: int
+    enrollment_code: str | None = None
+    authority_department: str | None = None
+    education_level: str | None = None
+    is_985: bool
+    is_211: bool
+    is_dual_class: bool
+    ruanke_rank: int | None = None
+    eol_rank: int | None = None
+    area: str | None = None
+    master_program_count: int | None = None
+    doctor_program_count: int | None = None
+    official_website: str | None = None
+    admission_website: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    address: str | None = None
+    summary: str | None = None
+    source_path: str | None = None
+    source_sha256: str | None = None
+    is_active: bool
+
+
+class CollegeYearSummaryRead(ORMModel):
+    id: int
+    college_id: int
+    province: str
+    year: int
+    total_plan_count: int | None = None
+    specialty_count: int | None = None
+    min_rank: int | None = None
+    estimated_min_score: float | None = None
+    source_note: str | None = None
+    source_path: str | None = None
+    source_sha256: str | None = None
+    is_active: bool
+
+
+class MajorProfileDetailRead(ORMModel):
+    id: int
+    major_id: int
+    major_code: str | None = None
+    education_level: str | None = None
+    schooling_years: str | None = None
+    direction: str | None = None
+    tags_json: list[str] = Field(default_factory=list)
+    summary: str | None = None
+    source_path: str | None = None
+    source_sha256: str | None = None
+    is_active: bool
+
+
+class CollegeMajorProfileRead(ORMModel):
+    id: int
+    college_id: int
+    college_name: str | None = None
+    major_id: int
+    major_name: str | None = None
+    school_major_feature: str | None = None
+    is_national_feature: bool
+    is_provincial_feature: bool
+    is_key_major: bool
+    schooling_years: str | None = None
+    education_level: str | None = None
+    source_path: str | None = None
+    source_sha256: str | None = None
+    is_active: bool
+
+
+class GaokaoProfileSourceRead(BaseModel):
+    source_path: str | None = None
+    source_sha256: str | None = None
+    source_type: str
+    title: str | None = None
+
+
+class CollegeDetailRead(BaseModel):
+    college: CollegeRead
+    profile: CollegeProfileDetailRead | None = None
+    year_summaries: list[CollegeYearSummaryRead] = Field(default_factory=list)
+    major_profiles: list[CollegeMajorProfileRead] = Field(default_factory=list)
+    recent_admissions: list["AdmissionRecordRead"] = Field(default_factory=list)
+    recent_plans: list["EnrollmentPlanRead"] = Field(default_factory=list)
+    source_documents: list[GaokaoProfileSourceRead] = Field(default_factory=list)
+
+
+class CollegeAdmissionHistoryRead(BaseModel):
+    college_id: int
+    college_name: str
+    admissions: list["AdmissionRecordRead"] = Field(default_factory=list)
+    plans: list["EnrollmentPlanRead"] = Field(default_factory=list)
+
+
+class MajorDetailRead(BaseModel):
+    major: MajorRead
+    profile: MajorProfileDetailRead | None = None
+    college_profiles: list[CollegeMajorProfileRead] = Field(default_factory=list)
+    employment_mappings: list["MajorEmploymentMappingRead"] = Field(default_factory=list)
+    recent_admissions: list["AdmissionRecordRead"] = Field(default_factory=list)
+    recent_plans: list["EnrollmentPlanRead"] = Field(default_factory=list)
+    subject_requirement_samples: list[str] = Field(default_factory=list)
+    source_documents: list[GaokaoProfileSourceRead] = Field(default_factory=list)
+
+
+class MajorAdmissionHistoryRead(BaseModel):
+    major_id: int
+    major_name: str
+    admissions: list["AdmissionRecordRead"] = Field(default_factory=list)
+    plans: list["EnrollmentPlanRead"] = Field(default_factory=list)
 
 
 class EmploymentDirectionPayload(BaseModel):
@@ -130,6 +272,13 @@ class MajorEmploymentMappingRead(ORMModel):
     is_active: bool
 
 
+class MajorEmploymentMappingPageRead(BaseModel):
+    items: list[MajorEmploymentMappingRead]
+    total: int
+    page: int
+    page_size: int
+
+
 class MajorEmploymentMappingBootstrapResponse(BaseModel):
     major_total_count: int
     matched_major_count: int
@@ -156,6 +305,13 @@ class AdmissionRecordRead(ORMModel):
     plan_count: int | None = None
     source_note: str | None = None
     is_active: bool
+
+
+class AdmissionRecordPageRead(BaseModel):
+    items: list[AdmissionRecordRead]
+    total: int
+    page: int
+    page_size: int
 
 
 class AdmissionImportResponse(ImportResult):
@@ -185,6 +341,13 @@ class EnrollmentPlanRead(ORMModel):
     source_note: str | None = None
     import_batch_name: str | None = None
     is_active: bool
+
+
+class EnrollmentPlanPageRead(BaseModel):
+    items: list[EnrollmentPlanRead]
+    total: int
+    page: int
+    page_size: int
 
 
 class EnrollmentPlanImportResponse(ImportResult):
@@ -418,6 +581,10 @@ class ShandongRushStableSafeCandidateRead(BaseModel):
     college_id: int
     college_name: str
     college_code_snapshot: str | None = None
+    college_province: str | None = None
+    college_city: str | None = None
+    college_school_type: str | None = None
+    college_ownership: str | None = None
     major_id: int | None = None
     major_name: str | None = None
     major_code_snapshot: str | None = None
@@ -466,6 +633,33 @@ class ShandongRushStableSafeRecommendationResponse(BaseModel):
     watch: list[ShandongRushStableSafeCandidateRead] = Field(default_factory=list)
 
 
+class VolunteerGuideOptionItemRead(BaseModel):
+    value: str
+    label: str
+
+
+class VolunteerGuideArtScoreFormulaRead(BaseModel):
+    art_track: str
+    label: str
+    culture_weight: float | None = None
+    professional_weight: float | None = None
+    professional_full_score: float | None = None
+    formula_text: str
+    requires_manual_review: bool = False
+
+
+class VolunteerGuideOptionsRead(BaseModel):
+    province: str
+    year: int
+    candidate_types: list[VolunteerGuideOptionItemRead] = Field(default_factory=list)
+    art_tracks: list[VolunteerGuideOptionItemRead] = Field(default_factory=list)
+    batches: list[VolunteerGuideOptionItemRead] = Field(default_factory=list)
+    batch_aliases: dict[str, str] = Field(default_factory=dict)
+    score_input_modes: list[VolunteerGuideOptionItemRead] = Field(default_factory=list)
+    art_score_formulas: dict[str, VolunteerGuideArtScoreFormulaRead] = Field(default_factory=dict)
+    maintained_rule_batches: list[str] = Field(default_factory=list)
+
+
 class VolunteerWorkbenchPreviewPayload(BaseModel):
     student_id: int
     exam_id: int
@@ -474,6 +668,7 @@ class VolunteerWorkbenchPreviewPayload(BaseModel):
     batch: str | None = None
     exam_mode: str | None = None
     candidate_type: str = ""
+    art_track: str | None = None
     score_input_mode: str = "actual_rank"
     score_range_min: float | None = None
     score_range_max: float | None = None
@@ -513,6 +708,10 @@ class VolunteerWorkbenchCandidateRead(BaseModel):
     college_id: int
     college_name: str
     college_code_snapshot: str | None = None
+    college_province: str | None = None
+    college_city: str | None = None
+    college_school_type: str | None = None
+    college_ownership: str | None = None
     major_id: int | None = None
     major_name: str | None = None
     major_group_code: str | None = None
@@ -572,6 +771,7 @@ class VolunteerWorkbenchCandidateRead(BaseModel):
     risk_flags_json: list[str] = Field(default_factory=list)
     source_note: str | None = None
     import_batch_name: str | None = None
+    recent_history_json: list[dict] = Field(default_factory=list)
 
 
 class VolunteerWorkbenchRuleAlertRead(BaseModel):
@@ -590,7 +790,12 @@ class VolunteerWorkbenchPreviewResponse(BaseModel):
     target_year: int
     student_type: str
     candidate_type: str
+    art_track: str | None = None
+    normalized_batch: str | None = None
     total_score: float
+    culture_score: float | None = None
+    professional_score: float | None = None
+    art_comprehensive_score: float | None = None
     snapshot_rank: int | None = None
     effective_rank: int | None = None
     score_input_mode: str = "actual_rank"
@@ -601,7 +806,92 @@ class VolunteerWorkbenchPreviewResponse(BaseModel):
     applicable_rule_count: int
     applicable_rules: list[ProvinceVolunteerRuleRead] = Field(default_factory=list)
     candidate_count: int
+    returned_candidate_count: int = 0
+    is_candidate_truncated: bool = False
     candidates: list[VolunteerWorkbenchCandidateRead] = Field(default_factory=list)
+
+
+class VolunteerGuideReadinessItemRead(BaseModel):
+    code: str
+    level: str
+    title: str
+    detail: str
+
+
+class VolunteerGuideReadinessRead(BaseModel):
+    status: str
+    blocking_count: int = 0
+    warning_count: int = 0
+    info_count: int = 0
+    items: list[VolunteerGuideReadinessItemRead] = Field(default_factory=list)
+
+
+class VolunteerGuideSourcePreviewRead(BaseModel):
+    candidate_count: int = 0
+    returned_candidate_count: int = 0
+    applicable_rule_count: int = 0
+    is_candidate_truncated: bool = False
+    score_input_mode: str = "actual_rank"
+    score_input_label: str
+    score_confidence: str
+    effective_rank: int | None = None
+    total_score: float | None = None
+    culture_score: float | None = None
+    professional_score: float | None = None
+    art_comprehensive_score: float | None = None
+
+
+class VolunteerGuideEvidenceRead(BaseModel):
+    strength: str
+    strength_label: str
+    summary: str
+    rank_margin: int | None = None
+    rank_margin_label: str | None = None
+    reference_years: list[int] = Field(default_factory=list)
+    reference_scope: str | None = None
+    risk_flags: list[str] = Field(default_factory=list)
+    source_notes: list[str] = Field(default_factory=list)
+
+
+class VolunteerGuideCandidateRead(BaseModel):
+    candidate: VolunteerWorkbenchCandidateRead
+    evidence: VolunteerGuideEvidenceRead
+
+
+class VolunteerGuideCandidateGroupRead(BaseModel):
+    key: str
+    label: str
+    count: int = 0
+    candidates: list[VolunteerGuideCandidateRead] = Field(default_factory=list)
+
+
+class VolunteerGuideNextActionRead(BaseModel):
+    code: str
+    level: str
+    title: str
+    detail: str
+
+
+class VolunteerGuidePreviewResponse(BaseModel):
+    student_id: int
+    student_name: str
+    exam_id: int
+    exam_name: str
+    province: str
+    target_year: int
+    student_type: str
+    candidate_type: str
+    art_track: str | None = None
+    normalized_batch: str | None = None
+    score_input_mode: str = "actual_rank"
+    input_notes: list[str] = Field(default_factory=list)
+    rule_alerts: list[VolunteerWorkbenchRuleAlertRead] = Field(default_factory=list)
+    applicable_rule_count: int = 0
+    applicable_rules: list[ProvinceVolunteerRuleRead] = Field(default_factory=list)
+    readiness: VolunteerGuideReadinessRead
+    source_preview: VolunteerGuideSourcePreviewRead
+    groups: dict[str, VolunteerGuideCandidateGroupRead]
+    next_actions: list[VolunteerGuideNextActionRead] = Field(default_factory=list)
 
 
 class VolunteerDraftItemPayload(BaseModel):
@@ -619,6 +909,7 @@ class VolunteerDraftPayload(BaseModel):
     batch: str | None = None
     exam_mode: str | None = None
     candidate_type: str = ""
+    art_track: str | None = None
     score_input_mode: str = "actual_rank"
     score_range_min: float | None = None
     score_range_max: float | None = None
@@ -670,6 +961,7 @@ class VolunteerDraftSummaryRead(ORMModel):
     batch: str | None = None
     exam_mode: str | None = None
     candidate_type: str = ""
+    art_track: str | None = None
     score_input_mode: str = "actual_rank"
     item_count: int
     updated_at: datetime
@@ -716,6 +1008,7 @@ class RecommendationGeneratePayload(BaseModel):
     name: str | None = None
     target_year: int | None = None
     province: str | None = None
+    art_track: str | None = None
     target_regions_json: list[str] = Field(default_factory=list)
     school_level_tags_json: list[str] = Field(default_factory=list)
     major_keyword: str | None = None
@@ -798,6 +1091,7 @@ class RecommendationGenerateResponse(BaseModel):
     challenge: list[RecommendationResultRead]
     steady: list[RecommendationResultRead]
     safe: list[RecommendationResultRead]
+    watch: list[RecommendationResultRead] = Field(default_factory=list)
 
 
 class RecommendationBatchGenerateItem(BaseModel):
@@ -834,6 +1128,7 @@ class RecommendationHistoryItem(BaseModel):
     challenge_count: int
     steady_count: int
     safe_count: int
+    watch_count: int = 0
 
 
 class RecommendationCollegeOption(BaseModel):

@@ -73,6 +73,26 @@ class StudentClassHistory(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     student = relationship("Student", back_populates="class_histories")
 
 
+class StudentTeacherComment(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
+    __tablename__ = "student_teacher_comment"
+
+    student_id: Mapped[int] = mapped_column(ForeignKey("student.id"), nullable=False)
+    teacher_id: Mapped[int] = mapped_column(ForeignKey("teacher.id"), nullable=False)
+    subject_id: Mapped[int | None] = mapped_column(ForeignKey("subject.id"), nullable=True)
+    class_id: Mapped[int | None] = mapped_column(ForeignKey("school_class.id"), nullable=True)
+    semester_id: Mapped[int | None] = mapped_column(ForeignKey("semester.id"), nullable=True)
+    commented_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False), default=datetime.now, nullable=False
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+
+    student = relationship("Student")
+    teacher = relationship("Teacher")
+    subject = relationship("Subject")
+    school_class = relationship("SchoolClass")
+    semester = relationship("Semester")
+
+
 class StudentClassTransferBatch(PrimaryKeyMixin, TimestampMixin, ActiveMixin, Base):
     __tablename__ = "student_class_transfer_batch"
 

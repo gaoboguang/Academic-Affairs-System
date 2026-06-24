@@ -9,15 +9,18 @@ from app.api.deps import get_db_session
 from app.schemas.exam import (
     ClassAnalyticsResponse,
     ClassPanoramaResponse,
+    ExamAnalyzableStudentListResponse,
+    ExamScoreReportResponse,
     GradeAnalyticsResponse,
     GradePanoramaResponse,
     StudentAnalyticsResponse,
     TeacherAnalyticsResponse,
     TeacherPanoramaResponse,
 )
-from app.schemas.student_event import AdviserDashboardResponse, StudentRiskResponse
+from app.schemas.knowledge import ClassKnowledgeBriefingResponse, ClassKnowledgeHeatmapResponse
+from app.schemas.student_followup import AdviserDashboardResponse, StudentRiskResponse
 from app.services import analytics as service
-from app.services import student_events as student_event_service
+from app.services import student_followup as student_followup_service
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -31,7 +34,7 @@ def get_adviser_dashboard(
     end_date: date | None = None,
     session: Session = Depends(get_db_session),
 ) -> AdviserDashboardResponse:
-    return student_event_service.get_adviser_dashboard(
+    return student_followup_service.get_adviser_dashboard(
         session,
         grade_id=grade_id,
         class_id=class_id,
@@ -49,12 +52,43 @@ def get_student_risk(
     end_date: date | None = None,
     session: Session = Depends(get_db_session),
 ) -> StudentRiskResponse:
-    return student_event_service.get_student_risk(
+    return student_followup_service.get_student_risk(
         session,
         student_id,
         exam_id=exam_id,
         start_date=start_date,
         end_date=end_date,
+    )
+
+
+@router.get("/exams/{exam_id}/students", response_model=ExamAnalyzableStudentListResponse)
+def list_exam_analyzable_students(
+    exam_id: int,
+    session: Session = Depends(get_db_session),
+) -> ExamAnalyzableStudentListResponse:
+    return service.list_exam_analyzable_students(session, exam_id)
+
+
+@router.get("/exams/{exam_id}/score-report", response_model=ExamScoreReportResponse)
+def get_exam_score_report(
+    exam_id: int,
+    class_id: int | None = Query(default=None, ge=1),
+    keyword: str | None = Query(default=None, max_length=64),
+    sort_by: str = Query(default="grade_rank", pattern="^(grade_rank|class_rank|total_score|student_no)$"),
+    sort_order: str = Query(default="asc", pattern="^(asc|desc)$"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    session: Session = Depends(get_db_session),
+) -> ExamScoreReportResponse:
+    return service.get_exam_score_report(
+        session,
+        exam_id,
+        class_id=class_id,
+        keyword=keyword,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        page=page,
+        page_size=page_size,
     )
 
 
@@ -74,6 +108,26 @@ def get_class_analytics(
     session: Session = Depends(get_db_session),
 ) -> ClassAnalyticsResponse:
     return service.get_class_analytics(session, class_id, exam_id)
+
+
+@router.get("/classes/{class_id}/knowledge-briefing", response_model=ClassKnowledgeBriefingResponse)
+def get_class_knowledge_briefing(
+    class_id: int,
+    exam_id: int = Query(..., ge=1),
+    subject_id: int | None = Query(default=None, ge=1),
+    session: Session = Depends(get_db_session),
+) -> ClassKnowledgeBriefingResponse:
+    return service.get_class_knowledge_briefing(session, class_id, exam_id, subject_id=subject_id)
+
+
+@router.get("/classes/{class_id}/knowledge-heatmap", response_model=ClassKnowledgeHeatmapResponse)
+def get_class_knowledge_heatmap(
+    class_id: int,
+    exam_id: int = Query(..., ge=1),
+    subject_id: int | None = Query(default=None, ge=1),
+    session: Session = Depends(get_db_session),
+) -> ClassKnowledgeHeatmapResponse:
+    return service.get_class_knowledge_heatmap(session, class_id, exam_id, subject_id=subject_id)
 
 
 @router.get("/classes/{class_id}/panorama", response_model=ClassPanoramaResponse)

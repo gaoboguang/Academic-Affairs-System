@@ -49,10 +49,14 @@ class AdmissionImporter:
         row_errors: list[RowError] = []
 
         for row_number, values in rows:
+            savepoint = self.session.begin_nested()
             try:
                 self._upsert_row(values)
+                savepoint.commit()
                 success_rows += 1
             except Exception as exc:
+                if savepoint.is_active:
+                    savepoint.rollback()
                 failed_rows += 1
                 row_errors.append(build_row_error(row_number=row_number, values=values, message=str(exc)))
 
@@ -179,8 +183,8 @@ class AdmissionImporter:
             "艺体生": ("art", None),
             "艺术类": ("art", None),
             "art": ("art", None),
-            "美术类": ("art", "art"),
-            "美术": ("art", "art"),
+            "美术类": ("art", "fine_art_design"),
+            "美术": ("art", "fine_art_design"),
             "体育类": ("sports", "sports"),
             "体育": ("sports", "sports"),
             "音乐类": ("art", "music"),

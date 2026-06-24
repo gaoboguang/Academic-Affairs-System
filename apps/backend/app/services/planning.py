@@ -32,6 +32,8 @@ from app.schemas.planning import (
     StudentPlanningResponse,
     StudentPlanningSummary,
 )
+from app.schemas.knowledge import KnowledgeTaskCandidate, KnowledgeTaskGenerateResponse, KnowledgeTaskPreviewResponse
+from app.schemas.exam import StudentKnowledgePointAnalytics, StudentKnowledgeTrendAnalytics
 from app.services import gaokao_pathways
 
 
@@ -59,6 +61,7 @@ TASK_TYPE_LABELS = {
     "family_contact": "家校沟通",
     "stage_review": "阶段复盘",
     "risk_followup": "风险跟进",
+    "knowledge_remediation": "知识点补弱",
     "other": "其他",
 }
 
@@ -293,6 +296,133 @@ def bulk_create_tasks_from_pathway(
     )
 
 
+def preview_student_knowledge_tasks(
+    session: Session,
+    student_id: int,
+    exam_id: int,
+    *,
+    due_date: date | None = None,
+) -> KnowledgeTaskPreviewResponse:
+    from app.services import analytics
+
+    analytics_data = analytics.get_student_analytics(session, student_id, exam_id)
+    target_due_date = due_date or date.today() + timedelta(days=14)
+    candidates = _build_student_knowledge_task_candidates(
+        session,
+        exam_id=exam_id,
+        student_id=student_id,
+        student_name=analytics_data.student_name,
+        class_name=None,
+        knowledge_trends=analytics_data.knowledge_trends,
+        knowledge_points=analytics_data.knowledge_points,
+        due_date=target_due_date,
+    )
+    return KnowledgeTaskPreviewResponse(
+        exam_id=exam_id,
+        student_id=student_id,
+        due_date=target_due_date,
+        candidates=candidates,
+        create_count=sum(1 for item in candidates if item.will_create),
+        skip_count=sum(1 for item in candidates if not item.will_create),
+        notices=[] if candidates else ["当前学生暂无可生成的知识点补弱任务。"],
+    )
+
+
+def generate_student_knowledge_tasks(
+    session: Session,
+    student_id: int,
+    exam_id: int,
+    *,
+    due_date: date | None = None,
+) -> KnowledgeTaskGenerateResponse:
+    preview = preview_student_knowledge_tasks(session, student_id, exam_id, due_date=due_date)
+    created = _create_knowledge_tasks_from_candidates(session, preview.candidates)
+    session.flush()
+    for item in created:
+        session.refresh(item)
+    return KnowledgeTaskGenerateResponse(
+        created_count=len(created),
+        skipped_count=len(preview.candidates) - len(created),
+        tasks=[_serialize_task(item) for item in created],
+        notices=preview.notices,
+    )
+
+
+def preview_class_knowledge_tasks(
+    session: Session,
+    class_id: int,
+    exam_id: int,
+    *,
+    knowledge_point_ids: list[int] | None = None,
+    due_date: date | None = None,
+) -> KnowledgeTaskPreviewResponse:
+    from app.services import analytics
+
+    briefing = analytics.get_class_knowledge_briefing(session, class_id, exam_id)
+    target_due_date = due_date or date.today() + timedelta(days=14)
+    selected_ids = set(knowledge_point_ids or [])
+    candidates: list[KnowledgeTaskCandidate] = []
+    for item in briefing.items:
+        if selected_ids and item.knowledge_point_id not in selected_ids:
+            continue
+        for weak_student in item.weak_students:
+            candidates.append(
+                _build_knowledge_task_candidate(
+                    session,
+                    exam_id=exam_id,
+                    student_id=weak_student.student_id,
+                    student_name=weak_student.student_name,
+                    class_name=weak_student.class_name,
+                    subject_id=item.subject_id,
+                    subject_name=item.subject_name,
+                    knowledge_point_id=item.knowledge_point_id,
+                    knowledge_point_name=item.knowledge_point_name,
+                    knowledge_path=item.knowledge_path,
+                    due_date=target_due_date,
+                    reason=f"班级讲评清单：{item.priority_label}优先级，得分率 {weak_student.score_rate if weak_student.score_rate is not None else '-'}",
+                    description=item.suggestion,
+                    priority="high" if item.priority_label == "高" else "medium",
+                )
+            )
+    return KnowledgeTaskPreviewResponse(
+        exam_id=exam_id,
+        class_id=class_id,
+        due_date=target_due_date,
+        candidates=candidates,
+        create_count=sum(1 for item in candidates if item.will_create),
+        skip_count=sum(1 for item in candidates if not item.will_create),
+        notices=[] if candidates else ["当前班级讲评清单暂无可生成的学生补弱任务。"],
+    )
+
+
+def generate_class_knowledge_tasks(
+    session: Session,
+    class_id: int,
+    exam_id: int,
+    *,
+    knowledge_point_ids: list[int] | None = None,
+    due_date: date | None = None,
+) -> KnowledgeTaskGenerateResponse:
+    preview = preview_class_knowledge_tasks(
+        session,
+        class_id,
+        exam_id,
+        knowledge_point_ids=knowledge_point_ids,
+        due_date=due_date,
+    )
+    created = _create_knowledge_tasks_from_candidates(session, preview.candidates)
+    session.flush()
+    for item in created:
+        session.refresh(item)
+    skipped = len(preview.candidates) - len(created)
+    return KnowledgeTaskGenerateResponse(
+        created_count=len(created),
+        skipped_count=skipped,
+        tasks=[_serialize_task(item) for item in created],
+        notices=preview.notices,
+    )
+
+
 def build_dashboard_planning_summary(session: Session) -> DashboardPlanningSummary:
     today = date.today()
     soon = today + timedelta(days=7)
@@ -356,9 +486,9 @@ def build_planning_followup_export_payload(session: Session, student_id: int, *,
     planning = get_student_planning(session, student_id)
     risk_payload: dict[str, object] | None = None
     try:
-        from app.services import student_events
+        from app.services import student_followup
 
-        risk_payload = student_events.get_student_risk(session, student_id, exam_id=exam_id).model_dump(mode="json")
+        risk_payload = student_followup.get_student_risk(session, student_id, exam_id=exam_id).model_dump(mode="json")
     except HTTPException:
         risk_payload = None
 
@@ -392,6 +522,156 @@ def _task_payload_from_material_gap(student_id: int, evaluation, gap: dict[str, 
         due_date=due_date,
         related_route=f"/students/{student_id}?tab=planning",
     )
+
+
+def _build_student_knowledge_task_candidates(
+    session: Session,
+    *,
+    exam_id: int,
+    student_id: int,
+    student_name: str,
+    class_name: str | None,
+    knowledge_trends: list[StudentKnowledgeTrendAnalytics],
+    knowledge_points: list[StudentKnowledgePointAnalytics],
+    due_date: date,
+) -> list[KnowledgeTaskCandidate]:
+    candidates: list[KnowledgeTaskCandidate] = []
+    trend_items = [
+        item
+        for item in knowledge_trends
+        if item.trend_label in {"持续薄弱", "波动反复"} and item.priority_score > 0
+    ][:3]
+    for item in trend_items:
+        candidates.append(
+            _build_knowledge_task_candidate(
+                session,
+                exam_id=exam_id,
+                student_id=student_id,
+                student_name=student_name,
+                class_name=class_name,
+                subject_id=item.subject_id,
+                subject_name=item.subject_name,
+                knowledge_point_id=item.knowledge_point_id,
+                knowledge_point_name=item.knowledge_point_name,
+                knowledge_path=item.knowledge_path,
+                due_date=due_date,
+                reason=f"连续趋势：{item.trend_label}",
+                description=item.suggestion or "根据连续题分趋势生成补弱任务。",
+                priority="high" if item.trend_label == "持续薄弱" else "medium",
+            )
+        )
+    existing_point_ids = {item.knowledge_point_id for item in candidates}
+    if len(candidates) < 3:
+        fallback_items = [
+            item
+            for item in knowledge_points
+            if item.knowledge_point_id not in existing_point_ids
+            and item.diagnosis_label in {"优先补弱", "需要巩固", "低于年级"}
+            and item.priority_score > 0
+        ][:2]
+        for item in fallback_items:
+            candidates.append(
+                _build_knowledge_task_candidate(
+                    session,
+                    exam_id=exam_id,
+                    student_id=student_id,
+                    student_name=student_name,
+                    class_name=class_name,
+                    subject_id=item.subject_id,
+                    subject_name=item.subject_name,
+                    knowledge_point_id=item.knowledge_point_id,
+                    knowledge_point_name=item.knowledge_point_name,
+                    knowledge_path=item.knowledge_path,
+                    due_date=due_date,
+                    reason=f"本次诊断：{item.diagnosis_label}",
+                    description=item.suggestion or "根据本次题分诊断生成补弱任务。",
+                    priority="high" if item.diagnosis_label == "优先补弱" else "medium",
+                )
+            )
+    return candidates
+
+
+def _build_knowledge_task_candidate(
+    session: Session,
+    *,
+    exam_id: int,
+    student_id: int,
+    student_name: str,
+    class_name: str | None,
+    subject_id: int,
+    subject_name: str,
+    knowledge_point_id: int,
+    knowledge_point_name: str,
+    knowledge_path: str | None,
+    due_date: date,
+    reason: str,
+    description: str,
+    priority: str,
+) -> KnowledgeTaskCandidate:
+    source_ref_id = f"{exam_id}:{student_id}:{knowledge_point_id}"
+    title = f"补弱：{subject_name}-{knowledge_point_name}"
+    existing = session.scalar(
+        select(StudentPlanningTask).where(
+            StudentPlanningTask.student_id == student_id,
+            StudentPlanningTask.source_type == "knowledge_remediation",
+            StudentPlanningTask.source_ref_id == source_ref_id,
+            StudentPlanningTask.task_type == "knowledge_remediation",
+            StudentPlanningTask.is_active.is_(True),
+            StudentPlanningTask.status.in_(ACTIVE_TASK_STATUSES),
+        )
+    )
+    return KnowledgeTaskCandidate(
+        student_id=student_id,
+        student_name=student_name,
+        class_name=class_name,
+        subject_id=subject_id,
+        subject_name=subject_name,
+        knowledge_point_id=knowledge_point_id,
+        knowledge_point_name=knowledge_point_name,
+        knowledge_path=knowledge_path,
+        source_ref_id=source_ref_id,
+        title=title,
+        description=f"{reason}。{description}",
+        priority=priority,
+        due_date=due_date,
+        reason=reason,
+        existing_task_id=existing.id if existing else None,
+        will_create=existing is None,
+    )
+
+
+def _create_knowledge_tasks_from_candidates(
+    session: Session,
+    candidates: list[KnowledgeTaskCandidate],
+) -> list[StudentPlanningTask]:
+    created: list[StudentPlanningTask] = []
+    for candidate in candidates:
+        if not candidate.will_create:
+            continue
+        payload = PlanningTaskPayload(
+            student_id=candidate.student_id,
+            source_type="knowledge_remediation",
+            source_ref_id=candidate.source_ref_id,
+            task_type="knowledge_remediation",
+            title=candidate.title,
+            description=candidate.description,
+            status="not_started",
+            priority=candidate.priority,
+            due_date=candidate.due_date,
+            related_route=f"/students/{candidate.student_id}?tab=planning",
+        )
+        item = _create_task_if_missing(session, payload)
+        if item:
+            created.append(item)
+    if created:
+        write_audit_log(
+            session,
+            module="planning",
+            action="create_knowledge_remediation_tasks",
+            target_type="student_planning_task",
+            detail_json={"created_count": len(created)},
+        )
+    return created
 
 
 def _ensure_volunteer_draft_review_tasks(

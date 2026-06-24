@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 
 from app.core.config import Settings
+from app.exporters.pathway_profiles import export_pathway_profile_template
 
 
 @dataclass(frozen=True)
@@ -75,9 +77,42 @@ TEMPLATE_SPECS = [
     TemplateSpec(
         filename="exam_scores_import_template.xlsx",
         title="成绩导入模板",
-        headers=["考试名称", "学号", "姓名", "班级", "科目", "分数", "缺考标记", "备注"],
-        sample_rows=[["2026届高一3月月考", "2026001", "张三", "1班", "语文", "118", "", ""]],
-        instructions=["考试需先创建。", "同一考试 + 学生 + 科目必须唯一。"],
+        headers=["考试名称", "学号", "姓名", "班级", "科目", "分数", "缺考标记", "备注", "原始分", "赋分", "成绩口径"],
+        sample_rows=[["2026届高一3月月考", "2026001", "张三", "1班", "物理", "86", "", "", "72", "86", "赋分"]],
+        instructions=[
+            "考试需先创建。",
+            "同一考试 + 学生 + 科目必须唯一。",
+            "有赋分时填写“赋分”和“成绩口径=赋分”，系统用赋分参与总分和名次；没有赋分时只填分数或原始分。",
+        ],
+    ),
+    TemplateSpec(
+        filename="score_question_details_import_template.xlsx",
+        title="题分明细导入模板",
+        headers=["考试名称", "学号", "姓名", "科目", "题号", "题目满分", "学生得分", "知识点", "题型", "能力层级", "错因标签", "错因备注", "备注"],
+        sample_rows=[
+            ["2026届高一3月月考", "2026001", "张三", "数学", "12", "5", "3", "函数>函数单调性", "选择题", "理解", "概念不清", "", ""],
+            ["2026届高一3月月考", "2026001", "张三", "数学", "18", "12", "8", "函数单调性、导数应用", "解答题", "综合应用", "方法不会、步骤不全", "", ""],
+        ],
+        instructions=[
+            "考试和科目需先创建并配置。",
+            "同一考试 + 学生 + 科目 + 题号会覆盖更新题分。",
+            "一题多个知识点可用顿号、逗号或分号分隔；知识点支持别名和“模块>子模块>知识点”路径写法。",
+            "错因标签可用顿号、逗号、分号或竖线分隔；未知错因会自动创建为自定义标签。",
+            "学生得分留空视为缺答或无有效得分，会按 0 分参与知识点诊断。",
+        ],
+    ),
+    TemplateSpec(
+        filename="knowledge_base_import_template.xlsx",
+        title="知识库导入模板",
+        headers=["科目", "知识点路径", "说明"],
+        sample_rows=[
+            ["数学", "函数>基本初等函数>函数单调性", "按同科单父级知识树维护。"],
+            ["数学", "函数>导数应用", ""],
+        ],
+        instructions=[
+            "本模板包含“知识点 / 别名 / 错因标签”三个工作表。",
+            "知识点路径使用“模块>子模块>知识点”写法；别名精确匹配到标准知识点；错因标签可维护导入题分时的错因。",
+        ],
     ),
     TemplateSpec(
         filename="timetable_import_template.xlsx",
@@ -85,28 +120,6 @@ TEMPLATE_SPECS = [
         headers=["学期", "星期", "节次", "教师", "班级", "学科", "课程类型", "周次规则", "备注"],
         sample_rows=[["2025-2026 下学期", "1", "1", "李老师", "1班", "语文", "正课", "全周", ""]],
         instructions=["教师、班级、学科、课程类型需已存在。"],
-    ),
-    TemplateSpec(
-        filename="attendance_import_template.xlsx",
-        title="考勤导入模板",
-        headers=["学号", "姓名", "日期", "范围", "节次", "状态", "原因", "备注"],
-        sample_rows=[["2026001", "张三", "2026-04-20", "日", "", "迟到", "交通", "示例"]],
-        instructions=[
-            "状态固定为：正常、迟到、早退、病假、事假、旷课、其他。",
-            "范围填写 日 或 节次；范围为节次时必须填写节次。",
-            "同一学生 + 日期 + 范围 + 节次重复导入时会覆盖更新。",
-        ],
-    ),
-    TemplateSpec(
-        filename="behavior_import_template.xlsx",
-        title="行为导入模板",
-        headers=["学号", "姓名", "日期", "类型", "严重度", "标题", "说明", "处理人", "分值变化", "附件路径"],
-        sample_rows=[["2026001", "张三", "2026-04-20", "谈话", "中", "阶段学习谈话", "围绕近期学习状态跟进", "李老师", "0", ""]],
-        instructions=[
-            "类型固定为：表扬、违纪、谈话、心理关注、安全事件、奖惩、其他。",
-            "严重度建议填写：低、中、高、严重；留空按中处理。",
-            "行为事件默认追加；同一文件内同学生/日期/类型/标题重复项会作为提醒并跳过。",
-        ],
     ),
     TemplateSpec(
         filename="admission_records_import_template.xlsx",
@@ -177,11 +190,32 @@ TEMPLATE_SPECS = [
 ]
 
 
+def _template_signature(spec: TemplateSpec) -> str:
+    payload = repr((spec.filename, spec.title, spec.headers, spec.sample_rows, spec.instructions))
+    return sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _template_is_current(path: Path, spec: TemplateSpec) -> bool:
+    if not path.exists():
+        return False
+    try:
+        workbook = load_workbook(path, read_only=True, data_only=True)
+        sheet = workbook["说明"]
+        return sheet["B1"].value == _template_signature(spec)
+    except Exception:
+        return False
+    finally:
+        try:
+            workbook.close()
+        except Exception:
+            pass
+
+
 def _build_workbook(spec: TemplateSpec) -> Workbook:
     workbook = Workbook()
     intro_sheet = workbook.active
     intro_sheet.title = "说明"
-    intro_sheet.append([spec.title])
+    intro_sheet.append([spec.title, _template_signature(spec)])
     for instruction in spec.instructions:
         intro_sheet.append([instruction])
 
@@ -189,17 +223,29 @@ def _build_workbook(spec: TemplateSpec) -> Workbook:
     data_sheet.append(spec.headers)
     for row in spec.sample_rows:
         data_sheet.append(row)
+    if spec.filename == "knowledge_base_import_template.xlsx":
+        data_sheet.title = "知识点"
+        alias_sheet = workbook.create_sheet("别名")
+        alias_sheet.append(["科目", "标准知识点", "别名", "说明"])
+        alias_sheet.append(["数学", "函数>基本初等函数>函数单调性", "单调性", "平台简称"])
+        error_sheet = workbook.create_sheet("错因标签")
+        error_sheet.append(["错因标签", "说明", "排序"])
+        error_sheet.append(["概念不清", "基础概念理解不到位", "1"])
     return workbook
 
 
-def generate_import_templates(settings: Settings) -> list[Path]:
+def generate_import_templates(settings: Settings, *, force: bool = False) -> list[Path]:
     generated_paths: list[Path] = []
     settings.templates_dir.mkdir(parents=True, exist_ok=True)
 
     for spec in TEMPLATE_SPECS:
         path = settings.templates_dir / spec.filename
+        if _template_is_current(path, spec) and not force:
+            generated_paths.append(path)
+            continue
         workbook = _build_workbook(spec)
         workbook.save(path)
         generated_paths.append(path)
 
+    generated_paths.append(settings.project_root / export_pathway_profile_template(settings))
     return generated_paths

@@ -307,7 +307,7 @@ async function waitForBackend(timeoutMs = 30000) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     try {
-      const response = await fetch(`http://127.0.0.1:${API_PORT}/api/dashboard/summary`);
+      const response = await fetch(`http://127.0.0.1:${API_PORT}/api/system/health`);
       if (response.ok) return;
     } catch {}
     await new Promise((resolve) => setTimeout(resolve, 500));

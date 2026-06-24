@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildGaokaoOverviewGapCards } from "../src/utils/gaokaoOverview";
+import { buildGaokaoOverviewGapCards, buildGaokaoOverviewHelpText } from "../src/utils/gaokaoOverview";
 
 describe("gaokaoOverview", () => {
   it("builds gap cards for empty app-side tables with raw data available", () => {
@@ -45,5 +45,32 @@ describe("gaokaoOverview", () => {
 
     expect(cards).toHaveLength(1);
     expect(cards[0]?.summary).toBe("应用模型为空，且本地只读库还没暴露对应原始表。");
+  });
+
+  it("explains that link coverage is separate from imported plan and admission data", () => {
+    const help = buildGaokaoOverviewHelpText([
+      {
+        key: "enrollment_plan",
+        label: "应用侧招生计划",
+        record_total: 63561,
+        latest_updated_at: "2026-05-03 02:31:25",
+        latest_batch_label: "sdzk_2025_hotspot_official_v1",
+        status: "ready",
+        notes: [],
+      },
+      {
+        key: "admission_record",
+        label: "应用侧录取结果",
+        record_total: 189077,
+        latest_updated_at: "2026-05-08 11:51:13",
+        latest_batch_label: null,
+        status: "ready",
+        notes: [],
+      },
+    ]);
+
+    expect(help.overallHelp).toContain("招生计划 63561 条");
+    expect(help.overallHelp).toContain("录取结果 189077 条");
+    expect(help.chapterUrlHelp).toContain("不代表录取结果缺失");
   });
 });

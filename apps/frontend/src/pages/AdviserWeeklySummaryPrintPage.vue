@@ -30,8 +30,8 @@
       <section class="print-section">
         <div class="print-section-head"><h2>数据概况</h2></div>
         <div class="summary-lines">
-          <p>考勤：{{ formatAttendanceSummary(dashboard.attendance_summary) }}</p>
-          <p>行为：{{ formatBehaviorSummary(dashboard.behavior_summary) }}</p>
+          <p>成长档案：{{ formatGrowthSummary(dashboard.growth_summary) }}</p>
+          <p>规划任务：{{ formatPlanningSummary(dashboard.planning_summary) }}</p>
           <p v-if="dashboard.data_flags.length">缺失数据：{{ dashboard.data_flags.join(" / ") }}</p>
         </div>
       </section>
@@ -75,8 +75,8 @@ import { useRoute } from "vue-router";
 
 import { apiRequest } from "../api/client";
 import {
-  formatAttendanceSummary,
-  formatBehaviorSummary,
+  formatGrowthSummary,
+  formatPlanningSummary,
   type AdviserDashboardResponse,
 } from "../components/analytics/adviserDashboard";
 

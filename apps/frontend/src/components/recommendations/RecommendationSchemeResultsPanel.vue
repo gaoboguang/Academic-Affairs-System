@@ -12,6 +12,7 @@
         <el-tag type="danger" effect="light">冲 {{ groupedResults.challenge.length }}</el-tag>
         <el-tag type="warning" effect="light">稳 {{ groupedResults.steady.length }}</el-tag>
         <el-tag type="success" effect="light">保 {{ groupedResults.safe.length }}</el-tag>
+        <el-tag type="info" effect="light">关注 {{ groupedResults.watch.length }}</el-tag>
         <el-button
           type="primary"
           plain
@@ -75,8 +76,28 @@
           <article v-for="item in groupedResults[column.key]" :key="item.id" class="result-card">
             <div class="result-card-head">
               <div>
-                <h5>{{ item.college_name }}</h5>
-                <p>{{ item.major_name || "院校级推荐" }}</p>
+                <h5>
+                  <el-button
+                    link
+                    type="primary"
+                    class="entity-link"
+                    @click="openCollegeDetail(item.college_id)"
+                  >
+                    {{ item.college_name || `院校 ${item.college_id}` }}
+                  </el-button>
+                </h5>
+                <p>
+                  <el-button
+                    v-if="item.major_id"
+                    link
+                    type="primary"
+                    class="entity-link muted"
+                    @click="openMajorDetail(item.major_id)"
+                  >
+                    {{ item.major_name || `专业 ${item.major_id}` }}
+                  </el-button>
+                  <span v-else>{{ item.major_name || "院校级推荐" }}</span>
+                </p>
               </div>
               <span class="ratio-badge">
                 {{ item.ratio !== null && item.ratio !== undefined ? `比值 ${item.ratio}` : formatScoreBasis(item.score_basis) }}
@@ -351,9 +372,9 @@
         <el-table-column label="方案" prop="scheme_name" min-width="180" />
         <el-table-column label="生成时间" prop="generated_at" min-width="170" />
         <el-table-column label="结果数" prop="result_count" width="80" />
-        <el-table-column label="冲/稳/保" min-width="120">
+        <el-table-column label="冲/稳/保/关注" min-width="140">
           <template #default="{ row }">
-            {{ row.challenge_count }} / {{ row.steady_count }} / {{ row.safe_count }}
+            {{ row.challenge_count }} / {{ row.steady_count }} / {{ row.safe_count }} / {{ row.watch_count }}
           </template>
         </el-table-column>
         <el-table-column label="新增" prop="added_count" width="80" />
@@ -381,8 +402,32 @@
           {{ resultGroupLabel(row.result_type) }}
         </template>
       </el-table-column>
-      <el-table-column label="院校" prop="college_name" min-width="180" />
-      <el-table-column label="专业" prop="major_name" min-width="180" />
+      <el-table-column label="院校" min-width="180">
+        <template #default="{ row }">
+          <el-button
+            link
+            type="primary"
+            class="entity-link"
+            @click="openCollegeDetail(row.college_id)"
+          >
+            {{ row.college_name || `院校 ${row.college_id}` }}
+          </el-button>
+        </template>
+      </el-table-column>
+      <el-table-column label="专业" min-width="180">
+        <template #default="{ row }">
+          <el-button
+            v-if="row.major_id"
+            link
+            type="primary"
+            class="entity-link"
+            @click="openMajorDetail(row.major_id)"
+          >
+            {{ row.major_name || `专业 ${row.major_id}` }}
+          </el-button>
+          <span v-else>{{ row.major_name || "院校级推荐" }}</span>
+        </template>
+      </el-table-column>
       <el-table-column label="参考位次" prop="reference_rank" width="100" />
       <el-table-column label="学生位次" prop="student_rank" width="100" />
       <el-table-column label="依据" width="120">
@@ -406,6 +451,7 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
+import { useRouter } from "vue-router";
 
 import {
   buildRecommendationSchemeComparison,
@@ -426,6 +472,7 @@ interface MultiSchemeComparisonRow {
   challenge_count: number;
   steady_count: number;
   safe_count: number;
+  watch_count: number;
   added_count: number;
   removed_count: number;
   changed_count: number;
@@ -453,6 +500,8 @@ const props = defineProps<{
   exportingScheme: number | null;
 }>();
 
+const router = useRouter();
+
 const emit = defineEmits<{
   "update:compareSchemeId": [value: number | undefined];
   "compare-scheme-change": [value: number | undefined];
@@ -467,7 +516,16 @@ const resultColumns: Array<{ key: ResultGroupKey; label: string; tip: string }> 
   { key: "challenge", label: "冲刺", tip: "略高于当前位次，需接受风险" },
   { key: "steady", label: "稳妥", tip: "与历史基线接近，适合作为主干" },
   { key: "safe", label: "保底", tip: "优于历史基线较多，风险相对更低" },
+  { key: "watch", label: "仅关注", tip: "只有计划或资格线等初筛证据，不能判断录取把握" },
 ];
+
+function openCollegeDetail(collegeId: number): void {
+  void router.push(`/colleges/${collegeId}`);
+}
+
+function openMajorDetail(majorId: number): void {
+  void router.push(`/majors/${majorId}`);
+}
 
 const compareSchemeIdModel = computed<number | undefined>({
   get: () => props.compareSchemeId,
@@ -490,6 +548,7 @@ const groupedResults = computed<Record<ResultGroupKey, RecommendationResult[]>>(
   challenge: props.selectedSchemeResults.filter((item) => item.result_type === "challenge"),
   steady: props.selectedSchemeResults.filter((item) => item.result_type === "steady"),
   safe: props.selectedSchemeResults.filter((item) => item.result_type === "safe"),
+  watch: props.selectedSchemeResults.filter((item) => item.result_type === "watch"),
 }));
 
 const selectedCompareSchemeMeta = computed(
@@ -526,6 +585,7 @@ const multiSchemeComparisonRows = computed<MultiSchemeComparisonRow[]>(() =>
         challenge_count: meta.challenge_count,
         steady_count: meta.steady_count,
         safe_count: meta.safe_count,
+        watch_count: meta.watch_count,
         added_count: summary.added.length,
         removed_count: summary.removed.length,
         changed_count: summary.changed.length,
@@ -946,7 +1006,7 @@ function riskFlagText(flag: string): string {
 
 .result-board-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   margin-top: 18px;
 }
@@ -968,6 +1028,10 @@ function riskFlagText(flag: string): string {
 
 .result-column.safe {
   box-shadow: inset 0 4px 0 rgba(69, 141, 105, 0.8);
+}
+
+.result-column.watch {
+  box-shadow: inset 0 4px 0 rgba(105, 126, 148, 0.74);
 }
 
 .result-column-head {
@@ -1024,6 +1088,23 @@ function riskFlagText(flag: string): string {
   margin: 0;
   font-size: 16px;
   color: #21364a;
+}
+
+.entity-link {
+  justify-content: flex-start;
+  height: auto;
+  padding: 0;
+  color: #1f5f8f;
+  font-weight: 700;
+  white-space: normal;
+  text-align: left;
+  line-height: 1.45;
+}
+
+.entity-link.muted {
+  color: #506a82;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .result-card-head p {

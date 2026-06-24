@@ -1,25 +1,14 @@
 <template>
-  <div class="page-shell">
-    <header class="page-header">
-      <div>
-        <div class="page-eyebrow">输出中心 / 报表工作流</div>
-        <h2 class="page-title">输出中心</h2>
-        <p class="page-subtitle">
-          按业务域选择交付物，生成前先看用途、必要参数、数据来源、导出格式和风险标签。
-        </p>
-        <div class="page-chip-row">
-          <span class="page-chip"><strong>报表类型</strong>{{ reportTypeOptions.length }}</span>
-          <span class="page-chip"><strong>当前类型</strong>{{ currentReportTypeLabel }}</span>
-          <span class="page-chip"><strong>导出记录</strong>{{ exportRecords.length }}</span>
-          <span class="page-chip"><strong>推荐方案</strong>{{ recommendationOptions.length }}</span>
-          <span class="page-chip"><strong>志愿草稿</strong>{{ volunteerDraftOptions.length }}</span>
-        </div>
-      </div>
-      <div class="action-row">
-        <el-button :loading="optionsLoading" @click="loadOptions">刷新选项</el-button>
-        <el-button type="primary" plain :loading="recordsLoading" @click="loadExportRecords">刷新记录</el-button>
-      </div>
-    </header>
+  <AppPage
+    title="报表中心"
+    eyebrow="决策输出 / 报表中心"
+    description="选择要交付的报表，补齐必要参数后生成 Excel 或打开打印预览。"
+    :meta="reportsPageMeta"
+  >
+    <template #actions>
+      <el-button :loading="optionsLoading" @click="loadOptions">刷新选项</el-button>
+      <el-button type="primary" plain :loading="recordsLoading" @click="loadExportRecords">刷新记录</el-button>
+    </template>
 
     <el-alert
       v-if="pageLoadError"
@@ -30,207 +19,226 @@
       :title="pageLoadError"
     />
 
-    <section class="overview-grid">
-      <article class="soft-card overview-panel">
-        <div class="overview-kicker">导出流</div>
-        <h3>{{ currentReportTypeLabel }}</h3>
-        <p>先确定报表类型，再补齐考试、学生、教师、学期或推荐方案等依赖参数，最后统一从导出记录回看结果。</p>
-      </article>
-      <article v-for="item in overviewCards" :key="item.label" class="soft-card overview-card" :class="item.tone">
-        <span>{{ item.label }}</span>
-        <strong>{{ item.value }}</strong>
-        <p>{{ item.help }}</p>
-      </article>
-    </section>
-
-    <section class="soft-card panel-block">
-      <div class="section-head compact">
-        <div>
-          <h3>报表参数</h3>
-          <p>不同报表类型会动态暴露所需参数，避免在一个大表单里混杂无关字段。</p>
+    <section class="report-workspace">
+      <aside class="soft-card report-picker" aria-label="报表类型选择">
+        <div class="section-head compact">
+          <div>
+            <h3>选择报表</h3>
+            <p>先按使用场景缩小范围，再点选具体报表。</p>
+          </div>
         </div>
-      </div>
-      <div class="filter-grid">
-        <el-select v-model="form.report_type" placeholder="报表类型">
-          <el-option
-            v-for="item in reportTypeOptions"
+
+        <div class="domain-tabs" role="tablist" aria-label="报表场景">
+          <button
+            v-for="group in groupedReportCatalog"
+            :key="group.key"
+            class="domain-tab"
+            :class="{ active: group.key === selectedCatalogDomain }"
+            type="button"
+            @click="selectedCatalogDomain = group.key"
+          >
+            {{ group.label }}
+          </button>
+        </div>
+
+        <div class="active-domain-copy" v-if="activeDomainGroup">
+          <strong>{{ activeDomainGroup.label }}</strong>
+          <p>{{ activeDomainGroup.description }}</p>
+        </div>
+
+        <div class="report-list">
+          <button
+            v-for="item in activeDomainReports"
             :key="item.value"
-            :label="item.label"
-            :value="item.value"
-          />
-        </el-select>
-        <el-select v-if="requiresExam" v-model="form.exam_id" filterable placeholder="考试">
-          <el-option
-            v-for="exam in examOptions"
-            :key="exam.id"
-            :label="exam.name"
-            :value="exam.id"
-          />
-        </el-select>
-        <el-select v-if="requiresStudent" v-model="form.student_id" filterable placeholder="学生">
-          <el-option
-            v-for="student in studentOptions"
-            :key="student.id"
-            :label="`${student.student_no} - ${student.name}`"
-            :value="student.id"
-          />
-        </el-select>
-        <el-select v-if="requiresScheme" v-model="form.scheme_id" filterable placeholder="推荐方案">
-          <el-option
-            v-for="item in recommendationOptions"
-            :key="item.scheme_id"
-            :label="`${item.student_name} / ${item.scheme_name}`"
-            :value="item.scheme_id"
-          />
-        </el-select>
-        <el-select v-if="requiresDraft" v-model="form.draft_id" filterable placeholder="志愿草稿">
-          <el-option
-            v-for="item in volunteerDraftOptions"
-            :key="item.id"
-            :label="`${item.student_name ?? '-'} / ${item.name}`"
-            :value="item.id"
-          />
-        </el-select>
-        <el-select v-if="requiresBatch" v-model="form.batch_id" filterable placeholder="评教批次">
-          <el-option
-            v-for="item in evaluationBatchOptions"
-            :key="item.id"
-            :label="`${item.template_name ?? '-'} / ${item.semester_name ?? '-'}`"
-            :value="item.id"
-          />
-        </el-select>
-        <el-select v-if="requiresClass" v-model="form.class_id" filterable placeholder="班级">
-          <el-option
-            v-for="item in referenceStore.classes"
-            :key="item.id"
-            :label="item.name"
-            :value="item.id"
-          />
-        </el-select>
-        <el-select v-if="requiresGrade" v-model="form.grade_id" filterable placeholder="年级">
-          <el-option
-            v-for="item in referenceStore.grades"
-            :key="item.id"
-            :label="item.name"
-            :value="item.id"
-          />
-        </el-select>
-        <el-select v-if="requiresTeacher" v-model="form.teacher_id" filterable placeholder="教师">
-          <el-option
-            v-for="teacher in teacherOptions"
-            :key="teacher.id"
-            :label="teacher.name"
-            :value="teacher.id"
-          />
-        </el-select>
-        <el-select v-if="requiresSemester" v-model="form.semester_id" filterable placeholder="学期">
-          <el-option
-            v-for="semester in referenceStore.semesters"
-            :key="semester.id"
-            :label="semesterLabel(semester)"
-            :value="semester.id"
-          />
-        </el-select>
-        <el-select v-if="optionalRuleVersion" v-model="form.rule_version_id" clearable filterable placeholder="规则版本，可选">
-          <el-option
-            v-for="rule in currentRuleOptions"
-            :key="rule.id"
-            :label="rule.name"
-            :value="rule.id"
-          />
-        </el-select>
-        <el-date-picker
-          v-if="usesStartDate"
-          v-model="form.start_date"
-          value-format="YYYY-MM-DD"
-          placeholder="开始日期，可选"
-        />
-        <el-date-picker
-          v-if="usesEndDate"
-          v-model="form.end_date"
-          value-format="YYYY-MM-DD"
-          placeholder="结束日期，可选"
-        />
-      </div>
-      <div class="action-row toolbar-row">
-        <el-button type="primary" :loading="exporting" @click="exportReport">生成报表</el-button>
-        <el-button
-          v-if="supportsPrintPreview"
-          :disabled="Boolean(missingRequiredFields.length) || !printPreviewPath"
-          @click="openPrintPreview"
-        >
-          打印预览
-        </el-button>
-        <el-button @click="loadExportRecords">刷新记录</el-button>
-      </div>
-      <el-alert
-        v-if="missingRequiredFields.length"
-        class="report-alert"
-        type="warning"
-        show-icon
-        :closable="false"
-        :title="`当前报表还缺少：${missingRequiredFields.join('、')}`"
-      />
-      <el-alert
-        v-for="item in scoreReportGuardMessages"
-        :key="item"
-        class="report-alert"
-        type="warning"
-        show-icon
-        :closable="false"
-        :title="item"
-      />
-      <ReportInsightPanel
-        v-if="showReportInsightSection"
-        :description="reportInsightDescription"
-        :loading="reportInsightLoading"
-        :error="reportInsightError"
-        :loaded="reportInsightLoaded"
-        :cards="reportInsightCards"
-        :groups="reportInsightGroups"
-        @retry="reloadReportInsights"
-      />
-    </section>
-
-    <section class="soft-card panel-block">
-      <div class="section-head compact">
-        <div>
-          <h3>输出目录</h3>
-          <p>按业务域查看每种报表适合什么场景，生成前先确认参数、来源和风险。</p>
-        </div>
-      </div>
-      <div class="report-domain-stack">
-        <article v-for="group in groupedReportCatalog" :key="group.key" class="report-domain">
-          <div class="report-domain-head">
+            class="report-list-item"
+            :class="{ selected: item.value === form.report_type }"
+            type="button"
+            @click="selectReportType(item.value)"
+          >
             <div>
-              <strong>{{ group.label }}</strong>
-              <p>{{ group.description }}</p>
+              <strong>{{ item.label }}</strong>
+              <span>{{ item.purpose }}</span>
             </div>
-            <el-tag effect="light">{{ group.items.length }} 项</el-tag>
+            <small>{{ item.requiredParams.length ? item.requiredParams.join("、") : "无需参数" }}</small>
+          </button>
+        </div>
+      </aside>
+
+      <section class="soft-card panel-block report-form-panel">
+        <div class="section-head compact">
+          <div>
+            <h3>报表参数</h3>
+            <p>只显示当前报表需要的条件。</p>
           </div>
-          <div class="report-card-grid">
-            <button
-              v-for="item in group.items"
+        </div>
+
+        <div v-if="currentReportCatalogItem" class="current-report-strip">
+          <div>
+            <span>当前报表</span>
+            <strong>{{ currentReportCatalogItem.label }}</strong>
+            <p>{{ currentReportCatalogItem.purpose }}</p>
+          </div>
+          <dl>
+            <div>
+              <dt>必要参数</dt>
+              <dd>{{ currentReportCatalogItem.requiredParams.length ? currentReportCatalogItem.requiredParams.join("、") : "无" }}</dd>
+            </div>
+            <div>
+              <dt>数据来源</dt>
+              <dd>{{ currentReportCatalogItem.dataSources.join("、") }}</dd>
+            </div>
+            <div>
+              <dt>格式</dt>
+              <dd>{{ currentReportCatalogItem.formats.join("、") }}</dd>
+            </div>
+          </dl>
+          <div class="risk-tag-row">
+            <el-tag v-for="risk in currentReportCatalogItem.riskTags" :key="risk" size="small" type="warning" effect="light">
+              {{ risk }}
+            </el-tag>
+          </div>
+        </div>
+
+        <div class="filter-grid">
+          <el-select v-model="form.report_type" placeholder="报表类型">
+            <el-option
+              v-for="item in reportTypeOptions"
               :key="item.value"
-              class="report-catalog-card"
-              :class="{ selected: item.value === form.report_type }"
-              type="button"
-              @click="form.report_type = item.value"
-            >
-              <span>{{ item.label }}</span>
-              <strong>{{ item.purpose }}</strong>
-              <small>必要参数：{{ item.requiredParams.length ? item.requiredParams.join("、") : "无" }}</small>
-              <small>数据来源：{{ item.dataSources.join("、") }}</small>
-              <small>格式：{{ item.formats.join("、") }}</small>
-              <div class="risk-tag-row">
-                <el-tag v-for="risk in item.riskTags" :key="risk" size="small" type="warning" effect="light">
-                  {{ risk }}
-                </el-tag>
-              </div>
-            </button>
-          </div>
-        </article>
-      </div>
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+          <el-select v-if="requiresExam" v-model="form.exam_id" filterable placeholder="考试">
+            <el-option
+              v-for="exam in examOptions"
+              :key="exam.id"
+              :label="exam.name"
+              :value="exam.id"
+            />
+          </el-select>
+          <el-select v-if="requiresStudent" v-model="form.student_id" filterable placeholder="学生">
+            <el-option
+              v-for="student in studentOptions"
+              :key="student.id"
+              :label="`${student.student_no} - ${student.name}`"
+              :value="student.id"
+            />
+          </el-select>
+          <el-select v-if="requiresScheme" v-model="form.scheme_id" filterable placeholder="推荐方案">
+            <el-option
+              v-for="item in recommendationOptions"
+              :key="item.scheme_id"
+              :label="`${item.student_name} / ${item.scheme_name}`"
+              :value="item.scheme_id"
+            />
+          </el-select>
+          <el-select v-if="requiresDraft" v-model="form.draft_id" filterable placeholder="志愿草稿">
+            <el-option
+              v-for="item in volunteerDraftOptions"
+              :key="item.id"
+              :label="`${item.student_name ?? '-'} / ${item.name}`"
+              :value="item.id"
+            />
+          </el-select>
+          <el-select v-if="requiresBatch" v-model="form.batch_id" filterable placeholder="评教批次">
+            <el-option
+              v-for="item in evaluationBatchOptions"
+              :key="item.id"
+              :label="`${item.template_name ?? '-'} / ${item.semester_name ?? '-'}`"
+              :value="item.id"
+            />
+          </el-select>
+          <el-select v-if="requiresClass" v-model="form.class_id" filterable placeholder="班级">
+            <el-option
+              v-for="item in referenceStore.classes"
+              :key="item.id"
+              :label="item.name"
+              :value="item.id"
+            />
+          </el-select>
+          <el-select v-if="requiresGrade" v-model="form.grade_id" filterable placeholder="年级">
+            <el-option
+              v-for="item in referenceStore.grades"
+              :key="item.id"
+              :label="item.name"
+              :value="item.id"
+            />
+          </el-select>
+          <el-select v-if="requiresTeacher" v-model="form.teacher_id" filterable placeholder="教师">
+            <el-option
+              v-for="teacher in teacherOptions"
+              :key="teacher.id"
+              :label="teacher.name"
+              :value="teacher.id"
+            />
+          </el-select>
+          <el-select v-if="requiresSemester" v-model="form.semester_id" filterable placeholder="学期">
+            <el-option
+              v-for="semester in referenceStore.semesters"
+              :key="semester.id"
+              :label="semesterLabel(semester)"
+              :value="semester.id"
+            />
+          </el-select>
+          <el-select v-if="optionalRuleVersion" v-model="form.rule_version_id" clearable filterable placeholder="规则版本，可选">
+            <el-option
+              v-for="rule in currentRuleOptions"
+              :key="rule.id"
+              :label="rule.name"
+              :value="rule.id"
+            />
+          </el-select>
+          <el-date-picker
+            v-if="usesStartDate"
+            v-model="form.start_date"
+            value-format="YYYY-MM-DD"
+            placeholder="开始日期，可选"
+          />
+          <el-date-picker
+            v-if="usesEndDate"
+            v-model="form.end_date"
+            value-format="YYYY-MM-DD"
+            placeholder="结束日期，可选"
+          />
+        </div>
+        <div class="action-row toolbar-row">
+          <el-button type="primary" :loading="exporting" @click="exportReport">生成报表</el-button>
+          <el-button
+            v-if="supportsPrintPreview"
+            :disabled="Boolean(missingRequiredFields.length) || !printPreviewPath"
+            @click="openPrintPreview"
+          >
+            打印预览
+          </el-button>
+        </div>
+        <el-alert
+          v-if="missingRequiredFields.length"
+          class="report-alert"
+          type="warning"
+          show-icon
+          :closable="false"
+          :title="`当前报表还缺少：${missingRequiredFields.join('、')}`"
+        />
+        <el-alert
+          v-for="item in scoreReportGuardMessages"
+          :key="item"
+          class="report-alert"
+          type="warning"
+          show-icon
+          :closable="false"
+          :title="item"
+        />
+        <ReportInsightPanel
+          v-if="showReportInsightSection"
+          :description="reportInsightDescription"
+          :loading="reportInsightLoading"
+          :error="reportInsightError"
+          :loaded="reportInsightLoaded"
+          :cards="reportInsightCards"
+          :groups="reportInsightGroups"
+          @retry="reloadReportInsights"
+        />
+      </section>
     </section>
 
     <section class="soft-card panel-block">
@@ -273,7 +281,7 @@
         description="暂无导出记录。请先在上方选择报表类型并补齐参数，再点击“生成报表”。"
       />
     </section>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
@@ -283,6 +291,7 @@ import ElMessage from "element-plus/es/components/message/index";
 
 import { apiRequest, openFile } from "../api/client";
 import ReportInsightPanel from "../components/reports/ReportInsightPanel.vue";
+import { AppPage } from "../components/ui";
 import {
   createEmptyReportInsightDataState,
   fetchReportInsightData,
@@ -299,12 +308,16 @@ import {
 import {
   buildReportExportPayload,
   formatReportExportParams,
+  getReportCatalogItem,
+  getReportCatalogItemsByDomain,
+  getReportDomainForType,
   getGroupedReportCatalog,
   getMissingRequiredReportFields,
   getMissingRequiredReportFieldsMessage,
   getReportPrintPreviewPath,
   getReportRuleOptionScope,
   getReportTypeLabel,
+  type ReportDomain,
   REPORT_TYPE_OPTIONS,
   reportTypeUsesField,
 } from "../components/reports/reportTypeConfig";
@@ -400,6 +413,7 @@ const pageLoadError = ref("");
 const scoreRecordTotal = ref(0);
 const reportTypeOptions = REPORT_TYPE_OPTIONS;
 const groupedReportCatalog = getGroupedReportCatalog();
+const selectedCatalogDomain = ref<ReportDomain>(getReportDomainForType("student_analysis") ?? "students");
 
 const form = reactive({
   report_type: "student_analysis",
@@ -432,9 +446,21 @@ const requiresBatch = computed(() => reportTypeUsesField(form.report_type, "batc
 const currentRuleOptions = computed(() =>
   getReportRuleOptionScope(form.report_type) === "adviser" ? adviserRuleVersions.value : ruleVersions.value,
 );
+const currentReportCatalogItem = computed(() => getReportCatalogItem(form.report_type));
+const activeDomainGroup = computed(
+  () => groupedReportCatalog.find((group) => group.key === selectedCatalogDomain.value) ?? groupedReportCatalog[0] ?? null,
+);
+const activeDomainReports = computed(() => getReportCatalogItemsByDomain(selectedCatalogDomain.value));
 const printPreviewPath = computed(() => getReportPrintPreviewPath(form));
 const supportsPrintPreview = computed(() => Boolean(printPreviewPath.value));
 const currentReportTypeLabel = computed(() => getReportTypeLabel(form.report_type));
+const reportsPageMeta = computed(() => [
+  { label: "报表类型", value: reportTypeOptions.length },
+  { label: "当前类型", value: currentReportTypeLabel.value },
+  { label: "导出记录", value: exportRecords.value.length },
+  { label: "推荐方案", value: recommendationOptions.value.length },
+  { label: "志愿草稿", value: volunteerDraftOptions.value.length },
+]);
 const missingRequiredFields = computed(() => getMissingRequiredReportFields(form));
 const missingRequiredFieldsMessage = computed(() => getMissingRequiredReportFieldsMessage(form));
 const scoreReportGuardMessages = computed(() =>
@@ -443,26 +469,6 @@ const scoreReportGuardMessages = computed(() =>
     scoreRecordTotal: scoreRecordTotal.value,
   }),
 );
-const overviewCards = computed(() => [
-  {
-    label: "考试依赖",
-    value: requiresExam.value ? "需要" : "可选",
-    help: "当前报表是否要求先选择考试。",
-    tone: "tone-blue",
-  },
-  {
-    label: "规则版本",
-    value: currentRuleOptions.value.length,
-    help: "工作量和班主任量化报表可选的规则版本数。",
-    tone: "tone-amber",
-  },
-  {
-    label: "最近导出",
-    value: exportRecords.value[0] ? formatExportStatus(exportRecords.value[0].status) : "暂无",
-    help: "最近一次导出记录的状态。",
-    tone: "tone-slate",
-  },
-]);
 const currentRecommendationOption = computed(
   () => recommendationOptions.value.find((item) => item.scheme_id === form.scheme_id) ?? null,
 );
@@ -516,6 +522,10 @@ function exportStatusType(status: string): "success" | "info" | "danger" {
 
 function formatParams(value?: Record<string, unknown> | null): string {
   return formatReportExportParams(value);
+}
+
+function selectReportType(reportType: string): void {
+  form.report_type = reportType;
 }
 
 async function loadOptions(): Promise<void> {
@@ -630,6 +640,14 @@ function openPrintPreview(): void {
 }
 
 watch(
+  () => form.report_type,
+  (reportType) => {
+    const domain = getReportDomainForType(reportType);
+    if (domain) selectedCatalogDomain.value = domain;
+  },
+);
+
+watch(
   () => form.scheme_id,
   (schemeId) => {
     if (!schemeId) return;
@@ -700,135 +718,74 @@ function applyRoutePrefill(): void {
   margin-top: -4px;
 }
 
-.overview-grid {
+.report-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) repeat(3, minmax(0, 0.75fr));
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
   gap: 16px;
+  align-items: start;
 }
 
-.overview-panel,
-.overview-card {
-  padding: 24px;
+.report-picker {
+  position: sticky;
+  top: 18px;
+  padding: 20px;
 }
 
-.overview-panel {
-  background:
-    radial-gradient(circle at top left, rgba(180, 219, 243, 0.32), transparent 28%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.99), rgba(244, 248, 252, 0.94));
+.domain-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
-.overview-kicker {
-  display: inline-flex;
-  padding: 7px 10px;
-  border-radius: 999px;
-  background: rgba(31, 108, 152, 0.1);
-  color: #1f6c98;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.overview-panel h3 {
-  margin: 14px 0 0;
-  color: #1f3448;
-  font-size: 28px;
-  line-height: 1.25;
-}
-
-.overview-panel p {
-  margin: 12px 0 0;
-  color: #62788c;
-  line-height: 1.7;
-}
-
-.overview-card {
-  display: grid;
-  align-content: end;
-  gap: 10px;
-}
-
-.overview-card span {
-  color: #6d8194;
+.domain-tab {
+  min-height: 32px;
+  padding: 7px 11px;
+  border: 1px solid #d9e5ef;
+  border-radius: 6px;
+  background: #fff;
+  color: #52677c;
   font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
 }
 
-.overview-card strong {
-  color: #1f3245;
-  font-size: 30px;
-  font-weight: 760;
+.domain-tab.active {
+  border-color: #1f6c98;
+  background: #e9f4fb;
+  color: #1f6c98;
 }
 
-.overview-card p {
-  margin: 0;
-  color: #73879b;
+.active-domain-copy {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #e4edf5;
+}
+
+.active-domain-copy strong {
+  color: #1f3448;
+  font-size: 15px;
+}
+
+.active-domain-copy p {
+  margin: 5px 0 0;
+  color: #667b8f;
   line-height: 1.55;
   font-size: 13px;
 }
 
-.tone-blue {
-  box-shadow: inset 0 4px 0 rgba(31, 108, 152, 0.78);
-}
-
-.tone-amber {
-  box-shadow: inset 0 4px 0 rgba(209, 141, 72, 0.84);
-}
-
-.tone-slate {
-  box-shadow: inset 0 4px 0 rgba(92, 111, 129, 0.74);
-}
-
-.toolbar-row {
+.report-list {
+  display: grid;
+  gap: 8px;
   margin-top: 14px;
 }
 
-.report-alert {
-  margin-top: 14px;
-}
-
-.report-domain-stack {
-  display: grid;
-  gap: 16px;
-}
-
-.report-domain {
-  display: grid;
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid #e2ebf3;
-  border-radius: 8px;
-  background: #fbfdff;
-}
-
-.report-domain-head {
+.report-list-item {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-}
-
-.report-domain-head strong {
-  color: #1f3448;
-  font-size: 16px;
-}
-
-.report-domain-head p {
-  margin: 4px 0 0;
-  color: #60748a;
-  line-height: 1.55;
-}
-
-.report-card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 12px;
-}
-
-.report-catalog-card {
-  display: grid;
-  gap: 8px;
-  min-height: 184px;
-  padding: 14px;
+  min-height: 72px;
+  padding: 11px 12px;
   border: 1px solid #dce7f1;
   border-radius: 8px;
   background: #fff;
@@ -837,24 +794,100 @@ function applyRoutePrefill(): void {
   cursor: pointer;
 }
 
-.report-catalog-card.selected {
+.report-list-item.selected {
   border-color: #1f6c98;
-  box-shadow: inset 0 4px 0 rgba(31, 108, 152, 0.78);
+  box-shadow: inset 3px 0 0 rgba(31, 108, 152, 0.86);
 }
 
-.report-catalog-card span {
+.report-list-item strong {
+  display: block;
+  color: #24384b;
+  font-size: 14px;
+}
+
+.report-list-item span {
+  display: block;
+  margin-top: 4px;
+  color: #65798d;
+  line-height: 1.45;
+  font-size: 12px;
+}
+
+.report-list-item small {
+  flex: 0 0 auto;
+  max-width: 92px;
   color: #1f6c98;
+  line-height: 1.45;
+  text-align: right;
+  font-size: 12px;
+}
+
+.report-form-panel {
+  min-width: 0;
+}
+
+.current-report-strip {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.1fr);
+  gap: 14px 18px;
+  margin-bottom: 16px;
+  padding: 0 0 16px;
+  border-bottom: 1px solid #e5edf4;
+}
+
+.current-report-strip span {
+  color: #1f6c98;
+  font-size: 12px;
   font-weight: 740;
 }
 
-.report-catalog-card strong {
-  color: #27394a;
-  line-height: 1.5;
+.current-report-strip strong {
+  display: block;
+  margin-top: 5px;
+  color: #1f3448;
+  font-size: 20px;
 }
 
-.report-catalog-card small {
-  color: #667b8f;
-  line-height: 1.5;
+.current-report-strip p {
+  margin: 7px 0 0;
+  color: #60748a;
+  line-height: 1.6;
+}
+
+.current-report-strip dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.current-report-strip dl div {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.current-report-strip dt {
+  color: #7a8ea2;
+  font-size: 12px;
+}
+
+.current-report-strip dd {
+  margin: 0;
+  color: #2d4052;
+  line-height: 1.45;
+  font-size: 13px;
+}
+
+.current-report-strip .risk-tag-row {
+  grid-column: 1 / -1;
+}
+
+.toolbar-row {
+  margin-top: 14px;
+}
+
+.report-alert {
+  margin-top: 14px;
 }
 
 .risk-tag-row {
@@ -880,8 +913,13 @@ function applyRoutePrefill(): void {
 }
 
 @media (max-width: 1180px) {
-  .overview-grid {
+  .report-workspace,
+  .current-report-strip {
     grid-template-columns: 1fr;
+  }
+
+  .report-picker {
+    position: static;
   }
 }
 </style>

@@ -142,6 +142,82 @@ def build_enrollment_plan_workbook() -> bytes:
     return buffer.getvalue()
 
 
+def build_large_enrollment_plan_workbook(row_count: int = 305) -> bytes:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "数据"
+    sheet.append(
+        [
+            "年份",
+            "省份",
+            "批次",
+            "科类/模式",
+            "院校",
+            "院校代码",
+            "专业组编号",
+            "专业",
+            "专业代码",
+            "计划人数",
+            "选科要求",
+            "学费",
+            "学制",
+            "培养地点",
+            "学生类别",
+            "数据来源",
+            "导入批次",
+        ]
+    )
+    for index in range(row_count):
+        sheet.append(
+            [
+                2026,
+                "广东",
+                "本科批",
+                "物理类",
+                "分页性能大学",
+                "P001",
+                f"P{index:03d}",
+                f"分页测试专业{index:03d}",
+                f"PX{index:03d}",
+                1,
+                "物理+化学",
+                "5000 元/年",
+                "4年",
+                "广州校区",
+                "普通生",
+                "分页压力测试",
+                "2026-广东-分页性能",
+            ]
+        )
+    buffer = BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()
+
+
+def build_large_admission_workbook(row_count: int = 305) -> bytes:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "数据"
+    sheet.append(["年份", "省份", "批次", "院校", "专业", "最低分", "最低位次", "学生类别", "数据来源说明"])
+    for index in range(row_count):
+        sheet.append(
+            [
+                2025,
+                "广东",
+                "本科批",
+                "分页性能大学",
+                f"分页测试专业{index:03d}",
+                560,
+                32000 + index,
+                "普通生",
+                "分页压力测试",
+            ]
+        )
+    buffer = BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()
+
+
 def create_exam_with_scores(client) -> int:
     exam_response = client.post(
         "/api/exams",
@@ -568,6 +644,76 @@ def test_candidate_filters_match_exact_special_student_types(app) -> None:
     assert {item.student_type for item in spring_admission_reference} == {"general"}
 
 
+def test_art_candidate_filter_uses_normalized_request_track(app) -> None:
+    from app.models import AdmissionRecord, College, Major, Student
+    from app.services._recommendations_candidates import get_admission_reference_candidates
+    from app.services._recommendations_shared import RecommendationSettingsState
+
+    with app.state.db.session_scope() as session:
+        college = College(name="艺术类别请求测试大学", province="山东", supports_art=True, is_active=True)
+        music_major = Major(name="音乐类请求测试专业", is_art_related=True, is_active=True)
+        fine_art_major = Major(name="美术类请求测试专业", is_art_related=True, is_active=True)
+        session.add_all([college, music_major, fine_art_major])
+        session.flush()
+        session.add_all(
+            [
+                AdmissionRecord(
+                    year=2025,
+                    province="山东",
+                    batch="艺术类本科批统考",
+                    college_id=college.id,
+                    major_id=music_major.id,
+                    student_type="art",
+                    art_track="music",
+                    min_score=500,
+                    is_active=True,
+                ),
+                AdmissionRecord(
+                    year=2025,
+                    province="山东",
+                    batch="艺术类本科批统考",
+                    college_id=college.id,
+                    major_id=fine_art_major.id,
+                    student_type="art",
+                    art_track="fine_art_design",
+                    min_score=500,
+                    is_active=True,
+                ),
+            ]
+        )
+        student = Student(
+            name="艺术类别请求测试生",
+            student_no="ARTREQ001",
+            gender="女",
+            student_type="art",
+            art_track="fine_art_design",
+            is_active=True,
+        )
+        session.add(student)
+        session.flush()
+
+        items, _ = get_admission_reference_candidates(
+            session,
+            province="山东",
+            student=student,
+            student_type="art",
+            art_track="music",
+            target_regions=[],
+            school_levels=[],
+            major_keyword=None,
+            subject_combination=None,
+            settings=RecommendationSettingsState(
+                safe_ratio_max=0.85,
+                steady_ratio_max=1.0,
+                rush_ratio_max=1.15,
+                whitelist_college_ids=[],
+                blacklist_college_ids=[],
+            ),
+        )
+
+    assert {item.major.name for item in items if item.major} == {"音乐类请求测试专业"}
+
+
 def update_major_profile(client, major_name: str, *, direction: str, career_path: str, note: str) -> None:
     major_response = client.get(f"/api/majors?keyword={major_name}")
     assert major_response.status_code == 200
@@ -755,17 +901,22 @@ def test_art_score_line_fallback_supports_preview_and_generation(client, app) ->
             "candidate_type": "art",
             "score_input_mode": "estimated_score",
             "culture_score": 360,
+            "professional_score": 240,
         },
     )
     assert preview_response.status_code == 200
     preview_payload = preview_response.json()
     assert preview_payload["candidate_count"] == 1
     candidate = preview_payload["candidates"][0]
+    assert candidate["result_type"] == "watch"
     assert candidate["reference_scope"] == "score_line"
     assert candidate["reference_years_json"] == [2025]
     assert candidate["reference_record_count"] == 0
     assert candidate["latest_min_score"] == 330
     assert candidate["score_basis"] == "culture_score"
+    assert preview_payload["culture_score"] == 360
+    assert preview_payload["professional_score"] == 240
+    assert preview_payload["art_comprehensive_score"] == 480
     assert candidate["fallback_priority_label"] in {"重点比较", "优先核看"}
     assert any("省级控制线" in note for note in candidate["fallback_priority_notes_json"])
     assert candidate["fallback_category_label"] == "艺术音乐类"
@@ -787,13 +938,17 @@ def test_art_score_line_fallback_supports_preview_and_generation(client, app) ->
             "target_year": 2026,
             "score_input_mode": "estimated_score",
             "culture_score": 360,
+            "professional_score": 240,
         },
     )
     assert generate_response.status_code == 200
     generate_payload = generate_response.json()
     assert generate_payload["result_count"] == 1
-    assert len(generate_payload["challenge"]) == 1
-    result = generate_payload["challenge"][0]
+    assert len(generate_payload["challenge"]) == 0
+    assert len(generate_payload["steady"]) == 0
+    assert len(generate_payload["safe"]) == 0
+    assert len(generate_payload["watch"]) == 1
+    result = generate_payload["watch"][0]
     assert result["score_basis"] == "culture_score"
     assert result["fallback_priority_label"] in {"重点比较", "优先核看"}
     assert any("省级控制线" in note for note in result["fallback_priority_notes_json"])
@@ -983,23 +1138,8 @@ def test_plan_only_fallback_supports_special_workbench_preview_and_generation(cl
     )
     assert preview_response.status_code == 200
     preview_payload = preview_response.json()
-    assert preview_payload["candidate_count"] == 2
-    candidate = preview_payload["candidates"][0]
-    assert candidate["college_name"] == "山东综评测试大学"
-    assert candidate["reference_scope"] == "plan_only"
-    assert candidate["reference_years_json"] == [2026]
-    assert candidate["reference_record_count"] == 0
-    assert candidate["score_basis"] == "plan_only"
-    assert candidate["fallback_priority_label"] in {"重点比较", "优先核看"}
-    assert candidate["fallback_priority_score"] > preview_payload["candidates"][1]["fallback_priority_score"]
-    assert any("计划数 20" in note for note in candidate["fallback_priority_notes_json"])
-    assert candidate["fallback_category_label"] == "综评工科方向"
-    assert any("核对综合评价报名条件" in note for note in candidate["fallback_review_notes_json"])
-    assert "计划清单初筛" in candidate["match_tags_json"]
-    assert "plan_only_reference" in (candidate["risk_flags_json"] or [])
-    assert any("当年招生计划清单" in note for note in candidate["match_notes_json"])
-    assert any("批次词典：" in note for note in candidate["match_notes_json"])
-    assert any("政策摘要：" in note for note in candidate["match_notes_json"])
+    assert preview_payload["candidate_count"] == 0
+    assert preview_payload["candidates"] == []
 
     generate_response = client.post(
         "/api/recommendations/generate",
@@ -1011,26 +1151,7 @@ def test_plan_only_fallback_supports_special_workbench_preview_and_generation(cl
             "score_input_mode": "actual_rank",
         },
     )
-    assert generate_response.status_code == 200
-    generate_payload = generate_response.json()
-    assert generate_payload["result_count"] == 2
-    assert len(generate_payload["challenge"]) == 2
-    result = generate_payload["challenge"][0]
-    assert result["college_name"] == "山东综评测试大学"
-    assert result["reference_scope"] == "plan_only"
-    assert result["reference_years_json"] == [2026]
-    assert result["reference_record_count"] == 0
-    assert result["score_basis"] == "plan_only"
-    assert result["fallback_priority_label"] in {"重点比较", "优先核看"}
-    assert result["fallback_priority_score"] > generate_payload["challenge"][1]["fallback_priority_score"]
-    assert any("计划数 20" in note for note in result["fallback_priority_notes_json"])
-    assert result["fallback_category_label"] == "综评工科方向"
-    assert any("核对综合评价报名条件" in note for note in result["fallback_review_notes_json"])
-    assert "plan_only_reference" in (result["risk_flags_json"] or [])
-    assert result["snapshot_json"]["plan_only_reference"] is True
-    assert result["snapshot_json"]["reference_scope"] == "plan_only"
-    assert result["snapshot_json"]["batch_dict_note"] == "综合评价招生专科批需结合学校综合测试与高考成绩。"
-    assert result["snapshot_json"]["province_policy_summary"] == "综合评价招生需结合高校测试和高考成绩综合认定，正式填报前需核对学校章程。"
+    assert generate_response.status_code == 404
 
 
 def test_special_type_rule_dictionary_bootstrap_and_list(client) -> None:
@@ -1048,6 +1169,154 @@ def test_special_type_rule_dictionary_bootstrap_and_list(client) -> None:
     info_rule = next(item for item in payload if item["category_code"] == "spring_it")
     assert "计算机" in info_rule["match_keywords_json"]
     assert any("技能考试类别" in note for note in info_rule["review_notes_json"])
+
+
+def test_recommendation_large_tables_support_paginated_queries(client) -> None:
+    for index, province in enumerate(["广东", "广东", "山东"], start=1):
+        response = client.post(
+            "/api/colleges",
+            json={
+                "name": f"分页测试大学{index}",
+                "college_code": None,
+                "province": province,
+                "city": None,
+                "school_type": None,
+                "school_level_tags_json": [],
+                "intro": None,
+                "website": None,
+                "supports_art": index == 3,
+                "note": None,
+                "alias_names": [],
+                "is_active": True,
+            },
+        )
+        assert response.status_code == 200
+
+    college_page = client.get("/api/colleges/page?keyword=分页测试大学&province=广东&page=1&page_size=1")
+    assert college_page.status_code == 200
+    college_payload = college_page.json()
+    assert college_payload["total"] == 2
+    assert college_payload["page"] == 1
+    assert college_payload["page_size"] == 1
+    assert len(college_payload["items"]) == 1
+    assert college_payload["items"][0]["province"] == "广东"
+
+    for major_name in ["分页测试专业A", "分页测试专业B", "分页测试专业C"]:
+        response = client.post(
+            "/api/majors",
+            json={
+                "name": major_name,
+                "major_code": None,
+                "category": "测试门类",
+                "direction": None,
+                "career_path": None,
+                "is_art_related": False,
+                "note": None,
+                "is_active": True,
+            },
+        )
+        assert response.status_code == 200
+
+    major_page = client.get("/api/majors/page?keyword=分页测试专业&page=2&page_size=2")
+    assert major_page.status_code == 200
+    major_payload = major_page.json()
+    assert major_payload["total"] == 3
+    assert major_payload["page"] == 2
+    assert major_payload["page_size"] == 2
+    assert len(major_payload["items"]) == 1
+
+    direction_response = client.post(
+        "/api/employment-directions",
+        json={
+            "name": "分页测试就业方向",
+            "category": "技术研发类",
+            "alias_names_json": [],
+            "description": None,
+            "common_job_types_json": [],
+            "common_industries_json": [],
+            "prefers_postgraduate": False,
+            "requires_certificate": False,
+            "requires_long_cycle": False,
+            "supports_art": False,
+            "risk_note": None,
+            "source_note": None,
+            "is_active": True,
+        },
+    )
+    assert direction_response.status_code == 200
+    direction_id = direction_response.json()["id"]
+    major_list = client.get("/api/majors?keyword=分页测试专业")
+    assert major_list.status_code == 200
+    for major_item in major_list.json():
+        mapping_response = client.post(
+            "/api/major-employment-maps",
+            json={
+                "major_id": major_item["id"],
+                "direction_id": direction_id,
+                "strength": "high",
+                "recommendation_note": "分页查询测试",
+                "requires_postgraduate": False,
+                "requires_certificate": False,
+                "supported_student_types_json": [],
+                "supports_art": False,
+                "note": None,
+                "is_active": True,
+            },
+        )
+        assert mapping_response.status_code == 200
+
+    mapping_page = client.get("/api/major-employment-maps/page?keyword=分页测试&page=2&page_size=2")
+    assert mapping_page.status_code == 200
+    mapping_payload = mapping_page.json()
+    assert mapping_payload["total"] == 3
+    assert mapping_payload["page"] == 2
+    assert len(mapping_payload["items"]) == 1
+    assert mapping_payload["items"][0]["direction_name"] == "分页测试就业方向"
+
+    import_response = client.post(
+        "/api/admissions/import",
+        files={
+            "file": (
+                "admissions.xlsx",
+                build_admission_workbook(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert import_response.status_code == 200
+
+    admissions_page = client.get("/api/admissions/page?province=广东&page=1&page_size=2")
+    assert admissions_page.status_code == 200
+    admissions_payload = admissions_page.json()
+    assert admissions_payload["total"] == 4
+    assert len(admissions_payload["items"]) == 2
+    assert {item["province"] for item in admissions_payload["items"]} == {"广东"}
+
+    plan_import_response = client.post(
+        "/api/enrollment-plans/import",
+        files={
+            "file": (
+                "enrollment-plans.xlsx",
+                build_enrollment_plan_workbook(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert plan_import_response.status_code == 200
+
+    plans_page = client.get("/api/enrollment-plans/page?province=广东&year=2026&page=1&page_size=2")
+    assert plans_page.status_code == 200
+    plans_payload = plans_page.json()
+    assert plans_payload["total"] == 3
+    assert len(plans_payload["items"]) == 2
+    assert {item["province"] for item in plans_payload["items"]} == {"广东"}
+
+    too_large_page_size = client.get("/api/enrollment-plans/page?page_size=500")
+    assert too_large_page_size.status_code == 422
+    too_large_college_page_size = client.get("/api/colleges/page?page_size=500")
+    assert too_large_college_page_size.status_code == 422
+    too_large_mapping_page_size = client.get("/api/major-employment-maps/page?page_size=500")
+    assert too_large_mapping_page_size.status_code == 422
 
 
 def test_admission_import_and_recommendation_generation(client, app) -> None:
@@ -1964,8 +2233,9 @@ def test_admission_import_and_recommendation_generation(client, app) -> None:
             "student_id": 3,
             "exam_id": exam_id,
             "province": "广东",
-            "student_rank_override": 25000,
-            "comprehensive_score": 540,
+            "score_input_mode": "estimated_score",
+            "culture_score": 360,
+            "professional_score": 270,
         },
     )
     assert art_response.status_code == 200
@@ -2187,6 +2457,59 @@ def test_volunteer_workbench_preview_supports_exam_mode_compatibility(client) ->
         "当前未配置“3+1+2”精确规则，先按兼容模式" in item and "物理类" in item
         for item in preview_payload["input_notes"]
     )
+
+
+def test_volunteer_workbench_preview_truncates_large_candidate_pool(client) -> None:
+    exam_id = create_exam_with_scores(client)
+
+    plan_import_response = client.post(
+        "/api/enrollment-plans/import",
+        files={
+            "file": (
+                "large-enrollment-plans.xlsx",
+                build_large_enrollment_plan_workbook(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert plan_import_response.status_code == 200
+    assert plan_import_response.json()["success_rows"] == 305
+
+    admission_import_response = client.post(
+        "/api/admissions/import",
+        files={
+            "file": (
+                "large-admissions.xlsx",
+                build_large_admission_workbook(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert admission_import_response.status_code == 200
+    assert admission_import_response.json()["success_rows"] == 305
+
+    preview_response = client.post(
+        "/api/recommendations/volunteer-workbench/preview",
+        json={
+            "student_id": 1,
+            "exam_id": exam_id,
+            "province": "广东",
+            "target_year": 2026,
+            "batch": "本科批",
+            "exam_mode": "物理类",
+            "candidate_type": "general",
+            "score_input_mode": "actual_rank",
+            "student_rank_override": 31000,
+            "subject_combination": "物理+化学",
+        },
+    )
+    assert preview_response.status_code == 200
+    preview_payload = preview_response.json()
+    assert preview_payload["candidate_count"] == 305
+    assert preview_payload["returned_candidate_count"] == 300
+    assert preview_payload["is_candidate_truncated"] is True
+    assert len(preview_payload["candidates"]) == 300
+    assert any(item["code"] == "candidate_result_truncated" for item in preview_payload["rule_alerts"])
 
 
 def test_volunteer_workbench_preview_explains_missing_rule_year(client) -> None:

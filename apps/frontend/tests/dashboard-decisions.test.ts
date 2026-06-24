@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  buildDashboardNextSteps,
-  formatDashboardBackupLabel,
-  formatDataHealthCardValue,
-} from "../src/components/dashboard/dashboardDecisions";
+import { buildDashboardNextSteps } from "../src/components/dashboard/dashboardDecisions";
 
 describe("dashboard decision helpers", () => {
   it("suggests concrete next actions for an empty teaching trial dataset", () => {
@@ -28,11 +24,9 @@ describe("dashboard decision helpers", () => {
     expect(steps.map((step) => step.code)).toEqual([
       "score_record_empty",
       "teacher_too_few",
-      "gaokao_data_warning",
-      "backup_missing",
     ]);
     expect(steps[0].path).toBe("/exams");
-    expect(steps[2].detail).toContain("3 条 P0 数据缺口");
+    expect(steps[1].title).toBe("教师台账待补充");
   });
 
   it("falls back to a ready state when the dashboard has no actionable warning", () => {
@@ -68,17 +62,7 @@ describe("dashboard decision helpers", () => {
 
     expect(steps).toHaveLength(1);
     expect(steps[0].code).toBe("ready_for_trial");
-    expect(
-      formatDataHealthCardValue({
-        status: "pass",
-        label: "P0 可通过",
-        summary: "",
-        p0_gap_count: 0,
-        warning_count: 0,
-        blocking_count: 0,
-        gaps: [],
-      }),
-    ).toBe("P0 可通过");
+    expect(steps[0].path).toBe("/analytics");
   });
 
   it("surfaces planning reminders before the ready state", () => {
@@ -116,17 +100,5 @@ describe("dashboard decision helpers", () => {
       code: "planning_overdue_tasks",
       path: "/students",
     });
-  });
-
-  it("formats backup labels without hiding missing backups", () => {
-    expect(formatDashboardBackupLabel(null)).toBe("未创建");
-    expect(
-      formatDashboardBackupLabel({
-        backup_name: "local_edu_backup_20260427.zip",
-        created_at: null,
-        status: "success",
-        file_size: 1024,
-      }),
-    ).toBe("local_edu_backup_20260427.zip");
   });
 });

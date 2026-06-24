@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     allowed_origins: list[str] = Field(
         default_factory=lambda: ["http://127.0.0.1:5173", "http://localhost:5173"]
     )
+    auth_required: bool = True
+    auth_cookie_name: str = "local_edu_session"
+    auth_cookie_secure: bool = False
+    auth_session_expire_hours: int = 12
     data_dir: Path | None = None
     db_path: Path | None = None
     gaokao_data_dir: Path | None = None

@@ -119,6 +119,20 @@ def test_exam_score_import_and_analytics(client) -> None:
     assert student_payload["total_score"] == 243.0
     assert student_payload["class_rank"] == 1
     assert student_payload["grade_rank"] == 1
+    assert "trend_shape" in student_payload
+    assert student_payload["trend_shape"]["label"] in {
+        "数据不足",
+        "稳定",
+        "稳步上升",
+        "下滑",
+        "剧烈波动",
+        "U型反弹",
+    }
+    assert student_payload["stability"]["level"] in {"unknown", "high", "medium", "low"}
+    assert isinstance(student_payload["subject_trend_shapes"], list)
+    assert isinstance(student_payload["subject_structure"]["radar_points"], list)
+    assert isinstance(student_payload["peer_comparison"]["subject_gaps"], list)
+    assert isinstance(student_payload["target_progress"], list)
 
     class_analytics = client.get(f"/api/analytics/classes/1?exam_id={exam_id}")
     assert class_analytics.status_code == 200
@@ -188,6 +202,7 @@ def test_student_analysis_export_keeps_summary_structure(client) -> None:
     assert download_response.status_code == 200
 
     workbook = load_workbook(BytesIO(download_response.content))
+    assert {"核心概况", "学科诊断", "趋势轨迹", "行动建议"} <= set(workbook.sheetnames)
     summary_sheet = workbook["学生分析"]
     summary_rows = {
         summary_sheet.cell(row=index, column=1).value: summary_sheet.cell(row=index, column=2).value
@@ -204,7 +219,18 @@ def test_student_analysis_export_keeps_summary_structure(client) -> None:
     assert detail_sheet.cell(row=1, column=1).value == "科目"
     assert detail_sheet.cell(row=1, column=3).value == "班级名次"
     assert detail_sheet.cell(row=1, column=4).value == "年级名次"
+    assert detail_sheet.cell(row=1, column=9).value == "T分"
     assert detail_sheet.max_row == 3
+
+    diagnosis_sheet = workbook["学科诊断"]
+    assert diagnosis_sheet.cell(row=1, column=1).value == "科目"
+    assert diagnosis_sheet.cell(row=1, column=13).value == "诊断"
+
+    trend_sheet = workbook["趋势轨迹"]
+    assert trend_sheet.cell(row=1, column=1).value == "考试"
+
+    action_sheet = workbook["行动建议"]
+    assert action_sheet.cell(row=1, column=2).value == "标题"
 
     insight_sheet = workbook["摘要概览"]
     assert insight_sheet.cell(row=1, column=1).value == "标题"

@@ -4,10 +4,10 @@ from collections import defaultdict
 from dataclasses import dataclass
 
 from fastapi import HTTPException
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from app.models import AdmissionRecord, RecommendationResult, RecommendationScheme, Student
+from app.models import AdmissionRecord, RecommendationResult, RecommendationScheme, Student, StudentPathwayProfile
 from app.repositories.exams import get_exam
 from app.repositories.recommendations import list_major_employment_mappings_for_majors, list_recommendation_results
 from app.repositories.students import get_student_career_preference as repo_get_student_career_preference
@@ -39,6 +39,11 @@ from ._recommendations_score_lines import build_plan_only_reference_evaluation
 from ._recommendations_score_input import apply_input_context_to_evaluation, resolve_score_input_context
 from ._recommendations_shared import _load_recommendation_settings_state, _serialize_result
 from ._recommendations_special_type_rules import resolve_special_type_context
+from ._recommendations_volunteer_options import (
+    ART_MANUAL_REVIEW_TRACKS,
+    calculate_art_comprehensive_score,
+    normalize_art_track,
+)
 
 GENERIC_CHAPTER_PENDING_NOTE = "待通过阳光高考章程查询逐校补链，当前仅完成山东 2025 工作集名单。"
 
@@ -129,14 +134,43 @@ def _generate_for_student(session: Session, payload: RecommendationGeneratePaylo
 
     settings = _load_recommendation_settings_state(session)
     target_year = payload.target_year or exam.exam_date.year
-    student_type = detect_student_type(student)
     student_total_score, snapshot_rank = get_student_exam_metrics(session, payload.student_id, payload.exam_id)
     province = _resolve_recommendation_province(payload.province, student.origin_province)
+    pathway_profile = _load_student_pathway_profile(session, student.id, province)
+    profile_candidate_type = (pathway_profile.candidate_type or "").strip() if pathway_profile else ""
+    student_type = profile_candidate_type or detect_student_type(student)
+    candidate_art_track = (
+        normalize_art_track(payload.art_track)
+        or normalize_art_track(pathway_profile.art_track if pathway_profile else None)
+        or normalize_art_track(student.art_track)
+    )
+    resolved_comprehensive_score = payload.comprehensive_score
+    resolved_culture_score = payload.culture_score
+    resolved_professional_score = payload.professional_score
+    if student_type == "art":
+        art_context = _resolve_art_score_context(
+            culture_score=payload.culture_score if payload.culture_score is not None else payload.comprehensive_score,
+            professional_score=(
+                payload.professional_score
+                if payload.professional_score is not None
+                else pathway_profile.art_professional_score
+                if pathway_profile
+                else None
+            ),
+            professional_full_score=pathway_profile.art_professional_full_score if pathway_profile else None,
+            total_score=student_total_score,
+            art_track=candidate_art_track,
+        )
+        if art_context["blocking_detail"]:
+            raise HTTPException(status_code=400, detail=str(art_context["blocking_detail"]))
+        resolved_culture_score = art_context["culture_score"]
+        resolved_professional_score = art_context["professional_score"]
+        resolved_comprehensive_score = art_context["comprehensive_score"]
     input_context = resolve_score_input_context(
         score_input_mode=payload.score_input_mode,
         student_rank_override=payload.student_rank_override,
-        comprehensive_score=payload.comprehensive_score,
-        culture_score=payload.culture_score,
+        comprehensive_score=resolved_comprehensive_score,
+        culture_score=resolved_culture_score,
         score_range_min=payload.score_range_min,
         score_range_max=payload.score_range_max,
         rank_range_min=payload.rank_range_min,
@@ -144,8 +178,8 @@ def _generate_for_student(session: Session, payload: RecommendationGeneratePaylo
         reference_exam_name=payload.reference_exam_name,
         use_historical_mapping=payload.use_historical_mapping,
         risk_preference=payload.risk_preference,
-        total_score=student_total_score,
-        snapshot_rank=snapshot_rank,
+        total_score=resolved_comprehensive_score if student_type == "art" and resolved_comprehensive_score is not None else student_total_score,
+        snapshot_rank=None if student_type == "art" else snapshot_rank,
     )
     student_rank = input_context["effective_rank"]
     score_source = str(input_context.get("score_source") or "")
@@ -154,6 +188,7 @@ def _generate_for_student(session: Session, payload: RecommendationGeneratePaylo
         province=province,
         student=student,
         student_type=student_type,
+        art_track=candidate_art_track,
         target_regions=payload.target_regions_json,
         school_levels=payload.school_level_tags_json,
         major_keyword=payload.major_keyword,
@@ -168,6 +203,7 @@ def _generate_for_student(session: Session, payload: RecommendationGeneratePaylo
             province=province,
             student=student,
             student_type=student_type,
+            art_track=candidate_art_track,
             batch=None,
             exam_mode=None,
             target_regions=payload.target_regions_json,
@@ -201,9 +237,9 @@ def _generate_for_student(session: Session, payload: RecommendationGeneratePaylo
             "use_historical_mapping": payload.use_historical_mapping,
             "risk_preference": payload.risk_preference,
             "student_rank_override": payload.student_rank_override,
-            "comprehensive_score": payload.comprehensive_score,
-            "professional_score": payload.professional_score,
-            "culture_score": payload.culture_score,
+            "comprehensive_score": resolved_comprehensive_score,
+            "professional_score": resolved_professional_score,
+            "culture_score": resolved_culture_score,
             "note": payload.note,
         },
         is_default=False,
@@ -346,20 +382,13 @@ def _generate_for_student(session: Session, payload: RecommendationGeneratePaylo
                 plan=plan,
                 score_value=score_value,
                 score_source=score_source,
+                culture_score=resolved_culture_score,
+                comprehensive_score=resolved_comprehensive_score,
             )
             if score_line_fallback:
                 evaluation, score_line_reference = score_line_fallback
             else:
-                score_line_reference = None
-                plan_only_fallback = build_plan_only_reference_evaluation(
-                    province=province,
-                    target_year=target_year,
-                    student_type=student_type,
-                    plan=plan,
-                )
-                if not plan_only_fallback:
-                    continue
-                evaluation = plan_only_fallback
+                continue
             career_alignment = evaluate_career_alignment(
                 major=plan.major,
                 mappings=fallback_employment_mappings_by_major.get(plan.major_id or 0, []),
@@ -423,7 +452,7 @@ def _generate_for_student(session: Session, payload: RecommendationGeneratePaylo
                 plan=plan,
                 reference_scope=str(snapshot_json.get("reference_scope") or ""),
                 student_type=student_type,
-                score_value=_read_optional_float(snapshot_json.get("student_score")),
+                score_value=_score_value_for_fallback_priority(evaluation),
                 reference_score=score_line_reference.score if score_line_reference else None,
                 career_match_score=_read_optional_float(evaluation.get("career_match_score")),
                 batch_order=None,
@@ -544,6 +573,7 @@ def _generate_for_student(session: Session, payload: RecommendationGeneratePaylo
         challenge=[item for item in serialized if item.result_type == "challenge"],
         steady=[item for item in serialized if item.result_type == "steady"],
         safe=[item for item in serialized if item.result_type == "safe"],
+        watch=[item for item in serialized if item.result_type == "watch"],
     )
 
 
@@ -718,6 +748,81 @@ def _read_optional_float(value: object) -> float | None:
     if isinstance(value, (int, float)):
         return float(value)
     return None
+
+
+def _resolve_art_score_context(
+    *,
+    culture_score: float | None,
+    professional_score: float | None,
+    professional_full_score: float | None = None,
+    total_score: float,
+    art_track: str | None,
+) -> dict[str, object]:
+    normalized_art_track = normalize_art_track(art_track)
+    if not normalized_art_track:
+        return {"blocking_detail": "艺术类推荐需要先选择艺术类别。"}
+    if normalized_art_track in ART_MANUAL_REVIEW_TRACKS:
+        return {"blocking_detail": "戏曲类、校考或省际联考录取原则差异较大，需按当年公告和院校章程人工复核。"}
+    resolved_culture_score = culture_score if culture_score is not None else total_score
+    if resolved_culture_score is None:
+        return {"blocking_detail": "艺术类推荐需要文化成绩。"}
+    if professional_score is None:
+        return {"blocking_detail": "艺术类推荐需要先维护艺术专业统考分。"}
+    comprehensive_score = calculate_art_comprehensive_score(
+        art_track=normalized_art_track,
+        culture_score=float(resolved_culture_score),
+        professional_score=float(professional_score),
+        professional_full_score=professional_full_score,
+    )
+    if comprehensive_score is None:
+        return {"blocking_detail": "当前艺术类别暂未配置可自动计算的省统考综合分公式。"}
+    return {
+        "blocking_detail": None,
+        "culture_score": float(resolved_culture_score),
+        "professional_score": float(professional_score),
+        "comprehensive_score": comprehensive_score,
+    }
+
+
+def _load_student_pathway_profile(
+    session: Session,
+    student_id: int,
+    province: str | None,
+) -> StudentPathwayProfile | None:
+    normalized_province = (province or "").strip()
+    if normalized_province:
+        profile = session.scalar(
+            select(StudentPathwayProfile).where(
+                StudentPathwayProfile.student_id == student_id,
+                StudentPathwayProfile.province == normalized_province,
+                StudentPathwayProfile.is_active.is_(True),
+            )
+        )
+        if profile:
+            return profile
+    return session.scalar(
+        select(StudentPathwayProfile)
+        .where(
+            StudentPathwayProfile.student_id == student_id,
+            StudentPathwayProfile.is_active.is_(True),
+        )
+        .order_by(
+            (StudentPathwayProfile.province == "山东").desc(),
+            StudentPathwayProfile.id.desc(),
+        )
+    )
+
+
+def _score_value_for_fallback_priority(evaluation: dict[str, object]) -> float | None:
+    snapshot = evaluation.get("snapshot_json")
+    if not isinstance(snapshot, dict):
+        return None
+    score_basis = str(snapshot.get("score_line_score_basis") or evaluation.get("score_basis") or "")
+    if score_basis == "culture_score":
+        return _read_optional_float(snapshot.get("culture_score")) or _read_optional_float(snapshot.get("student_score"))
+    if score_basis == "comprehensive_score":
+        return _read_optional_float(snapshot.get("comprehensive_score")) or _read_optional_float(snapshot.get("student_score"))
+    return _read_optional_float(snapshot.get("student_score"))
 
 
 def _dedupe_strings(values: list[str | None]) -> list[str]:

@@ -40,6 +40,16 @@ export interface StudentAnalysisSubjectInsight {
   class_percentile?: number | null;
   grade_percentile?: number | null;
   score_delta?: number | null;
+  rank_deviation?: number | null;
+  diagnosis?: string | null;
+}
+
+export interface StudentActionSuggestionInsight {
+  category: string;
+  title: string;
+  summary: string;
+  subject_names?: string[];
+  priority?: number;
 }
 
 export interface StudentAnalysisInsightData {
@@ -52,6 +62,8 @@ export interface StudentAnalysisInsightData {
   grade_percentile?: number | null;
   previous_exam_name?: string | null;
   total_score_delta?: number | null;
+  overview_sentence?: string | null;
+  action_suggestions?: StudentActionSuggestionInsight[];
   subjects: StudentAnalysisSubjectInsight[];
 }
 

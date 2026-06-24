@@ -29,7 +29,7 @@
       <el-table-column label="专业" min-width="220">
         <template #default="{ row }">
           <div class="name-stack">
-            <strong>{{ row.name }}</strong>
+            <el-button link type="primary" class="name-link" @click="emit('open-detail', row.id)">{{ row.name }}</el-button>
             <span v-if="row.major_code">{{ row.major_code }}</span>
           </div>
         </template>
@@ -57,12 +57,24 @@
         </template>
       </el-table-column>
     </el-table>
+    <el-pagination
+      v-if="pagination.total"
+      class="table-pagination"
+      background
+      layout="total, sizes, prev, pager, next"
+      :current-page="pagination.page"
+      :page-size="pagination.page_size"
+      :page-sizes="[50, 100, 200]"
+      :total="pagination.total"
+      @current-change="emit('page-change', $event)"
+      @size-change="emit('page-size-change', $event)"
+    />
     <el-empty v-if="!majors.length" description="暂无专业数据" />
   </section>
 </template>
 
 <script setup lang="ts">
-import type { MajorItem } from "./types";
+import type { MajorItem, PaginationState } from "./types";
 
 interface MajorFiltersState {
   keyword: string;
@@ -72,13 +84,17 @@ interface MajorFiltersState {
 defineProps<{
   majors: MajorItem[];
   filters: MajorFiltersState;
+  pagination: PaginationState;
 }>();
 
 const emit = defineEmits<{
   load: [];
   reset: [];
+  "page-change": [value: number];
+  "page-size-change": [value: number];
   create: [];
   edit: [value: MajorItem];
+  "open-detail": [majorId: number];
 }>();
 </script>
 
@@ -91,12 +107,21 @@ const emit = defineEmits<{
   margin-bottom: 16px;
 }
 
+.table-pagination {
+  margin-top: 16px;
+  justify-content: flex-end;
+}
+
 .name-stack {
   display: grid;
   gap: 4px;
 }
 
-.name-stack strong {
+.name-stack .name-link {
+  justify-content: flex-start;
+  padding: 0;
+  height: auto;
+  font-weight: 650;
   color: #203449;
 }
 

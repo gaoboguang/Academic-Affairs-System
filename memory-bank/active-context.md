@@ -2,6 +2,343 @@
 
 ## 当前状态
 
+- 2026-06-23 已完成学校服务器受控多人使用第一版及发布前复核：
+  - 新增 `admin` / `teacher` 两类账号，教师不开放注册，只能由管理员创建
+  - 后端已接入服务端会话 Cookie、CSRF 校验、Argon2 密码哈希、管理员初始化命令和账号管理接口
+  - 教师范围按班主任班级、任教班级和管理员补充授权班级合并；学生列表、学生详情、学生编辑和成绩导入已按范围限制，范围外统一 `403` 或进入导入错误报告
+  - 前端已新增登录页、首次改密页、无权限页、账号管理页、auth store、带 Cookie/CSRF 的请求封装和按权限过滤的左侧菜单
+  - 上线文档新增 `docs/server-deployment-and-roles.md`，后端仍建议监听 `127.0.0.1`，由 Nginx/HTTPS 反向代理提供域名访问
+  - 已通过 `npm run check:all`：后端 217 项、前端 245 项、生产构建和 50 条跨端 E2E；临时空库迁移已到 `20260601_0034 (head)`，`git diff --check` 通过
+  - GitHub 发布只包含代码、迁移、测试与文档；`data/app.db`、handoff 数据库、备份、导入导出文件、日志和上传附件继续留在本机
+
+- 2026-06-01 追加学生详情“教师评语”板块：
+  - 后端新增 `student_teacher_comment` 与 `/api/students/{student_id}/teacher-comments` 读写接口
+  - 普通教师查看仍按学生范围限制；发布评语要求账号关联教师档案，且任教关系覆盖该生当前或历史班级的对应科目
+  - 前端学生详情新增“教师评语”页签，教师可发布留言，调班后的新教师可查看历史评语
+  - 批量删除预检已把教师评语计入关联历史数据，软删除学生主档不会删除评语
+
+- 2026-05-13 已完成高考志愿推荐候选区筛选与分页：
+  - 后端 `VolunteerWorkbenchCandidateRead` 和山东普通类候选响应补充 `college_province`、`college_city`、`college_school_type`、`college_ownership`，志愿工作台候选可直接携带院校地区、类型和办学性质
+  - 办学性质不新增数据库字段，按院校标签、院校类型、备注和 `college_profile_detail.raw_json.attr_list` 等现有画像文本推断；能确认“民办”显示民办，能确认“公办 / 教育部直属 / 省属”显示公办，识别不到前端显示“未维护”
+  - 前端候选区新增“候选筛选”，支持按地区、省市、办学性质和关键词筛选当前已返回候选；候选卡增加地区和办学性质展示
+  - 候选区改为分页展示，默认每页 30 条，可切换 30 / 60 / 100；筛选条件变化或候选刷新时自动回到第 1 页
+  - 验证通过：后端推荐流程专项 16 passed，前端工作台单测 44 passed，`frontend:lint`、`frontend:build`、`git diff --check` 均通过
+
+- 2026-05-13 已修复高考志愿“筛选摘要候选数看起来对不上”的前端展示口径：
+  - 根因确认：后端 `source_preview.candidate_count` 是全部命中候选数，`returned_candidate_count` 是页面实际返回/展示条数；推荐向导候选返回上限为 300 条，分组卡只统计当前展示候选，所以截图中 606 与 213+62+25+0=300 并非数据库错乱
+  - 前端新增 `buildVolunteerGuideDisplaySummary()`，把“共命中 N 条 / 当前展示前 M 条 / 分组卡统计当前展示候选”分开展示；截断时分组卡标注“当前展示分布”
+  - `RecommendationVolunteerWorkbenchPanel.vue` 已改用统一摘要 helper，不再直接把总命中数和分组展示数混在一个口径里
+  - 验证通过：`npm run frontend:test -- tests/volunteer-guide.test.ts tests/volunteer-workbench.test.ts` 为 53 passed；`frontend:lint`、`frontend:build` 通过；相关文件 `git diff --check` 通过
+
+- 2026-05-13 已修复高考志愿候选“无最低录取成绩 / 位次却显示冲刺”的口径问题：
+  - 根因确认：`plan_only`（只有招生计划、没有录取线）和 `score_line`（仅省控线 / 资格线参考）兜底评估此前返回 `result_type=challenge`，前端按后端分组如实显示为“冲刺”，造成“没有最低分/位次也判断冲刺”的误导
+  - 后端已改为：计划清单初筛、历史计划模拟且缺同校同专业录取线、省控线资格参考，一律返回 `result_type=watch`，只进入“仅关注”，不得进入冲刺 / 稳妥 / 保底
+  - 旧 `/api/recommendations/generate` 响应新增 `watch` 分组；推荐历史、学生详情推荐记录、方案对比、打印预览、导出风险对比均同步识别“仅关注”
+  - 前端旧方案结果页增加“关注”统计与“仅关注”列；打印页摘要改为“冲 / 稳 / 保 / 关注”
+  - 业务口径：只有招生计划或资格线时只能说明“可关注、需人工核对、不能判断录取把握”；只有院校/专业历史最低分或最低位次时，才允许进入冲稳保分层
+  - 验证通过：后端推荐专项 `30 passed`；前端相关定向 `52 passed`；`frontend:lint`；`frontend:build`；`backend:data-health -- --json` 成功但保持既有单招/综评 warning；SQLite `20260510_0032` / `integrity_check=ok` / 外键检查无输出；`git diff --check`
+
+- 2026-05-12 已追加完成院校库“带空格旧名 / 别名污染成活跃山东副本”的二次核查与修复：
+  - 前次核查漏掉一层：部分 `gaokao_college` / raw 快照中的旧写法在中文院校名中带内部空格，例如 `东华理工 大学`、`中国人民 公安大学`、`中国人民 警察大学`、`宁夏工商职业 技术学院`；旧链路会把这些旧名当成独立活跃院校，并沿用山东招生记录上下文，导致院校库仍出现“山东 / 北京市、南昌市、廊坊市”等异常地区
+  - 真实主库已备份到 `data/backups/app_before_college_space_name_cleanup_20260512_155114.db`；已停用带空格旧名山东副本，`宁夏工商职业 技术学院` 已规范为 `宁夏工商职业技术学院`，旧带空格写法保留为 `college_alias`，保证搜索兼容但不作为院校本体展示
+  - `apps/backend/app/utils/gaokao_materialize.py` 已新增中文院校名内部空格压缩：当 raw 主名含内部空格且别名中存在无空格正式名时，应用侧展示名采用无空格正式名；raw 计划 / 录取 join 应用院校时也按压缩后的中文名匹配
+  - `scripts/import_gaokao_scraper_bundle.py` 和院校目录查询保持 canonical 名称 / 别名匹配策略：旧名输入可以搜到正式院校，但不得重新创建活跃副本；`/api/colleges/catalog/page` 搜索 `college_alias.alias_name`
+  - 真实库复核：活跃院校名内部空格残留为 0；截图异常样例中 `东华理工 大学`、`中国人民 公安大学`、`中国人民 警察大学` 已停用，正式主档分别为江西 / 抚州市、北京 / 西城区、河北 / 廊坊市；`宁夏工商职业 技术学院` 搜索命中宁夏 / 银川市正式院校
+
+- 2026-05-12 已修复“近三年录取分数不应该空白”的数据链路问题：
+  - 根因确认：`gaokao-scraper/output_final/all_categories_records.json` 中部分艺术类 / 体育类投档情况表把综合投档分放在源字段 `min_rank`，旧导入按“最低位次”落到应用侧，导致院校详情和候选卡显示最低分为空、最低位次出现 446 / 574 这类分数值
+  - `scripts/import_gaokao_scraper_bundle.py` 已新增语义归一：艺术类 / 体育类记录在 `min_score` 为空且 `min_rank` 位于 100-750 分数区间时，应用侧和 raw 侧均按最低分写入，最低位次置空，并在应用侧 `source_note` 标记“投档分字段识别为最低分”
+  - 真实主库已备份到 `data/backups/app_before_admission_score_backfill_20260512_124005.db`，并回填存量错位数据：应用侧 `admission_record` 2484 条、raw `gaokao_admission_result` 2501 条；回填后艺术 / 体育错位剩余数为 0
+  - 真实接口复核：三亚学院艺术类 / 体育类分页数据最低分已显示 446、445.75、415.84、574.46 等；志愿候选卡普通类“法学”样例近三年显示 515 / 510 / 501，音乐类候选样例显示 494.99、485.03 等最低分
+  - 最新验证通过：`npm run backend:test -- apps/backend/tests/test_gaokao_scraper_bundle_import.py apps/backend/tests/test_gaokao_profile_details.py -q` 为 9 passed；`npm run backend:data-health -- --json` 成功但保持既有单招/综评 warning；SQLite `integrity_check=ok`、外键检查无输出；`git diff --check` 通过
+
+- 2026-05-12 已完成“院校库独立浏览页 + 院校详情招生数据分页”：
+  - 当前分支：`codex/college-catalog-page`
+  - 新增只读院校浏览接口 `GET /api/colleges/catalog/page`，按“有院校身份信息或画像”的启用院校分页返回基础信息、画像状态、招生计划数、录取/投档数、最近计划年份和最近录取年份；支持 `keyword`、`province`、`school_type`、`level_tag`、`has_profile`、`has_admission_data` 筛选
+  - 2026-05-12 追加修复用户截图问题：院校所在地曾被旧导入用“招生省份=山东”覆盖，且 scraper 中存在专业名错位成院校名的异常行（如 `AA物联网应用技术`）；现在导入投档/录取记录不再把山东招生省份写入院校所在地，疑似错位专业名只保留 raw、不进入应用侧 `college/admission_record`
+  - 院校库目录默认排除无身份信息的专业名脏记录、`高校专项计划/综合评价招生/航海类/定向培养军士生/高本贯通/校企合作计划/省属公费/地方专项计划` 等招生计划变体；旧维护接口 `/api/colleges/page` 不受影响，仍保留原始口径方便维护
+  - scraper 导入新增 gaokao_college 别名/全半角括号归一匹配，避免再次把 `中国地质大学(北京)` 这类山东招生记录新建成错误所在地副本
+  - 真实主库已备份到 `data/backups/app_before_college_duplicate_location_cleanup_20260512_122119.db`，并清理现有数据：回填外省院校所在地，停用 `AA/AB/...` 字母前缀伪院校，合并/停用 11 组全角/半角括号重复院校主档并迁移可合并的招生计划、录取/投档和院校专业关系
+  - 后端未新增数据库表、未新增迁移；汇总只读取 `college`、`college_profile_detail`、`enrollment_plan`、`admission_record`，列表页用聚合子查询避免大表展开；SQLite JSON 层级标签筛选使用 `json_each` 精确匹配数组项
+  - 前端新增 `/colleges` 只读院校库页面和左侧“决策输出 / 院校库”入口；列表支持搜索、筛选、分页和进入详情，不提供新增/编辑，维护仍留在 `/recommendations` 数据与规则中心
+  - `/colleges/:collegeId` 详情页保留院校画像、联系方式、山东近年趋势、开设专业画像和来源证据；“招生数据”改为招生计划 + 录取/投档两个页签，均通过既有分页接口按院校查询，并支持年份、省份、批次、考生类型和计划专业关键词筛选
+  - `GET /api/admissions/page` 兼容新增 `batch` 查询参数，供院校详情筛选录取/投档批次使用
+  - 新增测试：后端院校目录接口测试、前端 `college-catalog.test.ts`、导航测试更新、E2E `tests/e2e/colleges.spec.ts`
+  - 最新验证通过：后端院校/导入专项 `8 passed`；前端院校/导航定向 `8 passed`；`npm run frontend:lint`；`npm run frontend:build`；`npm run e2e -- tests/e2e/colleges.spec.ts` 为 1 passed；`npm run backend:data-health -- --json` 成功但保持既有单招/综评 warning；SQLite `integrity_check=ok`、外键检查无输出；真实接口抽样确认三亚学院为海南/三亚市、中国地质大学只展示北京/武汉正式主档、`高校专项计划` 和 `AA` 搜索均为 0；`git diff --check`
+
+- 2026-05-12 已完成全项目体检并直接修复唯一真实安全项：
+  - 在核对 Electron 官方 breaking changes 后，将桌面壳 `apps/desktop/package.json` 的 `electron` 从 `37.3.1` 升级到 `42.0.1`，同步更新 `package-lock.json`
+  - 桌面壳仅使用 `BrowserWindow`、菜单、`dialog`、`shell.openPath/openExternal` 和本地 HTTP 代理，未使用本轮 Electron 38-42 breaking changes 中受影响的通知、offscreen、cookie changed、clearStorageData 旧签名或 renderer clipboard API
+  - 安全审计已清零：`npm audit --omit=dev --json` 和 `npm audit --json` 均为 0 vulnerabilities；`./.venv/bin/python -m pip_audit` 为 No known vulnerabilities（本地 editable 包 `local-edu-backend` 跳过属正常）
+  - 桌面验证通过：`npm run desktop:prepare` 与 `npm run desktop:dist:mac` 均通过，electron-builder 使用 `electron=42.0.1` 完成 mac dir 打包
+  - 全项目验证通过：SQLite `20260510_0032` / `integrity_check=ok` / 外键检查无输出；`npm run backend:data-health -- --json` 成功但保持已知数据 warning；`npm run --silent backend:p0-check -- --json` 为 `ok: true` 并新增 `data/backups/p0_delivery_backup_20260512_084637.zip`；`npm run check` 通过（后端 167 passed、前端 lint、前端 224 passed、前端构建）；`npm run check:e2e` 为 46 passed
+  - 当前剩余 warning 不是代码崩溃：单招 / 综评有计划但缺专门录取结果，只能初筛；2026 正式普通类招生计划、一分一段、省控线等待官方发布后导入
+  - 当前体积复核：`data/backups` 约 16G，`data/app.db` 约 813M，`data/` 约 17G，`dist/desktop` 约 311M
+
+- 2026-05-11 已完成“艺术类计划补导、历史参考候选、音乐类过滤与候选区 UI 修复”：
+  - 当前分支：`codex/gaokao-music-history-ui-fix-20260511`
+  - 本轮不新增数据库表、不新增迁移；已重新扫描 `/Users/gao/Desktop/高考志愿/gaokao-scraper`，将可确认的艺术类院校专业计划补入真实主库 `enrollment_plan` / `gaokao_admission_plan`
+  - 扫描确认：本地数据包里稳定符合“艺术类院校专业计划”结构的 Excel 只有 `data/all_toudang/6992.xls` 和 `data/all_toudang/7013.xls`；其余艺术类文件多为投档情况表，只能作为历史录取/投档参考，不能硬写成招生计划
+  - 已补入 `gaokao_scraper_art_plan_detail_20260511`：2025 本科批 65 条、35 校、23 专业、计划数 433；2025 专科批 90 条、46 校、26 专业、计划数 1416；其中音乐方向本科 27 条、专科 30 条
+  - 已把已有艺术类历史录取/投档中能确认专业方向、但缺同校同专业招生计划的记录补成 `history_only` 候选；页面标注“缺招生计划，仅历史参考”，加入草稿时不会把负 `plan_id` 当作真实计划保存
+  - 后端在 `apps/backend/app/services/_recommendations_volunteer_options.py` 新增艺术类别文本识别：招生计划 / 录取记录缺结构化 `art_track` 时，从专业名、计划快照名和来源备注推断艺术类别；`opera` 优先识别，避免“戏曲音乐”误进音乐类
+  - `candidate_type=art` 但 `art_track` 缺失或异常时会阻断；旧中文简称如“音乐”会归一为 `music`，但泛艺术 `art` 不再退化为美术与设计类
+  - 音乐类过滤已收紧为必须命中音乐、声乐、器乐、钢琴、音乐剧等正向关键词；没有音乐正向证据的艺术计划（如影视多媒体技术、广播影视节目制作、文物修复与保护等）不会进入音乐推荐池，美术与设计、舞蹈、表导、书法、播音、戏曲等也会被排除
+  - `EnrollmentPlan.major_name_snapshot` 已纳入过滤和展示；当标准专业名过泛（如“表演”）但计划快照含“音乐剧 / 音乐类统考成绩”时，候选展示更具体的计划快照名，避免老师看不出类别口径
+  - `VolunteerWorkbenchCandidateRead` 新增 `recent_history_json`，每条候选返回目标年前最近 3 个可用历史年份的计划人数、录取/投档人数、最低分、最低位次和学费；计划与录取专业 ID 不一致时，先按同校同艺术类别 + 规范化专业名补齐历史
+  - 前端候选区已从拥挤表格改为全宽候选卡，上方候选池、下方草稿区；默认不再展示大段“依据”，改为展示“近三年招生/录取情况”分区，包含年份、批次、计划、录取/投档、最低分、最低位次、学费
+  - 窄屏下近三年明细表使用横向滚动并保持 7 个字段对齐，避免字段挤压、错位或文字竖排；旧草稿缺 `recent_history_json` 时会兼容为空，不崩溃
+  - 修复向导就绪度误判：`candidate_result_truncated` 只作为 warning，不再把“已命中 609 条、页面展示前 300 条”的场景打成 blocked
+  - 真实库抽样：段立萌 / exam_id=2 / 山东 2026 / 艺术类本科批统考 / 音乐类 / 文化分 370.5 / 专业分 238 / 历史映射开启，当前返回 609 条候选、展示前 300 条，`readiness=warning`、`blocking_count=0`，美术/设计/舞蹈/书法/播音/戏曲音乐混入数为 0
+  - 当前艺术类最低位次大量为空是源数据事实：山东艺术类录取表多给综合最低分和人数，不稳定提供最低位次；系统不会伪造位次
+  - 最新验证通过：后端专项 `21 passed`；`npm run backend:test` 为 `167 passed`；`npm run frontend:test` 为 `42 files / 224 tests passed`；`npm run frontend:lint`、`npm run frontend:build` 通过；`npm run e2e -- tests/e2e/gaokao-volunteer.spec.ts` 为 `11 passed`；`npm run backend:data-health -- --json` 成功但保持已知 warning；SQLite `20260510_0032` / `integrity_check=ok` / 外键检查无输出；真实接口抽样和 `git diff --check` 通过
+
+- 2026-05-11 已修复“山东艺术类本科批统考仍无候选”的真实根因：
+  - 根因不是批次规则缺失；真实库 `province_volunteer_rule` 已有山东 2026 `艺术类本科批统考` art 规则，截图条件能命中 1 条规则
+  - 真实原因是应用侧 `enrollment_plan` 中山东 2026 招生计划为 0；此前 preview 只按目标年查计划，所以规则命中但候选计划为 0
+  - 后端新增目标年计划选择逻辑：目标年有计划时使用目标年；目标年无计划且 `use_historical_mapping=true` 时，回退最近可用历史计划年做模拟候选；未开启历史映射时明确返回 `missing_target_year_enrollment_plan`
+  - 历史模拟候选会显式标记 `historical_plan_simulation`，候选说明写明“按 2025 年历史招生计划模拟，不是 2026 年正式招生计划”，不可包装成正式录取把握
+  - 前端风险标签新增中文文案“按历史计划模拟”，readiness 短摘要优先提示“先处理招生计划”，避免继续显示泛化“调整条件或补充数据”
+  - 真实接口复核：段立萌 / 202604高三二模 / 山东 2026 / 艺术类本科批统考 / 音乐类 / 文化分约 370.5 / 专业分约 238，开启历年映射和 history-only 后返回 609 条候选、展示前 300 条；关闭历年映射时仍阻断并提示山东 2026 正式招生计划尚未导入
+  - 已重启本地服务，当前前端 `http://127.0.0.1:5173`、后端 `http://127.0.0.1:8000`
+  - 验证通过：后端推荐专项 `26 passed`、后端全量 `158 passed`、前端相关定向 `56 passed`、前端全量 `42 files / 220 tests passed`、`frontend:lint`、`frontend:build`、高考志愿 E2E `11 passed`、`backend:data-health -- --json` 成功但仍为已知 warning、SQLite `20260510_0032` / `integrity_check=ok` / 外键检查无输出
+  - 当前健康警告仍是数据事实：2026 正式招生计划、一分一段、省控线待官方发布；单招 / 综评缺专门录取结果，只能初筛
+
+- 2026-05-11 已完成“高考志愿字段统一与艺术生综合分修复”：
+  - 当前分支：`codex/gaokao-art-score-unification-20260510`
+  - 真实主库已先备份到 `data/backups/app_before_art_volunteer_fields_20260511_000001.db`，再执行迁移到 Alembic `20260510_0032`；SQLite `integrity_check=ok`，`foreign_key_check` 无输出
+  - 新增迁移 `apps/backend/alembic/versions/20260510_0032_art_volunteer_fields.py`：为 `student_pathway_profile` 增加 `art_professional_score`、`art_professional_full_score`、`art_score_source`、`art_score_note`，为 `volunteer_draft` 增加 `art_track`
+  - 新增统一字段配置服务 `apps/backend/app/services/_recommendations_volunteer_options.py` 和接口 `GET /api/recommendations/volunteer-guide/options?province=山东&year=2026`；前端志愿向导的考生类型、艺术类别、批次别名、成绩来源和艺术综合分公式以后端 options 为准
+  - 字段语义已统一：`candidate_type` 只表示普通类 / 艺术类 / 体育类 / 春考 / 单招 / 综评等大类；`art_track` 单独表示美术与设计、音乐、舞蹈、表（导）演、书法、播音与主持、戏曲；旧 `candidate_type=music/fine_art/dance/media` 会兼容归一为 `candidate_type=art` + 对应 `art_track`
+  - 批次别名已归一：`艺术本科批`、`艺术类本科批`、`艺术类本科统考批` 等在山东统一落到 `艺术类本科批统考`；计划 / 历史查询兼容同义批次，避免前端误报“艺术本科批暂未维护规则”
+  - 艺术类推荐必须有文化分、艺术类别和专业统考分；美术与设计、音乐、舞蹈、表（导）演按 `文化成绩 * 50% + 专业成绩 * 750 / 300 * 50%`，书法按 `60%/40%`，播音与主持按 `70%/30%`；戏曲 / 校考 / 省际联考保留人工复核，不包装成录取把握
+  - 普通类校内考试只自动带入总分，不再把校内位次写入推荐位次；`estimated_score` 模式会优先用官方一分一段换算省位次，缺少一分一段时明确提示只能按分数和计划模拟参考
+  - 学生“升学画像”页面、批量导入导出模板、志愿草稿保存 / 读取、旧推荐生成入口、志愿向导 preview 均已带上艺术类别和专业分字段；旧草稿和旧 payload 保持兼容
+  - E2E 公共志愿填表 helper 已改为默认使用“正式位次（高考省位次）”填测试用省位次，避免测试重新依赖校内名次；另保留“分数区间”和“校内分数估算”专项链路
+  - 验证通过：`npm run backend:test` 为 156 passed；`npm run frontend:test` 为 42 files / 220 tests passed；`npm run frontend:lint` 通过；`npm run frontend:build` 通过；`npm run e2e -- tests/e2e/gaokao-volunteer.spec.ts` 为 11 passed；`npm run check:e2e` 为 46 passed；`npm run backend:data-health -- --json` 成功但为已知 warning；SQLite 版本 `20260510_0032`、完整性 `ok`
+  - 当前唯一健康警告仍是数据事实：单招 / 综评已有招生计划但缺专门录取结果，只能初筛，不能当作完整录取把握
+
+- 2026-05-10 已完成“高考志愿向导界面低风险重做”：
+  - 当前分支仍为 `codex/gaokao-volunteer-guide-20260510`
+  - `/recommendations` 默认首屏已收口为单一“高考志愿推荐向导”，外层重复的条件栏、步骤卡和生成前复核卡已移除；页面顶部只保留“升学方案中心 / 高级工具 / 回到推荐向导”和简洁状态条
+  - `RecommendationVolunteerWorkbenchPanel.vue` 已重排为四步：`1 考生条件`、`2 意向偏好`、`3 智能筛选`、`4 志愿草稿`；详细筛选解释、规则差异和风险校验默认收进“查看依据与复核明细”
+  - “推荐中心”“山东普通类推荐”“历史方案”“数据与规则”“数据健康”已收进右上角“高级工具”，旧能力保留且 E2E 已验证可进入
+  - 新增 / 调整前端 helper：分步状态、批次规则分组、短阻断提示、下一步动作摘要；批次选项优先展示已配置规则批次，无规则批次显示维护提示
+  - 修复本轮暴露的 Element Plus 按需注册漏项：补齐 `ElDropdown/ElDropdownMenu/ElDropdownItem`、`ElCollapse/ElCollapseItem`、`ElCheckbox/ElCheckboxButton/ElCheckboxGroup`，避免高级工具、折叠面板或复选框在真实页面中渲染成原生未知标签
+  - 本轮只改前端展示层、组件注册和测试；未改后端接口、推荐算法、数据库结构，也未写 `data/app.db`
+  - 验证：`frontend:test -- tests/volunteer-guide.test.ts tests/volunteer-workbench.test.ts tests/navigation.test.ts` 为 53 passed；`frontend:lint` 通过；`frontend:build` 通过；`e2e -- tests/e2e/gaokao-volunteer.spec.ts` 为 11 passed；`e2e -- tests/e2e/recommendations.spec.ts` 为 9 passed；`e2e -- tests/e2e/admin-stat-grid-layout.spec.ts` 为 5 passed；`check:e2e` 为 46 passed；`backend:data-health -- --json` 仍为已知 warning（单招 / 综评缺专门录取结果）
+
+- 2026-05-10 已完成“志愿向导自动带入考试成绩”体验修正：
+  - 当前分支仍为 `codex/gaokao-volunteer-guide-20260510`
+  - 志愿推荐向导选择学生和参考考试后，会复用既有 `GET /api/analytics/exams/{exam_id}/students` 自动读取该学生总分与校内名次
+  - 有总分和校内名次时自动切到 `预估分 + 预估位次（本次考试/模拟推荐）`，填入 `comprehensive_score`、`student_rank_override` 和 `reference_exam_name`；只有总分无名次时只填总分并提示补位次；无成绩或读取失败时只提示手填，不阻塞其它条件
+  - 若老师已经手动改过分数、位次或成绩/位次来源，系统不覆盖，只显示“一键使用本次考试成绩”
+  - 页面文案从“分数模式”调整为“成绩/位次来源”，并明确提示“校内考试口径，仅作模拟参考，不是山东省正式位次；高考出分后切换为正式位次（高考省位次）”
+  - 新增 `apps/frontend/tests/volunteer-workspace-autofill.test.ts`，并扩展 `volunteer-workbench.test.ts` 覆盖自动带入、手动覆盖保护、切换考试和缺名次提示
+  - 本轮不新增后端接口、不新增数据库迁移、不改推荐算法
+  - 验证：`frontend:lint` 通过；`frontend:test -- tests/volunteer-guide.test.ts tests/volunteer-workbench.test.ts tests/volunteer-workspace-autofill.test.ts tests/navigation.test.ts` 为 53 passed；`frontend:build` 通过；`e2e -- tests/e2e/gaokao-volunteer.spec.ts` 为 11 passed；`check:e2e` 为 46 passed；`backend:data-health -- --json` 仍为已知 warning（单招 / 综评缺专门录取结果）
+
+- 2026-05-10 已完成“高考志愿板块阳光志愿式修整”：
+  - 当前分支：`codex/gaokao-volunteer-guide-20260510`
+  - `/recommendations` 默认入口已改为“高考志愿推荐向导”，首屏按“考生条件 → 意向偏好 → 智能筛选 → 志愿草稿”组织；推荐中心和山东普通类推荐保留为工作台内高级/历史工具，数据与规则维护入口不删除
+  - 新增后端编排接口 `POST /api/recommendations/volunteer-guide/preview`，复用既有志愿工作台候选池，额外返回 `readiness`、冲/稳/保/仅关注 `groups`、证据解释、下一步动作、规则和输入口径；前端再适配回旧 `VolunteerWorkbenchPreviewResponse`，继续复用草稿、打印、导出和志愿上限校验
+  - 新增 `apps/backend/app/services/_recommendations_volunteer_guide.py`、前端 helper `apps/frontend/src/components/recommendations/volunteerGuide.ts` 与对应后端/前端测试
+  - 新向导不接入阳光高考接口，不复制外部 UI；仅参考教育部“阳光志愿”公开逻辑，把本地数据重排成连续辅导流程
+  - 页面明确提示结果只作本地参考，正式填报仍以省级志愿系统为准；特殊类型继续只做初筛/人工复核，不包装成录取把握
+  - 2026-05-10 收口复核：`npm run backend:test -- apps/backend/tests/test_volunteer_guide.py apps/backend/tests/test_recommendation_workflow.py -q` 为 18 passed；`npm run frontend:lint` 通过；`npm run frontend:test -- tests/volunteer-guide.test.ts tests/volunteer-workbench.test.ts tests/navigation.test.ts` 为 46 passed；`npm run frontend:build` 通过；`npm run e2e -- tests/e2e/gaokao-volunteer.spec.ts` 为 11 passed；`npm run check:e2e` 为 46 passed；`npm run backend:data-health -- --json` 运行成功且仍为已知 warning；`npm run check` 通过，后端 149 passed、前端 41 files / 208 tests passed、lint 和 build 通过
+  - 收口期间同步修正 E2E 口径：`admin-stat-grid-layout.spec.ts` 改用新标题“高考志愿推荐向导”；`gaokao-volunteer.spec.ts` 排序验证改用页面已有“上移”按钮；`localEduE2e.ts` 的 Element Plus 下拉选择增加短重试，避免完整套件中弹层过渡导致偶发不可见
+
+- 2026-05-09 已修正高考数据总览口径文案：
+  - 用户看到“招生网覆盖 54.22% / 章程链接覆盖 12.56%”后误以为昨天补的数据仍不完整；实际这些卡片统计的是 `gaokao_college` 和 `gaokao_college_chapter_rule` 的官网 / 章程链接证据链覆盖，不是招生计划或录取结果完整度
+  - 当前真实主库应用侧数据已入库：`enrollment_plan=63561`、`admission_record=189077`；raw 层为 `gaokao_admission_plan=66584`、`gaokao_admission_result=282260`
+  - 前端 `GaokaoDataPage.vue` 已改用 `buildGaokaoOverviewHelpText()`，在已有应用侧计划 / 录取记录时直接提示“应用侧数据已入库：招生计划 X 条，录取结果 Y 条；上方覆盖率只表示官网 / 章程链接证据链还需继续补齐”
+  - 新增 `gaokao-overview` 单测覆盖此口径，避免后续把链接覆盖率重新解释成录取数据缺口
+
+- 2026-05-09 已完成“升学画像批量导入导出”：
+  - 复用既有 `student_pathway_profile` 表和单人画像逻辑，不新增迁移或新表；本轮未直接写真实 `data/app.db`
+  - 后端新增 `/api/gaokao/pathway-profiles/template`、`/api/gaokao/pathway-profiles/import`、`/api/gaokao/pathway-profiles/export`
+  - Excel 模板 / 导出列统一为中文字段：学号、姓名、班级、生源地、考生类型、考试类型、选科组合、春考专业类别、艺术类别、体育类别、身份确认项、意向接受项、常用材料勾选、体检限制、备注；“班级”仅用于定位学生，导入仍不按班级匹配或改班
+  - 导入以学号匹配学生，姓名只做辅助核对；学生不存在、姓名不一致、考生类型 / 考试类型 / 布尔值不合法都会进入错误报告
+  - 空白单元格导入时保留原画像字段，不清空既有值；只含“学号 + 选科组合”的精简文件可以批量补选科
+  - 导入只维护画像本身，不自动生成或刷新路径评估；老师仍需在学生详情或升学方案中心刷新评估
+  - 学生中心新增“升学画像批量维护”区，包含模板下载、画像数据下载、上传画像和导入结果反馈；导入中心模板列表新增“升学画像导入”，业务入口指向 `/students`
+
+- 2026-05-09 已完成项目安全体检修复与备份清理：
+  - 当前分支：`codex/security-remediation-20260509`
+  - 按积极清理策略处理 `data/backups` 中旧 `.db/.zip` 备份：清理前生成 `.tmp/backup-cleanup-manifest-20260509.json`，原有 76 个备份保留 20 个、删除 56 个，实际删除 14,928,372,365 bytes（约 13.9 GiB）；清理后生成 `.tmp/backup-cleanup-after-20260509.json`
+  - 清理后 P0 复核新增最新备份 `data/backups/p0_delivery_backup_20260509_085323.zip`，因此当前 `data/backups` 有 21 个 `.db/.zip` 备份；不要误删 `data/app.db`、上传、导出、模板和 2026-05-01 以来主库备份
+  - 备份目录从约 `27G` 降到 `13G`，`data/app.db` 仍约 `811M`，`data/` 约 `14G`
+  - SQLite 复核：真实主库 Alembic `20260508_0031`，`PRAGMA integrity_check=ok`，`PRAGMA foreign_key_check` 无输出
+  - `backend:p0-check -- --json` 为 `ok: true`，数据健康仍为已知 `warning`：单招 / 综评仍缺专门录取结果，只能初筛
+  - 修复分析中心全景对比 E2E：`AnalyticsPage.vue` 在切到 `grade-panorama`、`class-panorama`、`teacher-panorama` 页签时首次自动加载数据，loading 中不重复请求，手动“查询 / 重置”仍保留；`tests/e2e/recommendations.spec.ts` 同步用稳定下拉 helper 修复 Element Plus 多选弹层偶发不稳定
+  - 依赖安全：前端 `vite` 升到 `^6.4.2`、`postcss` 显式升到 `^8.5.14` 并用根 `overrides.postcss=8.5.14` 固定；桌面打包链 `electron-builder` 升到 `26.8.1`；后端依赖下限补 `mako>=1.3.12`、`python-multipart>=0.0.27`，dev 依赖 `pytest>=9.0.3,<10.0`，虚拟环境 `pip` 升到 `26.1.1`
+  - 审计结果：当时 `npm audit --omit=dev --json` 为 0 漏洞，`npm audit --json` 仅剩 Electron 37.3.1 high 风险；该风险已于 2026-05-12 升级 Electron 42.0.1 后清零；`pip-audit` 为 No known vulnerabilities，跳过本地 editable 包 `local-edu-backend`
+  - 验证：目标 E2E `多学年全景` 通过；完整 `npm run check:e2e` 为 `46 passed`；`npm run backend:test` 为 `142 passed`；`npm run frontend:lint`、`npm run frontend:test`（39 files / 199 tests）、`npm run frontend:build` 通过；`npm run desktop:prepare` 与 `npm run desktop:dist:mac` 通过；最终 `npm run check` 通过
+  - 打包边界：`desktop:dist:mac` 仍提示默认 Electron 图标和未签名，这是既有桌面交付边界；PyInstaller 的 `pysqlite2/MySQLdb/psycopg2` hidden import 警告与项目 SQLite 使用无冲突
+
+- 2026-05-08 已完成 `/Users/gao/Desktop/高考志愿/gaokao-scraper` 本地数据包并库、院校/专业详情页和数据库安全复查：
+  - 新增迁移 `20260508_0030_gaokao_profile_detail.py`，新增院校画像、院校年度汇总、专业画像、学校-专业画像四张表
+  - 新增安全迁移 `20260508_0031_gaokao_legacy_fk_safety.py`，真实主库已升级到 Alembic `20260508_0031`；补回遗留 raw 层缺失的 `data_import_batch` 空父表，清空旧 `data_import_error_log`，并清理指向缺失 raw 院校的 `gaokao_college_tag`
+  - 正式导入前保留备份：`data/backups/app_before_gaokao_profile_migrate_20260508_192533.db`、`data/backups/app_before_gaokao_scraper_bundle_20260508_194932.db`
+  - 安全修复前保留备份：`data/backups/app_before_gaokao_safety_fk_cleanup_20260508_202350.db`
+  - `scripts/import_gaokao_scraper_bundle.py` 已处理全部 scraper 目录：结构化 JSON/CSV 入库，xls/xlsx/docx/pdf/html 登记为 `gaokao_source_document` 来源证据；普通类第 1 次常规批应用表归并为 `常规批`，第 2/3 次保留独立批次
+  - 真实库当前关键计数：`college_profile_detail=2983`、`major_profile_detail=4979`、`college_major_profile=32186`、`college_year_summary=6531`；scraper 来源证据文件 `112` 个，raw 投档/录取 `92141` 条，raw 计划 `529` 条，应用侧 scraper 录取 `65542` 条，应用侧计划 `0` 条
+  - 安全复查清理：`PRAGMA foreign_key_check` 原有 62 条遗留问题已归零，其中 `gaokao_college_tag` 悬挂 raw 院校标签 58 条、`data_import_error_log` 指向缺失 `data_import_batch` 的旧日志 4 条；应用侧 `admission_record`、`enrollment_plan`、画像表与院校/专业主表均无缺失引用
+  - 新增详情接口和页面：`GET /api/colleges/{college_id}/detail`、`GET /api/colleges/{college_id}/admission-history`、`GET /api/majors/{major_id}/detail`、`GET /api/majors/{major_id}/admission-history`；前端 `/colleges/:collegeId`、`/majors/:majorId` 已接入推荐页、院校库、专业库、推荐方案、山东普通类推荐和志愿候选/草稿跳转
+  - `backend:data-health` 仍为 `warning`，P0 缺口剩 1 条：单招 / 综评仍缺专门录取结果，只能做初筛；2026 普通类正式计划、一分一段和省控线仍待官方发布
+  - 验证：SQLite `integrity_check=ok` 且 `foreign_key_check` 无输出；后端 gaokao 安全/详情/导入专项 `5 passed`，详情专项复跑 `2 passed`；`backend:data-health -- --json` 通过但保持 `warning`；`backend:p0-check -- --json` 为 `ok: true`（新 P0 备份 `data/backups/p0_delivery_backup_20260508_203220.zip`）；`frontend:lint`、`frontend:build`、推荐跳转前端单测 `51 passed`、navigation 单测 `6 passed`、推荐/志愿 E2E `20 passed`、详情接口 4 个真实库冒烟、浏览器院校/专业详情页冒烟、`git diff --check` 均通过
+
+- 2026-05-06 已完成“分析中心 / 成绩报表”首版：
+  - 新增只读接口 `GET /api/analytics/exams/{exam_id}/score-report`，支持 `class_id`、`keyword`、`sort_by`、`sort_order`，返回考试科目、摘要和一行一学生的宽表成绩数据
+  - 数据口径复用 `score_total_snapshot` 与 `score_subject_snapshot`；班级优先走考试时点 `score_exam_student_context`，只有单科快照、没有总分快照时仍展示学生行
+  - 分析中心新增“成绩报表”页签，支持班级筛选、姓名/学号检索、排序、科目显示开关，展示单科成绩、总分、班名次、校内名次、PR 和总分口径；科目列按当前筛选结果中至少有一名学生存在有效分的科目返回，避免班级筛选后显示本班无人选考的空科目
+  - 本轮不新增数据库迁移，不接输出中心、打印或 Excel 导出；仅做页面查看
+  - 验证：后端 `test_student_analysis_report_v1.py` 为 `13 passed`；前端 `student-report.test.ts` 为 `8 passed`；`frontend:lint`、`frontend:build`、考试分析 E2E `6 passed` 均通过；真实接口冒烟确认 `202604高三二模 / 202312` 从 11 科收窄为语文、数学、日语、政治、历史、地理 6 科
+
+- 2026-05-02 已完成“成绩知识点分析 V2.2：知识体系、错因、讲评与任务闭环”：
+  - 新增迁移 `20260502_0029_knowledge_v22_schema.py`，扩展 `knowledge_point` 支持单父级知识树，新增 `knowledge_point_alias`、`error_reason_tag`，并为题分记录、题目知识点映射和知识点快照补错因与归一来源字段
+  - 题分明细导入支持 `错因标签`、`错因备注` 可选列；知识点列按“标准点精确匹配 → 别名归一 → 路径建树 → 未归类扁平点”处理，错因按 `、 , ; |` 分隔，未知错因自动创建
+  - 新增 `/api/knowledge/*` 知识库维护接口，支持知识树、知识点、别名、错因标签和知识库 Excel 导入；模板中心新增 `knowledge_base_import_template.xlsx`
+  - 学生分析的 `knowledge_points`、`knowledge_trends` 增加知识路径、错因统计和主错因；学生端补弱任务支持预览和一键生成，写入既有 `student_planning_task`，`source_type/task_type=knowledge_remediation`
+  - 新增班级讲评接口 `GET /api/analytics/classes/{class_id}/knowledge-briefing`，返回班级薄弱知识点、弱项学生、错因分布、涉及题号、讲评优先级和建议；班级批量任务可按选中知识点生成弱项学生补弱任务
+  - 前端新增“知识库”入口、学生分析补弱任务按钮、班级知识点讲评清单、学生/班级专门打印页和输出中心 `class_knowledge_briefing`；`student_knowledge_plan` 支持打印预览
+  - 导出增强：学生知识点学习清单包含知识路径、错因和任务建议；新增班级知识点讲评清单 Excel，包含讲评摘要、讲评清单、弱项学生、任务建议 sheet
+  - 验证：后端知识库专项 `4 passed`；后端学生分析/规划/知识库定向 `17 passed`；前端 student-report/report-type 定向 `13 passed`；`py_compile`、临时空库 `backend:migrate`、`frontend:lint`、`frontend:build`、考试分析+报表 E2E `11 passed`、`git diff --check` 均通过
+
+- 2026-05-02 已完成“成绩知识点分析 V1”：
+  - 新增题分明细数据域、知识点、题目映射、学生题分和知识点诊断快照，迁移为 `20260502_0026_score_knowledge_analysis_schema.py`
+  - 分析中心学生分析新增“导入题分明细”和“知识点诊断”，按学生/科目展示 Top 10 薄弱知识点、涉及题号、年级均值差距、失分规模、优先级和复习建议
+  - 题分导入采用标准 Excel 模板：考试、学号、姓名、科目、题号、题目满分、学生得分、知识点、题型、能力层级；同题重复会报错，已存在题分可覆盖或跳过
+  - 输出中心新增 `student_knowledge_plan` 学生知识点学习清单导出，学生分析 Excel 也补充知识点诊断 sheet
+  - V1 只基于本次考试题分做扁平知识点诊断；连续考试趋势、错因标签、任务自动生成和知识树留到 V2
+  - 验证：知识点相关后端定向 `7 passed`、前端定向 `13 passed`、`frontend:lint`、`frontend:build`、考试分析 E2E `4 passed`、`git diff --check` 均通过
+
+- 2026-05-02 已按高中使用场景移除学生考勤与行为事件数据域：
+  - 新增迁移 `20260502_0028_remove_attendance_behavior.py`，删除 `attendance_record`、`behavior_record` 表，并清理对应导入任务和审计日志
+  - 后端移除考勤/行为模型、schema、importer、service 与 `/api/attendance/*`、`/api/behavior/*` 路由；旧路由应返回 404
+  - 班主任驾驶舱、学生风险摘要、班主任周报和学生跟进包保留，数据来源改为成绩样本/低位/下滑、成长档案、升学规划目标与任务
+  - 导入中心、模板中心、学生详情 360、班级画像、报表配置和打印预览不再展示考勤/行为概况或导入入口
+  - E2E fixture `attendance-import.xlsx`、`behavior-import.xlsx` 已删除；后续不要再补回学生考勤或行为事件模板
+
+- 2026-05-02 已完成“成绩知识点分析 V2：学生个人连续趋势补弱”第一阶段：
+  - 不新增迁移，复用 `score_knowledge_snapshot` 即时计算个人知识点趋势；窗口为当前考试往前最近 5 次 `is_trend_enabled=true` 且该学生有知识点快照的考试
+  - 趋势匹配按 `subject_id + knowledge_point_id`，至少出现 2 次且累计满分样本达阈值后进入诊断；标签固定为 `持续薄弱`、`正在改善`、`波动反复`、`偶发失误`、`保持观察`、`样本不足`
+  - 学生分析接口新增 `knowledge_trends`，行动建议新增 `knowledge_trend_focus`；分析中心“知识点诊断”下新增“连续知识点趋势”；学生知识点学习清单和学生成绩分析 Excel 新增连续趋势 sheet
+  - 新增趋势后端、前端 helper 和 E2E 覆盖；`tests/e2e/helpers/localEduE2e.ts` 的考试前置改为 API 幂等创建/配科/导入，避免同名草稿考试干扰分析链路
+  - 已通过：后端学生分析定向 `11 passed`、后端编译、前端 student-report/report-type/score-readiness 定向 `14 passed`、`frontend:lint`、`frontend:build`、考试分析 E2E `5 passed`
+
+- 2026-05-02 已完成“年级班级”独立对象入口首版：
+  - 新增班级荣誉结构化表 `class_honor` 和迁移 `20260502_0027_class_honor_schema.py`
+  - 新增班级/年级聚合接口和班级荣誉 CRUD，复用现有班主任、任教关系、学生、成绩快照、考试时点班级映射、成长档案和规划任务跟进信号
+  - 前端新增 `/classes`、`/classes/:classId`、`/grades/:gradeId` 和侧边栏“年级班级”，支持速览筛选、班级详情、荣誉维护、任课新增、学生/分析/报表跳转
+  - 已通过后端定向、前端定向、lint、build、临时空库迁移、班级 E2E 和 `git diff --check`
+  - 2026-05-02 收口分支 `codex/class-profile-next-step` 已备份真实主库到 `data/backups/app_before_class_profile_migrate_20260502_213457.db`，并执行 `npm run backend:migrate` 升级到 Alembic `20260502_0027`
+  - 收口校验：`class_honor` 表存在，SQLite `integrity_check=ok`；真实库 `/api/classes/overview`、`/api/classes/{class_id}/profile`、`/api/grades/{grade_id}/profile`、`/api/classes/{class_id}/honors` GET 冒烟均为 200；当前真实库速览为 17 个班、803 名学生、0 条有效荣誉
+  - 收口验证：班级后端定向 `7 passed`、前端 class-profile/navigation `8 passed`、`frontend:lint`、`frontend:build`、班级 E2E `2 passed`、`git diff --check`、`npm run check`（后端 `128 passed`、前端 lint、前端 `194 passed`、前端构建）均通过
+  - 2026-05-02 已补“设置任课教师”入口：`/classes` 班级卡和表格操作可深链到 `/classes/:classId?tab=teachers&action=assignment`，班级详情会自动切到任课页签并打开新增任教关系弹窗；顶部“批量维护任课”可跳到 `/teachers?assignments=1` 并自动打开教师中心任教关系维护弹窗
+  - 任课入口验证：`npm run frontend:test -- tests/class-profile.test.ts tests/navigation.test.ts` 为 `9 passed`，`npm run frontend:lint`、`npm run frontend:build`、`npm run e2e -- tests/e2e/classes.spec.ts`（4 passed）、`git diff --check` 均通过
+
+- 2026-05-02 已修复企业后台 UI 指标卡竖排崩溃：
+  - 根因是 `AppStatGrid` 的 Element Plus `el-row` 同时带了旧兼容类 `metric-grid`，全局 `.metric-grid { display: grid }` 覆盖了 `el-row` 的 flex 布局，导致 `el-col` 百分比宽度被压成窄条，中文逐字竖排
+  - 已从 `AppStatGrid` 根节点移除 `metric-grid`，并在 `admin.css` 明确设置 `.app-stat-grid` 宽度、行间距、列伸展和 `.app-stat-card.stat-card` 外层 padding 归零
+  - `tests/e2e/system-backup.spec.ts` 改用 `.app-stat-grid .stat-card` 定位备份数量，不再依赖旧 `.metric-grid` 容器
+  - 新增 `tests/e2e/admin-stat-grid-layout.spec.ts`，覆盖 `/exams`、`/analytics`、`/gaokao-pathways`、`/recommendations`、`/system-tools`，断言桌面宽度下指标卡宽度不小于 160px 且高度不过长
+  - 已通过：`npm run frontend:lint`、`npm run frontend:test`（38 files / 188 tests）、`npm run frontend:build`、`npm run e2e -- tests/e2e/admin-stat-grid-layout.spec.ts tests/e2e/system-backup.spec.ts`（6 passed）、`npm run e2e -- tests/e2e/exams-analytics.spec.ts tests/e2e/gaokao-volunteer.spec.ts tests/e2e/recommendations.spec.ts tests/e2e/system-backup.spec.ts tests/e2e/admin-stat-grid-layout.spec.ts`（29 passed）
+
+- 2026-05-02 已完成全项目企业级中后台 UI 第三阶段重构，并连同第二阶段作为同一组 UI 阶段成果交付：
+  - 本轮继续只改前端展示层，不修改后端接口、业务计算、路由路径或真实 `data/app.db`
+  - `apps/frontend/src/pages/TimetableWorkloadPage.vue` 已接入 `AppPage + AppStatGrid + AppSectionCard`：首屏新增课表批次、规则项、附加项、结果教师四张标准指标卡，课表导入 / 规则附加项 / 工作量结果收进统一 Tabs 分区
+  - `apps/frontend/src/pages/EvaluationQuantPage.vue` 已接入 `AppPage + AppStatGrid + AppSectionCard`：评教模板、评教批次、量化规则版本、量化记录改为统一指标卡，操作提示和评教/量化模块进入统一分区卡
+  - `apps/frontend/src/pages/GaokaoPathwaysPage.vue` 已接入 `AppPage + AppFilterBar + AppStatGrid`：学生与目标年份选择改为 sticky 全局筛选区，路径卡、材料缺口、下一步行动、P0 缺口改为标准指标卡
+  - `apps/frontend/src/pages/GaokaoDataPage.vue` 已接入 `AppPage + AppStatGrid`：高考数据总览和山东覆盖页的核心指标改为统一指标卡，证据链、审阅队列和覆盖表格保持原业务结构
+  - `apps/frontend/src/pages/RecommendationsPage.vue` 已接入 `AppPage + AppStatGrid + AppFilterBar`：高考志愿工作台首屏指标改为标准卡片，当前辅导条件改为 sticky 筛选区；推荐、山东普通类、数据与规则的懒加载和分页逻辑保持不变
+  - 本轮已通过：`npm run frontend:lint`、`npm run frontend:test`（38 files / 188 tests）、`npm run frontend:build`、`npm run e2e -- tests/e2e/recommendations.spec.ts tests/e2e/gaokao-volunteer.spec.ts tests/e2e/planning.spec.ts`（21 passed）、`git diff --check`
+
+- 2026-05-02 已完成全项目企业级中后台 UI 第二阶段重构：
+  - 本轮继续只改前端展示层，不修改后端接口、业务计算、路由路径或真实 `data/app.db`
+  - `apps/frontend/src/pages/ExamsPage.vue` 已从旧式 `page-header / section` 改为 `AppPage + AppStatGrid + AppFilterBar + AppTableShell`：首屏新增考试总数、已发布考试、已配科目考试、成绩记录四张标准指标卡，筛选区改为 sticky，全量考试表格进入统一表格外壳
+  - `apps/frontend/src/pages/ImportCenterPage.vue` 已接入 `AppPage`、`AppStatGrid`、`AppSectionCard`、`AppTableShell`：保留原 E2E 依赖的页面主标题“统一查看模板、批次、错误报告和撤销说明”，新增导入批次、需复核批次、错误报告、模板入口四张指标卡，预检 / 模板 / 批次列表改为统一分区
+  - `apps/frontend/src/pages/TeachersPage.vue` 已接入 `AppPage`、`AppStatGrid`、`AppFilterBar`、`AppTableShell`：教师总数、学科覆盖、班主任、联系电话改为统一指标卡；筛选导入区 sticky；教师表格进入统一外壳
+  - `apps/frontend/src/pages/SystemToolsPage.vue` 已接入 `AppPage` 和 `AppStatGrid`，移除重复的旧指标区，保留“备份数量”指标文案以兼容 `system-backup` E2E
+  - `apps/frontend/src/components/ui/AppStatCard.vue` 保留 `stat-card / strong` 结构类；`AppStatGrid.vue` 后续已移除 `metric-grid` 兼容类以避免和 Element Plus Row 布局冲突
+  - `apps/frontend/src/styles/admin.css` 已增强后台页视觉：页面 header、soft card、分区卡、表格壳、Tabs 容器、操作卡和 sticky 筛选条的背景、阴影、左侧强调线和密度更统一，未逐页迁移的大型页面也会获得更明显的企业后台质感
+  - 已通过：`npm run frontend:lint`、`npm run frontend:test`（38 files / 188 tests）、`npm run frontend:build`、`npm run e2e -- tests/e2e/exams-analytics.spec.ts`（3 passed）、`npm run e2e -- tests/e2e/system-backup.spec.ts`（1 passed）、`npm run e2e -- tests/e2e/adviser-dashboard.spec.ts`（1 passed）、`git diff --check`
+
+- 2026-05-02 已完成全项目企业级中后台 UI 第一轮重构：
+  - 前端新增共享 UI 基础层 `apps/frontend/src/components/ui/`：`AppPage`、`AppFilterBar`、`AppStatGrid`、`AppStatCard`、`AppSectionCard`、`AppTableShell`、`AppPrintLayout` 与共享展示类型
+  - `apps/frontend/src/styles.css` 已拆为 `styles/tokens.css`、`base.css`、`admin.css`、`element-plus.css`、`print.css`，用统一 tokens 收敛颜色、字号、圆角、阴影、表格、Tabs、打印页和历史 `overview/stat` 类
+  - `apps/frontend/src/layouts/AppLayout.vue` 改为更接近 Ant Design Pro 的深色侧边导航 + 顶部上下文栏 + 内容 PageContainer，仍保留本地教务中文语境
+  - `apps/frontend/src/pages/AnalyticsPage.vue` 已重点落地：标题下方 sticky 全局考试筛选、Row/Col 指标卡、Tabs 容器、名次审计卡片、班主任风险 Tag 和建议动作按钮组
+  - `DashboardPage`、`StudentsPage`、`ReportsPage` 已接入 `AppPage` 页面容器；其他页面先通过全局 tokens、Element Plus 覆盖和历史类兼容获得统一后台风格
+  - 打印页已接入统一全局 `print.css`，保留各打印页现有业务模板，统一 A4、标题、摘要卡、表格、分页和打印隐藏规则
+  - 本轮不修改后端 API、数据库、业务计算或路由路径；未写真实 `data/app.db`
+  - 当前已通过：`npm run frontend:lint`、`npm run frontend:test`（38 files / 188 tests）、`npm run frontend:build`、`npm run e2e -- tests/e2e/exams-analytics.spec.ts tests/e2e/adviser-dashboard.spec.ts`（4 passed）、`npm run e2e -- tests/e2e/dashboard.spec.ts tests/e2e/students.spec.ts tests/e2e/reports.spec.ts tests/e2e/recommendations.spec.ts tests/e2e/gaokao-volunteer.spec.ts`（28 passed）
+  - 待最终：按用户要求仍需跑完整 `npm run check:all`
+
+- 2026-05-02 已完成个人成绩分析报告 V1：
+  - `GET /api/analytics/students/{student_id}?exam_id=...` 在原有字段基础上新增目标线差距、总分画像、Z-Score、T-Score、排名离差、同档均分差、历史排名波动、有效分差距、诊断标签、近 5 次趋势和行动建议
+  - 本轮不新增迁移；PR 值继续复用 `score_total_snapshot` / `score_subject_snapshot` 的 `grade_percentile`，标准分、同档群体、有效分和行动建议均按现有快照即时计算
+  - 排名离差统一为 `总分校内名次 - 单科校内名次`，负数为拖后腿，正数为优势；小样本测试场景会按样本量收缩诊断阈值，真实大样本仍按更宽的名次差距判断
+  - 有效分只使用已配置目标线：优先 `score_value`，只有 `rank_value` 时按该名次内最低总分推导；各科拆分按该生实考科目的年级均分贡献比例计算
+  - 分析中心“学生分析”升级为个人报告视图：核心概况、PR/T 分相对位置条、偏科诊断表、趋势轨迹和行动建议；打印页同步升级四段式报告；Excel 学生成绩分析单新增 `核心概况 / 学科诊断 / 趋势轨迹 / 行动建议`
+  - 新增测试：`apps/backend/tests/test_student_analysis_report_v1.py`、`apps/frontend/tests/student-report.test.ts`
+  - 验证：后端相关 `15 passed`；前端全量 `38 files / 188 tests passed`；`frontend:lint`、`frontend:build`、考试/分析 E2E `3 passed` 均通过
+
+- 2026-05-02 已完成成绩赋分前 / 赋分后口径补强与真实库校验：
+  - 新增迁移 `20260502_0025_score_conversion_fields.py`，为 `score_record`、`score_subject_snapshot` 保存 `original_score`、`converted_score`、`score_value_type`，为 `score_total_snapshot` 保存总分口径，并为平台模板保存 `subject_score_type_json`
+  - 成绩智能导入现在能识别同一科目的 `原始分 / 原始成绩 / 卷面分` 与 `赋分 / 等级分 / 等级成绩`，宽表同科多列会合并成一条科目成绩；有赋分时 `score` 用赋分，没有赋分时用原始分
+  - 学生详情和学生分析展示成绩口径；学生详情成绩摘要展开分科时只展示最终分数并标注 `赋分` 或 `原始分`
+  - 标准成绩模板新增可选列 `原始分 / 赋分 / 成绩口径`，旧模板仍兼容
+  - 真实 `data/app.db` 已先备份到 `data/backups/app_before_score_conversion_fields_20260502_103856.db`，再迁移到 `20260502_0025`
+  - 真实数据已回填：一模 `2983` 条、二模 `2988` 条记录标记为 `converted`；高二期末 `1539` 条保持 `original`；2 月期末 `1492` 条为 `converted`、`1467` 条为 `original`，其中总分快照 `507` 个为赋分口径、`1` 个为原始分口径
+  - 数据校验：4 场考试 `score_record` 与 `score_subject_snapshot` 数量一致，单科快照字段与原始成绩记录一致，总分快照与计入总分科目求和一致，班级名次边界无异常，2 月期末源总赋分与系统总分 `0` 差异，SQLite 完整性 `ok`
+  - 验证：新增后端赋分导入测试后相关后端 `16 passed`；前端映射单测 `3 passed`；`frontend:lint`、`frontend:build`、考试/分析 E2E `3 passed`、临时空库迁移、`git diff --check` 均通过
+
+- 2026-05-02 已完成成绩分析增强与名次口径修正：
+  - 新增考试时点归属数据域 `score_exam_student_context`、源班级映射表 `score_class_mapping`、目标线表 `score_target_line`，迁移为 `20260502_0024_score_rank_context.py`
+  - 成绩快照重建已改为优先按考试源班级 / 映射班级计算班级名次；学生当前班级只作为没有考试归属时的兜底
+  - 成绩导入识别现在保留平台原始总分、班级名次、学校/年级名次、源学籍号和考号，系统仍按本次有效导入样本重算本地名次
+  - 新增接口：`GET /api/exams/{exam_id}/score-rank-audit`、`PUT /api/exams/{exam_id}/score-class-mappings`、`POST /api/exams/{exam_id}/scores/rebuild-snapshots`、`GET/PUT /api/exams/{exam_id}/score-target-lines`
+  - 年级分析新增目标线、达线率、临界学生、班级贡献、学科攻坚和排名可信度摘要；前端分析中心新增名次口径审计和按考试时点重建快照按钮
+  - 真实 `data/app.db` 已在备份 `data/backups/app_before_score_rank_context_20260502_100615.db` 后迁移到 `20260502_0024`，并重建 4 场真实考试快照：一模 506、二模 501、高二期末 171、2 月期末 508；4 场映射率均为 100%，主库完整性 `ok`
+  - 验证：后端新增/相关定向 `15 passed`；智能导入单测 `5 passed`；前端映射单测 `3 passed`；考试/分析 E2E `3 passed`；`frontend:lint`、`frontend:build`、临时空库迁移、`git diff --check` 均通过
+  - 边界：本轮未做小题、知识点、错题本；未匹配学生仍需后续先建立平台编号到系统学号的人工映射后再补导；“校内名次”只代表本次导入有效样本，不等同平台完整省市排名
+
+- 2026-05-01 已完成成绩单智能识别与导入适配首版：
+  - 后端新增 `score_import_profile` 平台模板表与迁移 `20260501_0023_score_import_profiles.py`，`score_import_batch` 记录 `profile_id` 和 `detection_summary_json`；真实 `data/app.db` 已在备份后迁移到 `20260501_0023`
+  - 新增 `apps/backend/app/importers/score_layouts.py`，支持 Excel/CSV 自动识别表头行、工作表、宽表/长表、学号/姓名/班级/科目/分数列，并把平台成绩单规范化为现有标准成绩行
+  - 标准模板导入保持兼容；新接口 `POST /api/exams/{exam_id}/scores/import/preview` 只预览不写库，`POST /api/exams/{exam_id}/scores/import` 支持 `mapping_json/profile_id/save_profile_name`，`GET /api/exams/score-import-profiles` 列出已保存模板
+  - 前端考试成绩中心的“导入成绩”弹窗改为“上传识别 / 确认映射 / 导入结果”三步，支持选择平台模板、人工调整字段和科目映射、保存模板；保留“按统一模板导入”
+  - 已用真实二模文件 `/Users/gao/Desktop/等级分_[冠县洪范高中高三]学生总成绩报表.xls` 试跑：识别为宽表、表头第 4 行、置信度 0.97；因平台学籍号/考生号与系统学号不一致，本次仅导入唯一姓名匹配的 501 名学生，写入 `202604高三二模`（exam_id=2）成绩 2,988 条，重建总分快照 501 条、单科快照 2,988 条
+  - 导入前备份：`data/backups/app_before_202604_second_mock_score_import_20260501_224304_post_migrate.db`；生成标准化导入表 `data/imports/scores/202604_second_mock_standardized_20260501_2243_01.xlsx`，未匹配名单 `data/logs/202604_second_mock_unresolved_students_20260501_2243_01.xlsx`，导入摘要 `data/logs/202604_second_mock_import_summary_20260501_2243_01.json`
+  - 已用真实一模文件 `/Users/gao/Desktop/202603高三一模一键分析报表/等级分_[冠县洪范高中高三]学生总成绩报表.xls` 导入既有一模考试：考试改名为 `202603高三一模`（exam_id=1），日期保留 `2026-03-08`，识别为宽表、表头第 4 行、置信度 0.97；唯一姓名匹配 506 名学生，写入成绩 2,983 条，重建总分快照 506 条、单科快照 2,983 条
+  - 一模导入前备份：`data/backups/app_before_202603_first_mock_score_import_20260501_232521.db`；生成标准化导入表 `data/imports/scores/202603_first_mock_standardized_20260501_232521.xlsx`，未匹配名单 `data/logs/202603_first_mock_unresolved_students_20260501_232521.xlsx`，导入摘要 `data/logs/202603_first_mock_import_summary_20260501_232521.json`
+  - 已导入同一批学生高二期末历史成绩文件 `/Users/gao/Library/Containers/com.tencent.xinWeChat/Data/Documents/xwechat_files/wxid_68te2g4tpzft22_2f57/temp/drag/2024-2025学年第一学期高二期末考试-校级报告-学生成绩-1.综合成绩表.xlsx`：新增 `2024-2025` 学年上学期和考试 `2024-2025学年第一学期高二期末考试`（exam_id=3），文件未提供具体考试日，按上学期期末默认使用 `2025-01-20`；因这是当前高三 cohort 的历史成绩，`grade_scope_json=[3]`
+  - 高二期末导入唯一姓名匹配 171 名学生，写入成绩 1,539 条，其中缺考 533 条、跳过未选科 171 格；重建总分快照 171 条、单科快照 1,539 条；未匹配 7 行需后续人工映射
+  - 高二期末导入前备份：`data/backups/app_before_202501_h2_final_score_import_20260501_233548.db`；生成标准化导入表 `data/imports/scores/202501_h2_final_standardized_20260501_233548.xlsx`，未匹配名单 `data/logs/202501_h2_final_unresolved_students_20260501_233548.xlsx`，导入摘要 `data/logs/202501_h2_final_import_summary_20260501_233548.json`
+  - 已导入 2026 年 2 月高三期末成绩：源文件采用 `/Users/gao/Desktop/综合成绩表-总分-聊城洪范高级中学-高三期末考试（成绩导入）-山东新高考“33”赋分报告.xlsx`，新增考试 `2026年2月高三期末考试`（exam_id=4，日期 `2026-02-28`，状态 `published`）；源文件未提供具体考试日，按用户说明“2026 年 2 月份”记录
+  - 2 月期末按赋分报告口径导入：语文/数学/英语/日语取原始分，物理/化学/生物/政治/历史/地理取赋分；唯一姓名匹配 508 名学生，写入成绩 2,959 条，重建总分快照 508 条、单科快照 2,959 条；未匹配 14 行需后续人工映射（系统无同名主档 12 行、系统同名不唯一 2 行）
+  - 2 月期末导入前备份：`data/backups/app_before_202602_final_score_import_20260501_235143.db`；生成标准化导入表 `data/imports/scores/202602_final_standardized_20260501_235355.xlsx`，未匹配名单 `data/logs/202602_final_unresolved_students_20260501_235355.xlsx`，导入摘要 `data/logs/202602_final_import_summary_20260501_235355.json`
+  - 已按同一二模表完成高三当前班级重分配：`2301`-`2313` 映射为 `202301`-`202313`，新建/复用高三 `未分班` 班；803 名高三在籍学生全部有当前班级，其中 501 人按表入班、302 人入 `未分班`；按用户要求未写 `student_class_transfer_*` 和 `student_class_history` 调班历史
+  - 分班备份：`data/backups/app_before_class_reassign_20260501_230900.db`；分班明细 `data/logs/class_reassign_202604_second_mock_20260501_230900.xlsx`，摘要 `data/logs/class_reassign_202604_second_mock_20260501_230900.json`
+  - 已验证：新增后端智能导入 `3 passed`、原考试工作流 `8 passed`、成绩分析/导入中心相关 `3 passed`、合并后端定向 `11 passed`、前端映射单测 `3 passed`、`frontend:lint`、`frontend:build`、临时空库 `alembic upgrade head`、`git diff --check`；2 月期末导入后真实主库完整性仍为 `ok`，年级分析冒烟可读，合并后端定向 `11 passed`
+  - 边界：首版只支持 Excel/CSV；PDF、图片、OCR 不做；缺学号/考号列会阻断导入，避免按姓名误匹配；本次未匹配/同名学生需后续人工补系统学号映射后再补导；2026-05-02 起总分/名次列已保留为核对元数据，历史班级分析已改按考试时点班级口径
+
+- 2026-04-28 已按用户“高考志愿界面重设计计划”完成 `/recommendations` 第一轮重设计：
+  - 首屏标题和导航改为“高考志愿工作台”，默认进入“学生志愿工作台”，页面顶层收成 `工作台 / 历史方案 / 数据与规则 / 数据健康` 四个分区，不再把院校库、专业库、计划库、录取库、规则字典等维护能力铺满首屏
+  - 工作台首屏新增紧凑条件栏和三块核心状态：学生画像与偏好、候选池/冲稳保、志愿草稿篮；旧推荐生成、策略、山东普通类推荐仍保留为工作台内二级入口
+  - 全局风险提示改为可展开的“数据风险与人工复核”栏；“数据健康”分区只读展示山东覆盖矩阵、P0 缺口和跳转高考数据看板
+  - 数据与规则分区继续复用旧维护组件；院校库和专业就业映射前端已接入新增分页接口，配套分页控件和单测
+  - 已验证：`npm run frontend:test -- tests/recommendation-large-table-loading.test.ts`（3 passed）、`npm run frontend:lint`、`npm run frontend:build`、`npm run backend:test -- apps/backend/tests/test_recommendation_workflow.py -q`（15 passed）、`npm run e2e -- tests/e2e/gaokao-volunteer.spec.ts --grep "Stage B 主链路|数据底座"`（2 passed）、`npm run e2e -- tests/e2e/recommendations.spec.ts --grep "Stage B 批量场景"`（1 passed）、`git diff --check`
+  - 本轮未新增迁移、未写真实 `data/app.db`；完整两文件 Playwright 复跑中已有 17 条通过、3 条因入口适配失败，修正后已定向重跑这 3 条并全部通过
+
+- 2026-04-28 已修复高考志愿 `/recommendations` 首屏因大表全量加载导致的卡死/崩溃：
+  - 首屏不再加载录取库、招生计划库、专业库等大表，只加载学生/考试选项、推荐设置、历史摘要和山东数据健康摘要；重数据改为切换到对应页签后懒加载
+  - 新增分页接口 `/api/majors/page`、`/api/admissions/page`、`/api/enrollment-plans/page`，默认每页 50 条，最大 200 条；推荐页专业库、录取库、招生计划库已改用分页表格
+  - 志愿工作台候选池默认只返回前 300 条，`candidate_count` 保留真实总数，并通过 `is_candidate_truncated` 和页面提示说明结果已截断
+  - 新增迁移 `20260428_0022_recommendation_large_table_indexes.py`，给 `admission_record` 与 `enrollment_plan` 常用筛选字段补只读查询索引；真实 `data/app.db` 已执行 `backend:migrate` 升级到该版本
+  - 已验证：后端定向 `15 passed`、后端全量 `109 passed`、前端 lint 通过、前端全量 `36 files / 182 tests passed`、前端构建通过、真实主库分页读取约 3.8 秒返回三类各 50 条、`recommendations.spec.ts` 9 条通过、`gaokao-volunteer.spec.ts` 11 条通过
+
 - 2026-04-28 已按用户提供的 `/Users/gao/Desktop/高考志愿` 本地资料补齐山东高考志愿数据库：
   - 新增脚本 `scripts/import_user_gaokao_local_folder.py`，支持 `--source-dir`、`--years`、`--dry-run`、`--json`、`--no-backup`，默认只处理山东、优先 2023/2024/2025，并把用户资料标记为 `user_provided / pending_local_review`
   - 写库前已备份真实主库到 `data/backups/app_before_user_gaokao_local_import_20260428_141651.db`，导入报告为 `docs/user-gaokao-local-import-20260428.md`
@@ -19,16 +356,7 @@
   - 已通过：临时空 SQLite `alembic upgrade head`、新增后端定向 `2 passed`、后端全量 `107 passed`、新增/相关前端 `3 files / 16 tests passed`、`frontend:lint`、`frontend:build`、新增 E2E `planning.spec.ts` `1 passed`
   - 最终验收：`npm run check:all` 通过，后端 `107 passed`、前端 lint 通过、前端 `35 files / 180 tests passed`、前端构建通过、E2E `34 passed`；`npm run desktop:dist:mac` 通过；打包后端二进制用临时空数据目录启动成功，自动创建 `app.db`，`/api/system/health` 与 `/api/dashboard/summary` 可响应
 
-- 2026-04-28 已完成 M11-M15：考勤行为数据域、班主任驾驶舱、学生 360/输出中心联动、桌面空库开局说明和成熟平台感收尾：
-  - M11：新增 `attendance_record`、`behavior_record` 模型与 Alembic 迁移 `20260427_0020_attendance_behavior_schema.py`；新增考勤/行为导入模板、导入服务、查询接口和审计摘要，考勤重复按学生+日期+范围+节次覆盖，行为同文件重复给 warning
-  - M12：分析中心新增“班主任驾驶舱”页签；后端新增 `/api/analytics/adviser-dashboard` 与 `/api/analytics/student-risk/{student_id}`，按本地确定性规则输出 `urgent/follow_up/watch/normal`，考勤/行为缺失显示“未导入”而不是 0 风险
-  - M13：学生详情 360° 增加近 30/90 天考勤、行为和风险摘要，并接入“生成学生跟进包”；输出中心新增 `adviser_weekly_summary` 与 `student_followup_package` 的 Excel 和打印页
-  - M14：新增 `docs/desktop_empty_db_initialization_20260427.md`，说明桌面版空库初始化顺序、模板导入、备份恢复和 Windows 打包待办；本轮不写真实 `data/app.db`
-  - M15：首页下一步建议、导入中心初始化清单和系统数据健康已接入成绩、考勤、行为、任教关系、备份等本地教务数据缺口
-  - 验证：新增后端定向 `2 passed`；新增/相关前端定向 `4 files / 17 tests passed`；临时空 SQLite `alembic upgrade head` 通过；`git diff --check` 通过
-  - 质量门禁：已重新执行完整 `npm run check:all`，后端 `105 passed`、前端 lint 通过、前端 `34 files / 174 tests passed`、前端构建通过、E2E `33 passed`
-  - 桌面验证：已在最终样式修复后重新执行 `npm run desktop:dist:mac` 并通过；打包后的后端二进制用临时空数据目录启动成功，自动创建 `app.db`，`/api/system/health` 与 `/api/dashboard/summary` 可响应
-  - 剩余边界：macOS 正式图标、签名、公证未做；Windows `dir/nsis` 仍需在 Windows 或可交叉构建环境验证；真实使用前用户仍应先备份主库再迁移
+- 2026-04-28 曾完成 M11-M15 的考勤/行为数据域；该数据域已在 2026-05-02 因高中使用场景调整废弃并移除。保留的能力只有班主任驾驶舱、学生跟进包和本地输出闭环，且跟进信号已改为成绩、成长档案和升学规划任务。
 
 - 2026-04-27 已完成 M4/M5/M6/M7/M8/M9/M10 窗口任务：
   - M4：成绩导入增加质量摘要，覆盖缺考、非法分数、重复学生、未匹配学生、未匹配科目；考试、分析、报表等成绩链路补 `score_record=0` 空态、单考试边界和统计口径提示

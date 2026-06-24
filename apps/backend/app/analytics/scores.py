@@ -9,6 +9,7 @@ from statistics import median
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, joinedload
 
+from app.analytics.score_contexts import ensure_exam_student_contexts, ranking_class_key
 from app.models import Exam, ExamSubject, ScoreRecord, ScoreSubjectSnapshot, ScoreTotalSnapshot, Student
 
 
@@ -85,26 +86,27 @@ def rebuild_exam_snapshots(session: Session, exam: Exam, rank_mode: str) -> None
             joinedload(ScoreRecord.student).joinedload(Student.current_grade),
         )
     ).all()
+    context_map = ensure_exam_student_contexts(session, exam)
 
     subject_group_all: dict[int, list[RankedValue]] = defaultdict(list)
-    subject_group_by_class: dict[tuple[int, int], list[RankedValue]] = defaultdict(list)
+    subject_group_by_class: dict[tuple[int, str], list[RankedValue]] = defaultdict(list)
     student_total_map: dict[int, float] = defaultdict(float)
+    student_total_score_type: dict[int, str] = {}
     total_group_all: list[RankedValue] = []
-    total_group_by_class: dict[int, list[RankedValue]] = defaultdict(list)
-    student_group_cache: dict[int, tuple[int | None, int | None]] = {}
+    total_group_by_class: dict[str, list[RankedValue]] = defaultdict(list)
+    student_group_cache: dict[int, str | None] = {}
 
     # Gather subject ranking inputs.
     for record in score_records:
         student = record.student
         if student is None:
             continue
-        class_id = student.current_class_id
-        grade_id = student.current_grade_id
-        student_group_cache[student.id] = (class_id, grade_id)
+        class_key = ranking_class_key(student, context_map.get(student.id))
+        student_group_cache[student.id] = class_key
         if record.score_status in VALID_SCORE_STATUS and record.score is not None:
             subject_group_all[record.subject_id].append(RankedValue(record.student_id, record.score))
-            if class_id is not None:
-                subject_group_by_class[(record.subject_id, class_id)].append(
+            if class_key is not None:
+                subject_group_by_class[(record.subject_id, class_key)].append(
                     RankedValue(record.student_id, record.score)
                 )
         exam_subject = exam_subjects.get(record.subject_id)
@@ -115,12 +117,16 @@ def rebuild_exam_snapshots(session: Session, exam: Exam, rank_mode: str) -> None
             and record.score is not None
         ):
             student_total_map[record.student_id] += record.score
+            if record.score_value_type == "converted":
+                student_total_score_type[record.student_id] = "converted"
+            else:
+                student_total_score_type.setdefault(record.student_id, "original")
 
     for student_id, total_score in student_total_map.items():
-        class_id, _grade_id = student_group_cache.get(student_id, (None, None))
+        class_key = student_group_cache.get(student_id)
         total_group_all.append(RankedValue(student_id, total_score))
-        if class_id is not None:
-            total_group_by_class[class_id].append(RankedValue(student_id, total_score))
+        if class_key is not None:
+            total_group_by_class[class_key].append(RankedValue(student_id, total_score))
 
     subject_ranks_all = {
         subject_id: assign_ranks(values, rank_mode)
@@ -141,7 +147,7 @@ def rebuild_exam_snapshots(session: Session, exam: Exam, rank_mode: str) -> None
         student = record.student
         if student is None:
             continue
-        class_id = student.current_class_id
+        class_key = student_group_cache.get(student.id)
         subject_meta = exam_subjects.get(record.subject_id)
         excellent_flag = False
         pass_flag = False
@@ -154,16 +160,12 @@ def rebuild_exam_snapshots(session: Session, exam: Exam, rank_mode: str) -> None
                 excellent_flag = record.score >= subject_meta.excellent_line
             if subject_meta and subject_meta.pass_line is not None:
                 pass_flag = record.score >= subject_meta.pass_line
-            class_rank = (
-                subject_ranks_by_class.get((record.subject_id, class_id), {}).get(record.student_id)
-                if class_id is not None
-                else None
-            )
+            class_rank = subject_ranks_by_class.get((record.subject_id, class_key), {}).get(record.student_id) if class_key is not None else None
             grade_rank = subject_ranks_all.get(record.subject_id, {}).get(record.student_id)
-            if class_rank is not None and class_id is not None:
+            if class_rank is not None and class_key is not None:
                 class_percentile = calculate_percentile(
                     class_rank,
-                    len(subject_group_by_class.get((record.subject_id, class_id), [])),
+                    len(subject_group_by_class.get((record.subject_id, class_key), [])),
                 )
             if grade_rank is not None:
                 grade_percentile = calculate_percentile(
@@ -176,6 +178,9 @@ def rebuild_exam_snapshots(session: Session, exam: Exam, rank_mode: str) -> None
                 student_id=record.student_id,
                 subject_id=record.subject_id,
                 score=record.score,
+                original_score=record.original_score,
+                converted_score=record.converted_score,
+                score_value_type=record.score_value_type,
                 class_rank=class_rank,
                 grade_rank=grade_rank,
                 class_percentile=class_percentile,
@@ -187,14 +192,14 @@ def rebuild_exam_snapshots(session: Session, exam: Exam, rank_mode: str) -> None
 
     # Total snapshots only for students with at least one valid total score.
     for student_id, total_score in student_total_map.items():
-        class_id, _grade_id = student_group_cache.get(student_id, (None, None))
+        class_key = student_group_cache.get(student_id)
         class_rank = (
-            total_ranks_by_class.get(class_id, {}).get(student_id) if class_id is not None else None
+            total_ranks_by_class.get(class_key, {}).get(student_id) if class_key is not None else None
         )
         grade_rank = total_ranks_all.get(student_id)
         class_percentile = (
-            calculate_percentile(class_rank, len(total_group_by_class.get(class_id, [])))
-            if class_id is not None and class_rank is not None
+            calculate_percentile(class_rank, len(total_group_by_class.get(class_key, [])))
+            if class_key is not None and class_rank is not None
             else None
         )
         grade_percentile = (
@@ -205,6 +210,7 @@ def rebuild_exam_snapshots(session: Session, exam: Exam, rank_mode: str) -> None
                 exam_id=exam.id,
                 student_id=student_id,
                 total_score=round(total_score, 2),
+                score_value_type=student_total_score_type.get(student_id, "original"),
                 class_rank=class_rank,
                 grade_rank=grade_rank,
                 class_percentile=class_percentile,

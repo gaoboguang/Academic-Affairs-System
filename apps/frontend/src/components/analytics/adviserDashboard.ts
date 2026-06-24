@@ -1,23 +1,5 @@
 export type AdviserRiskLevel = "urgent" | "follow_up" | "watch" | "normal";
 
-export interface AttendanceRiskSummary {
-  imported: boolean;
-  total_records: number;
-  late_count: number;
-  early_leave_count: number;
-  sick_leave_count: number;
-  personal_leave_count: number;
-  truancy_count: number;
-}
-
-export interface BehaviorRiskSummary {
-  imported: boolean;
-  total_records: number;
-  positive_count: number;
-  discipline_count: number;
-  severe_count: number;
-}
-
 export interface AdviserRiskStudentItem {
   student_id: number;
   student_no?: string | null;
@@ -51,10 +33,9 @@ export interface AdviserDashboardResponse {
   overview: {
     student_count: number;
     score_sample_count: number;
-    attendance_status: string;
-    behavior_status: string;
-    absence_risk_count: number;
-    behavior_risk_count: number;
+    growth_record_count: number;
+    open_task_count: number;
+    overdue_task_count: number;
     follow_up_count: number;
   };
   score_summary: {
@@ -64,8 +45,18 @@ export interface AdviserDashboardResponse {
     low_score_count: number;
     decline_count: number;
   };
-  attendance_summary: AttendanceRiskSummary;
-  behavior_summary: BehaviorRiskSummary;
+  growth_summary: {
+    total_records: number;
+    students_with_records_count: number;
+    latest_record_date?: string | null;
+  };
+  planning_summary: {
+    open_task_count: number;
+    overdue_task_count: number;
+    due_soon_task_count: number;
+    high_priority_open_count: number;
+    students_without_goal_count: number;
+  };
   risk_students: AdviserRiskStudentItem[];
   action_items: AdviserActionItem[];
   data_flags: string[];
@@ -78,15 +69,14 @@ export function adviserRiskTagType(level: AdviserRiskLevel): "danger" | "warning
   return "success";
 }
 
-export function formatAttendanceSummary(summary: AttendanceRiskSummary): string {
-  if (!summary.imported) return "未导入";
-  const leaveCount = summary.sick_leave_count + summary.personal_leave_count;
-  return `记录 ${summary.total_records} 条，迟到 ${summary.late_count}，请假 ${leaveCount}，旷课 ${summary.truancy_count}`;
+export function formatGrowthSummary(summary: AdviserDashboardResponse["growth_summary"]): string {
+  if (summary.total_records <= 0) return "暂无成长档案记录";
+  return `记录 ${summary.total_records} 条，覆盖 ${summary.students_with_records_count} 人，最近 ${summary.latest_record_date ?? "-"}`;
 }
 
-export function formatBehaviorSummary(summary: BehaviorRiskSummary): string {
-  if (!summary.imported) return "未导入";
-  return `记录 ${summary.total_records} 条，表扬 ${summary.positive_count}，违纪/奖惩 ${summary.discipline_count}，高关注 ${summary.severe_count}`;
+export function formatPlanningSummary(summary: AdviserDashboardResponse["planning_summary"]): string {
+  if (summary.open_task_count <= 0) return "暂无开放规划任务";
+  return `开放 ${summary.open_task_count} 项，逾期 ${summary.overdue_task_count}，7 天内到期 ${summary.due_soon_task_count}`;
 }
 
 export function buildAdviserDashboardEmptyTips(payload?: AdviserDashboardResponse | null): string[] {
@@ -94,8 +84,10 @@ export function buildAdviserDashboardEmptyTips(payload?: AdviserDashboardRespons
   const tips: string[] = [];
   if (payload.overview.student_count === 0) tips.push("当前范围没有学生，请先维护基础数据。");
   if (!payload.score_summary.imported) tips.push("当前范围没有成绩样本，成绩风险只显示数据缺口。");
-  if (!payload.attendance_summary.imported) tips.push("考勤未导入，不会按 0 风险处理。");
-  if (!payload.behavior_summary.imported) tips.push("行为记录未导入，不会按 0 风险处理。");
+  if (payload.growth_summary.total_records <= 0) tips.push("当前范围暂无成长档案记录，跟进建议会偏保守。");
+  if (payload.planning_summary.students_without_goal_count > 0) {
+    tips.push(`仍有 ${payload.planning_summary.students_without_goal_count} 名学生未建立升学规划目标。`);
+  }
   return tips;
 }
 

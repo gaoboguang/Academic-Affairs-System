@@ -15,7 +15,7 @@ interface WorkflowOptions {
 }
 
 export function useRecommendationWorkflow(options: WorkflowOptions) {
-  const activeTab = ref("recommendations");
+  const activeTab = ref("volunteer-workbench");
   const generation = useRecommendationGenerationManager({
     referenceStore: options.referenceStore,
   });

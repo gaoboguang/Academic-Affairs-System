@@ -1,25 +1,16 @@
 <template>
-  <div class="page-shell">
-    <header class="page-header">
-      <div>
-        <div class="page-eyebrow">数据治理 / 导入中心</div>
-        <h2 class="page-title">统一查看模板、批次、错误报告和撤销说明</h2>
-        <p class="page-subtitle">
-          聚合学生、教师、成绩、课表、录取数据、招生计划和评教导入历史，便于导入后回看结果、下载错误报告并回到对应业务页面修正。
-        </p>
-        <div class="page-chip-row">
-          <span class="page-chip"><strong>批次</strong>{{ payload.summary.total_batches }}</span>
-          <span class="page-chip"><strong>部分成功</strong>{{ payload.summary.partial_batches }}</span>
-          <span class="page-chip"><strong>失败</strong>{{ payload.summary.failed_batches }}</span>
-          <span class="page-chip"><strong>错误报告</strong>{{ payload.summary.error_report_count }}</span>
-          <span class="page-chip"><strong>最近备份</strong>{{ latestBackupLabel }}</span>
-        </div>
-      </div>
+  <AppPage
+    title="统一查看模板、批次、错误报告和撤销说明"
+    eyebrow="数据治理 / 导入中心"
+    description="统一查看模板、批次、错误报告和撤销说明；导入后可回看结果、下载错误报告并回到对应业务页面修正。"
+    :meta="importPageMeta"
+  >
+    <template #actions>
       <div class="action-row">
         <el-button @click="router.push('/system-tools')">备份与审计</el-button>
         <el-button type="primary" :loading="loading" @click="loadBatches">刷新</el-button>
       </div>
-    </header>
+    </template>
 
     <el-alert
       v-if="loadError"
@@ -36,6 +27,8 @@
         </div>
       </template>
     </el-alert>
+
+    <AppStatGrid :items="importStatCards" :columns="4" />
 
     <section class="soft-card trial-run-panel">
       <div class="section-head">
@@ -61,44 +54,22 @@
       />
     </section>
 
-    <section class="overview-grid">
-      <article class="soft-card overview-panel">
-        <div class="overview-kicker">导入前预检</div>
-        <h3>先确认模板和匹配项，再上传文件</h3>
-        <p>
-          重点检查模板版本、必填列、重复行，以及年级、班级、学科、教师等名称能否在系统中匹配。
-        </p>
-        <ul class="check-list">
-          <li>模板表头必须来自本页下载的最新模板。</li>
-          <li>学号、工号、考试名称、科目、班级等关键列不要留空。</li>
-          <li>同一学生同一科目、同一教师工号等重复行需先清理。</li>
-          <li>无法匹配的年级 / 班级 / 学科 / 教师，先到基础数据或对应业务页维护。</li>
-        </ul>
-      </article>
-      <article class="soft-card overview-card tone-blue">
-        <span>模板入口</span>
-        <strong>{{ payload.templates.length }}</strong>
-        <p>覆盖当前已统一治理的导入类型。</p>
-      </article>
-      <article class="soft-card overview-card tone-amber">
-        <span>需复核批次</span>
-        <strong>{{ reviewBatchCount }}</strong>
-        <p>失败或部分成功的批次建议优先处理。</p>
-      </article>
-      <article class="soft-card overview-card tone-slate">
-        <span>自动回滚</span>
-        <strong>关闭</strong>
-        <p>当前只给出撤销说明，避免误删业务数据。</p>
-      </article>
-    </section>
+    <AppSectionCard
+      title="导入前预检"
+      description="重点检查模板版本、必填列、重复行，以及年级、班级、学科、教师等名称能否在系统中匹配。"
+    >
+      <ul class="check-list">
+        <li>模板表头必须来自本页下载的最新模板。</li>
+        <li>学号、工号、考试名称、科目、班级等关键列不要留空。</li>
+        <li>同一学生同一科目、同一教师工号等重复行需先清理。</li>
+        <li>无法匹配的年级 / 班级 / 学科 / 教师，先到基础数据或对应业务页维护。</li>
+      </ul>
+    </AppSectionCard>
 
-    <section class="soft-card panel-block">
-      <div class="section-head">
-        <div>
-          <h3>模板与上传入口</h3>
-          <p>下载系统模板后，进入对应业务页完成上传、预检和结果确认。</p>
-        </div>
-      </div>
+    <AppSectionCard
+      title="模板与上传入口"
+      description="下载系统模板后，进入对应业务页完成上传、预检和结果确认。"
+    >
       <div class="template-grid">
         <article v-for="item in payload.templates" :key="item.job_type" class="template-card">
           <div>
@@ -111,14 +82,13 @@
           </div>
         </article>
       </div>
-    </section>
+    </AppSectionCard>
 
-    <section class="soft-card panel-block">
-      <div class="section-head">
-        <div>
-          <h3>导入批次</h3>
-          <p>聚合通用导入任务、成绩批次、课表批次和评教批次；有错误报告的批次可直接下载。</p>
-        </div>
+    <AppTableShell
+      title="导入批次"
+      description="聚合通用导入任务、成绩批次、课表批次和评教批次；有错误报告的批次可直接下载。"
+    >
+      <template #actions>
         <div class="filter-row">
           <el-select v-model="filters.jobType" clearable placeholder="导入类型" style="width: 180px" @change="loadBatches">
             <el-option
@@ -136,10 +106,9 @@
             <el-option label="已回滚" value="rolled_back" />
           </el-select>
         </div>
-      </div>
+      </template>
 
-      <div class="table-shell">
-        <el-table :data="payload.batches" stripe row-key="id" v-loading="loading">
+      <el-table :data="payload.batches" stripe row-key="id" v-loading="loading">
           <el-table-column label="类型" min-width="140">
             <template #default="{ row }">
               <strong>{{ row.job_type_label }}</strong>
@@ -176,13 +145,12 @@
               <el-button link type="warning" @click="openRollbackHint(row)">撤销说明</el-button>
             </template>
           </el-table-column>
-        </el-table>
-      </div>
+      </el-table>
       <el-empty
         v-if="!loading && !payload.batches.length"
         description="当前没有符合条件的导入批次。可先下载模板，到对应业务页完成上传；如果刚导入过，请点击刷新。"
       />
-    </section>
+    </AppTableShell>
 
     <el-drawer v-model="detailVisible" title="导入批次详情" size="520px">
       <div v-if="selectedDetail" class="detail-stack">
@@ -262,7 +230,7 @@
         </div>
       </div>
     </el-drawer>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
@@ -272,6 +240,14 @@ import ElMessageBox from "element-plus/es/components/message-box/index";
 import { useRouter } from "vue-router";
 
 import { apiRequest, openFile } from "../api/client";
+import {
+  AppPage,
+  AppSectionCard,
+  AppStatGrid,
+  AppTableShell,
+  type PageMetaItem,
+  type StatCardItem,
+} from "../components/ui";
 import {
   buildImportCenterErrorReportUrl,
   buildImportCenterRowSummary,
@@ -311,6 +287,37 @@ const payload = reactive<ImportCenterResponse>({
 
 const reviewBatchCount = computed(() => payload.summary.failed_batches + payload.summary.partial_batches);
 const latestBackupLabel = computed(() => formatLatestBackupLabel(payload.latest_backup));
+const importPageMeta = computed<PageMetaItem[]>(() => [
+  { label: "批次", value: payload.summary.total_batches },
+  { label: "需复核", value: reviewBatchCount.value },
+  { label: "最近备份", value: latestBackupLabel.value },
+]);
+const importStatCards = computed<StatCardItem[]>(() => [
+  {
+    label: "导入批次",
+    value: payload.summary.total_batches,
+    help: "系统记录的导入任务总数。",
+    tone: "primary",
+  },
+  {
+    label: "需复核批次",
+    value: reviewBatchCount.value,
+    help: "失败或部分成功的批次建议优先处理。",
+    tone: reviewBatchCount.value ? "warning" : "success",
+  },
+  {
+    label: "错误报告",
+    value: payload.summary.error_report_count,
+    help: "可下载并回到业务页修正的数据问题。",
+    tone: payload.summary.error_report_count ? "danger" : "neutral",
+  },
+  {
+    label: "模板入口",
+    value: payload.templates.length,
+    help: "覆盖当前已统一治理的导入类型。",
+    tone: "info",
+  },
+]);
 
 async function loadBatches(): Promise<void> {
   try {

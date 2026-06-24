@@ -48,69 +48,64 @@ def test_gaokao_data_overview_uses_separate_gaokao_db_when_configured(tmp_path) 
     data_dir = tmp_path / "data"
     gaokao_db_path = data_dir / "local_edu_tool" / "local_edu.sqlite3"
     gaokao_db_path.parent.mkdir(parents=True, exist_ok=True)
-    gaokao_db_path.touch()
+    # Pre-populate the sidecar with just enough schema for the overview query;
+    # create_app will ATTACH it automatically when the file exists.
+    with sqlite3.connect(gaokao_db_path) as side:
+        side.execute(
+            """
+            CREATE TABLE gaokao_college (
+                id INTEGER PRIMARY KEY,
+                college_code TEXT,
+                name TEXT,
+                province TEXT,
+                recruit_site TEXT,
+                duplicate_group_key TEXT,
+                same_name_group_key TEXT,
+                updated_at TEXT
+            )
+            """
+        )
+        side.execute(
+            """
+            CREATE TABLE gaokao_policy_reference (
+                id INTEGER PRIMARY KEY,
+                college_id INTEGER,
+                chapter_url TEXT,
+                fallback_url TEXT,
+                updated_at TEXT
+            )
+            """
+        )
+        side.execute(
+            """
+            INSERT INTO gaokao_college (
+                id, college_code, name, province, recruit_site,
+                duplicate_group_key, same_name_group_key, updated_at
+            ) VALUES
+                (201, 'GK201', '独立高考库学校', '山东', 'https://recruit.example/201', 'dup-201', 'same-201', '2026-04-21 14:00:00')
+            """
+        )
+        side.execute(
+            """
+            INSERT INTO gaokao_policy_reference (id, college_id, chapter_url, fallback_url, updated_at)
+            VALUES (1, 201, 'https://chapter.example/201', 'https://fallback.example/201', '2026-04-21 14:30:00')
+            """
+        )
 
     settings = Settings(
         data_dir=data_dir,
         db_path=data_dir / "app.db",
         gaokao_db_path=gaokao_db_path,
         allowed_origins=["http://127.0.0.1:5173"],
+        auth_required=False,
         debug=False,
     )
     app = create_app(settings)
     ensure_runtime_directories(settings)
     Base.metadata.create_all(app.state.db.engine)
 
-    assert app.state.gaokao_db is not None
-    with app.state.gaokao_db.session_scope() as session:
-        session.execute(
-            text(
-                """
-                CREATE TABLE gaokao_college (
-                    id INTEGER PRIMARY KEY,
-                    college_code TEXT,
-                    name TEXT,
-                    province TEXT,
-                    recruit_site TEXT,
-                    duplicate_group_key TEXT,
-                    same_name_group_key TEXT,
-                    updated_at TEXT
-                )
-                """
-            )
-        )
-        session.execute(
-            text(
-                """
-                CREATE TABLE gaokao_policy_reference (
-                    id INTEGER PRIMARY KEY,
-                    college_id INTEGER,
-                    chapter_url TEXT,
-                    fallback_url TEXT,
-                    updated_at TEXT
-                )
-                """
-            )
-        )
-        session.execute(
-            text(
-                """
-                INSERT INTO gaokao_college (
-                    id, college_code, name, province, recruit_site,
-                    duplicate_group_key, same_name_group_key, updated_at
-                ) VALUES
-                    (201, 'GK201', '独立高考库学校', '山东', 'https://recruit.example/201', 'dup-201', 'same-201', '2026-04-21 14:00:00')
-                """
-            )
-        )
-        session.execute(
-            text(
-                """
-                INSERT INTO gaokao_policy_reference (id, college_id, chapter_url, fallback_url, updated_at)
-                VALUES (1, 201, 'https://chapter.example/201', 'https://fallback.example/201', '2026-04-21 14:30:00')
-                """
-            )
-        )
+    # Sidecar is now ATTACHed inline; the legacy second-session manager is None.
+    assert app.state.gaokao_db is None
 
     try:
         with TestClient(app) as client:
@@ -131,17 +126,16 @@ def test_gaokao_data_overview_uses_separate_gaokao_db_when_configured(tmp_path) 
             assert options_payload[0]["source_mode"] == "db_rc1_live"
     finally:
         app.state.db.dispose()
-        if app.state.gaokao_db is not None:
-            app.state.gaokao_db.dispose()
 
 
 def test_create_app_prefers_embedded_gaokao_tables_over_external_snapshot(tmp_path) -> None:
+    # Under the new architecture raw tables always live in the sidecar; the
+    # legacy "prefer embedded tables in app.db" branch no longer exists.
+    # This test covers the simplified behaviour: when only app.db has the raw
+    # table (sidecar is empty), queries still resolve from the main schema.
     data_dir = tmp_path / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
     app_db_path = data_dir / "app.db"
-    gaokao_db_path = data_dir / "local_edu_tool" / "local_edu.sqlite3"
-    gaokao_db_path.parent.mkdir(parents=True, exist_ok=True)
-    gaokao_db_path.touch()
 
     with sqlite3.connect(app_db_path) as conn:
         conn.execute(
@@ -168,8 +162,9 @@ def test_create_app_prefers_embedded_gaokao_tables_over_external_snapshot(tmp_pa
     settings = Settings(
         data_dir=data_dir,
         db_path=app_db_path,
-        gaokao_db_path=gaokao_db_path,
+        # leave sidecar path at default; file does not exist so ATTACH is skipped.
         allowed_origins=["http://127.0.0.1:5173"],
+        auth_required=False,
         debug=False,
     )
     app = create_app(settings)
@@ -194,83 +189,71 @@ def test_gaokao_data_overview_marks_app_tables_partial_when_raw_tables_have_data
     data_dir = tmp_path / "data"
     gaokao_db_path = data_dir / "local_edu_tool" / "local_edu.sqlite3"
     gaokao_db_path.parent.mkdir(parents=True, exist_ok=True)
-    gaokao_db_path.touch()
+    with sqlite3.connect(gaokao_db_path) as side:
+        side.execute(
+            """
+            CREATE TABLE gaokao_college (
+                id INTEGER PRIMARY KEY,
+                college_code TEXT,
+                name TEXT,
+                province TEXT,
+                recruit_site TEXT,
+                updated_at TEXT
+            )
+            """
+        )
+        side.execute(
+            """
+            CREATE TABLE gaokao_admission_plan (
+                id INTEGER PRIMARY KEY,
+                province TEXT,
+                updated_at TEXT
+            )
+            """
+        )
+        side.execute(
+            """
+            CREATE TABLE gaokao_admission_result (
+                id INTEGER PRIMARY KEY,
+                province TEXT,
+                updated_at TEXT
+            )
+            """
+        )
+        side.execute(
+            """
+            INSERT INTO gaokao_college (
+                id, college_code, name, province, recruit_site, updated_at
+            ) VALUES
+                (201, 'GK201', '独立高考库学校', '山东', 'https://recruit.example/201', '2026-04-21 14:00:00')
+            """
+        )
+        side.execute(
+            """
+            INSERT INTO gaokao_admission_plan (id, province, updated_at) VALUES
+                (1, '山东', '2026-04-21 14:10:00')
+            """
+        )
+        side.execute(
+            """
+            INSERT INTO gaokao_admission_result (id, province, updated_at) VALUES
+                (1, '山东', '2026-04-21 14:20:00')
+            """
+        )
 
     settings = Settings(
         data_dir=data_dir,
         db_path=data_dir / "app.db",
         gaokao_db_path=gaokao_db_path,
         allowed_origins=["http://127.0.0.1:5173"],
+        auth_required=False,
         debug=False,
     )
     app = create_app(settings)
     ensure_runtime_directories(settings)
     Base.metadata.create_all(app.state.db.engine)
 
-    assert app.state.gaokao_db is not None
-    with app.state.gaokao_db.session_scope() as session:
-        session.execute(
-            text(
-                """
-                CREATE TABLE gaokao_college (
-                    id INTEGER PRIMARY KEY,
-                    college_code TEXT,
-                    name TEXT,
-                    province TEXT,
-                    recruit_site TEXT,
-                    updated_at TEXT
-                )
-                """
-            )
-        )
-        session.execute(
-            text(
-                """
-                CREATE TABLE gaokao_admission_plan (
-                    id INTEGER PRIMARY KEY,
-                    province TEXT,
-                    updated_at TEXT
-                )
-                """
-            )
-        )
-        session.execute(
-            text(
-                """
-                CREATE TABLE gaokao_admission_result (
-                    id INTEGER PRIMARY KEY,
-                    province TEXT,
-                    updated_at TEXT
-                )
-                """
-            )
-        )
-        session.execute(
-            text(
-                """
-                INSERT INTO gaokao_college (
-                    id, college_code, name, province, recruit_site, updated_at
-                ) VALUES
-                    (201, 'GK201', '独立高考库学校', '山东', 'https://recruit.example/201', '2026-04-21 14:00:00')
-                """
-            )
-        )
-        session.execute(
-            text(
-                """
-                INSERT INTO gaokao_admission_plan (id, province, updated_at) VALUES
-                    (1, '山东', '2026-04-21 14:10:00')
-                """
-            )
-        )
-        session.execute(
-            text(
-                """
-                INSERT INTO gaokao_admission_result (id, province, updated_at) VALUES
-                    (1, '山东', '2026-04-21 14:20:00')
-                """
-            )
-        )
+    assert app.state.gaokao_db is None
 
     try:
         with TestClient(app) as client:
@@ -291,8 +274,6 @@ def test_gaokao_data_overview_marks_app_tables_partial_when_raw_tables_have_data
             )
     finally:
         app.state.db.dispose()
-        if app.state.gaokao_db is not None:
-            app.state.gaokao_db.dispose()
 
 
 def test_gaokao_review_summary_and_evidence_use_live_rc1_tables(client, app) -> None:

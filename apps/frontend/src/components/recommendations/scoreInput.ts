@@ -14,8 +14,8 @@ export interface RecommendationScoreInputFields {
   culture_score?: number;
 }
 
-export function normalizeOptionalString(value: string): string | undefined {
-  const normalized = value.trim();
+export function normalizeOptionalString(value?: string | null): string | undefined {
+  const normalized = (value ?? "").trim();
   return normalized || undefined;
 }
 

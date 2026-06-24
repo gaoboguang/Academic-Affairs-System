@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.analytics.scores import calculate_rate, safe_mean
 from app.core.config import Settings
-from app.models import AttendanceRecord, BackupRecord, BehaviorRecord, Exam, Grade, SchoolClass, ScoreRecord, Student, Teacher, TeachingAssignment
+from app.models import BackupRecord, Exam, Grade, SchoolClass, ScoreRecord, Student, Teacher, TeachingAssignment
 from app.repositories.exams import get_subject_snapshots_for_exam, get_total_snapshots_for_exam
 from app.repositories.system import list_backups, list_recent_import_jobs
 from app.schemas.dashboard import (
@@ -112,10 +112,6 @@ def _build_local_academic_gaps(session: Session) -> list[str]:
     gaps: list[str] = []
     if (session.scalar(select(func.count()).select_from(ScoreRecord)) or 0) == 0:
         gaps.append("教务成绩数据缺口：尚未导入成绩记录。")
-    if (session.scalar(select(func.count()).select_from(AttendanceRecord)) or 0) == 0:
-        gaps.append("教务考勤数据缺口：尚未导入考勤记录。")
-    if (session.scalar(select(func.count()).select_from(BehaviorRecord)) or 0) == 0:
-        gaps.append("教务行为数据缺口：尚未导入行为记录。")
     if (session.scalar(select(func.count()).select_from(TeachingAssignment)) or 0) == 0:
         gaps.append("教务任教关系缺口：尚未维护任教关系。")
     if not list_backups(session):

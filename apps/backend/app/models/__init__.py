@@ -10,10 +10,37 @@ from app.models.evaluation import (
     EvaluationTemplate,
 )
 from app.models.archive import StudentGrowthAttachment, StudentGrowthRecord
+from app.models.auth import AppSession, AppUser, AppUserClassScope
 from app.models.base import Base
 from app.models.base_data import AcademicYear, DictItem, DictType, Grade, SchoolClass, Semester, Subject
-from app.models.exam import Exam, ExamSubject, ScoreImportBatch, ScoreRecord, ScoreSubjectSnapshot, ScoreTotalSnapshot
+from app.models.class_profile import ClassHonor
+from app.models.exam import (
+    Exam,
+    ExamSubject,
+    ErrorReasonTag,
+    KnowledgePoint,
+    KnowledgePointAlias,
+    ScoreClassMapping,
+    ScoreExamStudentContext,
+    ScoreImportBatch,
+    ScoreImportProfile,
+    ScoreKnowledgeSnapshot,
+    ScoreQuestion,
+    ScoreQuestionImportBatch,
+    ScoreQuestionKnowledgePoint,
+    ScoreQuestionRecord,
+    ScoreRecord,
+    ScoreSubjectSnapshot,
+    ScoreTargetLine,
+    ScoreTotalSnapshot,
+)
 from app.models.gaokao_import import GaokaoImportRun, GaokaoSourceDocument
+from app.models.gaokao_profile import (
+    CollegeMajorProfile,
+    CollegeProfileDetail,
+    CollegeYearSummary,
+    MajorProfileDetail,
+)
 from app.models.planning import StudentPlanningGoal, StudentPlanningNote, StudentPlanningTask
 from app.models.recommendation import (
     AdmissionRecord,
@@ -46,8 +73,8 @@ from app.models.student import (
     StudentClassTransferBatch,
     StudentClassTransferItem,
     StudentGuardian,
+    StudentTeacherComment,
 )
-from app.models.student_event import AttendanceRecord, BehaviorRecord
 from app.models.system import AuditLog, BackupRecord, ConfigItem, ImportJob, ReportExportRecord, StoredFile
 from app.models.teacher import (
     ClassAdviserAssignment,
@@ -71,16 +98,21 @@ __all__ = [
     "AdviserQuantRecordAttachment",
     "AdviserQuantRuleItem",
     "AdviserQuantRuleVersion",
+    "AppSession",
+    "AppUser",
+    "AppUserClassScope",
     "AuditLog",
     "AdmissionRecord",
-    "AttendanceRecord",
     "BackupRecord",
-    "BehaviorRecord",
     "Base",
     "College",
     "CollegeAlias",
     "CollegeMajor",
+    "CollegeMajorProfile",
+    "CollegeProfileDetail",
+    "CollegeYearSummary",
     "ClassAdviserAssignment",
+    "ClassHonor",
     "ConfigItem",
     "DictItem",
     "DictType",
@@ -88,6 +120,7 @@ __all__ = [
     "EnrollmentPlan",
     "Exam",
     "ExamSubject",
+    "ErrorReasonTag",
     "EvaluationBatch",
     "EvaluationQuestion",
     "EvaluationResponse",
@@ -99,15 +132,27 @@ __all__ = [
     "GaokaoImportRun",
     "GaokaoSourceDocument",
     "ImportJob",
+    "KnowledgePoint",
+    "KnowledgePointAlias",
     "Major",
+    "MajorProfileDetail",
     "MajorEmploymentMapping",
     "ReportExportRecord",
     "RecommendationResult",
     "RecommendationScheme",
     "SchoolClass",
     "ScoreImportBatch",
+    "ScoreClassMapping",
+    "ScoreExamStudentContext",
+    "ScoreImportProfile",
+    "ScoreKnowledgeSnapshot",
+    "ScoreQuestion",
+    "ScoreQuestionImportBatch",
+    "ScoreQuestionKnowledgePoint",
+    "ScoreQuestionRecord",
     "ScoreRecord",
     "ScoreSubjectSnapshot",
+    "ScoreTargetLine",
     "ScoreTotalSnapshot",
     "Semester",
     "Student",
@@ -120,6 +165,7 @@ __all__ = [
     "StudentGrowthAttachment",
     "StudentGrowthRecord",
     "StudentGuardian",
+    "StudentTeacherComment",
     "StudentPathwayEvaluation",
     "StudentPathwayProfile",
     "StudentPlanningGoal",

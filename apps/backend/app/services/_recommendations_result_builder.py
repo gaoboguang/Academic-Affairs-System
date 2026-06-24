@@ -499,6 +499,7 @@ def build_recommendation_sort_key(
         "challenge": 0,
         "steady": 1,
         "safe": 2,
+        "watch": 3,
     }
     return (
         result_order.get(result_type, 9),

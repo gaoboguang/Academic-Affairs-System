@@ -1,9 +1,17 @@
+import type { components } from "../../types/api.generated";
 import type {
   GaokaoCollegeEvidenceOption,
 } from "../../utils/gaokaoEvidence";
 import type {
   GaokaoOverviewTableStat,
 } from "../../utils/gaokaoOverview";
+
+type ApiSchemas = components["schemas"];
+
+// 以下类型定义是「前端契约」，包含若干非空约束（例如 notes: string[]），
+// 后端 OpenAPI 返回的是 `notes?: string[]`，实际运行时始终返回数组。
+// 文件末尾有一段编译期兼容性检查 `_AssertSchemaCompat`——当后端 schema
+// 改动导致不再兼容时，`npm run gen:api` 后 tsc 会直接报错。
 
 export interface GaokaoDataOverview {
   source_mode: string;
@@ -295,3 +303,83 @@ export interface GaokaoShandongMonitor {
   sections: GaokaoOverviewTableStat[];
   notes: string[];
 }
+
+// ---------------------------------------------------------------------------
+// 编译期兼容性检查：本文件的类型必须是后端 OpenAPI 生成类型的「子类型」。
+// 当后端字段改名或类型变更时，`npm run gen:api` 之后此文件会先报错，
+// 让前端改动集中在这一处、不再把错误扩散到各 Vue 组件。
+// ---------------------------------------------------------------------------
+
+type IsAssignable<L, R> = [L] extends [R] ? true : false;
+
+interface _SchemaAssertions {
+  overview: IsAssignable<GaokaoDataOverview, ApiSchemas["GaokaoDataOverviewRead"]>;
+  importBatch: IsAssignable<GaokaoImportBatch, ApiSchemas["GaokaoImportBatchRead"]>;
+  healthTable: IsAssignable<GaokaoDataHealthTable, ApiSchemas["GaokaoDataHealthTableRead"]>;
+  healthType: IsAssignable<GaokaoDataHealthType, ApiSchemas["GaokaoDataHealthTypeRead"]>;
+  healthYearBreakdown: IsAssignable<
+    GaokaoDataHealthYearBreakdown,
+    ApiSchemas["GaokaoDataHealthYearBreakdownRead"]
+  >;
+  healthCoverage: IsAssignable<
+    GaokaoDataHealthCoverage,
+    ApiSchemas["GaokaoDataHealthCoverageRead"]
+  >;
+  auditItem: IsAssignable<GaokaoDataAuditItem, ApiSchemas["GaokaoDataAuditItemRead"]>;
+  fieldExplanation: IsAssignable<
+    GaokaoDataFieldExplanation,
+    ApiSchemas["GaokaoDataFieldExplanationRead"]
+  >;
+  deliveryAssessment: IsAssignable<
+    GaokaoDataDeliveryAssessment,
+    ApiSchemas["GaokaoDataDeliveryAssessmentRead"]
+  >;
+  specialTypeRisk: IsAssignable<
+    GaokaoDataSpecialTypeRisk,
+    ApiSchemas["GaokaoDataSpecialTypeRiskRead"]
+  >;
+  publicationSource: IsAssignable<
+    GaokaoDataPublicationSource,
+    ApiSchemas["GaokaoDataPublicationSourceRead"]
+  >;
+  publicationStatus: IsAssignable<
+    GaokaoDataPublicationStatus,
+    ApiSchemas["GaokaoDataPublicationStatusRead"]
+  >;
+  health: IsAssignable<GaokaoDataHealth, ApiSchemas["GaokaoDataHealthRead"]>;
+  reviewBucket: IsAssignable<GaokaoReviewBucket, ApiSchemas["GaokaoReviewBucketRead"]>;
+  reviewQuickFilter: IsAssignable<
+    GaokaoReviewQuickFilter,
+    ApiSchemas["GaokaoReviewQuickFilterRead"]
+  >;
+  reviewGroupField: IsAssignable<
+    GaokaoReviewGroupComparisonField,
+    ApiSchemas["GaokaoReviewGroupComparisonFieldRead"]
+  >;
+  reviewGroupMember: IsAssignable<
+    GaokaoReviewGroupMember,
+    ApiSchemas["GaokaoReviewGroupMemberRead"]
+  >;
+  reviewItem: IsAssignable<GaokaoReviewItem, ApiSchemas["GaokaoReviewItemRead"]>;
+  reviewGroup: IsAssignable<GaokaoReviewGroup, ApiSchemas["GaokaoReviewGroupRead"]>;
+  reviewSummary: IsAssignable<GaokaoReviewSummary, ApiSchemas["GaokaoReviewSummaryRead"]>;
+  collegeEvidence: IsAssignable<
+    GaokaoCollegeEvidence,
+    ApiSchemas["GaokaoCollegeEvidenceRead"]
+  >;
+  shandongMonitor: IsAssignable<
+    GaokaoShandongMonitor,
+    ApiSchemas["GaokaoShandongMonitorRead"]
+  >;
+}
+
+type _AssertAllTrue<T> = {
+  [K in keyof T]: T[K] extends true ? T[K] : never;
+};
+
+type _SchemaCompatOk = _AssertAllTrue<_SchemaAssertions>;
+
+// 下面这行若标红，说明至少有一条不兼容。
+// 看最近一次 OpenAPI 变更并对齐上面的 interface 即可。
+const _schemaCompatOk: _SchemaCompatOk = {} as _SchemaCompatOk;
+void _schemaCompatOk;

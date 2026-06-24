@@ -1,35 +1,17 @@
 <template>
-  <div class="page-shell">
-    <header class="page-header">
-      <div>
-        <div class="page-eyebrow">基础台账 / 学生中心</div>
-        <h2 class="page-title">学生中心</h2>
-        <p class="page-subtitle">
-          当前支持学生列表、详情页、模板下载、批量导入和 Excel 导出。学生状态、类别、艺体方向和生源地会一起沉到学生主档。
-        </p>
-        <div class="page-chip-row">
-          <span class="page-chip"><strong>学生总数</strong>{{ students.total }}</span>
-          <span class="page-chip"><strong>当前页记录</strong>{{ students.items.length }}</span>
-          <span class="page-chip"><strong>已选学生</strong>{{ selectedRows.length }}</span>
-          <span class="page-chip"><strong>启用筛选</strong>{{ activeFilterCount }}</span>
-          <span class="page-chip"><strong>导入策略</strong>{{ importStrategyLabel }}</span>
-        </div>
-      </div>
-      <div class="action-row">
+  <AppPage
+    title="学生中心"
+    eyebrow="基础台账 / 学生中心"
+    description="当前支持学生列表、详情页、模板下载、批量导入和 Excel 导出。学生状态、类别、艺体方向和生源地会一起沉到学生主档。"
+    :meta="studentPageMeta"
+  >
+    <template #actions>
         <el-button @click="openFile('/api/students/template')">模板下载</el-button>
         <el-button @click="openFile('/api/students/export')">导出列表</el-button>
         <el-button type="primary" @click="openCreate">新增学生</el-button>
-      </div>
-    </header>
+    </template>
 
     <section class="overview-grid">
-      <article class="soft-card overview-panel">
-        <div class="overview-kicker">管理视图</div>
-        <h3>学生台账、导入和详情入口放在一条连续路径里</h3>
-        <p>
-          先筛选并确认学生范围，再进入详情补充家庭联系人、成长档案、成绩画像和附件，不把高频信息拆到多个页面里。
-        </p>
-      </article>
       <article v-for="item in overviewCards" :key="item.label" class="soft-card overview-card" :class="item.tone">
         <span>{{ item.label }}</span>
         <strong>{{ item.value }}</strong>
@@ -81,6 +63,27 @@
         </el-upload>
       </div>
       <ImportFeedbackPanel :result="importResult" />
+    </section>
+
+    <section class="soft-card panel-block pathway-profile-bulk-panel">
+      <div class="section-head compact">
+        <div>
+          <h3>升学画像批量维护</h3>
+          <p>批量补充选科组合、考生类型、身份意向、目标地区、就业方向等推荐工作台需要的字段。空白单元格会保留系统已有值。</p>
+        </div>
+      </div>
+      <div class="action-row import-row">
+        <el-button @click="openFile(pathwayProfileBulkEndpoints.template)">升学画像模板</el-button>
+        <el-button @click="openFile(pathwayProfileBulkEndpoints.export)">下载画像数据</el-button>
+        <el-upload
+          :show-file-list="false"
+          :auto-upload="false"
+          :on-change="handlePathwayProfileImport"
+        >
+          <el-button type="primary">上传画像</el-button>
+        </el-upload>
+      </div>
+      <ImportFeedbackPanel :result="pathwayProfileImportResult" />
     </section>
 
     <section class="soft-card panel-block">
@@ -290,7 +293,7 @@
       :class-options="referenceStore.classes"
       @completed="handleClassTransferCompleted"
     />
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
@@ -298,12 +301,18 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { Delete as DeleteIcon, Switch as TransferIcon } from "@element-plus/icons-vue";
 import ElMessage from "element-plus/es/components/message/index";
 import type { UploadFile } from "element-plus";
+import type { components as StudentApiSchemas } from "../types/api.generated";
+
+type StudentPayloadSchema = StudentApiSchemas["schemas"]["StudentPayload"];
 import { useRouter } from "vue-router";
 
 import { apiRequest, openFile, uploadFile } from "../api/client";
+import { api } from "../api/typedClient";
 import ImportFeedbackPanel from "../components/common/ImportFeedbackPanel.vue";
 import StudentBulkDeleteDialog from "../components/students/StudentBulkDeleteDialog.vue";
 import StudentClassTransferDialog from "../components/students/StudentClassTransferDialog.vue";
+import { pathwayProfileBulkEndpoints } from "../components/students/pathwayProfileBulk";
+import { AppPage } from "../components/ui";
 import { useReferenceStore } from "../stores/reference";
 import type { ImportFeedbackResult } from "../utils/importFeedback";
 
@@ -338,6 +347,7 @@ const dialogVisible = ref(false);
 const editingId = ref<number | null>(null);
 const submitting = ref(false);
 const importResult = ref<ImportFeedbackResult | null>(null);
+const pathwayProfileImportResult = ref<ImportFeedbackResult | null>(null);
 const selectedRows = ref<StudentItem[]>([]);
 const studentTableRef = ref<{ clearSelection: () => void } | null>(null);
 const bulkDeleteDialogVisible = ref(false);
@@ -392,6 +402,13 @@ const importStrategyLabel = computed(() => {
   };
   return mapping[importStrategy.value] ?? importStrategy.value;
 });
+const studentPageMeta = computed(() => [
+  { label: "学生总数", value: students.total },
+  { label: "当前页记录", value: students.items.length },
+  { label: "已选学生", value: selectedRows.value.length },
+  { label: "启用筛选", value: activeFilterCount.value },
+  { label: "导入策略", value: importStrategyLabel.value },
+]);
 const selectedStudentIds = computed(() => selectedRows.value.map((student) => student.id));
 const overviewCards = computed(() => [
   {
@@ -450,18 +467,17 @@ function resetForm(): void {
 
 async function loadStudents(): Promise<void> {
   try {
-    const query = new URLSearchParams({
-      page: String(page.value),
-      page_size: String(pageSize.value),
+    const payload = await api.get("/api/students", {
+      query: {
+        page: page.value,
+        page_size: pageSize.value,
+        student_no: filters.student_no || null,
+        name: filters.name || null,
+        grade_id: filters.grade_id ?? null,
+        class_id: filters.class_id ?? null,
+      },
     });
-    if (filters.student_no) query.set("student_no", filters.student_no);
-    if (filters.name) query.set("name", filters.name);
-    if (filters.grade_id) query.set("grade_id", String(filters.grade_id));
-    if (filters.class_id) query.set("class_id", String(filters.class_id));
-    Object.assign(
-      students,
-      await apiRequest<StudentListResponse>(`/api/students?${query.toString()}`),
-    );
+    Object.assign(students, payload);
     clearSelectedStudents();
   } catch (error) {
     ElMessage.error((error as Error).message);
@@ -469,12 +485,20 @@ async function loadStudents(): Promise<void> {
 }
 
 function resetFilters(): void {
+  void resetFiltersAndReload();
+}
+
+async function resetFiltersAndReload(): Promise<void> {
   filters.student_no = "";
   filters.name = "";
   filters.grade_id = undefined;
   filters.class_id = undefined;
   page.value = 1;
-  void loadStudents();
+  try {
+    await loadStudents();
+  } catch (error) {
+    ElMessage.error((error as Error).message || "重置筛选后刷新学生列表失败");
+  }
 }
 
 function openCreate(): void {
@@ -536,8 +560,12 @@ function openClassTransferDialog(): void {
   classTransferDialogVisible.value = true;
 }
 
-function handleClassTransferCompleted(): void {
-  void Promise.all([referenceStore.loadCore(), loadStudents()]);
+async function handleClassTransferCompleted(): Promise<void> {
+  try {
+    await Promise.all([referenceStore.loadCore(), loadStudents()]);
+  } catch (error) {
+    ElMessage.error((error as Error).message || "调班完成后刷新数据失败");
+  }
 }
 
 async function submitForm(): Promise<void> {
@@ -547,12 +575,14 @@ async function submitForm(): Promise<void> {
   }
   try {
     submitting.value = true;
-    const method = editingId.value ? "PUT" : "POST";
-    const path = editingId.value ? `/api/students/${editingId.value}` : "/api/students";
-    await apiRequest(path, {
-      method,
-      body: JSON.stringify(formState),
-    });
+    if (editingId.value) {
+      await api.put("/api/students/{student_id}", {
+        path: { student_id: editingId.value },
+        body: formState as unknown as StudentPayloadSchema,
+      });
+    } else {
+      await api.post("/api/students", { body: formState as unknown as StudentPayloadSchema });
+    }
     ElMessage.success("学生保存成功");
     dialogVisible.value = false;
     await Promise.all([referenceStore.loadCore(), loadStudents()]);
@@ -582,6 +612,25 @@ async function handleImport(uploadFileItem: UploadFile): Promise<void> {
       message: importResult.value.message,
     });
     await Promise.all([referenceStore.loadCore(), loadStudents()]);
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  }
+}
+
+async function handlePathwayProfileImport(uploadFileItem: UploadFile): Promise<void> {
+  if (!uploadFileItem.raw) {
+    return;
+  }
+  try {
+    pathwayProfileImportResult.value = null;
+    pathwayProfileImportResult.value = await uploadFile<ImportFeedbackResult>(
+      pathwayProfileBulkEndpoints.import,
+      uploadFileItem.raw,
+    );
+    ElMessage({
+      type: pathwayProfileImportResult.value.failed_rows ? "warning" : "success",
+      message: pathwayProfileImportResult.value.message,
+    });
   } catch (error) {
     ElMessage.error((error as Error).message);
   }
@@ -635,11 +684,10 @@ const provinceOptions = [
 <style scoped>
 .overview-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) repeat(3, minmax(0, 0.75fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 16px;
 }
 
-.overview-panel,
 .overview-card {
   padding: 24px;
 }
@@ -680,37 +728,6 @@ const provinceOptions = [
 
 .import-feedback-actions {
   margin-top: 8px;
-}
-
-.overview-panel {
-  background:
-    radial-gradient(circle at top left, rgba(180, 219, 243, 0.32), transparent 28%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.99), rgba(244, 248, 252, 0.94));
-}
-
-.overview-kicker {
-  display: inline-flex;
-  padding: 7px 10px;
-  border-radius: 999px;
-  background: rgba(31, 108, 152, 0.1);
-  color: #1f6c98;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.overview-panel h3 {
-  margin: 14px 0 0;
-  color: #1f3448;
-  font-size: 28px;
-  line-height: 1.25;
-}
-
-.overview-panel p {
-  margin: 12px 0 0;
-  color: #62788c;
-  line-height: 1.7;
 }
 
 .overview-card {

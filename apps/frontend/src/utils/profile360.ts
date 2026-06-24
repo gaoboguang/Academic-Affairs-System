@@ -17,8 +17,6 @@ export interface Student360Input {
   attachmentCount: number;
   classTransferCount: number;
   studentType?: string | null;
-  attendanceImported?: boolean;
-  behaviorImported?: boolean;
   riskLevel?: "urgent" | "follow_up" | "watch" | "normal" | null;
 }
 
@@ -35,17 +33,11 @@ export function buildStudent360RiskTags(input: Student360Input): Profile360Tag[]
     tags.push({ label: "成绩数据缺失", detail: "当前还没有可用于趋势和排名分析的成绩记录。", type: "danger" });
   }
   if (input.riskLevel === "urgent") {
-    tags.push({ label: "紧急跟进", detail: "考勤、行为或成绩波动触发了高优先级跟进。", type: "danger" });
+    tags.push({ label: "紧急跟进", detail: "成绩波动或规划任务触发了高优先级跟进。", type: "danger" });
   } else if (input.riskLevel === "follow_up") {
-    tags.push({ label: "需要跟进", detail: "近期存在出勤、行为或成绩方面的跟进信号。", type: "warning" });
+    tags.push({ label: "需要跟进", detail: "近期存在成绩、成长档案或规划任务方面的跟进信号。", type: "warning" });
   } else if (input.riskLevel === "watch") {
     tags.push({ label: "持续观察", detail: "当前数据不完整或存在轻微波动，建议保持观察。", type: "info" });
-  }
-  if (input.attendanceImported === false) {
-    tags.push({ label: "考勤未导入", detail: "缺少近阶段考勤数据，不能按 0 风险判断。", type: "warning" });
-  }
-  if (input.behaviorImported === false) {
-    tags.push({ label: "行为未导入", detail: "缺少近阶段行为记录，不能按 0 风险判断。", type: "warning" });
   }
   if (input.classTransferCount > 0) {
     tags.push({ label: "近期调班需复核", detail: "已有调班系统事件，查看分析前先确认生效日期和班级口径。", type: "warning" });
@@ -71,7 +63,7 @@ export function buildStudent360Actions(studentId: number): Profile360Action[] {
     { label: "成长时间线", detail: "查看成长记录、调班系统事件和附件。", path: `/growth-archive?student_id=${studentId}` },
     { label: "升学画像", detail: "维护路径画像、材料缺口和资格初筛。", path: `/gaokao-pathways?student_id=${studentId}` },
     { label: "推荐记录", detail: "生成或回看冲稳保方案。", path: "/recommendations" },
-    { label: "学生跟进包", detail: "汇总成绩、考勤、行为和成长记录。", path: `/reports?report_type=student_followup_package&student_id=${studentId}` },
+    { label: "学生跟进包", detail: "汇总成绩、成长档案、规划任务和建议行动。", path: `/reports?report_type=student_followup_package&student_id=${studentId}` },
     { label: "报表导出", detail: "到报表中心导出可交接材料。", path: "/reports" },
   ];
 }

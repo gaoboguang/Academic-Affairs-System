@@ -1,17 +1,16 @@
 <template>
-  <div class="page-shell">
-    <header class="page-header">
-      <div>
-        <h2 class="page-title">考试成绩中心</h2>
-        <p class="page-subtitle">
-          当前支持考试维护、考试科目配置、成绩模板下载、Excel 导入、快照重建和导入批次查看。
-        </p>
-      </div>
+  <AppPage
+    title="考试成绩中心"
+    eyebrow="考试治理 / 成绩中心"
+    description="集中维护考试、科目、成绩导入和快照重建；先完成考试配置，再进入分析中心查看口径与结果。"
+    :meta="examPageMeta"
+  >
+    <template #actions>
       <div class="action-row">
         <el-button @click="downloadTemplate">成绩模板下载</el-button>
         <el-button type="primary" @click="openCreate">新建考试</el-button>
       </div>
-    </header>
+    </template>
 
     <el-alert
       v-for="item in scoreReadinessMessages"
@@ -23,7 +22,13 @@
       :title="item"
     />
 
-    <section class="soft-card panel-block">
+    <AppStatGrid :items="examStatCards" :columns="4" />
+
+    <AppFilterBar
+      title="全局筛选"
+      description="按考试名称和学期快速定位，查询结果会同步到下方考试列表。"
+      sticky
+    >
       <div class="filter-grid">
         <el-input v-model="filters.name" placeholder="按考试名称筛选" />
         <el-select v-model="filters.semester_id" clearable placeholder="选择学期">
@@ -35,13 +40,16 @@
           />
         </el-select>
       </div>
-      <div class="action-row import-row">
+      <template #actions>
         <el-button type="primary" @click="loadExams">查询</el-button>
         <el-button @click="resetFilters">重置</el-button>
-      </div>
-    </section>
+      </template>
+    </AppFilterBar>
 
-    <section class="soft-card panel-block">
+    <AppTableShell
+      title="考试列表"
+      description="每场考试的科目配置、成绩导入和快照重建都从这里进入。"
+    >
       <el-table :data="exams.items" stripe>
         <el-table-column label="考试名称" prop="name" min-width="180" />
         <el-table-column label="类型" prop="exam_type" width="100" />
@@ -71,7 +79,7 @@
           </template>
         </el-table-column>
       </el-table>
-    </section>
+    </AppTableShell>
 
     <el-dialog
       v-model="dialogVisible"
@@ -235,13 +243,36 @@
       :close-on-click-modal="false"
       @closed="handleImportDialogClosed"
     >
+      <el-steps class="score-import-steps" :active="scoreImportStepActive" finish-status="success" simple>
+        <el-step title="上传识别" />
+        <el-step title="确认映射" />
+        <el-step title="导入结果" />
+      </el-steps>
+
       <div class="action-row import-row">
         <el-select v-model="importStrategy" style="width: 180px">
           <el-option label="覆盖已有成绩" value="overwrite" />
           <el-option label="跳过已有成绩" value="skip_existing" />
         </el-select>
-        <el-upload :show-file-list="false" :auto-upload="false" :on-change="handleImport">
-          <el-button type="primary">上传成绩表</el-button>
+        <el-select
+          v-model="selectedProfileId"
+          clearable
+          filterable
+          placeholder="选择平台模板"
+          style="width: 220px"
+        >
+          <el-option
+            v-for="profile in scoreProfiles"
+            :key="profile.id"
+            :label="profile.name"
+            :value="profile.id"
+          />
+        </el-select>
+        <el-upload :show-file-list="false" :auto-upload="false" :on-change="handleScorePreview">
+          <el-button type="primary" :loading="previewLoading">上传并识别</el-button>
+        </el-upload>
+        <el-upload :show-file-list="false" :auto-upload="false" :on-change="handleStandardImport">
+          <el-button plain :loading="importingScores">按统一模板导入</el-button>
         </el-upload>
         <el-button @click="reloadBatches">刷新批次</el-button>
       </div>
@@ -250,33 +281,185 @@
         type="info"
         show-icon
         :closable="false"
-        title="成绩导入会检查缺考、非法分数、重复学生、未匹配学生和未匹配科目；导入后请先看质量摘要，再查看分析。"
+        title="推荐先用“上传并识别”：系统会识别宽表/长表和科目列，确认映射后再写入成绩；统一模板仍可直接导入。"
       />
+
+      <section v-if="scorePreview && editableScoreMapping" class="score-mapping-panel">
+        <div class="section-head">
+          <div>
+            <h3>识别结果</h3>
+            <p>
+              {{ scorePreview.sheet_name }} / 第 {{ scorePreview.header_row }} 行表头 /
+              {{ scorePreview.layout_type === "wide" ? "宽表" : "长表" }} /
+              置信度 {{ Math.round(scorePreview.confidence * 100) }}%
+            </p>
+          </div>
+          <el-tag :type="scorePreview.import_ready ? 'success' : 'warning'" effect="light">
+            {{ scorePreview.import_ready ? "可导入" : "需复核" }}
+          </el-tag>
+        </div>
+        <el-alert
+          v-for="message in scorePreview.messages"
+          :key="message"
+          class="mapping-message"
+          type="warning"
+          show-icon
+          :closable="false"
+          :title="message"
+        />
+
+        <el-form label-width="110px" class="mapping-form">
+          <div class="form-grid">
+            <el-form-item label="板式">
+              <el-select v-model="editableScoreMapping.layout_type" style="width: 100%">
+                <el-option label="宽表：一行一个学生，多科成绩列" value="wide" />
+                <el-option label="长表：一行一个学生一科" value="long" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="保存模板">
+              <div class="profile-save-row">
+                <el-switch v-model="saveScoreProfile" />
+                <el-input
+                  v-model="scoreProfileName"
+                  :disabled="!saveScoreProfile"
+                  placeholder="如：七天网络成绩导出"
+                />
+              </div>
+            </el-form-item>
+            <el-form-item
+              v-for="field in SCORE_IMPORT_FIELD_OPTIONS"
+              :key="field.value"
+              :label="field.label"
+            >
+              <el-select
+                :model-value="editableScoreMapping.field_mapping[field.value]"
+                clearable
+                filterable
+                placeholder="选择列"
+                style="width: 100%"
+                @change="updateScoreFieldMapping(field.value, $event)"
+              >
+                <el-option
+                  v-for="header in scoreImportHeaders"
+                  :key="header"
+                  :label="header"
+                  :value="header"
+                />
+              </el-select>
+            </el-form-item>
+          </div>
+        </el-form>
+
+        <section v-if="editableScoreMapping.layout_type === 'wide'" class="subject-map-section">
+          <div class="section-head compact-section-head">
+            <div>
+              <h4>宽表科目列</h4>
+              <p>总分、名次等统计列可以留空，系统会在导入后重新计算。</p>
+            </div>
+          </div>
+          <el-table :data="scoreSubjectColumns" size="small" stripe>
+            <el-table-column label="来源列" min-width="180">
+              <template #default="{ row }">{{ row }}</template>
+            </el-table-column>
+            <el-table-column label="对应科目" min-width="180">
+              <template #default="{ row }">
+                <el-select
+                  :model-value="editableScoreMapping.subject_mapping[row]"
+                  clearable
+                  filterable
+                  placeholder="忽略或选择科目"
+                  style="width: 100%"
+                  @change="updateScoreSubjectMapping(row, $event)"
+                >
+                  <el-option
+                    v-for="subject in subjectOptions"
+                    :key="subject.id"
+                    :label="subject.name"
+                    :value="subject.name"
+                  />
+                </el-select>
+              </template>
+            </el-table-column>
+            <el-table-column label="成绩口径" width="130">
+              <template #default="{ row }">
+                <el-select
+                  :model-value="editableScoreMapping.subject_score_types[row] ?? 'original'"
+                  :disabled="!editableScoreMapping.subject_mapping[row]"
+                  style="width: 100%"
+                  @change="updateScoreSubjectScoreType(row, $event)"
+                >
+                  <el-option label="原始分" value="original" />
+                  <el-option label="赋分" value="converted" />
+                </el-select>
+              </template>
+            </el-table-column>
+          </el-table>
+        </section>
+
+        <el-alert
+          class="import-tip"
+          type="info"
+          show-icon
+          :closable="false"
+          :title="scoreImportReadinessText"
+        />
+        <el-table :data="scorePreview.normalized_preview" size="small" stripe class="preview-table">
+          <el-table-column
+            v-for="header in ['学号', '姓名', '班级', '科目', '分数', '成绩口径', '缺考标记']"
+            :key="header"
+            :label="header"
+            :prop="header"
+            min-width="100"
+          />
+        </el-table>
+        <div class="action-row import-row">
+          <el-button
+            type="primary"
+            :disabled="!pendingImportFile || !editableScoreMapping"
+            :loading="importingScores"
+            @click="executeSmartImport"
+          >
+            确认并导入
+          </el-button>
+        </div>
+      </section>
+
       <ImportFeedbackPanel :result="importResult" />
-      <el-table :data="scoreBatches" stripe style="margin-top: 16px">
-        <el-table-column label="批次 ID" prop="id" width="90" />
-        <el-table-column label="来源文件" prop="source_filename" min-width="180" />
-        <el-table-column label="导入时间" prop="import_time" min-width="160" />
-        <el-table-column label="成功" prop="success_rows" width="90" />
-        <el-table-column label="失败" prop="failed_rows" width="90" />
-        <el-table-column label="状态" width="110">
-          <template #default="{ row }">
-            <el-tag :type="scoreBatchStatusType(row.status)" effect="light">
-              {{ formatScoreBatchStatus(row.status) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-      </el-table>
+      <AppTableShell class="score-batch-shell" title="最近导入批次">
+        <el-table :data="scoreBatches" stripe>
+          <el-table-column label="批次 ID" prop="id" width="90" />
+          <el-table-column label="来源文件" prop="source_filename" min-width="180" />
+          <el-table-column label="导入时间" prop="import_time" min-width="160" />
+          <el-table-column label="成功" prop="success_rows" width="90" />
+          <el-table-column label="失败" prop="failed_rows" width="90" />
+          <el-table-column label="识别方式" min-width="140">
+            <template #default="{ row }">
+              {{ formatScoreBatchImportMode(row) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="110">
+            <template #default="{ row }">
+              <el-tag :type="scoreBatchStatusType(row.status)" effect="light">
+                {{ formatScoreBatchStatus(row.status) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+      </AppTableShell>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 import ElMessage from "element-plus/es/components/message/index";
 import type { UploadFile } from "element-plus";
+import type { components as ExamApiSchemas } from "../types/api.generated";
+
+type ExamPayloadSchema = ExamApiSchemas["schemas"]["ExamPayload"];
 
 import { apiRequest, openFile, uploadFile } from "../api/client";
+import { api } from "../api/typedClient";
 import ImportFeedbackPanel from "../components/common/ImportFeedbackPanel.vue";
 import {
   buildExamSubjectOptions,
@@ -286,6 +469,25 @@ import {
   type ExamSubjectDraftRow,
   type ExamSubjectOption,
 } from "../components/exams/examSubjectConfig";
+import {
+  SCORE_IMPORT_FIELD_OPTIONS,
+  buildScoreImportMappingPayload,
+  buildScoreImportReadinessText,
+  cloneScoreImportMapping,
+  getScoreImportHeaders,
+  getUnassignedScoreColumns,
+  type ScoreImportMapping,
+  type ScoreImportPreview,
+  type ScoreImportProfile,
+} from "../components/exams/scoreImportMapping";
+import {
+  AppFilterBar,
+  AppPage,
+  AppStatGrid,
+  AppTableShell,
+  type PageMetaItem,
+  type StatCardItem,
+} from "../components/ui";
 import { useReferenceStore } from "../stores/reference";
 import { formatImportStatus, importStatusTagType, type ImportFeedbackResult } from "../utils/importFeedback";
 import { buildScoreReadinessMessages } from "../utils/scoreReadiness";
@@ -330,6 +532,8 @@ interface ScoreBatch {
   success_rows: number;
   failed_rows: number;
   status: string;
+  profile_id?: number | null;
+  detection_summary?: Record<string, unknown> | null;
 }
 
 const referenceStore = useReferenceStore();
@@ -341,9 +545,18 @@ const subjectsExamId = ref<number | null>(null);
 const importExamId = ref<number | null>(null);
 const savingExam = ref(false);
 const savingSubjects = ref(false);
+const previewLoading = ref(false);
+const importingScores = ref(false);
 const importStrategy = ref("overwrite");
 const importResult = ref<(ImportFeedbackResult & { batch_id: number }) | null>(null);
 const scoreRecordTotal = ref(0);
+const scoreProfiles = ref<ScoreImportProfile[]>([]);
+const selectedProfileId = ref<number | null>(null);
+const pendingImportFile = ref<File | null>(null);
+const scorePreview = ref<ScoreImportPreview | null>(null);
+const editableScoreMapping = ref<ScoreImportMapping | null>(null);
+const saveScoreProfile = ref(false);
+const scoreProfileName = ref("");
 
 const filters = reactive({
   name: "",
@@ -372,6 +585,10 @@ const examForm = reactive({
 const subjectRows = ref<ExamSubjectDraftRow[]>([]);
 const scoreBatches = ref<ScoreBatch[]>([]);
 const subjectOptions = computed(() => buildExamSubjectOptions(referenceStore.subjects));
+const scoreImportHeaders = computed(() => getScoreImportHeaders(scorePreview.value));
+const scoreSubjectColumns = computed(() =>
+  editableScoreMapping.value ? getUnassignedScoreColumns(scorePreview.value, editableScoreMapping.value) : [],
+);
 const selectedSubjectIds = computed(() =>
   subjectRows.value
     .map((item) => item.subject_id)
@@ -393,6 +610,49 @@ const scoreReadinessMessages = computed(() =>
     scoreRecordTotal: scoreRecordTotal.value,
   }),
 );
+const publishedExamCount = computed(() => exams.items.filter((item) => item.status === "published").length);
+const configuredSubjectCount = computed(() =>
+  exams.items.reduce((total, item) => total + (item.subject_count > 0 ? 1 : 0), 0),
+);
+const examPageMeta = computed<PageMetaItem[]>(() => [
+  { label: "考试", value: exams.total },
+  { label: "已发布", value: publishedExamCount.value },
+  { label: "成绩记录", value: scoreRecordTotal.value },
+]);
+const examStatCards = computed<StatCardItem[]>(() => [
+  {
+    label: "考试总数",
+    value: exams.total,
+    help: "当前考试成绩中心维护的考试数量。",
+    tone: "primary",
+  },
+  {
+    label: "已发布考试",
+    value: publishedExamCount.value,
+    help: "可用于正式分析与报表输出的考试。",
+    tone: "success",
+  },
+  {
+    label: "已配科目考试",
+    value: configuredSubjectCount.value,
+    help: "至少配置过一个考试科目的考试。",
+    tone: configuredSubjectCount.value === exams.items.length && exams.items.length ? "success" : "warning",
+  },
+  {
+    label: "成绩记录",
+    value: scoreRecordTotal.value,
+    help: "系统当前已保存的成绩明细记录。",
+    tone: scoreRecordTotal.value ? "info" : "neutral",
+  },
+]);
+const scoreImportStepActive = computed(() => {
+  if (importResult.value) return 2;
+  if (scorePreview.value) return 1;
+  return 0;
+});
+const scoreImportReadinessText = computed(() =>
+  buildScoreImportReadinessText(scorePreview.value, editableScoreMapping.value),
+);
 
 function formatExamStatus(status: string): string {
   const mapping: Record<string, string> = {
@@ -411,6 +671,14 @@ function examStatusType(status: string): "info" | "success" | "warning" {
 
 function formatScoreBatchStatus(status: string): string {
   return formatImportStatus(status);
+}
+
+function formatScoreBatchImportMode(row: ScoreBatch): string {
+  const layoutType = row.detection_summary?.layout_type;
+  if (layoutType === "standard") return "统一模板";
+  if (layoutType === "wide") return "智能宽表";
+  if (layoutType === "long") return "智能长表";
+  return "-";
 }
 
 function scoreBatchStatusType(status: string): "info" | "success" | "warning" | "danger" {
@@ -433,10 +701,15 @@ function resetExamForm(): void {
 
 async function loadExams(): Promise<void> {
   try {
-    const query = new URLSearchParams({ page: "1", page_size: "100" });
-    if (filters.name) query.set("name", filters.name);
-    if (filters.semester_id) query.set("semester_id", String(filters.semester_id));
-    Object.assign(exams, await apiRequest<ExamListResponse>(`/api/exams?${query.toString()}`));
+    const payload = await api.get("/api/exams", {
+      query: {
+        page: 1,
+        page_size: 100,
+        name: filters.name || null,
+        semester_id: filters.semester_id ?? null,
+      },
+    });
+    Object.assign(exams, payload);
   } catch (error) {
     ElMessage.error((error as Error).message);
   }
@@ -473,7 +746,9 @@ function openCreate(): void {
 
 async function openEdit(row: ExamItem): Promise<void> {
   try {
-    const detail = await apiRequest<ExamItem>(`/api/exams/${row.id}`);
+    const detail = await api.get("/api/exams/{exam_id}", {
+      path: { exam_id: row.id },
+    });
     editingExamId.value = row.id;
     resetExamForm();
     Object.assign(examForm, detail);
@@ -490,9 +765,14 @@ async function submitExam(): Promise<void> {
   }
   try {
     savingExam.value = true;
-    const method = editingExamId.value ? "PUT" : "POST";
-    const path = editingExamId.value ? `/api/exams/${editingExamId.value}` : "/api/exams";
-    await apiRequest(path, { method, body: JSON.stringify(examForm) });
+    if (editingExamId.value) {
+      await api.put("/api/exams/{exam_id}", {
+        path: { exam_id: editingExamId.value },
+        body: examForm as unknown as ExamPayloadSchema,
+      });
+    } else {
+      await api.post("/api/exams", { body: examForm as unknown as ExamPayloadSchema });
+    }
     ElMessage.success("考试保存成功");
     dialogVisible.value = false;
     await loadExams();
@@ -592,13 +872,56 @@ async function openImport(row: ExamItem): Promise<void> {
   importExamId.value = row.id;
   importResult.value = null;
   scoreBatches.value = [];
+  pendingImportFile.value = null;
+  scorePreview.value = null;
+  editableScoreMapping.value = null;
+  saveScoreProfile.value = false;
+  scoreProfileName.value = "";
   importDialogVisible.value = true;
-  await reloadBatches();
+  await Promise.all([reloadBatches(), loadScoreProfiles()]);
 }
 
-async function handleImport(uploadFileItem: UploadFile): Promise<void> {
+async function loadScoreProfiles(): Promise<void> {
+  try {
+    scoreProfiles.value = await apiRequest<ScoreImportProfile[]>("/api/exams/score-import-profiles");
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  }
+}
+
+async function handleScorePreview(uploadFileItem: UploadFile): Promise<void> {
+  if (!uploadFileItem.raw || !importExamId.value) return;
+  pendingImportFile.value = uploadFileItem.raw;
+  importResult.value = null;
+  try {
+    previewLoading.value = true;
+    const fields: Record<string, string> = {};
+    if (selectedProfileId.value) fields.profile_id = String(selectedProfileId.value);
+    scorePreview.value = await uploadFile<ScoreImportPreview>(
+      `/api/exams/${importExamId.value}/scores/import/preview`,
+      uploadFileItem.raw,
+      fields,
+    );
+    editableScoreMapping.value = cloneScoreImportMapping(scorePreview.value.mapping);
+    if (selectedProfileId.value) {
+      const profile = scoreProfiles.value.find((item) => item.id === selectedProfileId.value);
+      scoreProfileName.value = profile?.name ?? "";
+    }
+    ElMessage({
+      type: scorePreview.value.import_ready ? "success" : "warning",
+      message: scorePreview.value.import_ready ? "成绩单识别完成，请确认映射后导入" : "成绩单已识别，请先补齐必要字段",
+    });
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  } finally {
+    previewLoading.value = false;
+  }
+}
+
+async function handleStandardImport(uploadFileItem: UploadFile): Promise<void> {
   if (!uploadFileItem.raw || !importExamId.value) return;
   try {
+    importingScores.value = true;
     importResult.value = await uploadFile<ImportFeedbackResult & { batch_id: number }>(
       `/api/exams/${importExamId.value}/scores/import`,
       uploadFileItem.raw,
@@ -615,6 +938,76 @@ async function handleImport(uploadFileItem: UploadFile): Promise<void> {
     await loadScoreReadiness();
   } catch (error) {
     ElMessage.error((error as Error).message);
+  } finally {
+    importingScores.value = false;
+  }
+}
+
+async function executeSmartImport(): Promise<void> {
+  if (!pendingImportFile.value || !importExamId.value || !editableScoreMapping.value) {
+    ElMessage.warning("请先上传成绩文件并完成识别");
+    return;
+  }
+  try {
+    importingScores.value = true;
+    const fields: Record<string, string> = {
+      strategy: importStrategy.value,
+      rebuild: "true",
+      mapping_json: buildScoreImportMappingPayload(editableScoreMapping.value),
+    };
+    if (selectedProfileId.value) fields.profile_id = String(selectedProfileId.value);
+    if (saveScoreProfile.value && scoreProfileName.value.trim()) {
+      fields.save_profile_name = scoreProfileName.value.trim();
+    }
+    importResult.value = await uploadFile<ImportFeedbackResult & { batch_id: number }>(
+      `/api/exams/${importExamId.value}/scores/import`,
+      pendingImportFile.value,
+      fields,
+    );
+    ElMessage({
+      type: importResult.value.failed_rows ? "warning" : "success",
+      message: importResult.value.message,
+    });
+    await Promise.all([reloadBatches(), loadScoreReadiness(), loadScoreProfiles()]);
+  } catch (error) {
+    ElMessage.error((error as Error).message);
+  } finally {
+    importingScores.value = false;
+  }
+}
+
+function updateScoreFieldMapping(role: string, header: string | number | boolean | undefined): void {
+  if (!editableScoreMapping.value) return;
+  const next = String(header ?? "");
+  if (!next) {
+    delete editableScoreMapping.value.field_mapping[role];
+    return;
+  }
+  editableScoreMapping.value.field_mapping[role] = next;
+  delete editableScoreMapping.value.subject_mapping[next];
+}
+
+function updateScoreSubjectMapping(header: string, subjectName: string | number | boolean | undefined): void {
+  if (!editableScoreMapping.value) return;
+  const next = String(subjectName ?? "");
+  if (!next) {
+    delete editableScoreMapping.value.subject_mapping[header];
+    delete editableScoreMapping.value.subject_score_types[header];
+    return;
+  }
+  editableScoreMapping.value.subject_mapping[header] = next;
+  editableScoreMapping.value.subject_score_types[header] =
+    editableScoreMapping.value.subject_score_types[header] ?? "original";
+}
+
+function updateScoreSubjectScoreType(
+  header: string,
+  scoreValueType: string | number | boolean | undefined,
+): void {
+  if (!editableScoreMapping.value) return;
+  const next = String(scoreValueType ?? "");
+  if (next === "converted" || next === "original" || next === "display") {
+    editableScoreMapping.value.subject_score_types[header] = next;
   }
 }
 
@@ -652,6 +1045,12 @@ function handleImportDialogClosed(): void {
   importExamId.value = null;
   importResult.value = null;
   scoreBatches.value = [];
+  selectedProfileId.value = null;
+  pendingImportFile.value = null;
+  scorePreview.value = null;
+  editableScoreMapping.value = null;
+  saveScoreProfile.value = false;
+  scoreProfileName.value = "";
 }
 
 onMounted(async () => {
@@ -666,6 +1065,60 @@ onMounted(async () => {
 }
 
 .import-tip {
+  margin-top: 12px;
+}
+
+.score-import-steps {
+  margin-bottom: 14px;
+}
+
+.score-batch-shell {
+  margin-top: 16px;
+}
+
+.score-mapping-panel {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid rgba(123, 141, 158, 0.24);
+  border-radius: 8px;
+  background: rgba(248, 251, 253, 0.76);
+}
+
+.mapping-message {
+  margin-top: 8px;
+}
+
+.mapping-form {
+  margin-top: 14px;
+}
+
+.profile-save-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  width: 100%;
+  align-items: center;
+}
+
+.subject-map-section {
+  margin-top: 10px;
+}
+
+.compact-section-head {
+  margin-bottom: 8px;
+}
+
+.compact-section-head h4 {
+  margin: 0;
+  color: #22384c;
+}
+
+.compact-section-head p {
+  margin: 4px 0 0;
+  color: #6d8194;
+}
+
+.preview-table {
   margin-top: 12px;
 }
 

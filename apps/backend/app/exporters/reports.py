@@ -44,6 +44,13 @@ def _format_percent(value: object) -> str:
     return "-"
 
 
+def _format_gap(value: object, unit: str) -> str:
+    if not isinstance(value, (int, float)):
+        return "-"
+    prefix = "+" if float(value) > 0 else ""
+    return f"{prefix}{_format_number(value)}{unit}"
+
+
 def _join_values(values: object) -> str:
     if not isinstance(values, list):
         return "-"
@@ -115,7 +122,7 @@ def _build_student_analysis_insight_rows(payload: dict[str, object]) -> list[dic
         {
             "title": "本次成绩摘要",
             "summary": f"{payload.get('student_name')} 在 {payload.get('exam_name')} 取得总分 {_format_number(payload.get('total_score'))}",
-            "detail": " / ".join(rank_segments) or "当前摘要可用于导出前快速复核学生本次成绩定位，避免把错误考试或学生参数带入报表。",
+            "detail": payload.get("overview_sentence") or " / ".join(rank_segments) or "当前摘要可用于导出前快速复核学生本次成绩定位，避免把错误考试或学生参数带入报表。",
             "tone": "info",
         }
     )
@@ -162,6 +169,17 @@ def _build_student_analysis_insight_rows(payload: dict[str, object]) -> list[dic
                 "summary": f"{focus_subject.get('subject_name')} 建议继续重点复核",
                 "detail": _build_student_subject_detail(focus_subject, "如需导出给班主任或任课教师，这一科更适合作为后续跟进重点。"),
                 "tone": "warning",
+            }
+        )
+    for suggestion in payload.get("action_suggestions") or []:
+        if not isinstance(suggestion, dict):
+            continue
+        rows.append(
+            {
+                "title": suggestion.get("title") or "行动建议",
+                "summary": suggestion.get("summary") or "-",
+                "detail": f"涉及科目：{_join_values(suggestion.get('subject_names'))}",
+                "tone": "warning" if suggestion.get("category") in {"fix_weakness", "target_warning"} else "success",
             }
         )
     return rows
@@ -277,8 +295,8 @@ def export_adviser_weekly_summary_report(settings: Settings, payload: dict[str, 
     sheet.title = "班主任周报"
     overview = payload.get("overview") if isinstance(payload.get("overview"), dict) else {}
     score_summary = payload.get("score_summary") if isinstance(payload.get("score_summary"), dict) else {}
-    attendance_summary = payload.get("attendance_summary") if isinstance(payload.get("attendance_summary"), dict) else {}
-    behavior_summary = payload.get("behavior_summary") if isinstance(payload.get("behavior_summary"), dict) else {}
+    growth_summary = payload.get("growth_summary") if isinstance(payload.get("growth_summary"), dict) else {}
+    planning_summary = payload.get("planning_summary") if isinstance(payload.get("planning_summary"), dict) else {}
 
     sheet.append(["班主任周报"])
     sheet.append(["年级", payload.get("grade_name") or "全部"])
@@ -290,8 +308,9 @@ def export_adviser_weekly_summary_report(settings: Settings, payload: dict[str, 
     sheet.append(["概览项", "数值"])
     sheet.append(["学生数", overview.get("student_count", 0)])
     sheet.append(["成绩样本", overview.get("score_sample_count", 0)])
-    sheet.append(["缺勤风险", overview.get("absence_risk_count", 0)])
-    sheet.append(["行为风险", overview.get("behavior_risk_count", 0)])
+    sheet.append(["成长记录", overview.get("growth_record_count", 0)])
+    sheet.append(["开放任务", overview.get("open_task_count", 0)])
+    sheet.append(["逾期任务", overview.get("overdue_task_count", 0)])
     sheet.append(["需跟进人数", overview.get("follow_up_count", 0)])
     sheet.append([])
     sheet.append(["成绩概况", "说明"])
@@ -300,16 +319,16 @@ def export_adviser_weekly_summary_report(settings: Settings, payload: dict[str, 
     sheet.append(["低位人数", score_summary.get("low_score_count", 0)])
     sheet.append(["下滑人数", score_summary.get("decline_count", 0)])
     sheet.append([])
-    sheet.append(["考勤概况", "说明"])
-    sheet.append(["导入状态", "已导入" if attendance_summary.get("imported") else "未导入"])
-    sheet.append(["总记录", attendance_summary.get("total_records", 0)])
-    sheet.append(["迟到", attendance_summary.get("late_count", 0)])
-    sheet.append(["旷课", attendance_summary.get("truancy_count", 0)])
+    sheet.append(["成长档案", "说明"])
+    sheet.append(["记录总数", growth_summary.get("total_records", 0)])
+    sheet.append(["有记录学生", growth_summary.get("students_with_records_count", 0)])
+    sheet.append(["最近记录日期", growth_summary.get("latest_record_date") or "-"])
     sheet.append([])
-    sheet.append(["行为概况", "说明"])
-    sheet.append(["导入状态", "已导入" if behavior_summary.get("imported") else "未导入"])
-    sheet.append(["总记录", behavior_summary.get("total_records", 0)])
-    sheet.append(["高关注行为", behavior_summary.get("severe_count", 0)])
+    sheet.append(["规划任务", "说明"])
+    sheet.append(["开放任务", planning_summary.get("open_task_count", 0)])
+    sheet.append(["逾期任务", planning_summary.get("overdue_task_count", 0)])
+    sheet.append(["7 天内到期", planning_summary.get("due_soon_task_count", 0)])
+    sheet.append(["高优先级", planning_summary.get("high_priority_open_count", 0)])
 
     risk_sheet = workbook.create_sheet("重点学生")
     risk_sheet.append(["姓名", "班级", "风险等级", "主要原因", "建议动作"])
@@ -352,9 +371,8 @@ def export_student_followup_package(settings: Settings, payload: dict[str, objec
     sheet = workbook.active
     sheet.title = "学生跟进包"
     score_summary = payload.get("score_summary") if isinstance(payload.get("score_summary"), dict) else {}
-    attendance_summary = payload.get("attendance_summary") if isinstance(payload.get("attendance_summary"), dict) else {}
-    behavior_summary = payload.get("behavior_summary") if isinstance(payload.get("behavior_summary"), dict) else {}
     growth_summary = payload.get("growth_summary") if isinstance(payload.get("growth_summary"), dict) else {}
+    planning_summary = payload.get("planning_summary") if isinstance(payload.get("planning_summary"), dict) else {}
 
     sheet.append(["学生跟进包"])
     sheet.append(["学生", payload.get("student_name")])
@@ -376,21 +394,13 @@ def export_student_followup_package(settings: Settings, payload: dict[str, objec
     sheet.append(["班级排名", _format_number(score_summary.get("class_rank"))])
     sheet.append(["年级排名", _format_number(score_summary.get("grade_rank"))])
     sheet.append([])
-    sheet.append(["考勤摘要", "值"])
-    sheet.append(["导入状态", "已导入" if attendance_summary.get("imported") else "未导入"])
-    sheet.append(["总记录", attendance_summary.get("total_records", 0)])
-    sheet.append(["迟到", attendance_summary.get("late_count", 0)])
-    sheet.append(["早退", attendance_summary.get("early_leave_count", 0)])
-    sheet.append(["病假", attendance_summary.get("sick_leave_count", 0)])
-    sheet.append(["事假", attendance_summary.get("personal_leave_count", 0)])
-    sheet.append(["旷课", attendance_summary.get("truancy_count", 0)])
-    sheet.append([])
-    sheet.append(["行为摘要", "值"])
-    sheet.append(["导入状态", "已导入" if behavior_summary.get("imported") else "未导入"])
-    sheet.append(["总记录", behavior_summary.get("total_records", 0)])
-    sheet.append(["表扬", behavior_summary.get("positive_count", 0)])
-    sheet.append(["违纪/奖惩", behavior_summary.get("discipline_count", 0)])
-    sheet.append(["高关注行为", behavior_summary.get("severe_count", 0)])
+    sheet.append(["规划任务", "值"])
+    sheet.append(["开放任务", planning_summary.get("open_task_count", 0)])
+    sheet.append(["逾期任务", planning_summary.get("overdue_task_count", 0)])
+    sheet.append(["7 天内到期", planning_summary.get("due_soon_task_count", 0)])
+    sheet.append(["高优先级", planning_summary.get("high_priority_open_count", 0)])
+    sheet.append(["是否缺少目标", "是" if planning_summary.get("no_goal") else "否"])
+    sheet.append(["最近到期日", planning_summary.get("next_due_date") or "-"])
     sheet.append([])
     sheet.append(["成长档案", "值"])
     sheet.append(["记录数", growth_summary.get("record_count", 0)])
@@ -704,11 +714,33 @@ def export_student_analysis_report(settings: Settings, payload: dict[str, object
     summary.append(["总分", payload.get("total_score")])
     summary.append(["班级名次", payload.get("class_rank")])
     summary.append(["年级名次", payload.get("grade_rank")])
+    summary.append(["校内PR", _format_percent(payload.get("grade_percentile"))])
     summary.append(["上次考试", payload.get("previous_exam_name")])
     summary.append(["总分变化", payload.get("total_score_delta")])
+    summary.append(["本次画像", payload.get("overview_sentence") or "-"])
+
+    overview_sheet = workbook.create_sheet("核心概况")
+    overview_sheet.append(["项目", "值"])
+    overview_sheet.append(["考试", payload.get("exam_name")])
+    overview_sheet.append(["学生", payload.get("student_name")])
+    overview_sheet.append(["总分", payload.get("total_score")])
+    overview_sheet.append(["总分口径", payload.get("score_value_label")])
+    overview_sheet.append(["班级名次", payload.get("class_rank")])
+    overview_sheet.append(["校内名次", payload.get("grade_rank")])
+    overview_sheet.append(["校内PR", _format_percent(payload.get("grade_percentile"))])
+    overview_sheet.append(["较上次总分", _format_gap(payload.get("total_score_delta"), "分")])
+    overview_sheet.append(["较上次校内名次", _format_gap(payload.get("grade_rank_delta"), "名")])
+    overview_sheet.append(["本次画像", payload.get("overview_sentence") or "-"])
+    for row in payload.get("target_line_gaps") or []:
+        if not isinstance(row, dict):
+            continue
+        overview_sheet.append([
+            f"目标线：{row.get('line_name')}",
+            f"{row.get('threshold_label') or '-'} / 差距 {_format_gap(row.get('gap_score'), '分')}",
+        ])
 
     detail = workbook.create_sheet("学科明细")
-    detail.append(["科目", "分数", "班级名次", "年级名次", "班百分位", "年百分位", "分数变化", "名次变化"])
+    detail.append(["科目", "分数", "班级名次", "年级名次", "班百分位", "年百分位", "分数变化", "名次变化", "T分", "排名离差", "诊断"])
     for row in payload.get("subjects", []):
         detail.append(
             [
@@ -720,10 +752,338 @@ def export_student_analysis_report(settings: Settings, payload: dict[str, object
                 row.get("grade_percentile"),
                 row.get("score_delta"),
                 row.get("rank_delta"),
+                row.get("t_score"),
+                row.get("rank_deviation"),
+                row.get("diagnosis"),
             ]
         )
+
+    diagnosis_sheet = workbook.create_sheet("学科诊断")
+    diagnosis_sheet.append([
+        "科目",
+        "分数",
+        "校内名次",
+        "PR",
+        "Z分",
+        "T分",
+        "排名离差",
+        "同档均分",
+        "同档差距",
+        "波动标准差",
+        "有效分目标",
+        "有效分差距",
+        "诊断",
+        "标签",
+    ])
+    for row in payload.get("subjects", []):
+        if not isinstance(row, dict):
+            continue
+        diagnosis_sheet.append([
+            row.get("subject_name"),
+            row.get("score"),
+            row.get("grade_rank"),
+            _format_percent(row.get("grade_percentile")),
+            row.get("z_score"),
+            row.get("t_score"),
+            row.get("rank_deviation"),
+            row.get("peer_average_score"),
+            row.get("peer_average_delta"),
+            row.get("trend_rank_stddev"),
+            row.get("primary_effective_score"),
+            row.get("primary_effective_score_gap"),
+            row.get("diagnosis"),
+            _join_values(row.get("diagnosis_tags")),
+        ])
+
+    trend_sheet = workbook.create_sheet("趋势轨迹")
+    trend_sheet.append(["考试", "日期", "总分", "班级名次", "校内名次", "PR"])
+    for row in payload.get("trend_points") or []:
+        if not isinstance(row, dict):
+            continue
+        trend_sheet.append([
+            row.get("exam_name"),
+            row.get("exam_date"),
+            row.get("total_score"),
+            row.get("class_rank"),
+            row.get("grade_rank"),
+            _format_percent(row.get("grade_percentile")),
+        ])
+    trend_sheet.append([])
+    trend_sheet.append(["科目", "考试", "日期", "分数", "校内名次", "PR"])
+    for series in payload.get("subject_trends") or []:
+        if not isinstance(series, dict):
+            continue
+        for point in series.get("points") or []:
+            if not isinstance(point, dict):
+                continue
+            trend_sheet.append([
+                series.get("subject_name"),
+                point.get("exam_name"),
+                point.get("exam_date"),
+                point.get("score"),
+                point.get("grade_rank"),
+                _format_percent(point.get("grade_percentile")),
+            ])
+
+    action_sheet = workbook.create_sheet("行动建议")
+    action_sheet.append(["类别", "标题", "建议", "涉及科目", "优先级"])
+    for row in payload.get("action_suggestions") or []:
+        if not isinstance(row, dict):
+            continue
+        action_sheet.append([
+            row.get("category"),
+            row.get("title"),
+            row.get("summary"),
+            _join_values(row.get("subject_names")),
+            row.get("priority"),
+        ])
+    _append_knowledge_sheet(workbook, payload.get("knowledge_points") or [])
+    _append_knowledge_trend_sheet(workbook, payload.get("knowledge_trends") or [])
     _append_analysis_insight_sheet(workbook, _build_student_analysis_insight_rows(payload))
     return _save_workbook(settings, workbook, "student_analysis_report")
+
+
+def export_student_knowledge_report(settings: Settings, payload: dict[str, object]) -> str:
+    workbook = Workbook()
+    summary = workbook.active
+    summary.title = "学习清单"
+    summary.append(["考试", payload.get("exam_name")])
+    summary.append(["学生", payload.get("student_name")])
+    summary.append(["总分", payload.get("total_score")])
+    summary.append(["校内名次", payload.get("grade_rank")])
+    summary.append(["知识点数量", len(payload.get("knowledge_points") or [])])
+    summary.append(["连续趋势数量", len(payload.get("knowledge_trends") or [])])
+    summary.append(["本次画像", payload.get("overview_sentence") or "-"])
+
+    _append_knowledge_sheet(workbook, payload.get("knowledge_points") or [], title="知识点诊断")
+    _append_knowledge_trend_sheet(workbook, payload.get("knowledge_trends") or [], title="连续趋势")
+
+    actions = workbook.create_sheet("下一步建议")
+    actions.append(["标题", "建议", "涉及科目", "优先级"])
+    for row in payload.get("action_suggestions") or []:
+        if not isinstance(row, dict):
+            continue
+        if row.get("category") not in {"knowledge_focus", "knowledge_trend_focus", "fix_weakness", "target_warning"}:
+            continue
+        actions.append([
+            row.get("title"),
+            row.get("summary"),
+            _join_values(row.get("subject_names")),
+            row.get("priority"),
+        ])
+    task_sheet = workbook.create_sheet("任务建议")
+    task_sheet.append(["任务来源", "建议动作", "涉及科目", "优先级"])
+    for row in payload.get("action_suggestions") or []:
+        if not isinstance(row, dict):
+            continue
+        if row.get("category") in {"knowledge_focus", "knowledge_trend_focus"}:
+            task_sheet.append([
+                row.get("title"),
+                row.get("summary"),
+                _join_values(row.get("subject_names")),
+                row.get("priority"),
+            ])
+    return _save_workbook(settings, workbook, "student_knowledge_report")
+
+
+def export_class_knowledge_briefing_report(settings: Settings, payload: dict[str, object]) -> str:
+    workbook = Workbook()
+    summary = workbook.active
+    summary.title = "讲评摘要"
+    summary.append(["考试", payload.get("exam_name")])
+    summary.append(["班级", payload.get("class_name")])
+    summary.append(["生成时间", payload.get("generated_at")])
+    summary.append(["讲评知识点数量", len(payload.get("items") or [])])
+    for notice in payload.get("notices") or []:
+        summary.append(["提示", notice])
+
+    detail = workbook.create_sheet("讲评清单")
+    detail.append([
+        "科目",
+        "知识路径",
+        "知识点",
+        "弱项学生数",
+        "涉及学生数",
+        "平均得分率",
+        "年级均值",
+        "累计失分",
+        "涉及题号",
+        "错因分布",
+        "优先级",
+        "建议",
+    ])
+    students = workbook.create_sheet("弱项学生")
+    students.append(["科目", "知识路径", "知识点", "学生", "班级", "得分率", "失分", "诊断", "主错因"])
+    tasks = workbook.create_sheet("任务建议")
+    tasks.append(["科目", "知识路径", "知识点", "弱项学生数", "建议任务"])
+    for row in payload.get("items") or []:
+        if not isinstance(row, dict):
+            continue
+        detail.append([
+            row.get("subject_name"),
+            row.get("knowledge_path"),
+            row.get("knowledge_point_name"),
+            row.get("weak_student_count"),
+            row.get("total_student_count"),
+            _format_percent(row.get("average_score_rate")),
+            _format_percent(row.get("grade_average_rate")),
+            row.get("lost_score_total"),
+            _join_values(row.get("question_numbers")),
+            _format_error_tag_stats(row.get("error_tag_stats")),
+            row.get("priority_label"),
+            row.get("suggestion"),
+        ])
+        tasks.append([
+            row.get("subject_name"),
+            row.get("knowledge_path"),
+            row.get("knowledge_point_name"),
+            row.get("weak_student_count"),
+            row.get("suggestion"),
+        ])
+        for student in row.get("weak_students") or []:
+            if not isinstance(student, dict):
+                continue
+            students.append([
+                row.get("subject_name"),
+                row.get("knowledge_path"),
+                row.get("knowledge_point_name"),
+                student.get("student_name"),
+                student.get("class_name"),
+                _format_percent(student.get("score_rate")),
+                student.get("lost_score"),
+                student.get("diagnosis_label"),
+                student.get("main_error_tag"),
+            ])
+    return _save_workbook(settings, workbook, "class_knowledge_briefing_report")
+
+
+def _append_knowledge_sheet(
+    workbook: Workbook,
+    rows: object,
+    *,
+    title: str = "知识点诊断",
+) -> None:
+    sheet = workbook.create_sheet(title)
+    sheet.append([
+        "科目",
+        "知识点",
+        "知识路径",
+        "得分",
+        "满分",
+        "得分率",
+        "年级均值",
+        "年级差距",
+        "失分",
+        "优先级",
+        "诊断",
+        "主错因",
+        "错因分布",
+        "涉及题号",
+        "建议",
+    ])
+    if not isinstance(rows, list):
+        return
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        sheet.append([
+            row.get("subject_name"),
+            row.get("knowledge_point_name"),
+            row.get("knowledge_path"),
+            row.get("score"),
+            row.get("full_score"),
+            _format_percent(row.get("score_rate")),
+            _format_percent(row.get("grade_average_rate")),
+            _format_gap(row.get("grade_gap_rate"), ""),
+            row.get("lost_score"),
+            row.get("priority_score"),
+            row.get("diagnosis_label"),
+            row.get("dominant_error_tag"),
+            _format_error_tag_stats(row.get("error_tag_stats")),
+            _join_values(row.get("question_numbers")),
+            row.get("suggestion"),
+        ])
+
+
+def _append_knowledge_trend_sheet(
+    workbook: Workbook,
+    rows: object,
+    *,
+    title: str = "连续趋势",
+) -> None:
+    sheet = workbook.create_sheet(title)
+    sheet.append([
+        "科目",
+        "知识点",
+        "知识路径",
+        "趋势考试数",
+        "薄弱次数",
+        "最近得分率",
+        "平均得分率",
+        "最近年级差距",
+        "平均年级差距",
+        "趋势变化",
+        "累计满分",
+        "累计失分",
+        "优先级",
+        "趋势标签",
+        "主错因",
+        "错因分布",
+        "考试轨迹",
+        "建议",
+    ])
+    if not isinstance(rows, list):
+        return
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        sheet.append([
+            row.get("subject_name"),
+            row.get("knowledge_point_name"),
+            row.get("knowledge_path"),
+            row.get("trend_exam_count"),
+            row.get("weak_exam_count"),
+            _format_percent(row.get("latest_score_rate")),
+            _format_percent(row.get("average_score_rate")),
+            _format_gap(row.get("latest_grade_gap_rate"), ""),
+            _format_gap(row.get("average_grade_gap_rate"), ""),
+            _format_gap(row.get("trend_delta"), ""),
+            row.get("total_full_score"),
+            row.get("total_lost_score"),
+            row.get("priority_score"),
+            row.get("trend_label"),
+            row.get("dominant_error_tag"),
+            _format_error_tag_stats(row.get("error_tag_stats")),
+            _format_knowledge_trend_points(row.get("points")),
+            row.get("suggestion"),
+        ])
+
+
+def _format_knowledge_trend_points(points: object) -> str:
+    if not isinstance(points, list):
+        return ""
+    segments: list[str] = []
+    for point in points:
+        if not isinstance(point, dict):
+            continue
+        segments.append(
+            f"{point.get('exam_name')}: {_format_percent(point.get('score_rate'))}"
+        )
+    return "；".join(segments)
+
+
+def _format_error_tag_stats(value: object) -> str:
+    if not isinstance(value, list):
+        return ""
+    parts: list[str] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        tag = item.get("tag") or item.get("name")
+        count = item.get("count")
+        if tag:
+            parts.append(f"{tag}×{count}")
+    return "；".join(parts)
 
 
 def export_class_analysis_report(settings: Settings, payload: dict[str, object]) -> str:

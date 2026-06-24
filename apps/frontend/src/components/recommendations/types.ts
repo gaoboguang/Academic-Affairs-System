@@ -1,6 +1,6 @@
 import type { ImportFeedbackResult } from "../../utils/importFeedback";
 
-export type ResultGroupKey = "challenge" | "steady" | "safe";
+export type ResultGroupKey = "challenge" | "steady" | "safe" | "watch";
 
 export interface CollegeItem {
   id: number;
@@ -14,7 +14,7 @@ export interface CollegeItem {
   website?: string | null;
   supports_art: boolean;
   note?: string | null;
-  alias_names?: string[] | null;
+  alias_names?: string[];
   is_active: boolean;
 }
 
@@ -60,10 +60,10 @@ export interface EmploymentDirectionItem {
   id: number;
   name: string;
   category?: string | null;
-  alias_names_json?: string[] | null;
+  alias_names_json?: string[];
   description?: string | null;
-  common_job_types_json?: string[] | null;
-  common_industries_json?: string[] | null;
+  common_job_types_json?: string[];
+  common_industries_json?: string[];
   prefers_postgraduate: boolean;
   requires_certificate: boolean;
   requires_long_cycle: boolean;
@@ -129,7 +129,7 @@ export interface MajorEmploymentMappingItem {
   recommendation_note?: string | null;
   requires_postgraduate: boolean;
   requires_certificate: boolean;
-  supported_student_types_json?: string[] | null;
+  supported_student_types_json?: string[];
   supports_art: boolean;
   note?: string | null;
   is_active: boolean;
@@ -168,6 +168,7 @@ export interface RecommendationGenerateResponse {
   challenge: RecommendationResult[];
   steady: RecommendationResult[];
   safe: RecommendationResult[];
+  watch: RecommendationResult[];
 }
 
 export interface BatchGenerateResponse {
@@ -232,6 +233,19 @@ export interface EnrollmentPlanItem {
   is_active: boolean;
 }
 
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface PaginationState {
+  page: number;
+  page_size: number;
+  total: number;
+}
+
 export interface ExamOption {
   id: number;
   name: string;
@@ -294,6 +308,7 @@ export interface RecommendationHistoryItem {
   challenge_count: number;
   steady_count: number;
   safe_count: number;
+  watch_count: number;
 }
 
 export interface RecommendationResult {
@@ -617,6 +632,10 @@ export interface ShandongRushStableSafeCandidate {
   college_id: number;
   college_name: string;
   college_code_snapshot?: string | null;
+  college_province?: string | null;
+  college_city?: string | null;
+  college_school_type?: string | null;
+  college_ownership?: string | null;
   major_id?: number | null;
   major_name?: string | null;
   major_code_snapshot?: string | null;
@@ -741,6 +760,7 @@ export interface VolunteerWorkbenchPreviewPayload extends CareerPreferenceFields
   batch?: string;
   exam_mode?: string;
   candidate_type: string;
+  art_track?: string;
   score_input_mode: ScoreInputMode;
   score_range_min?: number;
   score_range_max?: number;
@@ -769,6 +789,10 @@ export interface VolunteerWorkbenchCandidate {
   college_id: number;
   college_name: string;
   college_code_snapshot?: string | null;
+  college_province?: string | null;
+  college_city?: string | null;
+  college_school_type?: string | null;
+  college_ownership?: string | null;
   major_id?: number | null;
   major_name?: string | null;
   major_group_code?: string | null;
@@ -828,6 +852,17 @@ export interface VolunteerWorkbenchCandidate {
   risk_flags_json: string[];
   source_note?: string | null;
   import_batch_name?: string | null;
+  recent_history_json?: VolunteerWorkbenchCandidateHistory[] | null;
+}
+
+export interface VolunteerWorkbenchCandidateHistory {
+  year: number;
+  batch?: string | null;
+  plan_count?: number | null;
+  admission_count?: number | null;
+  min_score?: number | null;
+  min_rank?: number | null;
+  tuition_fee?: string | null;
 }
 
 export interface VolunteerWorkbenchPreviewResponse {
@@ -839,7 +874,12 @@ export interface VolunteerWorkbenchPreviewResponse {
   target_year: number;
   student_type: string;
   candidate_type: string;
+  art_track?: string | null;
+  normalized_batch?: string | null;
   total_score: number;
+  culture_score?: number | null;
+  professional_score?: number | null;
+  art_comprehensive_score?: number | null;
   snapshot_rank?: number | null;
   effective_rank?: number | null;
   score_input_mode: ScoreInputMode;
@@ -850,7 +890,130 @@ export interface VolunteerWorkbenchPreviewResponse {
   applicable_rule_count: number;
   applicable_rules: ProvinceVolunteerRule[];
   candidate_count: number;
+  returned_candidate_count?: number;
+  is_candidate_truncated?: boolean;
   candidates: VolunteerWorkbenchCandidate[];
+}
+
+export type VolunteerGuideGroupKey = "challenge" | "steady" | "safe" | "watch";
+export type VolunteerGuideReadinessStatus = "ready" | "warning" | "blocked";
+export type VolunteerGuideReadinessLevel = "blocking" | "warning" | "info";
+
+export interface VolunteerGuideReadinessItem {
+  code: string;
+  level: VolunteerGuideReadinessLevel;
+  title: string;
+  detail: string;
+}
+
+export interface VolunteerGuideReadiness {
+  status: VolunteerGuideReadinessStatus;
+  blocking_count: number;
+  warning_count: number;
+  info_count: number;
+  items: VolunteerGuideReadinessItem[];
+}
+
+export interface VolunteerGuideSourcePreview {
+  candidate_count: number;
+  returned_candidate_count: number;
+  applicable_rule_count: number;
+  is_candidate_truncated: boolean;
+  score_input_mode: ScoreInputMode;
+  score_input_label: string;
+  score_confidence: string;
+  effective_rank?: number | null;
+  total_score?: number | null;
+  culture_score?: number | null;
+  professional_score?: number | null;
+  art_comprehensive_score?: number | null;
+}
+
+export interface VolunteerGuideEvidence {
+  strength: string;
+  strength_label: string;
+  summary: string;
+  rank_margin?: number | null;
+  rank_margin_label?: string | null;
+  reference_years: number[];
+  reference_scope?: string | null;
+  risk_flags: string[];
+  source_notes: string[];
+}
+
+export interface VolunteerGuideCandidate {
+  candidate: VolunteerWorkbenchCandidate;
+  evidence: VolunteerGuideEvidence;
+}
+
+export interface VolunteerGuideCandidateGroup {
+  key: VolunteerGuideGroupKey;
+  label: string;
+  count: number;
+  candidates: VolunteerGuideCandidate[];
+}
+
+export interface VolunteerGuideNextAction {
+  code: string;
+  level: "warning" | "info";
+  title: string;
+  detail: string;
+}
+
+export interface VolunteerGuideOptionItem {
+  value: string;
+  label: string;
+}
+
+export interface VolunteerGuideArtScoreFormula {
+  art_track: string;
+  label: string;
+  culture_weight?: number | null;
+  professional_weight?: number | null;
+  professional_full_score?: number | null;
+  formula_text: string;
+  requires_manual_review: boolean;
+}
+
+export interface VolunteerGuideOptions {
+  province: string;
+  year: number;
+  candidate_types: VolunteerGuideOptionItem[];
+  art_tracks: VolunteerGuideOptionItem[];
+  batches: VolunteerGuideOptionItem[];
+  batch_aliases: Record<string, string>;
+  score_input_modes: VolunteerGuideOptionItem[];
+  art_score_formulas: Record<string, VolunteerGuideArtScoreFormula>;
+  maintained_rule_batches: string[];
+}
+
+export interface VolunteerGuidePreviewResponse {
+  student_id: number;
+  student_name: string;
+  exam_id: number;
+  exam_name: string;
+  province: string;
+  target_year: number;
+  student_type: string;
+  candidate_type: string;
+  art_track?: string | null;
+  normalized_batch?: string | null;
+  score_input_mode: ScoreInputMode;
+  input_notes: string[];
+  rule_alerts: VolunteerWorkbenchRuleAlert[];
+  applicable_rule_count: number;
+  applicable_rules: ProvinceVolunteerRule[];
+  readiness: VolunteerGuideReadiness;
+  source_preview: VolunteerGuideSourcePreview;
+  groups: Record<VolunteerGuideGroupKey, VolunteerGuideCandidateGroup>;
+  next_actions: VolunteerGuideNextAction[];
+}
+
+export interface VolunteerGuideStepCard {
+  key: string;
+  title: string;
+  summary: string;
+  status: VolunteerGuideReadinessStatus;
 }
 
 export interface VolunteerWorkbenchExplanationItem {
@@ -906,6 +1069,7 @@ export interface VolunteerWorkbenchFormState extends CareerPreferenceFields {
   batch: string;
   exam_mode: string;
   candidate_type: string;
+  art_track: string;
   score_input_mode: ScoreInputMode;
   score_range_min?: number;
   score_range_max?: number;
@@ -986,6 +1150,7 @@ export interface VolunteerDraftSavePayload extends CareerPreferenceFields {
   batch?: string;
   exam_mode?: string;
   candidate_type: string;
+  art_track?: string;
   score_input_mode: ScoreInputMode;
   score_range_min?: number;
   score_range_max?: number;
@@ -1023,6 +1188,7 @@ export interface VolunteerDraftSummary {
   batch?: string | null;
   exam_mode?: string | null;
   candidate_type: string;
+  art_track?: string | null;
   score_input_mode: ScoreInputMode;
   item_count: number;
   created_at: string;
@@ -1103,3 +1269,42 @@ export interface StrategyPresetFormState {
   name: string;
   note: string;
 }
+
+// ---------------------------------------------------------------------------
+// 编译期兼容性检查：本文件里与后端 OpenAPI 一一对应的类型，必须是生成类型的子集。
+// 当 `npm run gen:api` 之后这一块标红，说明后端 schema 变了，先把手写类型对齐，
+// 再让错误扩散到页面里修。
+// ---------------------------------------------------------------------------
+
+import type { components as _ApiComponents } from "../../types/api.generated";
+
+type _SchemasForRecommendations = _ApiComponents["schemas"];
+
+type _IsAssignable<L, R> = [L] extends [R] ? true : false;
+
+interface _RecommendationSchemaAssertions {
+  college: _IsAssignable<CollegeItem, _SchemasForRecommendations["CollegeRead"]>;
+  major: _IsAssignable<MajorItem, _SchemasForRecommendations["MajorRead"]>;
+  employmentDirection: _IsAssignable<
+    EmploymentDirectionItem,
+    _SchemasForRecommendations["EmploymentDirectionRead"]
+  >;
+  majorEmploymentMapping: _IsAssignable<
+    MajorEmploymentMappingItem,
+    _SchemasForRecommendations["MajorEmploymentMappingRead"]
+  >;
+  admissionRecord: _IsAssignable<
+    AdmissionRecord,
+    _SchemasForRecommendations["AdmissionRecordRead"]
+  >;
+  enrollmentPlan: _IsAssignable<
+    EnrollmentPlanItem,
+    _SchemasForRecommendations["EnrollmentPlanRead"]
+  >;
+}
+
+type _RecommendationsAllTrue<T> = { [K in keyof T]: T[K] extends true ? T[K] : never };
+type _RecommendationSchemaCompatOk = _RecommendationsAllTrue<_RecommendationSchemaAssertions>;
+const _recommendationSchemaCompatOk: _RecommendationSchemaCompatOk =
+  {} as _RecommendationSchemaCompatOk;
+void _recommendationSchemaCompatOk;

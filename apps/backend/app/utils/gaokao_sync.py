@@ -41,18 +41,12 @@ EMBEDDED_GAOKAO_HINT_TABLES = (
 
 
 def app_db_has_embedded_gaokao_tables(db_path: Path) -> bool:
-    if not db_path.exists():
-        return False
-    with sqlite3.connect(str(db_path)) as conn:
-        row = conn.execute(
-            """
-            SELECT COUNT(*)
-            FROM sqlite_master
-            WHERE type = 'table' AND name IN (?, ?, ?)
-            """,
-            EMBEDDED_GAOKAO_HINT_TABLES,
-        ).fetchone()
-    return bool(row and row[0])
+    """Historically returned True when raw tables lived inside app.db.
+
+    The 22 raw tables are now isolated to the sidecar database; keeping the
+    function around as a no-op avoids touching all legacy import sites.
+    """
+    return False
 
 
 def sync_gaokao_handoff_tables(

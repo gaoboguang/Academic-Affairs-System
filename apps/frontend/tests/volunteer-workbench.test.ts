@@ -5,6 +5,7 @@ import {
   buildVolunteerBoundaryInsightCards,
   buildVolunteerDraftBoundaryInsightCards,
   applyStudentCareerPreferenceToForm,
+  applyStudentPathwayProfileToForm,
   appendVolunteerDraftItem,
   buildStudentCareerPreferencePayload,
   buildVolunteerDraftComparison,
@@ -12,7 +13,11 @@ import {
   buildVolunteerCandidateLayeringCopy,
   buildVolunteerCandidateReferenceCopy,
   buildVolunteerCandidateRuleCopy,
+  applyVolunteerExamScoreAutofill,
+  buildVolunteerExamScoreAutofillNotice,
   buildVolunteerEmploymentProfile,
+  buildVolunteerCandidateFilterOptions,
+  buildVolunteerCandidatePage,
   buildVolunteerDraftPayload,
   buildVolunteerRuleInsightCards,
   buildVolunteerRuleInsightCardsFromRules,
@@ -24,15 +29,38 @@ import {
   formatVolunteerDraftSummaryLabel,
   hasVolunteerCareerPreferenceContent,
   hasVolunteerWorkbenchPendingChanges,
+  shouldApplyVolunteerExamScoreAutofill,
   isSameVolunteerCareerPreference,
   moveVolunteerDraftItem,
   reorderVolunteerDraftItem,
+  upsertVolunteerDraftSummary,
   validateVolunteerDraftName,
   validateVolunteerWorkbenchForm,
 } from "../src/components/recommendations/volunteerWorkbench";
+import fs from "node:fs";
+import path from "node:path";
+import {
+  alertLevelLabel,
+  alertTagType,
+  buildCodeMeta,
+  employmentHintTagType,
+  employmentMatchTagType,
+  emptyResultGroupCopy,
+  formatComparisonOrderChange,
+  formatComparisonType,
+  formatComparisonTypeChange,
+  formatDateTime,
+  formatEmploymentHintStatus,
+  formatEmploymentMatchStrength,
+  formatStudentType,
+  normalizeAlertLevel,
+  resultTagType,
+  resultTypeLabel,
+} from "../src/components/recommendations/volunteerWorkbenchPresentation";
 import type {
   ProvinceVolunteerRule,
   VolunteerDraftItem,
+  VolunteerDraftSummary,
   VolunteerWorkbenchCandidate,
   VolunteerWorkbenchFormState,
   VolunteerWorkbenchPreviewResponse,
@@ -47,7 +75,8 @@ function buildForm(overrides: Partial<VolunteerWorkbenchFormState> = {}): Volunt
     batch: "本科批",
     exam_mode: "物理类",
     candidate_type: "general",
-    score_input_mode: "estimated_score_and_rank",
+    art_track: "",
+    score_input_mode: "estimated_score",
     score_range_min: undefined,
     score_range_max: undefined,
     rank_range_min: undefined,
@@ -70,7 +99,7 @@ function buildForm(overrides: Partial<VolunteerWorkbenchFormState> = {}): Volunt
     accepts_public_service: false,
     accepts_certificate: true,
     accepts_long_training: false,
-    student_rank_override: 31000,
+    student_rank_override: undefined,
     comprehensive_score: 580,
     professional_score: 240,
     culture_score: 340,
@@ -89,6 +118,10 @@ function buildCandidate(planId: number, overrides: Partial<VolunteerWorkbenchCan
     college_id: 10 + planId,
     college_name: `院校 ${planId}`,
     college_code_snapshot: `C${planId.toString().padStart(3, "0")}`,
+    college_province: "广东",
+    college_city: "广州",
+    college_school_type: "公办本科",
+    college_ownership: "公办",
     major_id: 20 + planId,
     major_name: `专业 ${planId}`,
     major_group_code: `${planId}`,
@@ -128,6 +161,17 @@ function buildCandidate(planId: number, overrides: Partial<VolunteerWorkbenchCan
     risk_flags_json: [],
     source_note: "测试",
     import_batch_name: "2026-广东-本科",
+    recent_history_json: [
+      {
+        year: 2025,
+        batch: "本科批",
+        plan_count: 60,
+        admission_count: 56,
+        min_score: 585,
+        min_rank: 28500,
+        tuition_fee: "6500 元/年",
+      },
+    ],
     major_direction: null,
     career_path: null,
     major_note: null,
@@ -166,6 +210,29 @@ function buildRule(overrides: Partial<ProvinceVolunteerRule> = {}): ProvinceVolu
   };
 }
 
+function buildDraftSummary(overrides: Partial<VolunteerDraftSummary> = {}): VolunteerDraftSummary {
+  return {
+    id: 1,
+    name: "第一版",
+    student_id: 1,
+    student_name: "张三",
+    exam_id: 2,
+    exam_name: "2026届高一4月月考",
+    province: "广东",
+    target_year: 2026,
+    batch: "本科批",
+    exam_mode: "物理类",
+    candidate_type: "general",
+    art_track: null,
+    score_input_mode: "estimated_score",
+    item_count: 2,
+    created_at: "2026-05-11T07:49:00",
+    updated_at: "2026-05-11T07:50:00",
+    is_active: true,
+    ...overrides,
+  };
+}
+
 function buildPreview(overrides: Partial<VolunteerWorkbenchPreviewResponse> = {}): VolunteerWorkbenchPreviewResponse {
   return {
     student_id: 1,
@@ -179,23 +246,172 @@ function buildPreview(overrides: Partial<VolunteerWorkbenchPreviewResponse> = {}
     total_score: 580,
     snapshot_rank: 32000,
     effective_rank: 31000,
-    score_input_mode: "estimated_score_and_rank",
-    score_input_label: "预估分数 + 预估位次",
+    score_input_mode: "estimated_score",
+    score_input_label: "校内分数估算",
     score_confidence: "estimated",
-    input_notes: ["当前按预估位次为主、预估分数为辅的模拟模式生成。", "参考考试：2026届一模。"],
+    input_notes: ["校内名次不用于志愿推荐；当前仅使用分数通过官方一分一段估算省位次。", "参考考试：2026届一模。"],
     rule_alerts: [],
     applicable_rule_count: 1,
     applicable_rules: [buildRule()],
     candidate_count: 2,
+    returned_candidate_count: 2,
+    is_candidate_truncated: false,
     candidates: [buildCandidate(1), buildCandidate(2)],
     ...overrides,
   };
 }
 
 describe("volunteer workbench helpers", () => {
+  it("uses full-width candidate cards with recent history instead of the old crowded columns", () => {
+    const template = fs.readFileSync(
+      path.resolve(__dirname, "../src/components/recommendations/RecommendationVolunteerWorkbenchPanel.vue"),
+      "utf8",
+    );
+
+    expect(template).toContain('class="candidate-card-list"');
+    expect(template).toContain("近三年招生/录取情况");
+    expect(template).toContain("录取/投档");
+    expect(template).toContain("guideDisplaySummary.copy");
+    expect(template).toContain("统计口径是当前页面已展示的候选");
+    expect(template).toContain("当前展示分布");
+    expect(template).toContain("候选筛选");
+    expect(template).toContain("办学性质");
+    expect(template).toContain("candidatePagination.pageSize");
+    expect(template).toContain("暂无同类别同专业近三年招生/录取记录");
+    expect(template).toContain("缺招生计划，仅历史参考");
+    expect(template).toContain("candidatePlanCountLabel");
+    expect(template).toContain("workbench-stack");
+    expect(template).not.toContain("workbench-grid");
+    expect(template).not.toContain('label="近三年录取情况"');
+    expect(template).not.toContain('el-table-column label="依据"');
+  });
+
+  it("filters candidate cards by region and ownership with 30 items per page by default", () => {
+    const candidates = Array.from({ length: 35 }, (_, index) =>
+      buildCandidate(index + 1, {
+        college_province: index % 2 === 0 ? "山东" : "广东",
+        college_city: index % 2 === 0 ? "济南" : "广州",
+        college_ownership: index % 3 === 0 ? "民办" : "公办",
+      }),
+    );
+    const options = buildVolunteerCandidateFilterOptions(candidates);
+    expect(options.regions).toEqual(["山东", "济南", "广东", "广州"]);
+    expect(options.ownerships).toEqual(["民办", "公办"]);
+
+    const filtered = buildVolunteerCandidatePage(candidates, {
+      region: "山东",
+      ownership: "民办",
+      musicSubTrack: "",
+      keyword: "",
+      page: 1,
+      pageSize: 30,
+    });
+    expect(filtered.total).toBe(6);
+    expect(filtered.items).toHaveLength(6);
+    expect(filtered.items.every((item) => item.college_province === "山东")).toBe(true);
+    expect(filtered.items.every((item) => item.college_ownership === "民办")).toBe(true);
+
+    const firstPage = buildVolunteerCandidatePage(candidates, {
+      region: "",
+      ownership: "",
+      musicSubTrack: "",
+      keyword: "",
+      page: 1,
+      pageSize: 30,
+    });
+    expect(firstPage.items).toHaveLength(30);
+    expect(firstPage.total).toBe(35);
+    expect(firstPage.pageSize).toBe(30);
+  });
+
+  it("detects music vocal/instrumental sub-tracks and filters accordingly", () => {
+    const vocalCandidate = buildCandidate(1, {
+      major_name: "音乐表演(声乐)（招收声乐考生）",
+    });
+    const instrumentalCandidate = buildCandidate(2, {
+      major_name: "音乐表演(器乐)（招收钢琴考生）",
+    });
+    const ambiguousCandidate = buildCandidate(3, {
+      major_name: "音乐表演",
+    });
+    const candidates = [vocalCandidate, instrumentalCandidate, ambiguousCandidate];
+
+    const options = buildVolunteerCandidateFilterOptions(candidates);
+    expect(options.musicSubTracks).toEqual([
+      { value: "vocal", label: "声乐", count: 1 },
+      { value: "instrumental", label: "器乐", count: 1 },
+    ]);
+
+    const vocalPage = buildVolunteerCandidatePage(candidates, {
+      region: "",
+      ownership: "",
+      musicSubTrack: "vocal",
+      keyword: "",
+      page: 1,
+      pageSize: 30,
+    });
+    expect(vocalPage.total).toBe(1);
+    expect(vocalPage.items[0].plan_id).toBe(1);
+
+    const instrumentalPage = buildVolunteerCandidatePage(candidates, {
+      region: "",
+      ownership: "",
+      musicSubTrack: "instrumental",
+      keyword: "",
+      page: 1,
+      pageSize: 30,
+    });
+    expect(instrumentalPage.total).toBe(1);
+    expect(instrumentalPage.items[0].plan_id).toBe(2);
+
+    const noFilter = buildVolunteerCandidatePage(candidates, {
+      region: "",
+      ownership: "",
+      musicSubTrack: "",
+      keyword: "",
+      page: 1,
+      pageSize: 30,
+    });
+    expect(noFilter.total).toBe(3);
+  });
+
+  it("hides music sub-track options when no candidate maps to vocal or instrumental", () => {
+    const candidates = [buildCandidate(1, { major_name: "音乐表演" })];
+    const options = buildVolunteerCandidateFilterOptions(candidates);
+    expect(options.musicSubTracks).toEqual([]);
+  });
+
+  it("formats volunteer workbench presentation copy", () => {
+    expect(resultTypeLabel("challenge")).toBe("冲刺");
+    expect(resultTypeLabel("custom")).toBe("custom");
+    expect(resultTagType("safe")).toBe("success");
+    expect(resultTagType("custom")).toBe("info");
+    expect(formatStudentType("repeat")).toBe("复读生");
+    expect(formatStudentType(null)).toBe("-");
+    expect(emptyResultGroupCopy("稳妥志愿")).toBe("当前草稿里还没有稳妥志愿。");
+    expect(buildCodeMeta(buildCandidate(1))).toBe("院校代码 C001 / 专业代码 M001 / 专业组 1");
+    expect(formatComparisonType("safe")).toBe("保底");
+    expect(formatComparisonType()).toBe("-");
+    expect(formatComparisonOrderChange({ key: "1", currentOrder: 2, compareOrder: 4 })).toBe(
+      "当前第 2 位，对比稿第 4 位",
+    );
+    expect(formatComparisonTypeChange({ key: "1", currentType: "safe", compareType: "steady" })).toBe(
+      "保底 / 对比稿 稳妥",
+    );
+    expect(formatEmploymentMatchStrength("high")).toBe("强相关");
+    expect(employmentMatchTagType("transferable")).toBe("warning");
+    expect(formatEmploymentHintStatus("not_explicit")).toBe("未见明确提示");
+    expect(employmentHintTagType("yes")).toBe("warning");
+    expect(formatDateTime("not-a-date")).toBe("not-a-date");
+    expect(normalizeAlertLevel("danger")).toBe("info");
+    expect(alertTagType("warning")).toBe("warning");
+    expect(alertLevelLabel("warning")).toBe("需人工复核");
+    expect(alertLevelLabel("info")).toBe("已自动回退");
+  });
+
   it("validates required fields and builds normalized preview payload", () => {
     expect(validateVolunteerWorkbenchForm(buildForm({ student_id: undefined }))).toBe(
-      "学生志愿工作台至少需要选择学生和参考考试",
+      "志愿推荐向导至少需要选择学生和参考考试",
     );
     expect(
       validateVolunteerWorkbenchForm(buildForm({ score_input_mode: "score_range", score_range_min: 580, score_range_max: undefined })),
@@ -208,7 +424,7 @@ describe("volunteer workbench helpers", () => {
       batch: "本科批",
       exam_mode: "物理类",
       candidate_type: "general",
-      score_input_mode: "estimated_score_and_rank",
+      score_input_mode: "estimated_score",
       score_range_min: undefined,
       score_range_max: undefined,
       rank_range_min: undefined,
@@ -231,12 +447,94 @@ describe("volunteer workbench helpers", () => {
       accepts_public_service: false,
       accepts_certificate: true,
       accepts_long_training: false,
-      student_rank_override: 31000,
+      student_rank_override: undefined,
       comprehensive_score: 580,
       professional_score: 240,
       culture_score: 340,
       note: "优先留在省内",
     });
+  });
+
+  it("auto-fills volunteer workbench score context from selected exam results", () => {
+    const form = createVolunteerWorkbenchForm();
+    const source = {
+      student_id: 1,
+      exam_id: 2,
+      exam_name: "202604高三二模",
+      total_score: 582,
+      grade_rank: 123,
+    };
+
+    expect(shouldApplyVolunteerExamScoreAutofill(form)).toBe(true);
+
+    applyVolunteerExamScoreAutofill(form, source);
+
+    expect(form.score_input_mode).toBe("estimated_score");
+    expect(form.comprehensive_score).toBe(582);
+    expect(form.student_rank_override).toBeUndefined();
+    expect(form.reference_exam_name).toBe("202604高三二模");
+
+    const notice = buildVolunteerExamScoreAutofillNotice("applied", source);
+    expect(notice?.title).toBe("考试成绩已带入");
+    expect(notice?.detail).toContain("校内考试口径，仅作模拟参考");
+    expect(notice?.detail).toContain("不是山东省正式位次");
+  });
+
+  it("keeps manual score edits unless the user chooses to reuse exam results", () => {
+    const form = buildForm({
+      score_input_mode: "estimated_score",
+      comprehensive_score: 590,
+      student_rank_override: 120,
+      reference_exam_name: "手动调整",
+    });
+    const previousSource = {
+      student_id: 1,
+      exam_id: 2,
+      exam_name: "202604高三二模",
+      total_score: 582,
+      grade_rank: 123,
+    };
+
+    expect(shouldApplyVolunteerExamScoreAutofill(form, previousSource)).toBe(false);
+
+    const notice = buildVolunteerExamScoreAutofillNotice("manual_override", previousSource);
+    expect(notice?.canApply).toBe(true);
+    expect(notice?.detail).toContain("不会覆盖");
+
+    applyVolunteerExamScoreAutofill(form, previousSource);
+    expect(form.comprehensive_score).toBe(582);
+    expect(form.student_rank_override).toBeUndefined();
+    expect(form.reference_exam_name).toBe("202604高三二模");
+  });
+
+  it("updates auto-filled values when switching to another exam and prompts when rank is missing", () => {
+    const form = createVolunteerWorkbenchForm();
+    const firstSource = {
+      student_id: 1,
+      exam_id: 2,
+      exam_name: "202604高三二模",
+      total_score: 582,
+      grade_rank: 123,
+    };
+    const nextSource = {
+      student_id: 1,
+      exam_id: 3,
+      exam_name: "202605高三三模",
+      total_score: 601,
+      grade_rank: null,
+    };
+
+    applyVolunteerExamScoreAutofill(form, firstSource);
+    expect(shouldApplyVolunteerExamScoreAutofill(form, firstSource)).toBe(true);
+
+    applyVolunteerExamScoreAutofill(form, nextSource);
+    expect(form.comprehensive_score).toBe(601);
+    expect(form.student_rank_override).toBeUndefined();
+    expect(form.reference_exam_name).toBe("202605高三三模");
+
+    const notice = buildVolunteerExamScoreAutofillNotice("needs_rank", nextSource);
+    expect(notice?.detail).toContain("校内名次不用于志愿推荐");
+    expect(notice?.detail).toContain("成绩/位次来源");
   });
 
   it("adds candidates into draft and enforces limit", () => {
@@ -252,6 +550,66 @@ describe("volunteer workbench helpers", () => {
     const limited = appendVolunteerDraftItem(second.items, buildCandidate(3), 2);
     expect(limited.added).toBe(false);
     expect(limited.reason).toBe("limit");
+  });
+
+  it("keeps old draft candidate snapshots usable when recent history is missing", () => {
+    const legacyCandidate = {
+      ...buildCandidate(1),
+      recent_history_json: undefined,
+    } as VolunteerWorkbenchCandidate;
+
+    const result = appendVolunteerDraftItem([], legacyCandidate);
+    expect(result.added).toBe(true);
+    expect(result.items[0].candidate.recent_history_json).toEqual([]);
+
+    const payload = buildVolunteerDraftPayload("旧草稿兼容", buildForm(), result.items, buildRule());
+    expect(payload.items[0].candidate.recent_history_json).toEqual([]);
+  });
+
+  it("keeps history-only candidates as snapshots and does not save them as real plans", () => {
+    const historyOnlyCandidate = buildCandidate(-15, {
+      year: 2026,
+      batch: "艺术类本科批统考",
+      student_type: "art",
+      reference_scope: "history_only",
+      reference_years_json: [2025, 2024, 2023],
+      reference_record_count: 3,
+      plan_count: 0,
+      risk_flags_json: ["history_only_reference", "missing_enrollment_plan"],
+      match_notes_json: ["缺招生计划，仅历史参考：本条由历史录取/投档记录补入。"],
+      recent_history_json: [
+        {
+          year: 2025,
+          batch: "艺术类本科批",
+          plan_count: null,
+          admission_count: 18,
+          min_score: 486,
+          min_rank: null,
+          tuition_fee: null,
+        },
+      ],
+    });
+    const result = appendVolunteerDraftItem([], historyOnlyCandidate);
+
+    expect(result.added).toBe(true);
+    const payload = buildVolunteerDraftPayload("历史参考草稿", buildForm(), result.items, buildRule());
+    expect(payload.items[0].plan_id).toBeNull();
+    expect(payload.items[0].candidate.plan_id).toBe(-15);
+    expect(buildVolunteerCandidateReferenceCopy(historyOnlyCandidate)).toBe(
+      "缺招生计划，仅历史参考 · 2025 / 2024 / 2023 年 · 3 条历史录取/投档样本 · 来源：近年数据",
+    );
+    expect(buildVolunteerCandidateExplanationNotes(historyOnlyCandidate)).toContain(
+      "当前条目缺少同校同专业招生计划，只能按历史录取/投档记录参考；补齐招生计划前不能视作正式可填计划。",
+    );
+  });
+
+  it("keeps the saved draft visible when the server list refresh is briefly stale", () => {
+    const originalDraft = buildDraftSummary({ id: 1, name: "第一版", updated_at: "2026-05-11T07:50:00" });
+    const savedDraft = buildDraftSummary({ id: 2, name: "第二版", updated_at: "2026-05-11T07:51:00" });
+
+    const nextDrafts = upsertVolunteerDraftSummary([originalDraft], savedDraft);
+
+    expect(nextDrafts.map((item) => item.name)).toEqual(["第二版", "第一版"]);
   });
 
   it("detects pending workbench changes and formats draft labels", () => {
@@ -335,7 +693,7 @@ describe("volunteer workbench helpers", () => {
       batch: "本科批",
       exam_mode: "物理类",
       candidate_type: "general",
-      score_input_mode: "estimated_score_and_rank",
+      score_input_mode: "estimated_score",
       score_range_min: undefined,
       score_range_max: undefined,
       rank_range_min: undefined,
@@ -358,7 +716,7 @@ describe("volunteer workbench helpers", () => {
       accepts_public_service: false,
       accepts_certificate: true,
       accepts_long_training: false,
-      student_rank_override: 31000,
+      student_rank_override: undefined,
       comprehensive_score: 580,
       professional_score: 240,
       culture_score: 340,
@@ -408,6 +766,66 @@ describe("volunteer workbench helpers", () => {
     expect(target.priority_focuses_json).toEqual(["stability", "salary"]);
     expect(target.preferred_industries_json).toEqual(["人工智能", "智能制造"]);
     expect(target.accepts_certificate).toBe(true);
+  });
+
+  it("overwrites 考生条件 fields when applying a pathway profile", () => {
+    const target = buildForm({
+      province: "山东",
+      candidate_type: "general",
+      art_track: "",
+      subject_combination: "",
+      target_regions_json: ["江苏"],
+      school_level_tags_json: ["双一流"],
+      major_keyword: "原值",
+      professional_score: undefined,
+    });
+    applyStudentPathwayProfileToForm(target, {
+      province: "河南",
+      candidate_type: "art",
+      art_track: "music",
+      subject_combination: "物理,化学,生物",
+      art_professional_score: 245,
+      region_preferences_json: {
+        target_regions: ["山东", "河南"],
+        school_level_tags: ["公办本科", "民办本科"],
+        major_keyword: "音乐表演",
+      },
+    });
+    expect(target.province).toBe("河南");
+    expect(target.candidate_type).toBe("art");
+    expect(target.art_track).toBe("music");
+    expect(target.subject_combination).toBe("物理,化学,生物");
+    expect(target.professional_score).toBe(245);
+    expect(target.target_regions_json).toEqual(["山东", "河南"]);
+    expect(target.school_level_tags_json).toEqual(["公办本科", "民办本科"]);
+    expect(target.major_keyword).toBe("音乐表演");
+  });
+
+  it("clears region preferences when profile has no preferences json", () => {
+    const target = buildForm({
+      target_regions_json: ["保留值"],
+      school_level_tags_json: ["保留值"],
+      major_keyword: "保留值",
+    });
+    applyStudentPathwayProfileToForm(target, {
+      province: "山东",
+      candidate_type: "general",
+    });
+    expect(target.target_regions_json).toEqual([]);
+    expect(target.school_level_tags_json).toEqual([]);
+    expect(target.major_keyword).toBe("");
+  });
+
+  it("does nothing when profile is null", () => {
+    const target = buildForm({
+      candidate_type: "art",
+      art_track: "music",
+      target_regions_json: ["山东"],
+    });
+    applyStudentPathwayProfileToForm(target, null);
+    expect(target.candidate_type).toBe("art");
+    expect(target.art_track).toBe("music");
+    expect(target.target_regions_json).toEqual(["山东"]);
   });
 
   it("reorders volunteer draft items", () => {
@@ -1183,21 +1601,21 @@ describe("volunteer workbench helpers", () => {
         { label: "批次", value: "本科批" },
         { label: "模式", value: "物理类" },
         { label: "类别", value: "普通类" },
-        { label: "分数模式", value: "预估分 + 预估位次" },
+        { label: "成绩/位次来源", value: "校内分数估算" },
         { label: "专业", value: "软件工程" },
         { label: "选科", value: "物理+化学" },
         { label: "参考考试", value: "2026届一模" },
         { label: "首选方向", value: "方向 11" },
         { label: "偏好重点", value: "稳定性 / 薪酬" },
-        { label: "位次", value: "31000" },
+        { label: "总分", value: "580" },
       ]),
     );
     expect(explanation.notes.some((item) => item.includes("本次附加筛选包含 选科组合、目标地区、院校层级、专业关键词"))).toBe(true);
-    expect(explanation.notes.some((item) => item.includes("当前分数输入模式为“预估分 + 预估位次”"))).toBe(true);
+    expect(explanation.notes.some((item) => item.includes("当前成绩/位次来源为“校内分数估算”"))).toBe(true);
     expect(explanation.notes.some((item) => item.includes("历年映射估算提示"))).toBe(true);
     expect(explanation.notes.some((item) => item.includes("当前命中 广东 2026 物理类 本科批 规则"))).toBe(true);
     expect(explanation.notes.some((item) => item.includes("当前职业意向已记录到工作台和草稿中"))).toBe(true);
-    expect(explanation.notes.some((item) => item.includes("当前按预估位次为主、预估分数为辅"))).toBe(true);
+    expect(explanation.notes.some((item) => item.includes("校内名次不用于志愿推荐"))).toBe(true);
     expect(explanation.notes.some((item) => item.includes("建议优先放宽 选科组合、目标地区、院校层级、专业关键词"))).toBe(true);
   });
 

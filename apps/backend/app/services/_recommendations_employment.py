@@ -13,6 +13,7 @@ from app.repositories.recommendations import (
     get_major_employment_mapping_by_key,
     list_employment_directions as repo_list_employment_directions,
     list_major_employment_mappings as repo_list_major_employment_mappings,
+    list_major_employment_mappings_page as repo_list_major_employment_mappings_page,
 )
 from app.repositories.system import write_audit_log
 from app.schemas.recommendation import (
@@ -20,6 +21,7 @@ from app.schemas.recommendation import (
     EmploymentDirectionPayload,
     EmploymentDirectionRead,
     MajorEmploymentMappingBootstrapResponse,
+    MajorEmploymentMappingPageRead,
     MajorEmploymentMappingPayload,
     MajorEmploymentMappingRead,
 )
@@ -137,6 +139,33 @@ def list_major_employment_mappings(
             keyword=keyword,
         )
     ]
+
+
+def list_major_employment_mappings_page(
+    session: Session,
+    *,
+    major_id: int | None = None,
+    direction_id: int | None = None,
+    strength: str | None = None,
+    keyword: str | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> MajorEmploymentMappingPageRead:
+    items, total = repo_list_major_employment_mappings_page(
+        session,
+        major_id=major_id,
+        direction_id=direction_id,
+        strength=strength,
+        keyword=keyword,
+        page=page,
+        page_size=page_size,
+    )
+    return MajorEmploymentMappingPageRead(
+        items=[_serialize_major_employment_mapping(item) for item in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 def create_major_employment_mapping(

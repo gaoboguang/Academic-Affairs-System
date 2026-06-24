@@ -2,14 +2,16 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from sqlalchemy import Select, and_, desc, func, or_, select
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import Select, and_, desc, exists, func, or_, select
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.models import (
     AdmissionRecord,
     College,
     CollegeAlias,
     CollegeMajor,
+    CollegeProfileDetail,
     EmploymentDirection,
     EnrollmentPlan,
     Major,
@@ -62,6 +64,197 @@ def list_colleges(
     ).unique().all()
 
 
+def list_colleges_page(
+    session: Session,
+    *,
+    keyword: str | None = None,
+    province: str | None = None,
+    supports_art: bool | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> tuple[Sequence[College], int]:
+    total = session.scalar(
+        select(func.count()).select_from(College).where(
+            and_(*_college_conditions(keyword=keyword, province=province, supports_art=supports_art))
+        )
+    ) or 0
+    stmt = build_college_query(keyword=keyword, province=province, supports_art=supports_art)
+    stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+    return session.scalars(stmt).unique().all(), total
+
+
+def list_college_catalog_page(
+    session: Session,
+    *,
+    keyword: str | None = None,
+    province: str | None = None,
+    school_type: str | None = None,
+    level_tag: str | None = None,
+    has_profile: bool | None = None,
+    has_admission_data: bool | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> tuple[Sequence[tuple[College, int | None, int, int | None, int, int | None]], int]:
+    plan_summary = (
+        select(
+            EnrollmentPlan.college_id.label("college_id"),
+            func.count(EnrollmentPlan.id).label("plan_count"),
+            func.max(EnrollmentPlan.year).label("latest_plan_year"),
+        )
+        .where(EnrollmentPlan.is_active.is_(True))
+        .group_by(EnrollmentPlan.college_id)
+        .subquery()
+    )
+    admission_summary = (
+        select(
+            AdmissionRecord.college_id.label("college_id"),
+            func.count(AdmissionRecord.id).label("admission_count"),
+            func.max(AdmissionRecord.year).label("latest_admission_year"),
+        )
+        .where(AdmissionRecord.is_active.is_(True))
+        .group_by(AdmissionRecord.college_id)
+        .subquery()
+    )
+    profile_summary = (
+        select(CollegeProfileDetail.college_id.label("college_id"))
+        .where(CollegeProfileDetail.is_active.is_(True))
+        .subquery()
+    )
+    conditions = _college_catalog_conditions(
+        keyword=keyword,
+        province=province,
+        school_type=school_type,
+        level_tag=level_tag,
+        has_profile=has_profile,
+        has_admission_data=has_admission_data,
+        profile_summary=profile_summary,
+        plan_summary=plan_summary,
+        admission_summary=admission_summary,
+    )
+    from_clause = (
+        College.__table__
+        .outerjoin(profile_summary, profile_summary.c.college_id == College.id)
+        .outerjoin(plan_summary, plan_summary.c.college_id == College.id)
+        .outerjoin(admission_summary, admission_summary.c.college_id == College.id)
+    )
+    total = session.scalar(select(func.count()).select_from(from_clause).where(and_(*conditions))) or 0
+    stmt = (
+        select(
+            College,
+            profile_summary.c.college_id.label("profile_college_id"),
+            func.coalesce(plan_summary.c.plan_count, 0).label("plan_count"),
+            plan_summary.c.latest_plan_year,
+            func.coalesce(admission_summary.c.admission_count, 0).label("admission_count"),
+            admission_summary.c.latest_admission_year,
+        )
+        .select_from(from_clause)
+        .options(joinedload(College.aliases))
+        .where(and_(*conditions))
+        .order_by(College.name, College.id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    return session.execute(stmt).unique().all(), total
+
+
+def _college_catalog_conditions(
+    *,
+    keyword: str | None = None,
+    province: str | None = None,
+    school_type: str | None = None,
+    level_tag: str | None = None,
+    has_profile: bool | None = None,
+    has_admission_data: bool | None = None,
+    profile_summary,
+    plan_summary,
+    admission_summary,
+) -> list:
+    name_looks_like_college = or_(
+        College.name.contains("大学"),
+        College.name.contains("学院"),
+        College.name.contains("学校"),
+        College.name.contains("高等专科学校"),
+    )
+    has_identity = or_(
+        profile_summary.c.college_id.is_not(None),
+        and_(College.college_code.is_not(None), func.trim(College.college_code) != ""),
+        and_(College.province.is_not(None), func.trim(College.province) != ""),
+        and_(College.city.is_not(None), func.trim(College.city) != ""),
+        and_(College.school_type.is_not(None), func.trim(College.school_type) != ""),
+    )
+    conditions = [College.is_active.is_(True), has_identity, name_looks_like_college]
+    conditions.append(~_college_name_is_admission_variant())
+    if keyword:
+        alias_match = exists(
+            select(1).where(
+                CollegeAlias.college_id == College.id,
+                CollegeAlias.is_active.is_(True),
+                CollegeAlias.alias_name.contains(keyword),
+            )
+        )
+        conditions.append(or_(College.name.contains(keyword), College.college_code.contains(keyword), alias_match))
+    if province:
+        conditions.append(College.province == province)
+    if school_type:
+        conditions.append(College.school_type == school_type)
+    if level_tag:
+        level_values = func.json_each(College.school_level_tags_json).table_valued("value").alias("level_values")
+        conditions.append(
+            exists(
+                select(1)
+                .select_from(level_values)
+                .where(level_values.c.value == level_tag)
+            )
+        )
+    if has_profile is True:
+        conditions.append(profile_summary.c.college_id.is_not(None))
+    elif has_profile is False:
+        conditions.append(profile_summary.c.college_id.is_(None))
+    if has_admission_data is True:
+        conditions.append(or_(plan_summary.c.plan_count > 0, admission_summary.c.admission_count > 0))
+    elif has_admission_data is False:
+        conditions.append(func.coalesce(plan_summary.c.plan_count, 0) + func.coalesce(admission_summary.c.admission_count, 0) == 0)
+    return conditions
+
+
+def _college_name_is_admission_variant() -> ColumnElement[bool]:
+    variant_keywords = (
+        "高校专项计划",
+        "综合评价招生",
+        "其他类",
+        "公安政法类",
+        "航海类",
+        "飞行技术",
+        "定向培养军士生",
+        "高本贯通",
+        "校企合作计划",
+        "省属公费",
+        "地方专项计划",
+        "高职院校专项计划",
+        "边防军人子女预科班",
+    )
+    return and_(
+        College.name.contains("("),
+        or_(*(College.name.contains(keyword) for keyword in variant_keywords)),
+    )
+
+
+def _college_conditions(
+    *,
+    keyword: str | None = None,
+    province: str | None = None,
+    supports_art: bool | None = None,
+) -> list:
+    conditions = [College.is_active.is_(True)]
+    if keyword:
+        conditions.append(College.name.contains(keyword))
+    if province:
+        conditions.append(College.province == province)
+    if supports_art is not None:
+        conditions.append(College.supports_art == supports_art)
+    return conditions
+
+
 def get_college(session: Session, college_id: int) -> College | None:
     stmt = (
         select(College)
@@ -86,13 +279,58 @@ def list_majors(
     keyword: str | None = None,
     is_art_related: bool | None = None,
 ) -> Sequence[Major]:
-    stmt = select(Major).where(Major.is_active.is_(True))
-    if keyword:
-        stmt = stmt.where(Major.name.contains(keyword))
-    if is_art_related is not None:
-        stmt = stmt.where(Major.is_art_related == is_art_related)
-    stmt = stmt.order_by(Major.name, Major.id)
+    stmt = _build_major_list_statement(keyword=keyword, is_art_related=is_art_related)
     return session.scalars(stmt).all()
+
+
+def list_majors_page(
+    session: Session,
+    *,
+    keyword: str | None = None,
+    is_art_related: bool | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> tuple[Sequence[Major], int]:
+    count_stmt = _build_major_count_statement(keyword=keyword, is_art_related=is_art_related)
+    total = session.scalar(count_stmt) or 0
+    stmt = _build_major_list_statement(keyword=keyword, is_art_related=is_art_related)
+    stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+    return session.scalars(stmt).all(), total
+
+
+def _major_conditions(
+    *,
+    keyword: str | None = None,
+    is_art_related: bool | None = None,
+) -> list:
+    conditions = [Major.is_active.is_(True)]
+    if keyword:
+        conditions.append(Major.name.contains(keyword))
+    if is_art_related is not None:
+        conditions.append(Major.is_art_related == is_art_related)
+    return conditions
+
+
+def _build_major_list_statement(
+    *,
+    keyword: str | None = None,
+    is_art_related: bool | None = None,
+) -> Select[tuple[Major]]:
+    return (
+        select(Major)
+        .where(and_(*_major_conditions(keyword=keyword, is_art_related=is_art_related)))
+        .order_by(Major.name, Major.id)
+    )
+
+
+def _build_major_count_statement(
+    *,
+    keyword: str | None = None,
+    is_art_related: bool | None = None,
+):
+    return select(func.count()).select_from(Major).where(
+        and_(*_major_conditions(keyword=keyword, is_art_related=is_art_related))
+    )
 
 
 def get_major(session: Session, major_id: int) -> Major | None:
@@ -160,6 +398,63 @@ def list_major_employment_mappings(
         stmt = stmt.where(and_(*conditions))
     stmt = stmt.order_by(MajorEmploymentMapping.strength, MajorEmploymentMapping.id.desc())
     return session.scalars(stmt).unique().all()
+
+
+def list_major_employment_mappings_page(
+    session: Session,
+    *,
+    major_id: int | None = None,
+    direction_id: int | None = None,
+    strength: str | None = None,
+    keyword: str | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> tuple[Sequence[MajorEmploymentMapping], int]:
+    conditions = _major_employment_mapping_conditions(
+        major_id=major_id,
+        direction_id=direction_id,
+        strength=strength,
+        keyword=keyword,
+    )
+    total = session.scalar(
+        select(func.count()).select_from(MajorEmploymentMapping).where(and_(*conditions))
+    ) or 0
+    stmt = (
+        select(MajorEmploymentMapping)
+        .options(
+            joinedload(MajorEmploymentMapping.major),
+            joinedload(MajorEmploymentMapping.direction),
+        )
+        .where(and_(*conditions))
+        .order_by(MajorEmploymentMapping.strength, MajorEmploymentMapping.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    return session.scalars(stmt).unique().all(), total
+
+
+def _major_employment_mapping_conditions(
+    *,
+    major_id: int | None = None,
+    direction_id: int | None = None,
+    strength: str | None = None,
+    keyword: str | None = None,
+) -> list:
+    conditions = [MajorEmploymentMapping.is_active.is_(True)]
+    if major_id:
+        conditions.append(MajorEmploymentMapping.major_id == major_id)
+    if direction_id:
+        conditions.append(MajorEmploymentMapping.direction_id == direction_id)
+    if strength:
+        conditions.append(MajorEmploymentMapping.strength == strength)
+    if keyword:
+        conditions.append(
+            or_(
+                MajorEmploymentMapping.major.has(Major.name.contains(keyword)),
+                MajorEmploymentMapping.direction.has(EmploymentDirection.name.contains(keyword)),
+            )
+        )
+    return conditions
 
 
 def list_major_employment_mappings_for_majors(
@@ -231,30 +526,113 @@ def list_admission_records(
     *,
     year: int | None = None,
     province: str | None = None,
+    batch: str | None = None,
     college_id: int | None = None,
     student_type: str | None = None,
 ) -> Sequence[AdmissionRecord]:
+    stmt = _build_admission_record_list_statement(
+        year=year,
+        province=province,
+        batch=batch,
+        college_id=college_id,
+        student_type=student_type,
+    )
+    return session.scalars(stmt).all()
+
+
+def list_admission_records_page(
+    session: Session,
+    *,
+    year: int | None = None,
+    province: str | None = None,
+    batch: str | None = None,
+    college_id: int | None = None,
+    student_type: str | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> tuple[Sequence[AdmissionRecord], int]:
+    count_stmt = _build_admission_record_count_statement(
+        year=year,
+        province=province,
+        batch=batch,
+        college_id=college_id,
+        student_type=student_type,
+    )
+    total = session.scalar(count_stmt) or 0
+    stmt = _build_admission_record_list_statement(
+        year=year,
+        province=province,
+        batch=batch,
+        college_id=college_id,
+        student_type=student_type,
+    )
+    stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+    return session.scalars(stmt).all(), total
+
+
+def _admission_record_conditions(
+    *,
+    year: int | None = None,
+    province: str | None = None,
+    batch: str | None = None,
+    college_id: int | None = None,
+    student_type: str | None = None,
+) -> list:
+    conditions = [AdmissionRecord.is_active.is_(True)]
+    if year:
+        conditions.append(AdmissionRecord.year == year)
+    if province:
+        conditions.append(AdmissionRecord.province == province)
+    if batch:
+        conditions.append(AdmissionRecord.batch == batch)
+    if college_id:
+        conditions.append(AdmissionRecord.college_id == college_id)
+    if student_type:
+        conditions.append(AdmissionRecord.student_type == student_type)
+    return conditions
+
+
+def _build_admission_record_list_statement(
+    *,
+    year: int | None = None,
+    province: str | None = None,
+    batch: str | None = None,
+    college_id: int | None = None,
+    student_type: str | None = None,
+) -> Select[tuple[AdmissionRecord]]:
     stmt = (
         select(AdmissionRecord)
         .options(
             joinedload(AdmissionRecord.college),
             joinedload(AdmissionRecord.major),
         )
-        .where(AdmissionRecord.is_active.is_(True))
     )
-    conditions = []
-    if year:
-        conditions.append(AdmissionRecord.year == year)
-    if province:
-        conditions.append(AdmissionRecord.province == province)
-    if college_id:
-        conditions.append(AdmissionRecord.college_id == college_id)
-    if student_type:
-        conditions.append(AdmissionRecord.student_type == student_type)
-    if conditions:
-        stmt = stmt.where(and_(*conditions))
+    stmt = stmt.where(and_(*_admission_record_conditions(
+        year=year,
+        province=province,
+        batch=batch,
+        college_id=college_id,
+        student_type=student_type,
+    )))
     stmt = stmt.order_by(desc(AdmissionRecord.year), AdmissionRecord.college_id, AdmissionRecord.id)
-    return session.scalars(stmt).all()
+    return stmt
+
+
+def _build_admission_record_count_statement(
+    *,
+    year: int | None = None,
+    province: str | None = None,
+    batch: str | None = None,
+    college_id: int | None = None,
+    student_type: str | None = None,
+):
+    return select(func.count()).select_from(AdmissionRecord).where(and_(*_admission_record_conditions(
+        year=year,
+        province=province,
+        batch=batch,
+        college_id=college_id,
+        student_type=student_type,
+    )))
 
 
 def get_admission_record_by_key(
@@ -290,15 +668,60 @@ def list_enrollment_plans(
     student_type: str | None = None,
     keyword: str | None = None,
 ) -> Sequence[EnrollmentPlan]:
-    stmt = (
-        select(EnrollmentPlan)
-        .options(
-            joinedload(EnrollmentPlan.college),
-            joinedload(EnrollmentPlan.major),
-        )
-        .where(EnrollmentPlan.is_active.is_(True))
+    stmt = _build_enrollment_plan_list_statement(
+        year=year,
+        province=province,
+        batch=batch,
+        college_id=college_id,
+        student_type=student_type,
+        keyword=keyword,
     )
-    conditions = []
+    return session.scalars(stmt).unique().all()
+
+
+def list_enrollment_plans_page(
+    session: Session,
+    *,
+    year: int | None = None,
+    province: str | None = None,
+    batch: str | None = None,
+    college_id: int | None = None,
+    student_type: str | None = None,
+    keyword: str | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> tuple[Sequence[EnrollmentPlan], int]:
+    count_stmt = _build_enrollment_plan_count_statement(
+        year=year,
+        province=province,
+        batch=batch,
+        college_id=college_id,
+        student_type=student_type,
+        keyword=keyword,
+    )
+    total = session.scalar(count_stmt) or 0
+    stmt = _build_enrollment_plan_list_statement(
+        year=year,
+        province=province,
+        batch=batch,
+        college_id=college_id,
+        student_type=student_type,
+        keyword=keyword,
+    )
+    stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+    return session.scalars(stmt).unique().all(), total
+
+
+def _enrollment_plan_conditions(
+    *,
+    year: int | None = None,
+    province: str | None = None,
+    batch: str | None = None,
+    college_id: int | None = None,
+    student_type: str | None = None,
+    keyword: str | None = None,
+) -> list:
+    conditions = [EnrollmentPlan.is_active.is_(True)]
     if year:
         conditions.append(EnrollmentPlan.year == year)
     if province:
@@ -318,8 +741,33 @@ def list_enrollment_plans(
                 EnrollmentPlan.major_group_code.contains(keyword),
             )
         )
-    if conditions:
-        stmt = stmt.where(and_(*conditions))
+    return conditions
+
+
+def _build_enrollment_plan_list_statement(
+    *,
+    year: int | None = None,
+    province: str | None = None,
+    batch: str | None = None,
+    college_id: int | None = None,
+    student_type: str | None = None,
+    keyword: str | None = None,
+) -> Select[tuple[EnrollmentPlan]]:
+    stmt = (
+        select(EnrollmentPlan)
+        .options(
+            joinedload(EnrollmentPlan.college),
+            joinedload(EnrollmentPlan.major),
+        )
+    )
+    stmt = stmt.where(and_(*_enrollment_plan_conditions(
+        year=year,
+        province=province,
+        batch=batch,
+        college_id=college_id,
+        student_type=student_type,
+        keyword=keyword,
+    )))
     stmt = stmt.order_by(
         desc(EnrollmentPlan.year),
         EnrollmentPlan.province,
@@ -328,7 +776,26 @@ def list_enrollment_plans(
         EnrollmentPlan.major_group_code,
         EnrollmentPlan.id,
     )
-    return session.scalars(stmt).unique().all()
+    return stmt
+
+
+def _build_enrollment_plan_count_statement(
+    *,
+    year: int | None = None,
+    province: str | None = None,
+    batch: str | None = None,
+    college_id: int | None = None,
+    student_type: str | None = None,
+    keyword: str | None = None,
+):
+    return select(func.count()).select_from(EnrollmentPlan).where(and_(*_enrollment_plan_conditions(
+        year=year,
+        province=province,
+        batch=batch,
+        college_id=college_id,
+        student_type=student_type,
+        keyword=keyword,
+    )))
 
 
 def get_enrollment_plan_by_key(
@@ -362,6 +829,7 @@ def list_admission_candidates(
     province: str,
     student_type: str,
     batch: str | None = None,
+    batches: Sequence[str] | None = None,
     subject_requirement: str | None = None,
 ) -> Sequence[AdmissionRecord]:
     stmt = (
@@ -375,10 +843,12 @@ def list_admission_candidates(
             AdmissionRecord.is_active.is_(True),
         )
     )
-    if batch:
+    if batches:
+        stmt = stmt.where(AdmissionRecord.batch.in_(tuple(batches)))
+    elif batch:
         stmt = stmt.where(AdmissionRecord.batch == batch)
     stmt = stmt.where(AdmissionRecord.student_type.in_(_resolve_candidate_student_type_values(student_type)))
-    if subject_requirement:
+    if subject_requirement and "+" in subject_requirement:
         stmt = stmt.where(
             (AdmissionRecord.subject_requirement.is_(None))
             | (AdmissionRecord.subject_requirement.contains(subject_requirement))
@@ -394,31 +864,27 @@ def list_enrollment_plan_candidates(
     province: str,
     student_type: str,
     batch: str | None = None,
+    batches: Sequence[str] | None = None,
     exam_mode: str | None = None,
     subject_requirement: str | None = None,
 ) -> Sequence[EnrollmentPlan]:
+    conditions = _enrollment_plan_candidate_conditions(
+        year=year,
+        province=province,
+        student_type=student_type,
+        batch=batch,
+        batches=batches,
+        exam_mode=exam_mode,
+        subject_requirement=subject_requirement,
+    )
     stmt = (
         select(EnrollmentPlan)
         .options(
             joinedload(EnrollmentPlan.college).joinedload(College.aliases),
             joinedload(EnrollmentPlan.major),
         )
-        .where(
-            EnrollmentPlan.year == year,
-            EnrollmentPlan.province == province,
-            EnrollmentPlan.is_active.is_(True),
-        )
+        .where(and_(*conditions))
     )
-    if batch:
-        stmt = stmt.where(EnrollmentPlan.batch == batch)
-    if exam_mode:
-        stmt = stmt.where(EnrollmentPlan.exam_mode.in_(build_compatible_exam_modes(exam_mode)))
-    stmt = stmt.where(EnrollmentPlan.student_type.in_(_resolve_candidate_student_type_values(student_type)))
-    if subject_requirement:
-        stmt = stmt.where(
-            (EnrollmentPlan.subject_requirement.is_(None))
-            | (EnrollmentPlan.subject_requirement.contains(subject_requirement))
-        )
     stmt = stmt.order_by(
         EnrollmentPlan.batch,
         EnrollmentPlan.exam_mode,
@@ -429,10 +895,192 @@ def list_enrollment_plan_candidates(
     return session.scalars(stmt).unique().all()
 
 
+def count_enrollment_plan_candidates(
+    session: Session,
+    *,
+    year: int,
+    province: str,
+    student_type: str,
+    batch: str | None = None,
+    batches: Sequence[str] | None = None,
+    exam_mode: str | None = None,
+    subject_requirement: str | None = None,
+) -> int:
+    conditions = _enrollment_plan_candidate_conditions(
+        year=year,
+        province=province,
+        student_type=student_type,
+        batch=batch,
+        batches=batches,
+        exam_mode=exam_mode,
+        subject_requirement=subject_requirement,
+    )
+    return session.scalar(select(func.count()).select_from(EnrollmentPlan).where(and_(*conditions))) or 0
+
+
+def list_enrollment_plan_candidate_years(
+    session: Session,
+    *,
+    before_year: int,
+    province: str,
+    student_type: str,
+    batch: str | None = None,
+    batches: Sequence[str] | None = None,
+    exam_mode: str | None = None,
+    subject_requirement: str | None = None,
+) -> list[int]:
+    conditions = _enrollment_plan_candidate_conditions(
+        year=None,
+        province=province,
+        student_type=student_type,
+        batch=batch,
+        batches=batches,
+        exam_mode=exam_mode,
+        subject_requirement=subject_requirement,
+    )
+    conditions.append(EnrollmentPlan.year < before_year)
+    stmt = (
+        select(EnrollmentPlan.year)
+        .distinct()
+        .where(and_(*conditions))
+        .order_by(desc(EnrollmentPlan.year))
+    )
+    return [int(item) for item in session.scalars(stmt).all()]
+
+
+def list_recent_enrollment_plan_history(
+    session: Session,
+    *,
+    before_year: int,
+    province: str,
+    college_id: int,
+    major_id: int | None,
+    student_type: str,
+    batches: Sequence[str] | None = None,
+    exam_mode: str | None = None,
+    limit: int = 3,
+) -> Sequence[EnrollmentPlan]:
+    conditions = [
+        EnrollmentPlan.year < before_year,
+        EnrollmentPlan.province == province,
+        EnrollmentPlan.college_id == college_id,
+        EnrollmentPlan.is_active.is_(True),
+        EnrollmentPlan.student_type.in_(_resolve_candidate_student_type_values(student_type)),
+    ]
+    if major_id is not None:
+        conditions.append(EnrollmentPlan.major_id == major_id)
+    if batches:
+        conditions.append(EnrollmentPlan.batch.in_(tuple(batches)))
+    if exam_mode:
+        conditions.append(EnrollmentPlan.exam_mode.in_(build_compatible_exam_modes(exam_mode)))
+    stmt = (
+        select(EnrollmentPlan)
+        .options(joinedload(EnrollmentPlan.major))
+        .where(and_(*conditions))
+        .order_by(desc(EnrollmentPlan.year), EnrollmentPlan.id)
+        .limit(limit * 4)
+    )
+    return session.scalars(stmt).unique().all()
+
+
+def list_recent_admission_history(
+    session: Session,
+    *,
+    before_year: int,
+    province: str,
+    college_id: int,
+    major_id: int | None,
+    student_type: str,
+    batches: Sequence[str] | None = None,
+    limit: int = 3,
+) -> Sequence[AdmissionRecord]:
+    conditions = [
+        AdmissionRecord.year < before_year,
+        AdmissionRecord.province == province,
+        AdmissionRecord.college_id == college_id,
+        AdmissionRecord.is_active.is_(True),
+        AdmissionRecord.student_type.in_(_resolve_candidate_student_type_values(student_type)),
+    ]
+    if major_id is not None:
+        conditions.append(AdmissionRecord.major_id == major_id)
+    if batches:
+        conditions.append(AdmissionRecord.batch.in_(tuple(batches)))
+    stmt = (
+        select(AdmissionRecord)
+        .options(joinedload(AdmissionRecord.major))
+        .where(and_(*conditions))
+        .order_by(desc(AdmissionRecord.year), AdmissionRecord.id)
+        .limit(limit * 6)
+    )
+    return session.scalars(stmt).unique().all()
+
+
+def list_recent_admission_history_for_college(
+    session: Session,
+    *,
+    before_year: int,
+    province: str,
+    college_id: int,
+    student_type: str,
+    batches: Sequence[str] | None = None,
+    limit: int = 3,
+) -> Sequence[AdmissionRecord]:
+    conditions = [
+        AdmissionRecord.year < before_year,
+        AdmissionRecord.province == province,
+        AdmissionRecord.college_id == college_id,
+        AdmissionRecord.is_active.is_(True),
+        AdmissionRecord.student_type.in_(_resolve_candidate_student_type_values(student_type)),
+    ]
+    if batches:
+        conditions.append(AdmissionRecord.batch.in_(tuple(batches)))
+    stmt = (
+        select(AdmissionRecord)
+        .options(joinedload(AdmissionRecord.major))
+        .where(and_(*conditions))
+        .order_by(desc(AdmissionRecord.year), AdmissionRecord.id)
+        .limit(limit * 20)
+    )
+    return session.scalars(stmt).unique().all()
+
+
+def _enrollment_plan_candidate_conditions(
+    *,
+    year: int | None,
+    province: str,
+    student_type: str,
+    batch: str | None = None,
+    batches: Sequence[str] | None = None,
+    exam_mode: str | None = None,
+    subject_requirement: str | None = None,
+) -> list:
+    conditions = [
+        EnrollmentPlan.province == province,
+        EnrollmentPlan.is_active.is_(True),
+        EnrollmentPlan.student_type.in_(_resolve_candidate_student_type_values(student_type)),
+    ]
+    if year is not None:
+        conditions.append(EnrollmentPlan.year == year)
+    if batches:
+        conditions.append(EnrollmentPlan.batch.in_(tuple(batches)))
+    elif batch:
+        conditions.append(EnrollmentPlan.batch == batch)
+    if exam_mode:
+        conditions.append(EnrollmentPlan.exam_mode.in_(build_compatible_exam_modes(exam_mode)))
+    if subject_requirement and "+" in subject_requirement:
+        conditions.append(
+            (EnrollmentPlan.subject_requirement.is_(None))
+            | (EnrollmentPlan.subject_requirement.contains(subject_requirement))
+        )
+    return conditions
+
+
 def _resolve_candidate_student_type_values(student_type: str) -> tuple[str, ...]:
     normalized = (student_type or "").strip()
     if normalized in {"", "general", "repeat"}:
         return ("general", "common", "")
+    if normalized in {"fine_art_design", "fine_art", "music", "dance", "media", "broadcast_hosting", "performance_directing", "calligraphy", "opera"}:
+        return ("art", normalized)
     return (normalized,)
 
 

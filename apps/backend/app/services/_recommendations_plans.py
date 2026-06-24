@@ -6,9 +6,12 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings
 from app.importers.enrollment_plans import EnrollmentPlanImporter
-from app.repositories.recommendations import list_enrollment_plans as repo_list_enrollment_plans
+from app.repositories.recommendations import (
+    list_enrollment_plans as repo_list_enrollment_plans,
+    list_enrollment_plans_page as repo_list_enrollment_plans_page,
+)
 from app.repositories.system import create_import_job, write_audit_log
-from app.schemas.recommendation import EnrollmentPlanImportResponse, EnrollmentPlanRead
+from app.schemas.recommendation import EnrollmentPlanImportResponse, EnrollmentPlanPageRead, EnrollmentPlanRead
 
 from ._recommendations_shared import _serialize_enrollment_plan
 
@@ -35,6 +38,37 @@ def list_enrollment_plans(
             keyword=keyword,
         )
     ]
+
+
+def list_enrollment_plans_page(
+    session: Session,
+    *,
+    year: int | None = None,
+    province: str | None = None,
+    batch: str | None = None,
+    college_id: int | None = None,
+    student_type: str | None = None,
+    keyword: str | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> EnrollmentPlanPageRead:
+    items, total = repo_list_enrollment_plans_page(
+        session,
+        year=year,
+        province=province,
+        batch=batch,
+        college_id=college_id,
+        student_type=student_type,
+        keyword=keyword,
+        page=page,
+        page_size=page_size,
+    )
+    return EnrollmentPlanPageRead(
+        items=[_serialize_enrollment_plan(item) for item in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 def import_enrollment_plans(

@@ -1,27 +1,8 @@
 <template>
-  <div class="page-shell">
-    <header class="page-header">
-      <div>
-        <div class="page-eyebrow">工作台 / 今日教务决策台</div>
-        <h2 class="page-title">先判断系统能不能试用，再进入具体工作</h2>
-        <p class="page-subtitle">
-          汇总学生、教师、考试、成绩、导入、备份和高考数据健康状态，把下一步要做的事直接摆在首页。
-        </p>
-        <div class="page-chip-row">
-          <span class="page-chip"><strong>学生</strong>{{ summary.student_total }}</span>
-          <span class="page-chip"><strong>教师</strong>{{ summary.teacher_total }}</span>
-          <span class="page-chip"><strong>成绩记录</strong>{{ summary.score_record_total }}</span>
-          <span class="page-chip"><strong>P0 缺口</strong>{{ summary.data_health?.p0_gap_count ?? "-" }}</span>
-          <span class="page-chip"><strong>最近导入</strong>{{ latestImport ? formatImportJobType(latestImport.job_type) : "暂无" }}</span>
-        </div>
-      </div>
-      <div class="action-row">
-        <el-button @click="router.push('/import-center')">导入中心</el-button>
-        <el-button @click="router.push('/system-tools')">系统设置</el-button>
-        <el-button type="primary" @click="reload">刷新概况</el-button>
-      </div>
-    </header>
-
+  <AppPage
+    title="工作台"
+    hide-header
+  >
     <section class="metric-grid">
       <button
         v-for="card in statusCards"
@@ -37,8 +18,8 @@
     <section class="soft-card panel-block">
       <div class="section-head">
         <div>
-          <h3>下一步建议</h3>
-          <p>这些建议只基于当前本地数据状态生成，点击后进入已有页面处理。</p>
+          <h3>待处理事项</h3>
+          <p>根据当前学生、教师、考试和升学任务整理，点进去就能继续处理。</p>
         </div>
       </div>
       <div class="next-step-grid">
@@ -58,7 +39,7 @@
         <div class="section-head compact">
           <div>
             <h3>最近考试与成绩状态</h3>
-            <p>优先确认最近考试是否已有成绩，避免在空成绩库上解读分析图表。</p>
+            <p>查看最近一次考试是否已经有成绩，方便继续做分析和报表。</p>
           </div>
           <el-button v-if="summary.recent_exam" type="primary" plain @click="openAnalytics">
             进入分析中心
@@ -125,9 +106,9 @@
       <div class="section-head">
         <div>
           <h3>基础数据修复提醒</h3>
-          <p>这些是学生、班级、成绩等业务数据的可修复问题；高考数据缺口请进入高考数据看板复核。</p>
+          <p>这里展示学生、班级、成绩等日常数据里需要补齐或修正的事项。</p>
         </div>
-        <el-button link type="primary" @click="router.push('/system-tools')">打开修复工具</el-button>
+        <el-button link type="primary" @click="router.push('/system-tools')">处理数据问题</el-button>
       </div>
       <div v-if="summary.data_quality_issues.length" class="quality-grid">
         <article v-for="issue in summary.data_quality_issues" :key="issue.code" class="quality-card">
@@ -177,7 +158,7 @@
       </div>
       <el-empty v-if="!summary.recent_imports.length" description="暂无导入记录" />
     </section>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
@@ -188,12 +169,11 @@ import { useRouter } from "vue-router";
 import { apiRequest } from "../api/client";
 import {
   buildDashboardNextSteps,
-  formatDashboardBackupLabel,
-  formatDataHealthCardValue,
   type DashboardBackupSummary,
   type DashboardDataHealthSummary,
 } from "../components/dashboard/dashboardDecisions";
 import MetricCard from "../components/MetricCard.vue";
+import { AppPage } from "../components/ui";
 import { formatImportStatus as formatUnifiedImportStatus, importStatusTagType } from "../utils/importFeedback";
 
 interface ImportJob {
@@ -254,7 +234,6 @@ const quickActions = [
   { label: "考试成绩导入", help: "创建考试、配置科目并导入成绩。", path: "/exams" },
   { label: "分析中心", help: "查看学生、班级、年级和教师分析。", path: "/analytics" },
   { label: "报表中心", help: "导出打印可交接的汇总材料。", path: "/reports" },
-  { label: "系统备份", help: "创建备份、查看恢复入口。", path: "/system-tools" },
   { label: "高考志愿工作台", help: "进入推荐和志愿草稿流程。", path: "/recommendations" },
 ];
 
@@ -306,17 +285,12 @@ const summary = reactive<DashboardSummary>({
 });
 
 const latestImport = computed(() => summary.recent_imports[0] ?? null);
-const latestBackupLabel = computed(() => formatDashboardBackupLabel(summary.latest_backup));
-
 const statusCards = computed(() => [
-  { label: "学生总数", value: summary.student_total, helpText: "当前库内学生记录，点击进入学生中心。", path: "/students" },
-  { label: "教师总数", value: summary.teacher_total, helpText: "教师样本偏少会影响工作量和评教对比。", path: "/teachers" },
-  { label: "考试数量", value: summary.exam_total, helpText: "已有考试批次，点击进入考试成绩页。", path: "/exams" },
-  { label: "成绩记录", value: summary.score_record_total, helpText: "为 0 时不要解读成绩分析图表。", path: "/exams" },
+  { label: "学生总数", value: summary.student_total, helpText: "查看学生名单、画像和详情。", path: "/students" },
+  { label: "教师总数", value: summary.teacher_total, helpText: "维护教师台账和任教关系。", path: "/teachers" },
+  { label: "考试数量", value: summary.exam_total, helpText: "进入考试成绩页继续处理。", path: "/exams" },
+  { label: "成绩记录", value: summary.score_record_total, helpText: "查看已导入的成绩明细。", path: "/exams" },
   { label: "最近导入", value: latestImport.value ? formatImportJobType(latestImport.value.job_type) : "暂无", helpText: "查看最近导入批次和错误报告。", path: "/import-center" },
-  { label: "最近备份", value: latestBackupLabel.value, helpText: "导入真实数据和恢复前建议先备份。", path: "/system-tools" },
-  { label: "数据健康", value: summary.data_health?.label ?? "未检查", helpText: "查看高考数据可用性和发布状态。", path: "/gaokao-data" },
-  { label: "P0 缺口", value: formatDataHealthCardValue(summary.data_health), helpText: "缺口存在时，推荐输出必须保留风险提示。", path: "/gaokao-data" },
 ]);
 
 const nextSteps = computed(() => buildDashboardNextSteps(summary));

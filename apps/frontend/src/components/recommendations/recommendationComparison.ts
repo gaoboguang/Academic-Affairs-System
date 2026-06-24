@@ -33,6 +33,7 @@ const resultColumns: Array<{ key: ResultGroupKey; label: string }> = [
   { key: "challenge", label: "冲刺" },
   { key: "steady", label: "稳妥" },
   { key: "safe", label: "保底" },
+  { key: "watch", label: "仅关注" },
 ];
 
 interface RecommendationComparableScheme {
@@ -307,7 +308,7 @@ function buildRecommendationGroupCounts(results: RecommendationResult[]): Record
       accumulator[item.result_type] += 1;
       return accumulator;
     },
-    { challenge: 0, steady: 0, safe: 0 },
+    { challenge: 0, steady: 0, safe: 0, watch: 0 },
   );
 }
 

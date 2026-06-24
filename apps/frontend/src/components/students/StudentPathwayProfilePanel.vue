@@ -72,7 +72,39 @@
           </label>
           <label class="pathway-field">
             <span>艺术类别</span>
-            <el-input v-model="form.art_track" placeholder="如：美术与设计类" />
+            <el-select v-model="form.art_track" clearable filterable placeholder="选择艺术类别">
+              <el-option v-for="item in pathwayArtTrackOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+          </label>
+          <label class="pathway-field">
+            <span>艺术专业分</span>
+            <el-input-number
+              v-model="form.art_professional_score"
+              :min="0"
+              :max="300"
+              controls-position="right"
+              style="width: 100%"
+              placeholder="省统考专业分"
+            />
+          </label>
+          <label class="pathway-field">
+            <span>艺术专业满分</span>
+            <el-input-number
+              v-model="form.art_professional_full_score"
+              :min="1"
+              :max="750"
+              controls-position="right"
+              style="width: 100%"
+              placeholder="默认 300"
+            />
+          </label>
+          <label class="pathway-field">
+            <span>艺术成绩来源</span>
+            <el-input v-model="form.art_score_source" placeholder="如：山东音乐类统考" />
+          </label>
+          <label class="pathway-field wide">
+            <span>艺术成绩备注</span>
+            <el-input v-model="form.art_score_note" placeholder="校考、省际联考或需人工复核的说明" />
           </label>
           <label class="pathway-field">
             <span>体育类别</span>
@@ -98,14 +130,144 @@
 
         <div class="section-head compact subsection-head">
           <div>
-            <h3>材料准备</h3>
-            <p>勾选的是“材料已经整理到位”，不是系统自动判定。</p>
+            <h3>意向偏好</h3>
+            <p>这些字段会直接带入志愿工作台「意向偏好」区，不必再二次维护。</p>
           </div>
         </div>
-        <div class="pathway-material-grid">
-          <label v-for="item in materialChecklist" :key="item.key" class="pathway-material-item">
-            <el-checkbox v-model="form.materials_json[item.key]">{{ item.label }}</el-checkbox>
-            <small>{{ item.help }}</small>
+        <div class="pathway-field-grid">
+          <label class="pathway-field wide">
+            <span>目标地区偏好</span>
+            <el-select
+              v-model="targetRegions"
+              multiple
+              filterable
+              allow-create
+              default-first-option
+              collapse-tags
+              placeholder="可选多个：山东、江苏…"
+            >
+              <el-option v-for="item in regionPresetOptions" :key="`region-${item}`" :label="item" :value="item" />
+            </el-select>
+          </label>
+          <label class="pathway-field wide">
+            <span>院校层级偏好</span>
+            <el-select
+              v-model="schoolLevelTags"
+              multiple
+              filterable
+              allow-create
+              default-first-option
+              collapse-tags
+              placeholder="可选多个：双一流、公办本科…"
+            >
+              <el-option v-for="item in schoolLevelPresetOptions" :key="`level-${item}`" :label="item" :value="item" />
+            </el-select>
+          </label>
+          <label class="pathway-field wide">
+            <span>专业方向关键词</span>
+            <el-input v-model="majorKeyword" placeholder="如：计算机、护理、机械" />
+          </label>
+          <label class="pathway-field">
+            <span>首选就业方向</span>
+            <el-select v-model="primaryDirectionId" clearable filterable placeholder="选择就业方向">
+              <el-option
+                v-for="item in directionOptions"
+                :key="`primary-${item.id}`"
+                :label="item.name"
+                :value="item.id"
+                :disabled="!item.is_active"
+              />
+            </el-select>
+          </label>
+          <label class="pathway-field">
+            <span>次选就业方向</span>
+            <el-select v-model="secondaryDirectionId" clearable filterable placeholder="选择就业方向">
+              <el-option
+                v-for="item in directionOptions"
+                :key="`secondary-${item.id}`"
+                :label="item.name"
+                :value="item.id"
+                :disabled="!item.is_active"
+              />
+            </el-select>
+          </label>
+          <label class="pathway-field">
+            <span>可接受替代方向</span>
+            <el-select v-model="alternativeDirectionId" clearable filterable placeholder="选择就业方向">
+              <el-option
+                v-for="item in directionOptions"
+                :key="`alternative-${item.id}`"
+                :label="item.name"
+                :value="item.id"
+                :disabled="!item.is_active"
+              />
+            </el-select>
+          </label>
+          <label class="pathway-field wide">
+            <span>偏好重点</span>
+            <el-checkbox-group v-model="priorityFocuses">
+              <el-checkbox-button v-for="item in focusOptions" :key="item.value" :label="item.value">
+                {{ item.label }}
+              </el-checkbox-button>
+            </el-checkbox-group>
+          </label>
+          <label class="pathway-field wide">
+            <span>目标行业偏好</span>
+            <el-select
+              v-model="preferredIndustries"
+              multiple
+              filterable
+              allow-create
+              default-first-option
+              collapse-tags
+              placeholder="如：互联网、人工智能、智能制造"
+            >
+              <el-option v-for="item in industryPresetOptions" :key="`ind-${item}`" :label="item" :value="item" />
+            </el-select>
+          </label>
+          <label class="pathway-field wide">
+            <span>目标岗位偏好</span>
+            <el-select
+              v-model="preferredJobTypes"
+              multiple
+              filterable
+              allow-create
+              default-first-option
+              collapse-tags
+              placeholder="如：算法工程师、产品经理"
+            >
+              <el-option v-for="item in jobTypePresetOptions" :key="`job-${item}`" :label="item" :value="item" />
+            </el-select>
+          </label>
+          <label class="pathway-field wide">
+            <span>目标就业城市</span>
+            <el-select
+              v-model="targetEmploymentCities"
+              multiple
+              filterable
+              allow-create
+              default-first-option
+              collapse-tags
+              placeholder="如：济南、青岛、北京"
+            >
+              <el-option v-for="item in regionPresetOptions" :key="`city-${item}`" :label="item" :value="item" />
+            </el-select>
+          </label>
+          <label class="pathway-field">
+            <span>可接受深造路径</span>
+            <el-switch v-model="acceptsPostgraduate" inline-prompt active-text="是" inactive-text="否" />
+          </label>
+          <label class="pathway-field">
+            <span>可接受公考路径</span>
+            <el-switch v-model="acceptsPublicService" inline-prompt active-text="是" inactive-text="否" />
+          </label>
+          <label class="pathway-field">
+            <span>可接受证书路径</span>
+            <el-switch v-model="acceptsCertificate" inline-prompt active-text="是" inactive-text="否" />
+          </label>
+          <label class="pathway-field">
+            <span>可接受长周期培养</span>
+            <el-switch v-model="acceptsLongTraining" inline-prompt active-text="是" inactive-text="否" />
           </label>
         </div>
 
@@ -120,12 +282,12 @@
             />
           </label>
           <label class="pathway-field">
-            <span>材料备注</span>
+            <span>备注</span>
             <el-input
               v-model="form.note"
               type="textarea"
               :rows="3"
-              placeholder="记录已联系家长、材料存放位置、仍待确认的问题"
+              placeholder="记录已联系家长、仍待确认的问题等"
             />
           </label>
         </div>
@@ -145,20 +307,6 @@
           </span>
         </div>
         <el-empty v-else description="暂无路径评估结果，保存画像后刷新评估。" />
-
-        <div class="pathway-gap-box">
-          <h4>系统识别到的缺口</h4>
-          <div v-if="aggregatedGaps.length" class="pathway-gap-list">
-            <article v-for="gap in aggregatedGaps" :key="gap.key" class="pathway-gap-item">
-              <div>
-                <strong>{{ gap.label }}</strong>
-                <span>影响 {{ gap.count }} 条路径：{{ gap.pathways.join("、") }}</span>
-              </div>
-              <p>{{ gap.nextAction }}</p>
-            </article>
-          </div>
-          <p v-else class="muted-copy">暂无系统识别到的材料缺口。仍需在正式报名前逐校核对官方公告、招生章程和报名时间。</p>
-        </div>
 
         <div class="pathway-evaluation-list">
           <article v-for="item in evaluations" :key="item.pathway_id" class="pathway-evaluation-item">
@@ -188,11 +336,10 @@ import { apiRequest } from "../../api/client";
 import { formatUserActionError } from "../../utils/userFeedback";
 import {
   applyPathwayProfileToForm,
-  buildPathwayMaterialChecklist,
   buildPathwayProfileReadiness,
   buildStudentPathwayProfilePayload,
-  collectStudentPathwayGaps,
   createStudentPathwayProfileForm,
+  pathwayArtTrackOptions,
   pathwayBooleanOptions,
   pathwayCandidateTypeOptions,
   pathwayExamTypeOptions,
@@ -243,8 +390,6 @@ const booleanFields: BooleanFieldConfig[] = [
 ];
 
 const readinessItems = computed(() => buildPathwayProfileReadiness(form));
-const materialChecklist = computed(() => buildPathwayMaterialChecklist(form.materials_json));
-const aggregatedGaps = computed(() => collectStudentPathwayGaps(evaluations.value));
 const statusSummary = computed(() => summarizePathwayStatuses(evaluations.value));
 
 const bodyLimitationsText = computed({
@@ -257,6 +402,112 @@ const bodyLimitationsText = computed({
     form.known_body_limitations_json = normalized ? { note: normalized } : {};
   },
 });
+
+interface EmploymentDirectionOption {
+  id: number;
+  name: string;
+  is_active: boolean;
+}
+
+const directionOptions = ref<EmploymentDirectionOption[]>([]);
+
+const regionPresetOptions = [
+  "山东", "江苏", "河南", "河北", "广东", "浙江", "上海", "北京", "天津",
+  "湖北", "湖南", "安徽", "福建", "江西", "辽宁", "黑龙江", "吉林",
+  "济南", "青岛", "烟台", "潍坊",
+];
+const schoolLevelPresetOptions = [
+  "双一流", "985", "211", "普通本科", "公办本科", "民办本科",
+  "公办专科", "民办专科", "高职院校",
+];
+const industryPresetOptions = [
+  "互联网", "人工智能", "智能制造", "教育", "医疗健康",
+  "金融", "公共服务", "新能源", "文化传媒", "建筑工程",
+];
+const jobTypePresetOptions = [
+  "算法工程师", "软件工程师", "产品经理", "数据分析师",
+  "教师", "医生", "护士", "公务员", "工程师", "设计师",
+];
+const focusOptions: Array<{ value: string; label: string }> = [
+  { value: "stability", label: "稳定" },
+  { value: "salary", label: "薪酬" },
+  { value: "interest", label: "兴趣" },
+  { value: "long_term", label: "长远发展" },
+];
+
+function listFromJson(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.map((item) => (typeof item === "string" ? item : "")).filter((item): item is string => item.length > 0)
+    : [];
+}
+
+function readNumber(value: unknown): number | undefined {
+  return typeof value === "number" ? value : undefined;
+}
+
+function readBool(value: unknown): boolean {
+  return typeof value === "boolean" ? value : false;
+}
+
+function regionGetSet<T>(key: string, fallback: () => T, parse: (raw: unknown) => T) {
+  return computed<T>({
+    get: () => parse((form.region_preferences_json ?? {})[key]),
+    set: (value: T) => {
+      const next = { ...(form.region_preferences_json ?? {}) };
+      if (value == null || (Array.isArray(value) && value.length === 0) || value === "") {
+        delete next[key];
+      } else {
+        next[key] = value as never;
+      }
+      form.region_preferences_json = next;
+      void fallback;
+    },
+  });
+}
+
+function careerGetSet<T>(key: string, parse: (raw: unknown) => T) {
+  return computed<T>({
+    get: () => parse((form.career_preferences_json ?? {})[key]),
+    set: (value: T) => {
+      const next = { ...(form.career_preferences_json ?? {}) };
+      if (value == null || (Array.isArray(value) && value.length === 0) || value === "") {
+        delete next[key];
+      } else {
+        next[key] = value as never;
+      }
+      form.career_preferences_json = next;
+    },
+  });
+}
+
+const targetRegions = regionGetSet<string[]>("target_regions", () => [], listFromJson);
+const schoolLevelTags = regionGetSet<string[]>("school_level_tags", () => [], listFromJson);
+const majorKeyword = regionGetSet<string>("major_keyword", () => "", (raw) =>
+  typeof raw === "string" ? raw : "",
+);
+
+const primaryDirectionId = careerGetSet<number | undefined>("primary_direction_id", readNumber);
+const secondaryDirectionId = careerGetSet<number | undefined>("secondary_direction_id", readNumber);
+const alternativeDirectionId = careerGetSet<number | undefined>("alternative_direction_id", readNumber);
+const priorityFocuses = careerGetSet<string[]>("priority_focuses", listFromJson);
+const preferredIndustries = careerGetSet<string[]>("preferred_industries", listFromJson);
+const preferredJobTypes = careerGetSet<string[]>("preferred_job_types", listFromJson);
+const targetEmploymentCities = careerGetSet<string[]>("target_employment_cities", listFromJson);
+const acceptsPostgraduate = careerGetSet<boolean>("accepts_postgraduate", readBool);
+const acceptsPublicService = careerGetSet<boolean>("accepts_public_service", readBool);
+const acceptsCertificate = careerGetSet<boolean>("accepts_certificate", readBool);
+const acceptsLongTraining = careerGetSet<boolean>("accepts_long_training", readBool);
+
+async function loadDirectionOptions(): Promise<void> {
+  try {
+    directionOptions.value = await apiRequest<EmploymentDirectionOption[]>(
+      "/api/employment-directions?page_size=500",
+    );
+  } catch (error) {
+    // direction list is optional UX sugar; fall back silently.
+    void error;
+  }
+}
 
 async function loadProfile(): Promise<void> {
   if (!props.studentId) return;
@@ -310,7 +561,10 @@ async function refreshEvaluations(): Promise<void> {
 }
 
 watch(() => props.studentId, loadProfile);
-onMounted(loadProfile);
+onMounted(() => {
+  void loadProfile();
+  void loadDirectionOptions();
+});
 </script>
 
 <style scoped>

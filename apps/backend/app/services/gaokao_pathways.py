@@ -1,13 +1,26 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
+from zipfile import BadZipFile
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy.orm import Session
+from openpyxl.utils.exceptions import InvalidFileException
+from sqlalchemy import select
+from sqlalchemy.orm import Session, joinedload
 
-from app.models import GaokaoPathway, GaokaoPathwayRule, Student, StudentPathwayEvaluation, StudentPathwayProfile
+from app.core.config import Settings
+from app.exporters.pathway_profiles import export_pathway_profile_template, export_pathway_profiles
+from app.importers.pathway_profiles import StudentPathwayProfileImporter
+from app.models import (
+    EmploymentDirection,
+    GaokaoPathway,
+    GaokaoPathwayRule,
+    Student,
+    StudentPathwayEvaluation,
+    StudentPathwayProfile,
+)
 from app.repositories.gaokao_pathways import (
     get_pathway,
     get_pathway_by_code,
@@ -17,7 +30,7 @@ from app.repositories.gaokao_pathways import (
     list_pathway_rules as repo_list_pathway_rules,
     list_pathways as repo_list_pathways,
 )
-from app.repositories.system import write_audit_log
+from app.repositories.system import create_import_job, write_audit_log
 from app.schemas.gaokao_pathway import (
     GaokaoPathwayBootstrapResponse,
     GaokaoPathwayRead,
@@ -57,6 +70,10 @@ PROFILE_FIELD_LABELS = {
     "subject_combination": "选科组合",
     "spring_exam_category": "春季高考专业类别",
     "art_track": "艺术类别",
+    "art_professional_score": "艺术专业分",
+    "art_professional_full_score": "艺术专业满分",
+    "art_score_source": "艺术成绩来源",
+    "art_score_note": "艺术成绩备注",
     "sports_track": "体育类别",
     "has_gaokao_registration": "高考报名状态",
     "is_fresh_graduate": "普通高中应届状态",
@@ -1579,6 +1596,117 @@ def upsert_student_pathway_profile(
     return _serialize_profile(item, student)
 
 
+def export_student_pathway_profile_template(settings: Settings) -> dict[str, str]:
+    file_path = export_pathway_profile_template(settings)
+    return {"file_path": file_path}
+
+
+def import_student_pathway_profiles(
+    session: Session,
+    settings: Settings,
+    *,
+    filename: str | None,
+    content: bytes,
+) -> dict:
+    job = create_import_job(session, "pathway_profiles", filename)
+    job.started_at = datetime.now()
+    importer = StudentPathwayProfileImporter(session, settings)
+    try:
+        result = importer.execute(filename=filename, content=content)
+    except (ValueError, InvalidFileException, BadZipFile) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    job.finished_at = datetime.now()
+    job.status = result.status
+    job.result_json = result.model_dump()
+    write_audit_log(
+        session,
+        module="gaokao_pathways",
+        action="import_student_pathway_profiles",
+        target_type="import_job",
+        target_id=str(job.id),
+        detail_json=result.model_dump(),
+    )
+    return {"job_id": job.id, **result.model_dump()}
+
+
+def export_student_pathway_profiles(session: Session, settings: Settings) -> dict[str, str]:
+    rows = []
+    students = session.scalars(
+        select(Student)
+        .options(joinedload(Student.current_grade), joinedload(Student.current_class))
+        .where(Student.is_active.is_(True))
+        .order_by(Student.student_no)
+    ).unique().all()
+    if not students:
+        return {"file_path": export_pathway_profiles(settings, [])}
+
+    student_ids = [student.id for student in students]
+    profiles = session.scalars(
+        select(StudentPathwayProfile).where(
+            StudentPathwayProfile.student_id.in_(student_ids),
+            StudentPathwayProfile.is_active.is_(True),
+        )
+    ).all()
+    profile_by_student_id: dict[int, StudentPathwayProfile] = {}
+    for profile in profiles:
+        if profile.student_id not in profile_by_student_id or profile.province == DEFAULT_PROVINCE:
+            profile_by_student_id[profile.student_id] = profile
+
+    for student in students:
+        profile = profile_by_student_id.get(student.id)
+        rows.append(
+            {
+                "student_no": student.student_no,
+                "name": student.name,
+                "class_name": student.current_class.name if student.current_class else None,
+                "province": profile.province if profile else student.origin_province,
+                "candidate_type": profile.candidate_type if profile else None,
+                "exam_type": profile.exam_type if profile else None,
+                "subject_combination": profile.subject_combination if profile else None,
+                "spring_exam_category": profile.spring_exam_category if profile else None,
+                "art_track": profile.art_track if profile else student.art_track,
+                "art_professional_score": profile.art_professional_score if profile else None,
+                "art_professional_full_score": profile.art_professional_full_score if profile else None,
+                "art_score_source": profile.art_score_source if profile else None,
+                "art_score_note": profile.art_score_note if profile else None,
+                "sports_track": profile.sports_track if profile else None,
+                "has_gaokao_registration": profile.has_gaokao_registration if profile else None,
+                "is_fresh_graduate": profile.is_fresh_graduate if profile else None,
+                "is_vocational_student": profile.is_vocational_student if profile else None,
+                "is_social_candidate": profile.is_social_candidate if profile else None,
+                "has_high_school_equivalent": profile.has_high_school_equivalent if profile else None,
+                "accept_junior_college": profile.accept_junior_college if profile else None,
+                "accept_private_college": profile.accept_private_college if profile else None,
+                "accept_sino_foreign": profile.accept_sino_foreign if profile else None,
+                "accept_outside_province": profile.accept_outside_province if profile else None,
+                "accept_early_batch": profile.accept_early_batch if profile else None,
+                "accept_service_commitment": profile.accept_service_commitment if profile else None,
+                "accept_interview_or_physical_test": profile.accept_interview_or_physical_test if profile else None,
+                "region_preferences_json": profile.region_preferences_json if profile else {},
+                "career_preferences_json": profile.career_preferences_json if profile else {},
+                "primary_direction_name": _resolve_direction_name(
+                    session, (profile.career_preferences_json or {}).get("primary_direction_id") if profile else None
+                ),
+                "secondary_direction_name": _resolve_direction_name(
+                    session, (profile.career_preferences_json or {}).get("secondary_direction_id") if profile else None
+                ),
+                "alternative_direction_name": _resolve_direction_name(
+                    session, (profile.career_preferences_json or {}).get("alternative_direction_id") if profile else None
+                ),
+                "known_body_limitations_json": profile.known_body_limitations_json if profile else {},
+                "note": profile.note if profile else None,
+            }
+        )
+    return {"file_path": export_pathway_profiles(settings, rows)}
+
+
+def _resolve_direction_name(session: Session, direction_id: object) -> str | None:
+    if not isinstance(direction_id, int):
+        return None
+    direction = session.get(EmploymentDirection, direction_id)
+    return direction.name if direction else None
+
+
 def preview_student_pathway_evaluations(
     session: Session,
     student_id: int,
@@ -1772,7 +1900,8 @@ def _build_missing_materials(rule_results: list[StudentPathwayRuleEvaluationRead
 
 
 def _count_required_material_gaps(rule_results: list[StudentPathwayRuleEvaluationRead]) -> int:
-    return sum(1 for item in rule_results if item.result != RULE_RESULT_PASSED and item.rule_type == "material_required")
+    # Material gating was retired; never penalize the score for material gaps.
+    return 0
 
 
 def _evaluate_condition(profile: StudentPathwayProfile, condition: dict[str, Any]) -> str:
@@ -1803,17 +1932,11 @@ def _evaluate_condition(profile: StudentPathwayProfile, condition: dict[str, Any
             return RULE_RESULT_UNKNOWN
         return RULE_RESULT_PASSED if bool(value) is bool(condition.get("value")) else RULE_RESULT_FAILED
     if condition_type == "material_present":
-        key = str(condition.get("key") or "")
-        value = (profile.materials_json or {}).get(key, _MISSING)
-        return RULE_RESULT_PASSED if _has_value(value) and bool(value) else RULE_RESULT_UNKNOWN
+        # Material gating was retired together with the 材料准备 UI; treat
+        # everything as already-prepared so it never blocks a pathway.
+        return RULE_RESULT_PASSED
     if condition_type == "material_present_when":
-        when = condition.get("when")
-        when_result = _evaluate_condition(profile, when if isinstance(when, dict) else {})
-        if when_result != RULE_RESULT_PASSED:
-            return RULE_RESULT_PASSED
-        key = str(condition.get("key") or "")
-        value = (profile.materials_json or {}).get(key, _MISSING)
-        return RULE_RESULT_PASSED if _has_value(value) and bool(value) else RULE_RESULT_UNKNOWN
+        return RULE_RESULT_PASSED
     if condition_type == "all":
         results = [_evaluate_condition(profile, item) for item in _condition_items(condition)]
         if any(item == RULE_RESULT_FAILED for item in results):
@@ -2212,6 +2335,10 @@ def _serialize_profile(item: StudentPathwayProfile, student: Student | None = No
         subject_combination=item.subject_combination,
         spring_exam_category=item.spring_exam_category,
         art_track=item.art_track,
+        art_professional_score=item.art_professional_score,
+        art_professional_full_score=item.art_professional_full_score,
+        art_score_source=item.art_score_source,
+        art_score_note=item.art_score_note,
         sports_track=item.sports_track,
         has_gaokao_registration=item.has_gaokao_registration,
         is_fresh_graduate=item.is_fresh_graduate,

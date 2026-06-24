@@ -31,6 +31,7 @@ export function buildStudentAnalysisInsightCards(data: StudentAnalysisInsightDat
     title: "本次成绩摘要",
     summary: `${data.student_name} 在 ${data.exam_name} 取得总分 ${formatNumber(data.total_score)}`,
     detail:
+      data.overview_sentence ||
       rankSegments.join(" / ") ||
       "当前摘要可用于导出前快速复核学生本次成绩定位，避免把错误考试或学生参数带入报表。",
     tone: "info",
@@ -69,6 +70,16 @@ export function buildStudentAnalysisInsightCards(data: StudentAnalysisInsightDat
       summary: `${focusSubject.subject_name} 建议继续重点复核`,
       detail: buildStudentSubjectDetail(focusSubject, "如需导出给班主任或任课教师，这一科更适合作为后续跟进重点。"),
       tone: "warning",
+    });
+  }
+
+  for (const suggestion of data.action_suggestions ?? []) {
+    cards.push({
+      key: `student_action_${suggestion.category}_${suggestion.title}`,
+      title: suggestion.title,
+      summary: suggestion.summary,
+      detail: suggestion.subject_names?.length ? `涉及科目：${suggestion.subject_names.join(" / ")}` : "系统按本次考试快照和趋势生成，适合用于后续跟进。",
+      tone: suggestion.category === "keep_strength" ? "success" : "warning",
     });
   }
 

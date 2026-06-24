@@ -1,64 +1,34 @@
 <template>
-  <div class="page-shell">
-    <header class="page-header">
-      <div>
-        <div class="page-eyebrow">高考数据 / 只读驾驶舱</div>
-        <h2 class="page-title">高考数据</h2>
-        <p class="page-subtitle">
-          先看数据来源、待审阅项、单校证据链和山东覆盖情况，再决定下一步优先补哪些数据。
-        </p>
-        <div class="page-chip-row">
-          <span class="page-chip"><strong>当前版本</strong>{{ overview.data_version || "待确认" }}</span>
-          <span class="page-chip"><strong>数据来源</strong>{{ formatSourceMode(overview.source_mode) }}</span>
-          <span class="page-chip"><strong>学校总数</strong>{{ overview.school_total || "-" }}</span>
-          <span class="page-chip"><strong>山东监控</strong>{{ shandongMonitor.sections.length }}</span>
-          <span class="page-chip"><strong>P0 缺口</strong>{{ dataHealth.gaps.length }}</span>
-        </div>
-      </div>
+  <AppPage
+    eyebrow="高考数据 / 只读驾驶舱"
+    title="高考数据"
+    description="先看数据来源、待审阅项、单校证据链和山东覆盖情况，再决定下一步优先补哪些数据。"
+    :meta="pageMeta"
+  >
+    <template #actions>
       <div class="action-row">
         <el-button @click="reloadAll">刷新驾驶舱</el-button>
-        <el-button @click="openDataCoverageReportPrintPreview">打印覆盖报告</el-button>
-        <el-button type="primary" @click="activeTab = 'evidence'">查看证据页</el-button>
+        <el-button @click="openDataCoverageReportPrintPreview"
+          >打印覆盖报告</el-button
+        >
+        <el-button type="primary" @click="activeTab = 'evidence'"
+          >查看证据页</el-button
+        >
       </div>
-    </header>
+    </template>
 
     <el-tabs v-model="activeTab" class="gaokao-tabs">
       <el-tab-pane label="总览" name="overview">
-        <section class="metric-grid">
-          <MetricCard label="学校总数" :value="overview.school_total || 0" help-text="当前高考高校主档总量。" />
-          <MetricCard
-            label="招生网覆盖"
-            :value="formatCoverage(overview.recruit_site_covered, overview.recruit_site_coverage_rate)"
-            help-text="已确认 recruit_site 的学校数与覆盖率。"
-          />
-          <MetricCard
-            label="章程链接覆盖"
-            :value="formatCoverage(overview.chapter_url_covered, overview.chapter_url_coverage_rate)"
-            help-text="已确认 chapter_url 的学校数与覆盖率。"
-          />
-          <MetricCard
-            label="备用链接覆盖"
-            :value="overview.fallback_url_covered || 0"
-            help-text="没有正式章程入口时可用于只读兜底的链接数。"
-          />
-          <MetricCard
-            label="重复组"
-            :value="overview.duplicate_group_total ?? '待同步'"
-            help-text="需要进一步人工裁决的重复院校组。"
-          />
-          <MetricCard
-            label="同名跨站组"
-            :value="overview.same_name_cross_site_group_total ?? '待同步'"
-            help-text="学校名称相同但来源站点不同的组数。"
-          />
-        </section>
+        <AppStatGrid :items="overviewStatCards" :columns="6" />
 
         <section class="dashboard-grid">
           <article class="soft-card panel-block">
             <div class="section-head compact">
               <div>
                 <h3>当前口径</h3>
-                <p>先说明这页数字来自哪里，避免把冻结基线、只读库和应用侧数据混在一起理解。</p>
+                <p>
+                  先说明这页数字来自哪里，避免把冻结基线、只读库和应用侧数据混在一起理解。
+                </p>
               </div>
             </div>
             <div class="overview-copy">
@@ -86,23 +56,42 @@
             <div class="section-head compact">
               <div>
                 <h3>最近批次</h3>
-                <p>优先展示高考相关导入或冻结基线，帮助快速判断当前应用看到的是哪一波材料。</p>
+                <p>
+                  优先展示高考相关导入或冻结基线，帮助快速判断当前应用看到的是哪一波材料。
+                </p>
               </div>
             </div>
             <div class="table-shell">
               <el-table :data="importBatches" stripe>
-                <el-table-column label="批次" prop="batch_name" min-width="180" />
+                <el-table-column
+                  label="批次"
+                  prop="batch_name"
+                  min-width="180"
+                />
                 <el-table-column label="来源" prop="source_type" width="120" />
-                <el-table-column label="文件" prop="source_filename" min-width="180" />
+                <el-table-column
+                  label="文件"
+                  prop="source_filename"
+                  min-width="180"
+                />
                 <el-table-column label="状态" width="110">
                   <template #default="{ row }">
-                    <el-tag :type="statusTagType(row.status)" effect="light">{{ formatStatus(row.status) }}</el-tag>
+                    <el-tag :type="statusTagType(row.status)" effect="light">{{
+                      formatStatus(row.status)
+                    }}</el-tag>
                   </template>
                 </el-table-column>
-                <el-table-column label="完成时间" prop="finished_at" min-width="180" />
+                <el-table-column
+                  label="完成时间"
+                  prop="finished_at"
+                  min-width="180"
+                />
               </el-table>
             </div>
-            <el-empty v-if="!importBatches.length" description="暂无高考相关批次记录" />
+            <el-empty
+              v-if="!importBatches.length"
+              description="暂无高考相关批次记录"
+            />
           </article>
         </section>
 
@@ -110,7 +99,9 @@
           <div class="section-head">
             <div>
               <h3>2026 数据发布状态</h3>
-              <p>把已公开、已导入、待官方发布和需人工核验的数据分开看，避免把单招/综评材料误当成普通类正式计划。</p>
+              <p>
+                把已公开、已导入、待官方发布和需人工核验的数据分开看，避免把单招/综评材料误当成普通类正式计划。
+              </p>
             </div>
           </div>
           <div class="table-shell">
@@ -118,18 +109,29 @@
               <el-table-column label="数据项" min-width="220">
                 <template #default="{ row }">
                   <div class="table-strong">{{ row.label }}</div>
-                  <div class="table-muted">{{ row.category }} · {{ row.target_year }}</div>
+                  <div class="table-muted">
+                    {{ row.category }} · {{ row.target_year }}
+                  </div>
                 </template>
               </el-table-column>
               <el-table-column label="状态" width="150">
                 <template #default="{ row }">
-                  <el-tag :type="statusTagType(row.status)" effect="light">{{ row.status_label }}</el-tag>
+                  <el-tag :type="statusTagType(row.status)" effect="light">{{
+                    row.status_label
+                  }}</el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="当前记录" width="110" prop="record_count" />
+              <el-table-column
+                label="当前记录"
+                width="110"
+                prop="record_count"
+              />
               <el-table-column label="已登记来源" min-width="300">
                 <template #default="{ row }">
-                  <div v-if="row.source_documents.length" class="source-doc-list">
+                  <div
+                    v-if="row.source_documents.length"
+                    class="source-doc-list"
+                  >
                     <a
                       v-for="source in row.source_documents"
                       :key="source.id"
@@ -154,14 +156,19 @@
               </el-table-column>
             </el-table>
           </div>
-          <el-empty v-if="!dataHealth.publication_status.length" description="暂无 2026 数据发布状态" />
+          <el-empty
+            v-if="!dataHealth.publication_status.length"
+            description="暂无 2026 数据发布状态"
+          />
         </section>
 
         <section class="soft-card panel-block">
           <div class="section-head">
             <div>
               <h3>核心表统计</h3>
-              <p>当前把高考只读库指标和应用侧可复用表放在一起看，方便区分“原始数据已到位”和“页面已能直接使用”。</p>
+              <p>
+                当前把高考只读库指标和应用侧可复用表放在一起看，方便区分“原始数据已到位”和“页面已能直接使用”。
+              </p>
             </div>
           </div>
           <div class="table-shell">
@@ -175,31 +182,54 @@
               </el-table-column>
               <el-table-column label="覆盖率" width="120">
                 <template #default="{ row }">
-                  {{ row.coverage_rate === null || row.coverage_rate === undefined ? "-" : `${row.coverage_rate}%` }}
+                  {{
+                    row.coverage_rate === null ||
+                    row.coverage_rate === undefined
+                      ? "-"
+                      : `${row.coverage_rate}%`
+                  }}
                 </template>
               </el-table-column>
-              <el-table-column label="最近时间" prop="latest_updated_at" min-width="180" />
-              <el-table-column label="批次/说明" prop="latest_batch_label" min-width="160" />
+              <el-table-column
+                label="最近时间"
+                prop="latest_updated_at"
+                min-width="180"
+              />
+              <el-table-column
+                label="批次/说明"
+                prop="latest_batch_label"
+                min-width="160"
+              />
               <el-table-column label="状态" width="110">
                 <template #default="{ row }">
-                  <el-tag :type="statusTagType(row.status)" effect="light">{{ formatMonitorStatus(row.status) }}</el-tag>
+                  <el-tag :type="statusTagType(row.status)" effect="light">{{
+                    formatMonitorStatus(row.status)
+                  }}</el-tag>
                 </template>
               </el-table-column>
             </el-table>
           </div>
           <div v-if="overviewGapCards.length" class="overview-gap-grid">
-            <article v-for="item in overviewGapCards" :key="item.key" class="overview-gap-card">
+            <article
+              v-for="item in overviewGapCards"
+              :key="item.key"
+              class="overview-gap-card"
+            >
               <div class="monitor-card-head">
                 <div>
                   <div class="table-strong">{{ item.label }}</div>
                   <p>{{ item.summary }}</p>
                 </div>
-                <el-tag :type="statusTagType(item.status)" effect="light">{{ formatMonitorStatus(item.status) }}</el-tag>
+                <el-tag :type="statusTagType(item.status)" effect="light">{{
+                  formatMonitorStatus(item.status)
+                }}</el-tag>
               </div>
               <div class="review-filter-summary">
                 <span>应用侧记录：{{ item.record_total }}</span>
                 <span>最近时间：{{ item.latest_updated_at || "未导入" }}</span>
-                <span>批次/说明：{{ item.latest_batch_label || "待确认" }}</span>
+                <span
+                  >批次/说明：{{ item.latest_batch_label || "待确认" }}</span
+                >
               </div>
               <ul v-if="item.notes.length" class="note-list compact">
                 <li v-for="note in item.notes" :key="note">{{ note }}</li>
@@ -210,20 +240,20 @@
       </el-tab-pane>
 
       <el-tab-pane label="山东覆盖" name="coverage">
-        <section class="metric-grid">
-          <MetricCard label="核心表缺失" :value="dataHealthSummary.missing" help-text="健康检查里未找到的核心表数量。" />
-          <MetricCard label="空表" :value="dataHealthSummary.empty" help-text="核心表存在但当前没有记录的数量。" />
-          <MetricCard label="需关注表" :value="dataHealthSummary.gap" help-text="有数据但明显存在交付缺口的表。" />
-          <MetricCard label="P0 缺口" :value="dataHealth.gaps.length" help-text="按交付计划 P0 规则自动识别出的数据缺口。" />
-        </section>
+        <AppStatGrid :items="coverageStatCards" :columns="4" />
 
         <section class="soft-card panel-block">
           <div class="section-head">
             <div>
               <h3>数据库补齐结果说明</h3>
-              <p>把 E6 已补齐、仍部分补齐、官方未发布和需人工复核的数据拆开显示，避免只看记录数误判。</p>
+              <p>
+                把 E6
+                已补齐、仍部分补齐、官方未发布和需人工复核的数据拆开显示，避免只看记录数误判。
+              </p>
             </div>
-            <el-button @click="openDataCoverageReportPrintPreview">打印覆盖报告</el-button>
+            <el-button @click="openDataCoverageReportPrintPreview"
+              >打印覆盖报告</el-button
+            >
           </div>
           <div class="completion-card-grid">
             <article
@@ -234,7 +264,9 @@
             >
               <div class="completion-card-head">
                 <strong>{{ item.title }}</strong>
-                <el-tag :type="coverageToneTagType(item.tone)" effect="light">{{ item.statusLabel }}</el-tag>
+                <el-tag :type="coverageToneTagType(item.tone)" effect="light">{{
+                  item.statusLabel
+                }}</el-tag>
               </div>
               <p>{{ item.summary }}</p>
               <span>{{ item.detail }}</span>
@@ -247,9 +279,15 @@
             <div class="section-head compact">
               <div>
                 <h3>健康检查摘要</h3>
-                <p>直接复用本地命令 `backend:data-health` 的结构化结果，方便补数据前后对照。</p>
+                <p>
+                  直接复用本地命令 `backend:data-health`
+                  的结构化结果，方便补数据前后对照。
+                </p>
               </div>
-              <el-tag :type="dataHealth.gaps.length ? 'warning' : 'success'" effect="light">
+              <el-tag
+                :type="dataHealth.gaps.length ? 'warning' : 'success'"
+                effect="light"
+              >
                 {{ dataHealth.summary || "待检查" }}
               </el-tag>
             </div>
@@ -259,8 +297,14 @@
                 <span>{{ dataHealth.generated_at || "待检查" }}</span>
               </div>
               <p>主库：{{ dataHealth.db_path || "待确认" }}</p>
-              <div v-if="dataHealth.delivery_assessment" class="delivery-assessment">
-                <el-tag :type="deliveryTagType(dataHealth.delivery_assessment.status)" effect="light">
+              <div
+                v-if="dataHealth.delivery_assessment"
+                class="delivery-assessment"
+              >
+                <el-tag
+                  :type="deliveryTagType(dataHealth.delivery_assessment.status)"
+                  effect="light"
+                >
                   {{ dataHealth.delivery_assessment.label }}
                 </el-tag>
                 <span>{{ dataHealth.delivery_assessment.summary }}</span>
@@ -276,7 +320,9 @@
             <div class="section-head compact">
               <div>
                 <h3>核心表状态</h3>
-                <p>先看哪些表已经有数据，哪些表虽然有数据但仍不足以支撑交付。</p>
+                <p>
+                  先看哪些表已经有数据，哪些表虽然有数据但仍不足以支撑交付。
+                </p>
               </div>
             </div>
             <div class="table-shell">
@@ -285,7 +331,9 @@
                 <el-table-column label="记录数" prop="count" width="110" />
                 <el-table-column label="状态" width="110">
                   <template #default="{ row }">
-                    <el-tag :type="statusTagType(row.status)" effect="light">{{ formatMonitorStatus(row.status) }}</el-tag>
+                    <el-tag :type="statusTagType(row.status)" effect="light">{{
+                      formatMonitorStatus(row.status)
+                    }}</el-tag>
                   </template>
                 </el-table-column>
                 <el-table-column label="说明" min-width="240">
@@ -302,7 +350,9 @@
           <div class="section-head">
             <div>
               <h3>考生类型可用性</h3>
-              <p>把普通类、春考、艺术、体育、单招、综评分开看，避免把“有计划”误解成“有录取把握”。</p>
+              <p>
+                把普通类、春考、艺术、体育、单招、综评分开看，避免把“有计划”误解成“有录取把握”。
+              </p>
             </div>
           </div>
           <div class="table-shell">
@@ -315,7 +365,10 @@
               </el-table-column>
               <el-table-column label="可用性" min-width="170">
                 <template #default="{ row }">
-                  <el-tag :type="riskLevelTagType(row.risk_level)" effect="light">
+                  <el-tag
+                    :type="riskLevelTagType(row.risk_level)"
+                    effect="light"
+                  >
                     {{ row.readiness_label }}
                   </el-tag>
                 </template>
@@ -324,9 +377,15 @@
                 <template #default="{ row }">
                   <div class="risk-count-grid">
                     <span>计划 {{ row.plan_count || row.raw_plan_count }}</span>
-                    <span>录取 {{ row.admission_count || row.raw_admission_count }}</span>
+                    <span
+                      >录取
+                      {{ row.admission_count || row.raw_admission_count }}</span
+                    >
                     <span>省控线 {{ row.score_line_count }}</span>
-                    <span>规则 {{ row.volunteer_rule_count }} / {{ row.special_rule_count }}</span>
+                    <span
+                      >规则 {{ row.volunteer_rule_count }} /
+                      {{ row.special_rule_count }}</span
+                    >
                   </div>
                 </template>
               </el-table-column>
@@ -351,7 +410,10 @@
           <div class="section-head">
             <div>
               <h3>2020-2026 年份覆盖矩阵</h3>
-              <p>横向查看一分一段、省控线、招生计划、政策参考和章程复核进度；2026 未发布项单独标为待发布。</p>
+              <p>
+                横向查看一分一段、省控线、招生计划、政策参考和章程复核进度；2026
+                未发布项单独标为待发布。
+              </p>
             </div>
           </div>
           <div class="coverage-matrix-shell">
@@ -359,7 +421,9 @@
               <thead>
                 <tr>
                   <th>数据域</th>
-                  <th v-for="year in dataHealth.expected_years" :key="year">{{ year }}</th>
+                  <th v-for="year in dataHealth.expected_years" :key="year">
+                    {{ year }}
+                  </th>
                   <th>当前记录</th>
                 </tr>
               </thead>
@@ -369,9 +433,16 @@
                     <strong>{{ row.label }}</strong>
                     <span>{{ row.readinessLabel }}</span>
                   </td>
-                  <td v-for="cell in row.cells" :key="`${row.key}_${cell.year}`">
+                  <td
+                    v-for="cell in row.cells"
+                    :key="`${row.key}_${cell.year}`"
+                  >
                     <el-tooltip :content="cell.detail" placement="top">
-                      <el-tag :type="coverageToneTagType(cell.tone)" effect="light">{{ cell.label }}</el-tag>
+                      <el-tag
+                        :type="coverageToneTagType(cell.tone)"
+                        effect="light"
+                        >{{ cell.label }}</el-tag
+                      >
                     </el-tooltip>
                   </td>
                   <td>{{ row.total }}</td>
@@ -379,7 +450,10 @@
               </tbody>
             </table>
           </div>
-          <el-empty v-if="!coverageMatrixRows.length" description="暂无覆盖矩阵，请刷新数据健康检查" />
+          <el-empty
+            v-if="!coverageMatrixRows.length"
+            description="暂无覆盖矩阵，请刷新数据健康检查"
+          />
         </section>
 
         <section class="soft-card panel-block">
@@ -399,7 +473,9 @@
                       <el-table-column label="总量" prop="total" width="100" />
                       <el-table-column label="类型 / 状态" min-width="220">
                         <template #default="{ row: yearRow }">
-                          {{ formatDistribution(yearRow.student_types, "无分类") }}
+                          {{
+                            formatDistribution(yearRow.student_types, "无分类")
+                          }}
                         </template>
                       </el-table-column>
                       <el-table-column label="批次 / 口径" min-width="220">
@@ -409,13 +485,19 @@
                       </el-table-column>
                       <el-table-column label="状态" width="110">
                         <template #default="{ row: yearRow }">
-                          <el-tag :type="statusTagType(yearRow.status)" effect="light">
+                          <el-tag
+                            :type="statusTagType(yearRow.status)"
+                            effect="light"
+                          >
                             {{ formatMonitorStatus(yearRow.status) }}
                           </el-tag>
                         </template>
                       </el-table-column>
                     </el-table>
-                    <el-empty v-if="!row.year_breakdown.length" description="暂无按年明细" />
+                    <el-empty
+                      v-if="!row.year_breakdown.length"
+                      description="暂无按年明细"
+                    />
                   </div>
                 </template>
               </el-table-column>
@@ -442,7 +524,9 @@
                     >
                       {{ item.label || item.key }}：{{ item.count }}
                     </el-tag>
-                    <span v-if="!row.student_types.length" class="table-muted">无分类</span>
+                    <span v-if="!row.student_types.length" class="table-muted"
+                      >无分类</span
+                    >
                   </div>
                 </template>
               </el-table-column>
@@ -453,14 +537,22 @@
               </el-table-column>
               <el-table-column label="状态" width="110">
                 <template #default="{ row }">
-                  <el-tag :type="statusTagType(row.status)" effect="light">{{ formatMonitorStatus(row.status) }}</el-tag>
+                  <el-tag :type="statusTagType(row.status)" effect="light">{{
+                    formatMonitorStatus(row.status)
+                  }}</el-tag>
                 </template>
               </el-table-column>
               <el-table-column label="可用性说明" min-width="320">
                 <template #default="{ row }">
                   <div class="coverage-readiness">
-                    <el-tag :type="riskLevelTagType(row.risk_level)" size="small" effect="light">
-                      {{ row.readiness_label || formatMonitorStatus(row.status) }}
+                    <el-tag
+                      :type="riskLevelTagType(row.risk_level)"
+                      size="small"
+                      effect="light"
+                    >
+                      {{
+                        row.readiness_label || formatMonitorStatus(row.status)
+                      }}
                     </el-tag>
                     <span>{{ row.explanation }}</span>
                   </div>
@@ -477,7 +569,9 @@
           <div class="section-head">
             <div>
               <h3>数据导入审计摘要</h3>
-              <p>覆盖阶段一要求的新增、更新、重复、冲突与待复核摘要，补数据前后可直接对照。</p>
+              <p>
+                覆盖阶段一要求的新增、更新、重复、冲突与待复核摘要，补数据前后可直接对照。
+              </p>
             </div>
           </div>
           <div class="table-shell">
@@ -485,14 +579,20 @@
               <el-table-column label="数据域" prop="label" min-width="180" />
               <el-table-column label="状态" width="110">
                 <template #default="{ row }">
-                  <el-tag :type="statusTagType(row.status)" effect="light">{{ formatMonitorStatus(row.status) }}</el-tag>
+                  <el-tag :type="statusTagType(row.status)" effect="light">{{
+                    formatMonitorStatus(row.status)
+                  }}</el-tag>
                 </template>
               </el-table-column>
               <el-table-column label="新增" prop="created" width="90" />
               <el-table-column label="更新/当前" prop="updated" width="110" />
               <el-table-column label="重复" prop="duplicates" width="90" />
               <el-table-column label="冲突" prop="conflicts" width="90" />
-              <el-table-column label="待复核" prop="pending_review" width="100" />
+              <el-table-column
+                label="待复核"
+                prop="pending_review"
+                width="100"
+              />
               <el-table-column label="说明" min-width="280">
                 <template #default="{ row }">
                   <ul v-if="row.notes?.length" class="audit-note-list">
@@ -503,7 +603,10 @@
               </el-table-column>
             </el-table>
           </div>
-          <el-empty v-if="!dataHealth.audit_summary.length" description="暂无审计摘要" />
+          <el-empty
+            v-if="!dataHealth.audit_summary.length"
+            description="暂无审计摘要"
+          />
         </section>
       </el-tab-pane>
 
@@ -512,16 +615,31 @@
           <div class="section-head compact">
             <div>
               <h3>审阅队列</h3>
-              <p>先看哪类问题还在队列里，再决定是等待下一批数据同步，还是先在文档层记录跟进。</p>
+              <p>
+                先看哪类问题还在队列里，再决定是等待下一批数据同步，还是先在文档层记录跟进。
+              </p>
             </div>
             <div class="action-row">
-              <el-select v-model="reviewFilter" class="review-filter" placeholder="审阅状态" @change="loadReviewSummary">
+              <el-select
+                v-model="reviewFilter"
+                class="review-filter"
+                placeholder="审阅状态"
+                @change="loadReviewSummary"
+              >
                 <el-option label="全部" value="all" />
                 <el-option label="待人工复核" value="pending_manual_review" />
-                <el-option label="待人工复核（已有官方候选）" value="pending_manual_review_with_official_candidate" />
+                <el-option
+                  label="待人工复核（已有官方候选）"
+                  value="pending_manual_review_with_official_candidate"
+                />
                 <el-option label="仍未解决" value="unresolved" />
               </el-select>
-              <el-select v-model="reviewSort" class="review-filter" placeholder="排序方式" @change="loadReviewSummary">
+              <el-select
+                v-model="reviewSort"
+                class="review-filter"
+                placeholder="排序方式"
+                @change="loadReviewSummary"
+              >
                 <el-option label="优先级优先" value="priority_desc" />
                 <el-option label="最近更新时间" value="updated_desc" />
               </el-select>
@@ -536,13 +654,20 @@
             </div>
           </div>
           <div class="review-metrics">
-            <article v-for="item in reviewSummary.counts" :key="item.code" class="review-metric-card">
+            <article
+              v-for="item in reviewSummary.counts"
+              :key="item.code"
+              class="review-metric-card"
+            >
               <span>{{ item.title }}</span>
               <strong>{{ item.count ?? "待同步" }}</strong>
               <p>{{ item.description }}</p>
             </article>
           </div>
-          <div v-if="reviewSummary.quick_filters.length" class="review-quick-filters">
+          <div
+            v-if="reviewSummary.quick_filters.length"
+            class="review-quick-filters"
+          >
             <el-button
               v-for="item in reviewSummary.quick_filters"
               :key="item.code"
@@ -558,12 +683,22 @@
             {{ activeReviewQuickFilter.description }}
           </p>
           <div class="review-filter-summary">
-            <span>当前过滤：{{ formatReviewFilter(reviewSummary.active_filter) }}</span>
-            <span>优先视图：{{ formatReviewFocus(reviewSummary.active_focus) }}</span>
+            <span
+              >当前过滤：{{
+                formatReviewFilter(reviewSummary.active_filter)
+              }}</span
+            >
+            <span
+              >优先视图：{{
+                formatReviewFocus(reviewSummary.active_focus)
+              }}</span
+            >
             <span>排序：{{ formatReviewSort(reviewSummary.active_sort) }}</span>
             <span>队列：{{ reviewSummary.queue_total }}</span>
             <span>关键字：{{ reviewSummary.active_keyword || "未输入" }}</span>
-            <span v-if="reviewSummary.matched_total !== null">命中：{{ reviewSummary.matched_total }}</span>
+            <span v-if="reviewSummary.matched_total !== null"
+              >命中：{{ reviewSummary.matched_total }}</span
+            >
           </div>
           <el-alert
             v-for="highlight in reviewSummary.highlights"
@@ -588,33 +723,75 @@
             <div class="section-head compact">
               <div>
                 <h3>待审阅学校</h3>
-                <p>当前过滤：{{ formatReviewFilter(reviewSummary.active_filter) }}。</p>
+                <p>
+                  当前过滤：{{
+                    formatReviewFilter(reviewSummary.active_filter)
+                  }}。
+                </p>
               </div>
             </div>
             <div class="table-shell">
               <el-table :data="reviewSummary.items" stripe>
                 <el-table-column label="学校" min-width="180">
                   <template #default="{ row }">
-                    <div class="table-strong">{{ row.college_name || "-" }}</div>
-                    <div class="table-muted">学校 ID {{ row.college_id ?? "-" }} / {{ row.college_code || "无学校代码" }}</div>
-                    <div v-if="row.duplicate_group_key || row.same_name_group_key" class="inline-tag-row">
-                      <el-tag v-if="row.duplicate_group_key" size="small" effect="light" type="warning">重复组</el-tag>
-                      <el-tag v-if="row.same_name_group_key" size="small" effect="light" type="info">同名组</el-tag>
+                    <div class="table-strong">
+                      {{ row.college_name || "-" }}
+                    </div>
+                    <div class="table-muted">
+                      学校 ID {{ row.college_id ?? "-" }} /
+                      {{ row.college_code || "无学校代码" }}
+                    </div>
+                    <div
+                      v-if="row.duplicate_group_key || row.same_name_group_key"
+                      class="inline-tag-row"
+                    >
+                      <el-tag
+                        v-if="row.duplicate_group_key"
+                        size="small"
+                        effect="light"
+                        type="warning"
+                        >重复组</el-tag
+                      >
+                      <el-tag
+                        v-if="row.same_name_group_key"
+                        size="small"
+                        effect="light"
+                        type="info"
+                        >同名组</el-tag
+                      >
                     </div>
                   </template>
                 </el-table-column>
                 <el-table-column label="优先级" min-width="220">
                   <template #default="{ row }">
-                    <el-tag :type="reviewPriorityTagType(row.priority_code)" effect="light">
+                    <el-tag
+                      :type="reviewPriorityTagType(row.priority_code)"
+                      effect="light"
+                    >
                       {{ row.priority_label || "待分层" }}
                     </el-tag>
-                    <div v-if="row.priority_reasons?.length" class="priority-reason-list">
-                      <span v-for="reason in row.priority_reasons" :key="reason">{{ reason }}</span>
+                    <div
+                      v-if="row.priority_reasons?.length"
+                      class="priority-reason-list"
+                    >
+                      <span
+                        v-for="reason in row.priority_reasons"
+                        :key="reason"
+                        >{{ reason }}</span
+                      >
                     </div>
                   </template>
                 </el-table-column>
-                <el-table-column label="审阅状态" prop="review_status" min-width="160" />
-                <el-table-column label="抓取状态" prop="retrieval_status" min-width="140" />
+                <el-table-column
+                  label="审阅状态"
+                  prop="review_status"
+                  min-width="160"
+                />
+                <el-table-column
+                  label="抓取状态"
+                  prop="retrieval_status"
+                  min-width="140"
+                />
                 <el-table-column label="招生网" min-width="220">
                   <template #default="{ row }">
                     <span class="mono-text">{{ row.recruit_site || "-" }}</span>
@@ -622,7 +799,9 @@
                 </el-table-column>
                 <el-table-column label="章程" min-width="220">
                   <template #default="{ row }">
-                    <span class="mono-text">{{ row.chapter_url || row.fallback_url || "-" }}</span>
+                    <span class="mono-text">{{
+                      row.chapter_url || row.fallback_url || "-"
+                    }}</span>
                   </template>
                 </el-table-column>
                 <el-table-column label="操作" width="110" fixed="right">
@@ -639,17 +818,25 @@
                 </el-table-column>
               </el-table>
             </div>
-            <el-empty v-if="!reviewSummary.items.length" description="当前过滤条件下暂无学校明细" />
+            <el-empty
+              v-if="!reviewSummary.items.length"
+              description="当前过滤条件下暂无学校明细"
+            />
           </article>
 
           <article class="soft-card panel-block">
             <div class="section-head compact">
               <div>
                 <h3>重复 / 同名组</h3>
-                <p>这两类组最适合用来判断还要不要继续催 Windows 线做语义裁决。</p>
+                <p>
+                  这两类组最适合用来判断还要不要继续催 Windows 线做语义裁决。
+                </p>
               </div>
             </div>
-            <div v-if="reviewSummary.priority_groups.length" class="group-priority-strip">
+            <div
+              v-if="reviewSummary.priority_groups.length"
+              class="group-priority-strip"
+            >
               <article
                 v-for="item in reviewSummary.priority_groups"
                 :key="`priority_${item.group_type}_${item.key}`"
@@ -658,17 +845,33 @@
                 <div class="group-priority-head">
                   <div>
                     <strong>{{ item.title }}</strong>
-                    <p>{{ formatGroupType(item.group_type) }} · {{ item.item_count }} 条记录</p>
+                    <p>
+                      {{ formatGroupType(item.group_type) }} ·
+                      {{ item.item_count }} 条记录
+                    </p>
                   </div>
-                  <el-tag :type="reviewPriorityTagType(item.priority_code)" effect="light">
+                  <el-tag
+                    :type="reviewPriorityTagType(item.priority_code)"
+                    effect="light"
+                  >
                     {{ item.priority_label || "待分层" }}
                   </el-tag>
                 </div>
-                <p class="group-action-copy">{{ item.suggested_action || "先打开组内证据链核对来源。" }}</p>
-                <div v-if="item.priority_reasons?.length" class="priority-reason-list">
-                  <span v-for="reason in item.priority_reasons" :key="reason">{{ reason }}</span>
+                <p class="group-action-copy">
+                  {{ item.suggested_action || "先打开组内证据链核对来源。" }}
+                </p>
+                <div
+                  v-if="item.priority_reasons?.length"
+                  class="priority-reason-list"
+                >
+                  <span v-for="reason in item.priority_reasons" :key="reason">{{
+                    reason
+                  }}</span>
                 </div>
-                <div v-if="item.comparison_fields?.length" class="group-compare-summary">
+                <div
+                  v-if="item.comparison_fields?.length"
+                  class="group-compare-summary"
+                >
                   <el-tag
                     v-for="field in item.comparison_fields"
                     :key="`priority_${item.key}_${field.key}`"
@@ -694,24 +897,50 @@
             </div>
             <div class="group-section">
               <div>
-                <strong>重复组（命中 {{ reviewSummary.duplicate_groups.length }} / 全量 {{ reviewSummary.duplicate_group_total ?? "待同步" }}）</strong>
+                <strong
+                  >重复组（命中 {{ reviewSummary.duplicate_groups.length }} /
+                  全量
+                  {{
+                    reviewSummary.duplicate_group_total ?? "待同步"
+                  }}）</strong
+                >
                 <ul class="group-list">
-                  <li v-for="item in reviewSummary.duplicate_groups" :key="`duplicate_${item.key}`">
+                  <li
+                    v-for="item in reviewSummary.duplicate_groups"
+                    :key="`duplicate_${item.key}`"
+                  >
                     <div class="group-item-copy">
                       <div class="group-item-head">
                         <span>{{ item.title }}</span>
-                        <el-tag :type="reviewPriorityTagType(item.priority_code)" effect="light">
+                        <el-tag
+                          :type="reviewPriorityTagType(item.priority_code)"
+                          effect="light"
+                        >
                           {{ item.priority_label || "待分层" }}
                         </el-tag>
                       </div>
                       <small>
-                        {{ item.item_count }} 条 · 高优先 {{ item.high_priority_member_total }} · unresolved {{ item.unresolved_total }}
+                        {{ item.item_count }} 条 · 高优先
+                        {{ item.high_priority_member_total }} · unresolved
+                        {{ item.unresolved_total }}
                       </small>
-                      <p class="group-action-copy">{{ item.suggested_action || "先核对组内证据链。" }}</p>
-                      <div v-if="item.priority_reasons?.length" class="priority-reason-list">
-                        <span v-for="reason in item.priority_reasons" :key="reason">{{ reason }}</span>
+                      <p class="group-action-copy">
+                        {{ item.suggested_action || "先核对组内证据链。" }}
+                      </p>
+                      <div
+                        v-if="item.priority_reasons?.length"
+                        class="priority-reason-list"
+                      >
+                        <span
+                          v-for="reason in item.priority_reasons"
+                          :key="reason"
+                          >{{ reason }}</span
+                        >
                       </div>
-                      <div v-if="item.comparison_fields?.length" class="group-compare-summary">
+                      <div
+                        v-if="item.comparison_fields?.length"
+                        class="group-compare-summary"
+                      >
                         <el-tag
                           v-for="field in item.comparison_fields"
                           :key="`duplicate_${item.key}_${field.key}`"
@@ -722,7 +951,10 @@
                           {{ field.title }} · {{ field.summary }}
                         </el-tag>
                       </div>
-                      <div v-if="item.member_items?.length" class="group-compare-shell">
+                      <div
+                        v-if="item.member_items?.length"
+                        class="group-compare-shell"
+                      >
                         <table class="group-compare-table">
                           <thead>
                             <tr>
@@ -737,28 +969,52 @@
                             </tr>
                           </thead>
                           <tbody>
-                            <tr v-for="member in item.member_items" :key="`duplicate_row_${item.key}_${member.college_id}`">
+                            <tr
+                              v-for="member in item.member_items"
+                              :key="`duplicate_row_${item.key}_${member.college_id}`"
+                            >
                               <td>
                                 <el-button
                                   link
                                   type="primary"
-                                  @click="openEvidenceForCollege(member.college_id, member)"
+                                  @click="
+                                    openEvidenceForCollege(
+                                      member.college_id,
+                                      member,
+                                    )
+                                  "
                                 >
-                                  {{ member.college_name || `学校 ${member.college_id}` }}
+                                  {{
+                                    member.college_name ||
+                                    `学校 ${member.college_id}`
+                                  }}
                                 </el-button>
                                 <div class="table-muted">
-                                  {{ member.review_status || "状态待确认" }} · {{ member.priority_label || "待分层" }}
+                                  {{ member.review_status || "状态待确认" }} ·
+                                  {{ member.priority_label || "待分层" }}
                                 </div>
                               </td>
                               <td>{{ member.province || "待补齐" }}</td>
                               <td>{{ member.college_code || "待补齐" }}</td>
-                              <td>{{ formatGroupCompareCell(member.official_site) }}</td>
-                              <td>{{ formatGroupCompareCell(member.recruit_site) }}</td>
+                              <td>
+                                {{
+                                  formatGroupCompareCell(member.official_site)
+                                }}
+                              </td>
+                              <td>
+                                {{
+                                  formatGroupCompareCell(member.recruit_site)
+                                }}
+                              </td>
                               <td>{{ formatGroupChapterCell(member) }}</td>
                               <td>
                                 <div class="group-source-cell">
-                                  <strong>{{ member.source_title || "待补齐" }}</strong>
-                                  <span class="mono-text">{{ formatGroupSourceUrlCell(member.source_url) }}</span>
+                                  <strong>{{
+                                    member.source_title || "待补齐"
+                                  }}</strong>
+                                  <span class="mono-text">{{
+                                    formatGroupSourceUrlCell(member.source_url)
+                                  }}</span>
                                 </div>
                               </td>
                               <td>{{ member.updated_at || "待补齐" }}</td>
@@ -766,13 +1022,18 @@
                           </tbody>
                         </table>
                       </div>
-                      <div v-if="item.member_items?.length" class="group-member-list">
+                      <div
+                        v-if="item.member_items?.length"
+                        class="group-member-list"
+                      >
                         <el-button
                           v-for="member in item.member_items"
                           :key="`duplicate_${item.key}_${member.college_id}`"
                           link
                           type="primary"
-                          @click="openEvidenceForCollege(member.college_id, member)"
+                          @click="
+                            openEvidenceForCollege(member.college_id, member)
+                          "
                         >
                           {{ formatGroupMemberLabel(member) }}
                         </el-button>
@@ -780,27 +1041,56 @@
                     </div>
                   </li>
                 </ul>
-                <el-empty v-if="!reviewSummary.duplicate_groups.length" description="暂无重复组明细" />
+                <el-empty
+                  v-if="!reviewSummary.duplicate_groups.length"
+                  description="暂无重复组明细"
+                />
               </div>
               <div>
-                <strong>同名跨站组（命中 {{ reviewSummary.same_name_groups.length }} / 全量 {{ reviewSummary.same_name_cross_site_group_total ?? "待同步" }}）</strong>
+                <strong
+                  >同名跨站组（命中
+                  {{ reviewSummary.same_name_groups.length }} / 全量
+                  {{
+                    reviewSummary.same_name_cross_site_group_total ?? "待同步"
+                  }}）</strong
+                >
                 <ul class="group-list">
-                  <li v-for="item in reviewSummary.same_name_groups" :key="`same_${item.key}`">
+                  <li
+                    v-for="item in reviewSummary.same_name_groups"
+                    :key="`same_${item.key}`"
+                  >
                     <div class="group-item-copy">
                       <div class="group-item-head">
                         <span>{{ item.title }}</span>
-                        <el-tag :type="reviewPriorityTagType(item.priority_code)" effect="light">
+                        <el-tag
+                          :type="reviewPriorityTagType(item.priority_code)"
+                          effect="light"
+                        >
                           {{ item.priority_label || "待分层" }}
                         </el-tag>
                       </div>
                       <small>
-                        {{ item.item_count }} 条 · 高优先 {{ item.high_priority_member_total }} · unresolved {{ item.unresolved_total }}
+                        {{ item.item_count }} 条 · 高优先
+                        {{ item.high_priority_member_total }} · unresolved
+                        {{ item.unresolved_total }}
                       </small>
-                      <p class="group-action-copy">{{ item.suggested_action || "先核对组内证据链。" }}</p>
-                      <div v-if="item.priority_reasons?.length" class="priority-reason-list">
-                        <span v-for="reason in item.priority_reasons" :key="reason">{{ reason }}</span>
+                      <p class="group-action-copy">
+                        {{ item.suggested_action || "先核对组内证据链。" }}
+                      </p>
+                      <div
+                        v-if="item.priority_reasons?.length"
+                        class="priority-reason-list"
+                      >
+                        <span
+                          v-for="reason in item.priority_reasons"
+                          :key="reason"
+                          >{{ reason }}</span
+                        >
                       </div>
-                      <div v-if="item.comparison_fields?.length" class="group-compare-summary">
+                      <div
+                        v-if="item.comparison_fields?.length"
+                        class="group-compare-summary"
+                      >
                         <el-tag
                           v-for="field in item.comparison_fields"
                           :key="`same_${item.key}_${field.key}`"
@@ -811,7 +1101,10 @@
                           {{ field.title }} · {{ field.summary }}
                         </el-tag>
                       </div>
-                      <div v-if="item.member_items?.length" class="group-compare-shell">
+                      <div
+                        v-if="item.member_items?.length"
+                        class="group-compare-shell"
+                      >
                         <table class="group-compare-table">
                           <thead>
                             <tr>
@@ -826,28 +1119,52 @@
                             </tr>
                           </thead>
                           <tbody>
-                            <tr v-for="member in item.member_items" :key="`same_row_${item.key}_${member.college_id}`">
+                            <tr
+                              v-for="member in item.member_items"
+                              :key="`same_row_${item.key}_${member.college_id}`"
+                            >
                               <td>
                                 <el-button
                                   link
                                   type="primary"
-                                  @click="openEvidenceForCollege(member.college_id, member)"
+                                  @click="
+                                    openEvidenceForCollege(
+                                      member.college_id,
+                                      member,
+                                    )
+                                  "
                                 >
-                                  {{ member.college_name || `学校 ${member.college_id}` }}
+                                  {{
+                                    member.college_name ||
+                                    `学校 ${member.college_id}`
+                                  }}
                                 </el-button>
                                 <div class="table-muted">
-                                  {{ member.review_status || "状态待确认" }} · {{ member.priority_label || "待分层" }}
+                                  {{ member.review_status || "状态待确认" }} ·
+                                  {{ member.priority_label || "待分层" }}
                                 </div>
                               </td>
                               <td>{{ member.province || "待补齐" }}</td>
                               <td>{{ member.college_code || "待补齐" }}</td>
-                              <td>{{ formatGroupCompareCell(member.official_site) }}</td>
-                              <td>{{ formatGroupCompareCell(member.recruit_site) }}</td>
+                              <td>
+                                {{
+                                  formatGroupCompareCell(member.official_site)
+                                }}
+                              </td>
+                              <td>
+                                {{
+                                  formatGroupCompareCell(member.recruit_site)
+                                }}
+                              </td>
                               <td>{{ formatGroupChapterCell(member) }}</td>
                               <td>
                                 <div class="group-source-cell">
-                                  <strong>{{ member.source_title || "待补齐" }}</strong>
-                                  <span class="mono-text">{{ formatGroupSourceUrlCell(member.source_url) }}</span>
+                                  <strong>{{
+                                    member.source_title || "待补齐"
+                                  }}</strong>
+                                  <span class="mono-text">{{
+                                    formatGroupSourceUrlCell(member.source_url)
+                                  }}</span>
                                 </div>
                               </td>
                               <td>{{ member.updated_at || "待补齐" }}</td>
@@ -855,13 +1172,18 @@
                           </tbody>
                         </table>
                       </div>
-                      <div v-if="item.member_items?.length" class="group-member-list">
+                      <div
+                        v-if="item.member_items?.length"
+                        class="group-member-list"
+                      >
                         <el-button
                           v-for="member in item.member_items"
                           :key="`same_${item.key}_${member.college_id}`"
                           link
                           type="primary"
-                          @click="openEvidenceForCollege(member.college_id, member)"
+                          @click="
+                            openEvidenceForCollege(member.college_id, member)
+                          "
                         >
                           {{ formatGroupMemberLabel(member) }}
                         </el-button>
@@ -869,7 +1191,10 @@
                     </div>
                   </li>
                 </ul>
-                <el-empty v-if="!reviewSummary.same_name_groups.length" description="暂无同名组明细" />
+                <el-empty
+                  v-if="!reviewSummary.same_name_groups.length"
+                  description="暂无同名组明细"
+                />
               </div>
             </div>
           </article>
@@ -881,7 +1206,10 @@
           <div class="section-head compact">
             <div>
               <h3>单校证据链</h3>
-              <p>按学校名、学校代码或学校 ID 搜索，也可以从审阅表和重复组里直接跳转到单校证据链。</p>
+              <p>
+                按学校名、学校代码或学校 ID
+                搜索，也可以从审阅表和重复组里直接跳转到单校证据链。
+              </p>
             </div>
             <div class="action-row">
               <el-autocomplete
@@ -897,14 +1225,23 @@
               >
                 <template #default="{ item }">
                   <div class="evidence-suggestion">
-                    <div class="table-strong">{{ item.college_name || `学校 ${item.college_id}` }}</div>
+                    <div class="table-strong">
+                      {{ item.college_name || `学校 ${item.college_id}` }}
+                    </div>
                     <div class="table-muted">
-                      学校 ID {{ item.college_id }} / {{ item.college_code || "无学校代码" }} / {{ item.province || "省份待确认" }}
+                      学校 ID {{ item.college_id }} /
+                      {{ item.college_code || "无学校代码" }} /
+                      {{ item.province || "省份待确认" }}
                     </div>
                   </div>
                 </template>
               </el-autocomplete>
-              <el-button type="primary" :loading="evidenceLoading" @click="loadEvidence">查看</el-button>
+              <el-button
+                type="primary"
+                :loading="evidenceLoading"
+                @click="loadEvidence"
+                >查看</el-button
+              >
             </div>
           </div>
           <el-alert
@@ -921,11 +1258,23 @@
           <article v-else-if="evidence" class="evidence-panel">
             <div class="evidence-head">
               <div>
-                <h3>{{ evidence.college_name || `学校 ${evidence.college_id}` }}</h3>
-                <p>{{ evidence.college_code || "无学校代码" }} · {{ evidence.province || "省份待确认" }}</p>
+                <h3>
+                  {{ evidence.college_name || `学校 ${evidence.college_id}` }}
+                </h3>
+                <p>
+                  {{ evidence.college_code || "无学校代码" }} ·
+                  {{ evidence.province || "省份待确认" }}
+                </p>
               </div>
-              <el-tag :type="evidence.source_available ? 'success' : 'warning'" effect="light">
-                {{ evidence.source_available ? formatSourceMode(evidence.source_mode) : "应用侧补充数据" }}
+              <el-tag
+                :type="evidence.source_available ? 'success' : 'warning'"
+                effect="light"
+              >
+                {{
+                  evidence.source_available
+                    ? formatSourceMode(evidence.source_mode)
+                    : "应用侧补充数据"
+                }}
               </el-tag>
             </div>
             <el-alert
@@ -981,9 +1330,14 @@
           <div class="section-head compact">
             <div>
               <h3>山东首期数据监控</h3>
-              <p>优先确认规则、分数线/赋分、一分一段、选科要求、投档录取和招生计划这 6 类材料是否齐。</p>
+              <p>
+                优先确认规则、分数线/赋分、一分一段、选科要求、投档录取和招生计划这
+                6 类材料是否齐。
+              </p>
             </div>
-            <el-tag effect="light">{{ shandongMonitor.data_version || "待确认" }}</el-tag>
+            <el-tag effect="light">{{
+              shandongMonitor.data_version || "待确认"
+            }}</el-tag>
           </div>
           <div class="review-metrics">
             <article class="review-metric-card">
@@ -1006,10 +1360,16 @@
             :title="note"
           />
           <div class="monitor-grid">
-            <article v-for="item in shandongMonitor.sections" :key="item.key" class="monitor-card">
+            <article
+              v-for="item in shandongMonitor.sections"
+              :key="item.key"
+              class="monitor-card"
+            >
               <div class="monitor-card-head">
                 <strong>{{ item.label }}</strong>
-                <el-tag :type="statusTagType(item.status)" effect="light">{{ formatMonitorStatus(item.status) }}</el-tag>
+                <el-tag :type="statusTagType(item.status)" effect="light">{{
+                  formatMonitorStatus(item.status)
+                }}</el-tag>
               </div>
               <div class="monitor-card-value">{{ item.record_total }}</div>
               <p>最近时间：{{ item.latest_updated_at || "待同步" }}</p>
@@ -1030,7 +1390,7 @@
         </section>
       </el-tab-pane>
     </el-tabs>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
@@ -1038,7 +1398,10 @@ import { computed, onMounted, reactive, ref } from "vue";
 import ElMessage from "element-plus/es/components/message/index";
 
 import { apiRequest, openFile } from "../api/client";
-import MetricCard from "../components/MetricCard.vue";
+import { api } from "../api/typedClient";
+import AppPage from "../components/ui/AppPage.vue";
+import AppStatGrid from "../components/ui/AppStatGrid.vue";
+import type { PageMetaItem, StatCardItem } from "../components/ui/types";
 import {
   buildCoverageMatrixRows,
   buildDataCompletionPrintPayload,
@@ -1086,6 +1449,7 @@ import {
 } from "../utils/gaokaoEvidence";
 import {
   buildGaokaoOverviewGapCards,
+  buildGaokaoOverviewHelpText,
   type GaokaoOverviewGapCard,
 } from "../utils/gaokaoOverview";
 import { gaokaoDataCoveragePrintPreviewPath } from "../utils/print";
@@ -1171,9 +1535,16 @@ const shandongMonitor = reactive<GaokaoShandongMonitor>({
 });
 
 const activeReviewQuickFilter = computed(() => {
-  return reviewSummary.quick_filters.find((item) => item.code === reviewSummary.active_focus) ?? null;
+  return (
+    reviewSummary.quick_filters.find(
+      (item) => item.code === reviewSummary.active_focus,
+    ) ?? null
+  );
 });
-const overviewGapCards = computed<GaokaoOverviewGapCard[]>(() => buildGaokaoOverviewGapCards(overview.core_tables));
+const overviewGapCards = computed<GaokaoOverviewGapCard[]>(() =>
+  buildGaokaoOverviewGapCards(overview.core_tables),
+);
+const overviewHelpText = computed(() => buildGaokaoOverviewHelpText(overview.core_tables));
 const dataHealthSummary = computed(() => {
   return dataHealth.tables.reduce(
     (summary, item) => {
@@ -1185,24 +1556,111 @@ const dataHealthSummary = computed(() => {
     { missing: 0, empty: 0, gap: 0 },
   );
 });
-const dataCompletionCards = computed<DataCompletionCard[]>(() => buildDataCompletionResultCards(dataHealth));
-const coverageMatrixRows = computed<CoverageMatrixRow[]>(() => buildCoverageMatrixRows(dataHealth));
+const dataCompletionCards = computed<DataCompletionCard[]>(() =>
+  buildDataCompletionResultCards(dataHealth),
+);
+const coverageMatrixRows = computed<CoverageMatrixRow[]>(() =>
+  buildCoverageMatrixRows(dataHealth),
+);
+const pageMeta = computed<PageMetaItem[]>(() => [
+  { label: "当前版本", value: overview.data_version || "待确认" },
+  { label: "数据来源", value: formatSourceMode(overview.source_mode) },
+  { label: "学校总数", value: overview.school_total || "-" },
+  { label: "山东监控", value: shandongMonitor.sections.length },
+  { label: "P0 缺口", value: dataHealth.gaps.length },
+]);
+const overviewStatCards = computed<StatCardItem[]>(() => [
+  {
+    label: "学校总数",
+    value: overview.school_total || 0,
+    help: overviewHelpText.value.overallHelp,
+    tone: "primary",
+  },
+  {
+    label: "招生网覆盖",
+    value: formatCoverage(
+      overview.recruit_site_covered,
+      overview.recruit_site_coverage_rate,
+    ),
+    help: overviewHelpText.value.recruitSiteHelp,
+    tone: "success",
+  },
+  {
+    label: "章程链接覆盖",
+    value: formatCoverage(
+      overview.chapter_url_covered,
+      overview.chapter_url_coverage_rate,
+    ),
+    help: overviewHelpText.value.chapterUrlHelp,
+    tone: "info",
+  },
+  {
+    label: "备用链接覆盖",
+    value: overview.fallback_url_covered || 0,
+    help: overviewHelpText.value.fallbackUrlHelp,
+    tone: "neutral",
+  },
+  {
+    label: "重复组",
+    value: overview.duplicate_group_total ?? "待同步",
+    help: "需要进一步人工裁决的重复院校组。",
+    tone: overview.duplicate_group_total ? "warning" : "neutral",
+  },
+  {
+    label: "同名跨站组",
+    value: overview.same_name_cross_site_group_total ?? "待同步",
+    help: "学校名称相同但来源站点不同的组数。",
+    tone: overview.same_name_cross_site_group_total ? "warning" : "neutral",
+  },
+]);
+const coverageStatCards = computed<StatCardItem[]>(() => [
+  {
+    label: "核心表缺失",
+    value: dataHealthSummary.value.missing,
+    help: "健康检查里未找到的核心表数量。",
+    tone: dataHealthSummary.value.missing ? "danger" : "success",
+  },
+  {
+    label: "空表",
+    value: dataHealthSummary.value.empty,
+    help: "核心表存在但当前没有记录的数量。",
+    tone: dataHealthSummary.value.empty ? "warning" : "success",
+  },
+  {
+    label: "需关注表",
+    value: dataHealthSummary.value.gap,
+    help: "有数据但明显存在交付缺口的表。",
+    tone: dataHealthSummary.value.gap ? "warning" : "success",
+  },
+  {
+    label: "P0 缺口",
+    value: dataHealth.gaps.length,
+    help: "按交付计划 P0 规则自动识别出的数据缺口。",
+    tone: dataHealth.gaps.length ? "warning" : "success",
+  },
+]);
 
 async function reloadAll(): Promise<void> {
-  await Promise.all([loadOverview(), loadDataHealth(), loadImportBatches(), loadReviewSummary(), loadShandongMonitor()]);
+  await Promise.all([
+    loadOverview(),
+    loadDataHealth(),
+    loadImportBatches(),
+    loadReviewSummary(),
+    loadShandongMonitor(),
+  ]);
 }
 
 async function loadOverview(): Promise<void> {
-  const payload = await apiRequest<GaokaoDataOverview>("/api/gaokao/data-overview");
+  const payload = await api.get("/api/gaokao/data-overview");
   Object.assign(overview, payload);
 }
 
 async function loadImportBatches(): Promise<void> {
-  importBatches.value = await apiRequest<GaokaoImportBatch[]>("/api/gaokao/import-batches");
+  importBatches.value = await api.get("/api/gaokao/import-batches");
 }
 
 async function loadDataHealth(): Promise<void> {
-  const payload = await apiRequest<GaokaoDataHealth>("/api/gaokao/data-health");
+  const payload = await api.get("/api/gaokao/data-health");
   Object.assign(dataHealth, payload);
 }
 
@@ -1212,20 +1670,23 @@ function openDataCoverageReportPrintPreview(): void {
     return;
   }
   const storageKey = `${GAOKAO_DATA_COVERAGE_PRINT_STORAGE_PREFIX}${Date.now()}`;
-  window.localStorage.setItem(storageKey, JSON.stringify(buildDataCompletionPrintPayload(dataHealth)));
+  window.localStorage.setItem(
+    storageKey,
+    JSON.stringify(buildDataCompletionPrintPayload(dataHealth)),
+  );
   openFile(gaokaoDataCoveragePrintPreviewPath(storageKey));
 }
 
 async function loadReviewSummary(): Promise<void> {
-  const params = new URLSearchParams({ status: reviewFilter.value });
-  params.set("focus", reviewFocus.value);
-  params.set("sort", reviewSort.value);
-  if (reviewKeyword.value.trim()) {
-    params.set("keyword", reviewKeyword.value.trim());
-  }
-  const payload = await apiRequest<GaokaoReviewSummary>(
-    `/api/gaokao/review-summary?${params.toString()}`,
-  );
+  const keyword = reviewKeyword.value.trim();
+  const payload = await api.get("/api/gaokao/review-summary", {
+    query: {
+      status: reviewFilter.value,
+      focus: reviewFocus.value,
+      sort: reviewSort.value,
+      keyword: keyword || null,
+    },
+  });
   Object.assign(reviewSummary, payload);
   reviewFilter.value = payload.active_filter;
   reviewFocus.value = payload.active_focus;
@@ -1238,19 +1699,31 @@ async function applyReviewFocus(focusCode: string): Promise<void> {
 }
 
 async function loadShandongMonitor(): Promise<void> {
-  const payload = await apiRequest<GaokaoShandongMonitor>("/api/gaokao/shandong-monitor");
+  const payload = await api.get("/api/gaokao/shandong-monitor");
   Object.assign(shandongMonitor, payload);
 }
 
-async function searchEvidenceColleges(query: string): Promise<GaokaoCollegeOption[]> {
+async function searchEvidenceColleges(
+  query: string,
+): Promise<GaokaoCollegeOption[]> {
   evidenceSearchLoading.value = true;
   try {
-    const suffix = query.trim() ? `?q=${encodeURIComponent(query.trim())}&limit=10` : "?limit=10";
-    const payload = await apiRequest<GaokaoCollegeOption[]>(`/api/gaokao/college-options${suffix}`);
+    const suffix = query.trim()
+      ? `?q=${encodeURIComponent(query.trim())}&limit=10`
+      : "?limit=10";
+    const payload = await apiRequest<GaokaoCollegeOption[]>(
+      `/api/gaokao/college-options${suffix}`,
+    );
     evidenceCollegeOptions.value = payload;
     return payload;
   } catch (error) {
-    ElMessage.error(formatUserActionError("搜索学校候选", error, "请减少关键词长度，或直接输入学校 ID 后查看。"));
+    ElMessage.error(
+      formatUserActionError(
+        "搜索学校候选",
+        error,
+        "请减少关键词长度，或直接输入学校 ID 后查看。",
+      ),
+    );
     evidenceCollegeOptions.value = [];
     return [];
   } finally {
@@ -1303,7 +1776,9 @@ async function loadEvidence(): Promise<void> {
   evidenceLoading.value = true;
   evidenceError.value = "";
   try {
-    evidence.value = await apiRequest<GaokaoCollegeEvidence>(`/api/gaokao/college-evidence/${collegeId}`);
+    evidence.value = await apiRequest<GaokaoCollegeEvidence>(
+      `/api/gaokao/college-evidence/${collegeId}`,
+    );
     evidenceSelectedCollegeId.value = collegeId;
     if (evidence.value) {
       evidenceKeyword.value = formatGaokaoCollegeEvidenceOptionLabel({
@@ -1317,7 +1792,11 @@ async function loadEvidence(): Promise<void> {
     }
   } catch (error) {
     evidence.value = null;
-    evidenceError.value = formatUserActionError("加载单校证据链", error, "请换用学校代码或从候选列表选择学校后重试。");
+    evidenceError.value = formatUserActionError(
+      "加载单校证据链",
+      error,
+      "请换用学校代码或从候选列表选择学校后重试。",
+    );
   } finally {
     evidenceLoading.value = false;
   }
@@ -1355,7 +1834,13 @@ onMounted(async () => {
   try {
     await reloadAll();
   } catch (error) {
-    ElMessage.error(formatUserActionError("加载高考数据驾驶舱", error, "确认本地服务已启动后点击“刷新驾驶舱”。"));
+    ElMessage.error(
+      formatUserActionError(
+        "加载高考数据驾驶舱",
+        error,
+        "确认本地服务已启动后点击“刷新驾驶舱”。",
+      ),
+    );
   }
 });
 </script>
@@ -1561,7 +2046,11 @@ onMounted(async () => {
   padding: 16px 18px;
   border-radius: 18px;
   border: 1px solid rgba(111, 129, 145, 0.14);
-  background: linear-gradient(180deg, rgba(255, 250, 244, 0.95), rgba(250, 245, 239, 0.9));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 250, 244, 0.95),
+    rgba(250, 245, 239, 0.9)
+  );
 }
 
 .group-priority-head,
@@ -1753,7 +2242,11 @@ onMounted(async () => {
   padding: 18px;
   border-radius: 18px;
   border: 1px solid rgba(204, 174, 96, 0.28);
-  background: linear-gradient(180deg, rgba(255, 250, 240, 0.96), rgba(255, 255, 255, 0.92));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 250, 240, 0.96),
+    rgba(255, 255, 255, 0.92)
+  );
 }
 
 .health-gap-list {

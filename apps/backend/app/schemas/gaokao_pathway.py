@@ -98,6 +98,10 @@ class StudentPathwayProfilePayload(BaseModel):
     subject_combination: str | None = None
     spring_exam_category: str | None = None
     art_track: str | None = None
+    art_professional_score: float | None = None
+    art_professional_full_score: float | None = None
+    art_score_source: str | None = None
+    art_score_note: str | None = None
     sports_track: str | None = None
     has_gaokao_registration: bool | None = None
     is_fresh_graduate: bool | None = None
@@ -130,6 +134,10 @@ class StudentPathwayProfileRead(ORMModel):
     subject_combination: str | None = None
     spring_exam_category: str | None = None
     art_track: str | None = None
+    art_professional_score: float | None = None
+    art_professional_full_score: float | None = None
+    art_score_source: str | None = None
+    art_score_note: str | None = None
     sports_track: str | None = None
     has_gaokao_registration: bool | None = None
     is_fresh_graduate: bool | None = None

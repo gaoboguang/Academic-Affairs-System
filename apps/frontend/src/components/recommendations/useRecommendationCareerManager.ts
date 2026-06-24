@@ -19,6 +19,8 @@ import type {
   MajorEmploymentMappingItem,
   MajorEmploymentMappingPayload,
   MajorItem,
+  PaginatedResponse,
+  PaginationState,
 } from "./types";
 
 function reportError(error: unknown): void {
@@ -32,6 +34,7 @@ interface RecommendationCareerManagerOptions {
 export function useRecommendationCareerManager(options: RecommendationCareerManagerOptions) {
   const employmentDirections = ref<EmploymentDirectionItem[]>([]);
   const majorEmploymentMappings = ref<MajorEmploymentMappingItem[]>([]);
+  const majorEmploymentMappingPagination = reactive<PaginationState>({ page: 1, page_size: 50, total: 0 });
   const employmentDirectionDialogVisible = ref(false);
   const majorEmploymentMappingDialogVisible = ref(false);
   const editingEmploymentDirectionId = ref<number | null>(null);
@@ -80,16 +83,23 @@ export function useRecommendationCareerManager(options: RecommendationCareerMana
     }
   }
 
-  async function loadMajorEmploymentMappings(): Promise<void> {
+  async function loadMajorEmploymentMappings(options: { resetPage?: boolean } = {}): Promise<void> {
     try {
+      if (options.resetPage) majorEmploymentMappingPagination.page = 1;
       const query = new URLSearchParams();
       if (majorEmploymentMappingFilters.keyword) query.set("keyword", majorEmploymentMappingFilters.keyword);
       if (majorEmploymentMappingFilters.major_id) query.set("major_id", String(majorEmploymentMappingFilters.major_id));
       if (majorEmploymentMappingFilters.direction_id) query.set("direction_id", String(majorEmploymentMappingFilters.direction_id));
       if (majorEmploymentMappingFilters.strength) query.set("strength", majorEmploymentMappingFilters.strength);
-      majorEmploymentMappings.value = await apiRequest<MajorEmploymentMappingItem[]>(
-        `/api/major-employment-maps?${query.toString()}`,
+      query.set("page", String(majorEmploymentMappingPagination.page));
+      query.set("page_size", String(majorEmploymentMappingPagination.page_size));
+      const response = await apiRequest<PaginatedResponse<MajorEmploymentMappingItem>>(
+        `/api/major-employment-maps/page?${query.toString()}`,
       );
+      majorEmploymentMappings.value = response.items;
+      majorEmploymentMappingPagination.total = response.total;
+      majorEmploymentMappingPagination.page = response.page;
+      majorEmploymentMappingPagination.page_size = response.page_size;
     } catch (error) {
       reportError(error);
     }
@@ -106,6 +116,17 @@ export function useRecommendationCareerManager(options: RecommendationCareerMana
     majorEmploymentMappingFilters.major_id = undefined;
     majorEmploymentMappingFilters.direction_id = undefined;
     majorEmploymentMappingFilters.strength = "";
+    void loadMajorEmploymentMappings({ resetPage: true });
+  }
+
+  function handleMajorEmploymentMappingPageChange(page: number): void {
+    majorEmploymentMappingPagination.page = page;
+    void loadMajorEmploymentMappings();
+  }
+
+  function handleMajorEmploymentMappingPageSizeChange(pageSize: number): void {
+    majorEmploymentMappingPagination.page_size = pageSize;
+    majorEmploymentMappingPagination.page = 1;
     void loadMajorEmploymentMappings();
   }
 
@@ -154,7 +175,7 @@ export function useRecommendationCareerManager(options: RecommendationCareerMana
       };
       await apiRequest(path, { method, body: JSON.stringify(payload) });
       employmentDirectionDialogVisible.value = false;
-      await Promise.all([loadEmploymentDirections(), loadMajorEmploymentMappings()]);
+      await Promise.all([loadEmploymentDirections(), loadMajorEmploymentMappings({ resetPage: true })]);
       ElMessage.success("就业方向保存成功");
     } catch (error) {
       reportError(error);
@@ -203,7 +224,7 @@ export function useRecommendationCareerManager(options: RecommendationCareerMana
       };
       await apiRequest(path, { method, body: JSON.stringify(payload) });
       majorEmploymentMappingDialogVisible.value = false;
-      await loadMajorEmploymentMappings();
+      await loadMajorEmploymentMappings({ resetPage: true });
       ElMessage.success("专业就业映射保存成功");
     } catch (error) {
       reportError(error);
@@ -231,6 +252,8 @@ export function useRecommendationCareerManager(options: RecommendationCareerMana
     employmentDirectionOptions,
     employmentDirections,
     handleEmploymentDirectionDialogClosed,
+    handleMajorEmploymentMappingPageChange,
+    handleMajorEmploymentMappingPageSizeChange,
     handleMajorEmploymentMappingDialogClosed,
     loadEmploymentDirections,
     loadMajorEmploymentMappings,
@@ -239,6 +262,7 @@ export function useRecommendationCareerManager(options: RecommendationCareerMana
     majorEmploymentMappingDialogVisible,
     majorEmploymentMappingFilters,
     majorEmploymentMappingForm,
+    majorEmploymentMappingPagination,
     majorEmploymentMappings,
     employmentMappingStrengthOptions,
     openCreateEmploymentDirection,

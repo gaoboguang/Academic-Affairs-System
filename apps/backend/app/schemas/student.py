@@ -165,6 +165,7 @@ class StudentBulkDeleteAssociationSummary(BaseModel):
     score_count: int = 0
     score_snapshot_count: int = 0
     growth_record_count: int = 0
+    teacher_comment_count: int = 0
     attachment_count: int = 0
     class_history_count: int = 0
     recommendation_count: int = 0
@@ -406,10 +407,23 @@ class StudentExamTrendItem(BaseModel):
     exam_name: str
     exam_date: date
     total_score: float
+    score_value_type: str = "original"
+    score_value_label: str = "原始分"
     class_rank: int | None = None
     grade_rank: int | None = None
     class_percentile: float | None = None
     grade_percentile: float | None = None
+    subjects: list["StudentExamSubjectItem"] = Field(default_factory=list)
+
+
+class StudentExamSubjectItem(BaseModel):
+    subject_id: int
+    subject_name: str
+    score: float | None = None
+    score_value_type: str = "original"
+    score_value_label: str = "原始分"
+    class_rank: int | None = None
+    grade_rank: int | None = None
 
 
 class StudentGrowthRecordSummary(BaseModel):
@@ -430,6 +444,7 @@ class StudentRecommendationSummary(BaseModel):
     challenge_count: int
     steady_count: int
     safe_count: int
+    watch_count: int = 0
 
 
 class StudentAttachmentPayload(BaseModel):
@@ -455,11 +470,61 @@ class StudentAttachmentSummary(BaseModel):
     download_url: str | None = None
 
 
+class StudentTeacherCommentPayload(BaseModel):
+    subject_id: int | None = None
+    content: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("content")
+    @classmethod
+    def trim_content(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("教师评语不能为空")
+        return normalized
+
+
+class StudentTeacherCommentSubjectOption(BaseModel):
+    subject_id: int
+    subject_name: str
+    teacher_id: int
+    teacher_name: str
+    class_id: int | None = None
+    class_name: str | None = None
+    semester_id: int | None = None
+    semester_name: str | None = None
+
+
+class StudentTeacherCommentRead(BaseModel):
+    id: int
+    student_id: int
+    teacher_id: int
+    teacher_name: str
+    subject_id: int | None = None
+    subject_name: str | None = None
+    class_id: int | None = None
+    class_name: str | None = None
+    semester_id: int | None = None
+    semester_name: str | None = None
+    content: str
+    commented_at: datetime
+    created_at: datetime
+    updated_at: datetime
+    is_active: bool
+
+
+class StudentTeacherCommentListResponse(BaseModel):
+    items: list[StudentTeacherCommentRead] = Field(default_factory=list)
+    can_comment: bool = False
+    available_subjects: list[StudentTeacherCommentSubjectOption] = Field(default_factory=list)
+
+
 class StudentPerformanceSummary(BaseModel):
     latest_exam_id: int | None = None
     latest_exam_name: str | None = None
     latest_exam_date: date | None = None
     latest_total_score: float | None = None
+    latest_score_value_type: str | None = None
+    latest_score_value_label: str | None = None
     latest_class_rank: int | None = None
     latest_grade_rank: int | None = None
     exam_count: int = 0

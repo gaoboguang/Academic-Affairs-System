@@ -60,6 +60,9 @@ class AuditLogRead(ORMModel):
     action: str
     target_type: str | None = None
     target_id: str | None = None
+    actor_user_id: int | None = None
+    actor_username: str | None = None
+    client_ip: str | None = None
     detail_json: dict | None = None
     created_at: datetime
 

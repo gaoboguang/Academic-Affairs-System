@@ -45,6 +45,7 @@ def list_recommendation_history(session: Session, student_id: int | None = None)
                 challenge_count=counts["challenge"],
                 steady_count=counts["steady"],
                 safe_count=counts["safe"],
+                watch_count=counts["watch"],
             )
         )
     history.sort(key=lambda item: item.generated_at, reverse=True)

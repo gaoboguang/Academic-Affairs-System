@@ -30,8 +30,8 @@
             <strong>{{ results.length }}</strong>
           </div>
           <div class="print-summary-item">
-            <span>冲 / 稳 / 保</span>
-            <strong>{{ groupedResults.challenge.length }} / {{ groupedResults.steady.length }} / {{ groupedResults.safe.length }}</strong>
+            <span>冲 / 稳 / 保 / 关注</span>
+            <strong>{{ groupedResults.challenge.length }} / {{ groupedResults.steady.length }} / {{ groupedResults.safe.length }} / {{ groupedResults.watch.length }}</strong>
           </div>
           <div class="print-summary-item">
             <span>目标年份</span>
@@ -168,12 +168,14 @@ const groupSections: Array<{ key: ResultGroupKey; label: string }> = [
   { key: "challenge", label: "冲刺志愿" },
   { key: "steady", label: "稳妥志愿" },
   { key: "safe", label: "保底志愿" },
+  { key: "watch", label: "仅关注" },
 ];
 
 const groupedResults = computed<Record<ResultGroupKey, RecommendationResult[]>>(() => ({
   challenge: results.value.filter((item) => item.result_type === "challenge"),
   steady: results.value.filter((item) => item.result_type === "steady"),
   safe: results.value.filter((item) => item.result_type === "safe"),
+  watch: results.value.filter((item) => item.result_type === "watch"),
 }));
 
 const targetDirectionSummary = computed(() => {

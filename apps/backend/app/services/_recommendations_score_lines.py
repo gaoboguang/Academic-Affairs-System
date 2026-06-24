@@ -9,7 +9,7 @@ from app.models import EnrollmentPlan
 
 
 SCORE_LINE_SUPPORTED_STUDENT_TYPES = {"art", "sports"}
-PLAN_ONLY_REFERENCE_SUPPORTED_STUDENT_TYPES = {"spring_exam", "independent_recruitment", "comprehensive_evaluation"}
+PLAN_ONLY_REFERENCE_SUPPORTED_STUDENT_TYPES = {"art", "sports", "spring_exam", "independent_recruitment", "comprehensive_evaluation"}
 
 LINE_TYPE_LABELS = {
     "junior_culture_control": "专科文化控制线",
@@ -61,7 +61,7 @@ def build_plan_only_reference_evaluation(
         "该结果不能直接作为冲稳保或录取把握判断。"
     )
     return {
-        "result_type": "challenge",
+        "result_type": "watch",
         "reference_rank": None,
         "student_rank": None,
         "score_basis": "plan_only",
@@ -106,8 +106,10 @@ def build_score_line_reference_evaluation(
     plan: EnrollmentPlan,
     score_value: float | None,
     score_source: str | None,
+    culture_score: float | None = None,
+    comprehensive_score: float | None = None,
 ) -> tuple[dict[str, object], ScoreLineReference] | None:
-    if score_value is None or not supports_score_line_reference(student_type):
+    if not supports_score_line_reference(student_type):
         return None
     reference = get_best_score_line_reference(
         session,
@@ -118,7 +120,15 @@ def build_score_line_reference_evaluation(
         major_name=plan.major.name if plan.major else plan.major_name_snapshot,
         score_source=score_source,
     )
-    if not reference or float(score_value) < float(reference.score):
+    if not reference:
+        return None
+    reference_score_value = _select_score_for_reference(
+        reference=reference,
+        score_value=score_value,
+        culture_score=culture_score,
+        comprehensive_score=comprehensive_score,
+    )
+    if reference_score_value is None or float(reference_score_value) < float(reference.score):
         return None
 
     reference_years = [reference.year]
@@ -136,7 +146,7 @@ def build_score_line_reference_evaluation(
         risk_flags.append("manual_formula_check")
 
     evaluation = {
-        "result_type": "challenge",
+        "result_type": "watch",
         "reference_rank": None,
         "student_rank": None,
         "score_basis": reference.score_basis,
@@ -151,7 +161,10 @@ def build_score_line_reference_evaluation(
             "province": province,
             "college_name": plan.college.name if plan.college else None,
             "major_name": plan.major.name if plan.major else plan.major_name_snapshot,
-            "student_score": score_value,
+            "student_score": reference_score_value,
+            "input_score": score_value,
+            "culture_score": culture_score,
+            "comprehensive_score": comprehensive_score,
             "student_rank": None,
             "score_line_reference": True,
             "score_line_candidate_type": reference.candidate_type,
@@ -180,6 +193,20 @@ def build_score_line_reference_evaluation(
     return evaluation, reference
 
 
+def _select_score_for_reference(
+    *,
+    reference: ScoreLineReference,
+    score_value: float | None,
+    culture_score: float | None,
+    comprehensive_score: float | None,
+) -> float | None:
+    if reference.score_basis == "culture_score":
+        return culture_score if culture_score is not None else score_value
+    if reference.score_basis == "comprehensive_score":
+        return comprehensive_score if comprehensive_score is not None else score_value
+    return score_value
+
+
 def get_best_score_line_reference(
     session: Session,
     *,
@@ -197,8 +224,17 @@ def get_best_score_line_reference(
     if not rows:
         return None
 
-    available_years = sorted({int(row["year"]) for row in rows if row.get("year") is not None}, reverse=True)
-    preferred_years = [year for year in available_years if year <= target_year] or available_years
+    available_years: set[int] = set()
+    for row in rows:
+        raw_year = row.get("year")
+        if raw_year is None:
+            continue
+        try:
+            available_years.add(int(raw_year))
+        except (TypeError, ValueError):
+            continue
+    sorted_years = sorted(available_years, reverse=True)
+    preferred_years = [year for year in sorted_years if year <= target_year] or sorted_years
     preferred_pairs = _preferred_score_line_pairs(
         student_type=student_type,
         batch=batch,
@@ -211,27 +247,31 @@ def get_best_score_line_reference(
                 (
                     item
                     for item in rows
-                    if int(item["year"]) == year
-                    and str(item["batch_name"] or "").strip() == batch_name
-                    and str(item["line_type"] or "").strip() == line_type
+                    if _safe_int(item.get("year")) == year
+                    and str(item.get("batch_name") or "").strip() == batch_name
+                    and str(item.get("line_type") or "").strip() == line_type
                 ),
                 None,
             )
             if not row:
                 continue
-            current_line_type = str(row["line_type"]).strip()
+            current_line_type = str(row.get("line_type") or "").strip()
+            row_score = _safe_float(row.get("score"))
+            row_year = _safe_int(row.get("year"))
+            if row_score is None or row_year is None:
+                continue
             return ScoreLineReference(
-                year=int(row["year"]),
+                year=row_year,
                 province=province,
                 candidate_type=candidate_type,
-                batch_name=str(row["batch_name"]).strip(),
+                batch_name=str(row.get("batch_name") or "").strip(),
                 line_type=current_line_type,
                 line_label=LINE_TYPE_LABELS.get(current_line_type, current_line_type),
-                score=float(row["score"]),
+                score=row_score,
                 score_basis=_score_basis_for_line_type(current_line_type),
-                remark=_clean_optional_text(row["remark"]),
-                source_title=_clean_optional_text(row["source_title"]),
-                source_url=_clean_optional_text(row["source_url"]),
+                remark=_clean_optional_text(row.get("remark")),
+                source_title=_clean_optional_text(row.get("source_title")),
+                source_url=_clean_optional_text(row.get("source_url")),
             )
     return None
 
@@ -353,3 +393,21 @@ def _clean_optional_text(value: object) -> str | None:
         return None
     current = str(value).strip()
     return current or None
+
+
+def _safe_int(value: object) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_float(value: object) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None

@@ -22,6 +22,8 @@ import type {
   MajorFiltersState,
   MajorItem,
   MajorPayload,
+  PaginatedResponse,
+  PaginationState,
 } from "./types";
 
 function reportError(error: unknown): void {
@@ -35,6 +37,9 @@ export function useRecommendationCatalogManager() {
   const majors = ref<MajorItem[]>([]);
   const admissions = ref<AdmissionRecord[]>([]);
   const admissionImportResult = ref<AdmissionImportResponse | null>(null);
+  const collegePagination = reactive<PaginationState>({ page: 1, page_size: 50, total: 0 });
+  const majorPagination = reactive<PaginationState>({ page: 1, page_size: 50, total: 0 });
+  const admissionPagination = reactive<PaginationState>({ page: 1, page_size: 50, total: 0 });
 
   const collegeDialogVisible = ref(false);
   const majorDialogVisible = ref(false);
@@ -101,37 +106,58 @@ export function useRecommendationCatalogManager() {
     majorDirectory.value = await apiRequest<MajorItem[]>("/api/majors");
   }
 
-  async function loadColleges(): Promise<void> {
+  async function loadColleges(options: { resetPage?: boolean } = {}): Promise<void> {
     try {
+      if (options.resetPage) collegePagination.page = 1;
       const query = new URLSearchParams();
       if (collegeFilters.keyword) query.set("keyword", collegeFilters.keyword);
       if (collegeFilters.province) query.set("province", collegeFilters.province);
       if (collegeFilters.supports_art !== "all") query.set("supports_art", String(collegeFilters.supports_art === "true"));
-      colleges.value = await apiRequest<CollegeItem[]>(`/api/colleges?${query.toString()}`);
+      query.set("page", String(collegePagination.page));
+      query.set("page_size", String(collegePagination.page_size));
+      const response = await apiRequest<PaginatedResponse<CollegeItem>>(`/api/colleges/page?${query.toString()}`);
+      colleges.value = response.items;
+      collegePagination.total = response.total;
+      collegePagination.page = response.page;
+      collegePagination.page_size = response.page_size;
     } catch (error) {
       reportError(error);
     }
   }
 
-  async function loadMajors(): Promise<void> {
+  async function loadMajors(options: { resetPage?: boolean } = {}): Promise<void> {
     try {
+      if (options.resetPage) majorPagination.page = 1;
       const query = new URLSearchParams();
       if (majorFilters.keyword) query.set("keyword", majorFilters.keyword);
       if (majorFilters.is_art_related !== "all") query.set("is_art_related", String(majorFilters.is_art_related === "true"));
-      majors.value = await apiRequest<MajorItem[]>(`/api/majors?${query.toString()}`);
+      query.set("page", String(majorPagination.page));
+      query.set("page_size", String(majorPagination.page_size));
+      const response = await apiRequest<PaginatedResponse<MajorItem>>(`/api/majors/page?${query.toString()}`);
+      majors.value = response.items;
+      majorPagination.total = response.total;
+      majorPagination.page = response.page;
+      majorPagination.page_size = response.page_size;
     } catch (error) {
       reportError(error);
     }
   }
 
-  async function loadAdmissions(): Promise<void> {
+  async function loadAdmissions(options: { resetPage?: boolean } = {}): Promise<void> {
     try {
+      if (options.resetPage) admissionPagination.page = 1;
       const query = new URLSearchParams();
       if (admissionFilters.year) query.set("year", String(admissionFilters.year));
       if (admissionFilters.province) query.set("province", admissionFilters.province);
       if (admissionFilters.college_id) query.set("college_id", String(admissionFilters.college_id));
       if (admissionFilters.student_type) query.set("student_type", admissionFilters.student_type);
-      admissions.value = await apiRequest<AdmissionRecord[]>(`/api/admissions?${query.toString()}`);
+      query.set("page", String(admissionPagination.page));
+      query.set("page_size", String(admissionPagination.page_size));
+      const response = await apiRequest<PaginatedResponse<AdmissionRecord>>(`/api/admissions/page?${query.toString()}`);
+      admissions.value = response.items;
+      admissionPagination.total = response.total;
+      admissionPagination.page = response.page;
+      admissionPagination.page_size = response.page_size;
     } catch (error) {
       reportError(error);
     }
@@ -141,13 +167,13 @@ export function useRecommendationCatalogManager() {
     collegeFilters.keyword = "";
     collegeFilters.province = "";
     collegeFilters.supports_art = "all";
-    void loadColleges();
+    void loadColleges({ resetPage: true });
   }
 
   function resetMajorFilters(): void {
     majorFilters.keyword = "";
     majorFilters.is_art_related = "all";
-    void loadMajors();
+    void loadMajors({ resetPage: true });
   }
 
   function resetAdmissionFilters(): void {
@@ -155,6 +181,39 @@ export function useRecommendationCatalogManager() {
     admissionFilters.province = "山东";
     admissionFilters.college_id = undefined;
     admissionFilters.student_type = "";
+    void loadAdmissions({ resetPage: true });
+  }
+
+  function handleMajorPageChange(page: number): void {
+    majorPagination.page = page;
+    void loadMajors();
+  }
+
+  function handleMajorPageSizeChange(pageSize: number): void {
+    majorPagination.page_size = pageSize;
+    majorPagination.page = 1;
+    void loadMajors();
+  }
+
+  function handleCollegePageChange(page: number): void {
+    collegePagination.page = page;
+    void loadColleges();
+  }
+
+  function handleCollegePageSizeChange(pageSize: number): void {
+    collegePagination.page_size = pageSize;
+    collegePagination.page = 1;
+    void loadColleges();
+  }
+
+  function handleAdmissionPageChange(page: number): void {
+    admissionPagination.page = page;
+    void loadAdmissions();
+  }
+
+  function handleAdmissionPageSizeChange(pageSize: number): void {
+    admissionPagination.page_size = pageSize;
+    admissionPagination.page = 1;
     void loadAdmissions();
   }
 
@@ -199,7 +258,7 @@ export function useRecommendationCatalogManager() {
       const method = editingCollegeId.value ? "PUT" : "POST";
       await apiRequest(path, { method, body: JSON.stringify(payload) });
       collegeDialogVisible.value = false;
-      await Promise.all([loadCollegeDirectory(), loadColleges()]);
+      await Promise.all([loadCollegeDirectory(), loadColleges({ resetPage: true })]);
       ElMessage.success("院校保存成功");
     } catch (error) {
       reportError(error);
@@ -240,7 +299,7 @@ export function useRecommendationCatalogManager() {
       const method = editingMajorId.value ? "PUT" : "POST";
       await apiRequest(path, { method, body: JSON.stringify(majorForm) });
       majorDialogVisible.value = false;
-      await Promise.all([loadMajorDirectory(), loadMajors()]);
+      await Promise.all([loadMajorDirectory(), loadMajors({ resetPage: true })]);
       ElMessage.success("专业保存成功");
     } catch (error) {
       reportError(error);
@@ -263,7 +322,7 @@ export function useRecommendationCatalogManager() {
     if (!uploadFileItem.raw) return;
     try {
       admissionImportResult.value = await uploadFile<AdmissionImportResponse>("/api/admissions/import", uploadFileItem.raw);
-      await Promise.all([loadCollegeDirectory(), loadMajorDirectory(), loadAdmissions()]);
+      await Promise.all([loadCollegeDirectory(), loadMajorDirectory(), loadAdmissions({ resetPage: true })]);
       ElMessage({
         type: admissionImportResult.value.failed_rows ? "warning" : "success",
         message: admissionImportResult.value.message,
@@ -276,6 +335,7 @@ export function useRecommendationCatalogManager() {
   return {
     admissionFilters,
     admissionImportResult,
+    admissionPagination,
     admissionYearOptions,
     admissions,
     recommendationStudentTypeOptions,
@@ -284,10 +344,17 @@ export function useRecommendationCatalogManager() {
     collegeDirectory,
     collegeFilters,
     collegeForm,
+    collegePagination,
     colleges,
     downloadAdmissionTemplate,
     handleAdmissionImport,
+    handleAdmissionPageChange,
+    handleAdmissionPageSizeChange,
+    handleCollegePageChange,
+    handleCollegePageSizeChange,
     handleCollegeDialogClosed,
+    handleMajorPageChange,
+    handleMajorPageSizeChange,
     handleMajorDialogClosed,
     loadAdmissions,
     loadCollegeDirectory,
@@ -299,6 +366,7 @@ export function useRecommendationCatalogManager() {
     majorDirectory,
     majorFilters,
     majorForm,
+    majorPagination,
     majors,
     openCreateCollege,
     openCreateMajor,

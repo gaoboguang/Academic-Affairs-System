@@ -32,7 +32,7 @@
       <el-table-column label="院校" min-width="220">
         <template #default="{ row }">
           <div class="name-stack">
-            <strong>{{ row.name }}</strong>
+            <el-button link type="primary" class="name-link" @click="emit('open-detail', row.id)">{{ row.name }}</el-button>
             <span v-if="row.college_code">{{ row.college_code }}</span>
           </div>
         </template>
@@ -81,12 +81,24 @@
         </template>
       </el-table-column>
     </el-table>
+    <el-pagination
+      v-if="pagination.total"
+      class="table-pagination"
+      background
+      layout="total, sizes, prev, pager, next"
+      :current-page="pagination.page"
+      :page-size="pagination.page_size"
+      :page-sizes="[50, 100, 200]"
+      :total="pagination.total"
+      @current-change="emit('page-change', $event)"
+      @size-change="emit('page-size-change', $event)"
+    />
     <el-empty v-if="!colleges.length" description="暂无院校数据" />
   </section>
 </template>
 
 <script setup lang="ts">
-import type { CollegeItem } from "./types";
+import type { CollegeItem, PaginationState } from "./types";
 
 interface CollegeFiltersState {
   keyword: string;
@@ -97,14 +109,18 @@ interface CollegeFiltersState {
 defineProps<{
   colleges: CollegeItem[];
   filters: CollegeFiltersState;
+  pagination: PaginationState;
   provinceOptions: string[];
 }>();
 
 const emit = defineEmits<{
   load: [];
   reset: [];
+  "page-change": [value: number];
+  "page-size-change": [value: number];
   create: [];
   edit: [value: CollegeItem];
+  "open-detail": [collegeId: number];
 }>();
 </script>
 
@@ -115,6 +131,11 @@ const emit = defineEmits<{
 
 .toolbar-row {
   margin-bottom: 16px;
+}
+
+.table-pagination {
+  margin-top: 16px;
+  justify-content: flex-end;
 }
 
 .tag-cluster {
@@ -134,7 +155,11 @@ const emit = defineEmits<{
   gap: 4px;
 }
 
-.name-stack strong {
+.name-stack .name-link {
+  justify-content: flex-start;
+  padding: 0;
+  height: auto;
+  font-weight: 650;
   color: #203449;
 }
 

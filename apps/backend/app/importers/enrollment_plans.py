@@ -66,10 +66,14 @@ class EnrollmentPlanImporter:
         row_errors: list[RowError] = []
 
         for row_number, values in rows:
+            savepoint = self.session.begin_nested()
             try:
                 self._upsert_row(values)
+                savepoint.commit()
                 success_rows += 1
             except Exception as exc:
+                if savepoint.is_active:
+                    savepoint.rollback()
                 failed_rows += 1
                 row_errors.append(build_row_error(row_number=row_number, values=values, message=str(exc)))
 
