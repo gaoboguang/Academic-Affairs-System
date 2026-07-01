@@ -6,7 +6,7 @@
     :meta="analyticsPageMeta"
   >
     <template #actions>
-        <el-button @click="loadOptions">重载选项</el-button>
+        <el-button :loading="loadingOptions" @click="loadOptions">重载选项</el-button>
         <el-button type="primary" plain @click="resetAnalyticsState">清空结果</el-button>
     </template>
 
@@ -20,6 +20,29 @@
         :title="item"
       />
     </section>
+
+    <el-alert
+      v-if="analysisLoadErrorItems.length"
+      class="analysis-page-alert"
+      type="warning"
+      show-icon
+      :closable="false"
+      title="分析中心部分数据加载失败"
+    >
+      <div class="analysis-load-error-list">
+        <div
+          v-for="item in analysisLoadErrorItems"
+          :key="item.key"
+          class="analysis-load-error-item"
+        >
+          <div>
+            <strong>{{ item.label }}</strong>
+            <p>{{ item.message }}</p>
+          </div>
+          <el-button size="small" :loading="item.loading" @click="reloadAnalysisErrorItem(item.key)">重试</el-button>
+        </div>
+      </div>
+    </el-alert>
 
     <AppFilterBar
       title="选择考试"
@@ -79,7 +102,7 @@
 
     <el-tabs v-model="activeAnalyticsTab" class="analytics-tabs">
       <el-tab-pane label="班主任驾驶舱" name="adviser" lazy>
-        <section class="soft-card panel-block">
+        <section class="soft-card panel-block" v-loading="loadingAdviserDashboard">
           <div class="section-head compact">
             <div>
               <h3>班主任驾驶舱</h3>
@@ -113,6 +136,14 @@
             />
             <el-button type="primary" :loading="loadingAdviserDashboard" @click="loadAdviserDashboard">加载驾驶舱</el-button>
           </div>
+          <el-alert
+            v-if="adviserDashboardError"
+            class="analytics-inline-alert"
+            type="warning"
+            show-icon
+            :closable="false"
+            :title="adviserDashboardError"
+          />
           <div v-if="adviserDashboardTips.length" class="dashboard-tip-stack">
             <el-alert
               v-for="item in adviserDashboardTips"
@@ -190,11 +221,15 @@
               description="当前范围暂无需要跟进的学生。"
             />
           </div>
+          <el-empty
+            v-else-if="!loadingAdviserDashboard"
+            :description="adviserDashboardEmptyDescription"
+          />
         </section>
       </el-tab-pane>
 
       <el-tab-pane label="成绩报表" name="score-report" lazy>
-        <section class="soft-card panel-block score-report-panel">
+        <section class="soft-card panel-block score-report-panel" v-loading="loadingScoreReport">
           <div class="section-head compact">
             <div>
               <h3>成绩报表</h3>
@@ -221,6 +256,14 @@
               加载成绩报表
             </el-button>
           </div>
+          <el-alert
+            v-if="scoreReportError"
+            class="analytics-inline-alert"
+            type="warning"
+            show-icon
+            :closable="false"
+            :title="scoreReportError"
+          />
 
           <div v-if="scoreReport" class="score-report-toolbar">
             <el-select
@@ -242,7 +285,7 @@
           </div>
 
           <AppStatGrid v-if="scoreReport" :items="scoreReportCards" :columns="5" class="table-gap" />
-          <el-empty v-else-if="selectedExamId && !scoreRecordTotal" description="当前成绩记录为 0。请先导入成绩，再查看本次考试成绩报表。" />
+          <el-empty v-else-if="!loadingScoreReport" :description="scoreReportEmptyDescription" />
 
           <div v-if="scoreReport" class="table-shell table-gap score-report-table-shell">
             <el-table :data="scoreReportTableRows" stripe height="620">
@@ -275,6 +318,9 @@
                 <template #default="{ row }">{{ formatPercentCell(row.grade_percentile) }}</template>
               </el-table-column>
               <el-table-column label="总分口径" prop="score_value_label" min-width="95" />
+              <template #empty>
+                <el-empty description="当前筛选条件下暂无成绩行。" />
+              </template>
             </el-table>
             <el-pagination
               v-model:current-page="scoreReportPage"
@@ -291,7 +337,7 @@
       </el-tab-pane>
 
       <el-tab-pane label="学生分析" name="student" lazy>
-        <section class="soft-card panel-block">
+        <section class="soft-card panel-block" v-loading="loadingStudentAnalytics">
           <div class="section-head compact">
             <div>
               <h3>学生分析</h3>
@@ -307,15 +353,21 @@
                 :value="student.id"
               />
             </el-select>
-            <el-button type="primary" :disabled="!selectedStudentId" @click="loadStudentAnalytics">查询</el-button>
+            <el-button type="primary" :disabled="!selectedStudentId" :loading="loadingStudentAnalytics" @click="loadStudentAnalytics">查询</el-button>
           </div>
           <div class="action-row knowledge-import-row">
-            <el-select v-model="questionImportStrategy" style="width: 180px">
+            <el-select v-model="questionImportStrategy" style="width: 180px" :disabled="!selectedExamId || importingQuestionScores">
               <el-option label="覆盖已有题分" value="overwrite" />
               <el-option label="跳过已有题分" value="skip_existing" />
             </el-select>
-            <el-upload :show-file-list="false" :auto-upload="false" :on-change="handleQuestionScoreImport">
-              <el-button plain :disabled="!selectedExamId" :loading="importingQuestionScores">导入题分明细</el-button>
+            <el-upload
+              :show-file-list="false"
+              :auto-upload="false"
+              :disabled="!selectedExamId || importingQuestionScores"
+              accept=".xlsx,.xls"
+              :on-change="handleQuestionScoreImport"
+            >
+              <el-button plain :disabled="!selectedExamId || importingQuestionScores" :loading="importingQuestionScores">导入题分明细</el-button>
             </el-upload>
             <el-alert
               v-if="questionImportResult"
@@ -325,12 +377,24 @@
               :closable="false"
               :title="questionImportResult.message"
             />
+            <el-alert
+              v-if="questionImportError"
+              class="inline-import-result"
+              type="error"
+              show-icon
+              :closable="false"
+              :title="questionImportError"
+            />
           </div>
-          <el-empty v-if="!studentAnalytics && !scoreRecordTotal" description="当前成绩记录为 0。请先到考试成绩中心导入成绩，再查看学生分析。" />
-          <el-empty
-            v-else-if="!studentAnalytics && selectedExamId && !studentOptions.length"
-            description="当前考试暂无可分析学生。请确认已导入成绩并重建成绩快照。"
+          <el-alert
+            v-if="studentAnalyticsError"
+            class="analytics-inline-alert"
+            type="warning"
+            show-icon
+            :closable="false"
+            :title="studentAnalyticsError"
           />
+          <el-empty v-if="!studentAnalytics && !loadingStudentAnalytics" :description="studentAnalyticsEmptyDescription" />
           <div v-if="studentAnalytics" class="metric-grid analytics-grid">
             <div class="soft-card stat-card">
               <div class="metric-label">总分{{ studentAnalytics.score_value_label ? `（${studentAnalytics.score_value_label}）` : "" }}</div>
@@ -439,11 +503,39 @@
                     :value="subject.subject_id"
                   />
                 </el-select>
-                <el-button :loading="previewingStudentKnowledgeTasks" @click="previewStudentKnowledgeTasks">预览补弱任务</el-button>
-                <el-button type="primary" plain :loading="generatingStudentKnowledgeTasks" @click="generateStudentKnowledgeTasks">一键生成任务</el-button>
+                <el-button
+                  :loading="previewingStudentKnowledgeTasks"
+                  :disabled="generatingStudentKnowledgeTasks"
+                  @click="previewStudentKnowledgeTasks"
+                >
+                  预览补弱任务
+                </el-button>
+                <el-button
+                  type="primary"
+                  plain
+                  :loading="generatingStudentKnowledgeTasks"
+                  :disabled="previewingStudentKnowledgeTasks"
+                  @click="generateStudentKnowledgeTasks"
+                >
+                  一键生成任务
+                </el-button>
                 <el-button plain @click="openStudentKnowledgePrint">打印清单</el-button>
               </div>
             </div>
+            <el-alert
+              v-if="studentKnowledgeTaskError"
+              class="table-gap"
+              type="error"
+              show-icon
+              :closable="false"
+              :title="studentKnowledgeTaskError"
+            >
+              <template #default>
+                <el-button size="small" type="danger" plain :loading="previewingStudentKnowledgeTasks" @click="previewStudentKnowledgeTasks">
+                  重新预览任务
+                </el-button>
+              </template>
+            </el-alert>
             <el-alert
               v-if="studentKnowledgeTaskPreview"
               class="table-gap"
@@ -556,7 +648,7 @@
       </el-tab-pane>
 
       <el-tab-pane label="班级分析" name="class" lazy>
-        <section class="soft-card panel-block">
+        <section class="soft-card panel-block" v-loading="loadingClassAnalytics">
           <div class="section-head compact">
             <div>
               <h3>班级分析</h3>
@@ -572,9 +664,17 @@
                 :value="schoolClass.id"
               />
             </el-select>
-            <el-button type="primary" @click="loadClassAnalytics">查询</el-button>
+            <el-button type="primary" :disabled="!selectedClassId" :loading="loadingClassAnalytics" @click="loadClassAnalytics">查询</el-button>
           </div>
-          <el-empty v-if="!classAnalytics && !scoreRecordTotal" description="当前成绩记录为 0。请先导入成绩，再查看班级均分、分科质量和横向比较。" />
+          <el-alert
+            v-if="classAnalyticsError"
+            class="analytics-inline-alert"
+            type="warning"
+            show-icon
+            :closable="false"
+            :title="classAnalyticsError"
+          />
+          <el-empty v-if="!classAnalytics && !loadingClassAnalytics" :description="classAnalyticsEmptyDescription" />
           <div v-if="classAnalytics" class="metric-grid analytics-grid">
             <div class="soft-card stat-card">
               <div class="metric-label">总分均分</div>
@@ -617,11 +717,60 @@
                   />
                 </el-select>
                 <el-button :loading="loadingClassKnowledgeBriefing" @click="loadClassKnowledgeBriefing">加载讲评清单</el-button>
-                <el-button :disabled="!selectedClassKnowledgeIds.length" @click="previewClassKnowledgeTasks">预览任务</el-button>
-                <el-button type="primary" plain :disabled="!selectedClassKnowledgeIds.length" :loading="generatingClassKnowledgeTasks" @click="generateClassKnowledgeTasks">批量生成任务</el-button>
+                <el-button
+                  :loading="previewingClassKnowledgeTasks"
+                  :disabled="!selectedClassKnowledgeIds.length || loadingClassKnowledgeBriefing || generatingClassKnowledgeTasks"
+                  @click="previewClassKnowledgeTasks"
+                >
+                  预览任务
+                </el-button>
+                <el-button
+                  type="primary"
+                  plain
+                  :disabled="!selectedClassKnowledgeIds.length || loadingClassKnowledgeBriefing || previewingClassKnowledgeTasks"
+                  :loading="generatingClassKnowledgeTasks"
+                  @click="generateClassKnowledgeTasks"
+                >
+                  批量生成任务
+                </el-button>
                 <el-button plain @click="openClassKnowledgePrint">打印讲评</el-button>
               </div>
             </div>
+            <el-alert
+              v-if="classKnowledgeBriefingError"
+              class="table-gap"
+              type="error"
+              show-icon
+              :closable="false"
+              :title="classKnowledgeBriefingError"
+            >
+              <template #default>
+                <el-button size="small" type="danger" plain :loading="loadingClassKnowledgeBriefing" @click="loadClassKnowledgeBriefing">
+                  重新加载讲评清单
+                </el-button>
+              </template>
+            </el-alert>
+            <el-alert
+              v-if="classKnowledgeTaskError"
+              class="table-gap"
+              type="error"
+              show-icon
+              :closable="false"
+              :title="classKnowledgeTaskError"
+            >
+              <template #default>
+                <el-button
+                  size="small"
+                  type="danger"
+                  plain
+                  :disabled="!selectedClassKnowledgeIds.length"
+                  :loading="previewingClassKnowledgeTasks"
+                  @click="previewClassKnowledgeTasks"
+                >
+                  重新预览任务
+                </el-button>
+              </template>
+            </el-alert>
             <el-alert
               v-if="classKnowledgeTaskPreview"
               class="table-gap"
@@ -630,7 +779,7 @@
               :closable="false"
               :title="formatTaskPreviewSummary(classKnowledgeTaskPreview.create_count, classKnowledgeTaskPreview.skip_count)"
             />
-            <div v-if="classKnowledgeBriefing?.items?.length" class="table-shell table-gap">
+            <div v-if="classKnowledgeBriefing?.items?.length" class="table-shell table-gap" v-loading="loadingClassKnowledgeBriefing">
               <el-table :data="classKnowledgeBriefing.items" stripe @selection-change="handleClassKnowledgeSelection">
                 <el-table-column type="selection" width="45" />
                 <el-table-column label="科目" prop="subject_name" width="90" />
@@ -655,19 +804,30 @@
                 <el-table-column label="建议" prop="suggestion" min-width="260" />
               </el-table>
             </div>
-            <el-empty v-else description="当前班级暂无知识点讲评清单。请先导入题分明细。" />
+            <el-empty v-else :description="classKnowledgeBriefingEmptyDescription">
+              <el-button
+                v-if="classKnowledgeBriefingError"
+                type="primary"
+                plain
+                :loading="loadingClassKnowledgeBriefing"
+                @click="loadClassKnowledgeBriefing"
+              >
+                重新加载讲评清单
+              </el-button>
+            </el-empty>
           </article>
           <ClassKnowledgeHeatmapCard
             v-if="classAnalytics"
             :heatmap="classKnowledgeHeatmap"
             :loading="loadingClassKnowledgeHeatmap"
+            :error-message="classKnowledgeHeatmapError"
             @refresh="loadClassKnowledgeHeatmap"
           />
         </section>
       </el-tab-pane>
 
       <el-tab-pane label="年级分析" name="grade" lazy>
-        <section class="soft-card panel-block">
+        <section class="soft-card panel-block" v-loading="loadingGradeAnalytics">
           <div class="section-head compact">
             <div>
               <h3>年级分析</h3>
@@ -683,26 +843,76 @@
                 :value="grade.id"
               />
             </el-select>
-            <el-button type="primary" @click="loadGradeAnalytics">查询</el-button>
+            <el-button type="primary" :disabled="!selectedGradeId" :loading="loadingGradeAnalytics" @click="loadGradeAnalytics">查询</el-button>
           </div>
+          <el-alert
+            v-if="gradeAnalyticsError"
+            class="analytics-inline-alert"
+            type="warning"
+            show-icon
+            :closable="false"
+            :title="gradeAnalyticsError"
+          />
           <section v-if="selectedExamId" class="soft-card inner-panel target-line-panel">
             <div class="inner-head">
               <h4>年级目标线</h4>
               <div class="action-row">
-                <el-button size="small" @click="addTargetLineDraft">新增目标线</el-button>
-                <el-button size="small" type="primary" :loading="savingTargetLines" @click="saveTargetLines">保存目标线</el-button>
+                <el-button size="small" :disabled="loadingTargetLines || savingTargetLines" @click="addTargetLineDraft">新增目标线</el-button>
+                <el-button size="small" :disabled="loadingTargetLines || savingTargetLines" :loading="loadingTargetLines" @click="loadTargetLines">
+                  重新加载
+                </el-button>
+                <el-button size="small" type="primary" :disabled="loadingTargetLines" :loading="savingTargetLines" @click="saveTargetLines">保存目标线</el-button>
               </div>
             </div>
+            <el-alert
+              v-if="targetLineError"
+              class="table-gap"
+              type="error"
+              show-icon
+              :closable="false"
+              :title="targetLineError"
+            >
+              <template #default>
+                <el-button
+                  v-if="targetLineErrorMode === 'load'"
+                  size="small"
+                  type="danger"
+                  plain
+                  :loading="loadingTargetLines"
+                  @click="loadTargetLines"
+                >
+                  重新加载目标线
+                </el-button>
+                <el-button
+                  v-else
+                  size="small"
+                  type="danger"
+                  plain
+                  :loading="savingTargetLines"
+                  @click="saveTargetLines"
+                >
+                  重新保存目标线
+                </el-button>
+              </template>
+            </el-alert>
+            <el-alert
+              v-if="targetLineSuccessMessage"
+              class="table-gap"
+              type="success"
+              show-icon
+              :closable="false"
+              :title="targetLineSuccessMessage"
+            />
             <div class="table-shell">
-              <el-table :data="targetLineDrafts" stripe>
+              <el-table :data="targetLineDrafts" stripe v-loading="loadingTargetLines || savingTargetLines">
                 <el-table-column label="名称" min-width="140">
                   <template #default="{ row }">
-                    <el-input v-model="row.name" placeholder="如 本科线" />
+                    <el-input v-model="row.name" placeholder="如 本科线" :disabled="loadingTargetLines || savingTargetLines" />
                   </template>
                 </el-table-column>
                 <el-table-column label="类型" width="130">
                   <template #default="{ row }">
-                    <el-select v-model="row.line_type">
+                    <el-select v-model="row.line_type" :disabled="loadingTargetLines || savingTargetLines">
                       <el-option label="分数线" value="score" />
                       <el-option label="名次线" value="rank" />
                     </el-select>
@@ -710,33 +920,64 @@
                 </el-table-column>
                 <el-table-column label="分数" width="130">
                   <template #default="{ row }">
-                    <el-input-number v-model="row.score_value" :disabled="row.line_type !== 'score'" :min="0" controls-position="right" />
+                    <el-input-number v-model="row.score_value" :disabled="row.line_type !== 'score' || loadingTargetLines || savingTargetLines" :min="0" controls-position="right" />
                   </template>
                 </el-table-column>
                 <el-table-column label="名次" width="130">
                   <template #default="{ row }">
-                    <el-input-number v-model="row.rank_value" :disabled="row.line_type !== 'rank'" :min="1" controls-position="right" />
+                    <el-input-number v-model="row.rank_value" :disabled="row.line_type !== 'rank' || loadingTargetLines || savingTargetLines" :min="1" controls-position="right" />
                   </template>
                 </el-table-column>
                 <el-table-column label="临界分" width="130">
                   <template #default="{ row }">
-                    <el-input-number v-model="row.near_margin_score" :min="0" controls-position="right" />
+                    <el-input-number v-model="row.near_margin_score" :min="0" controls-position="right" :disabled="loadingTargetLines || savingTargetLines" />
                   </template>
                 </el-table-column>
                 <el-table-column label="临界名次" width="130">
                   <template #default="{ row }">
-                    <el-input-number v-model="row.near_margin_rank" :min="0" controls-position="right" />
+                    <el-input-number v-model="row.near_margin_rank" :min="0" controls-position="right" :disabled="loadingTargetLines || savingTargetLines" />
                   </template>
                 </el-table-column>
                 <el-table-column label="操作" width="90">
                   <template #default="{ $index }">
-                    <el-button link type="danger" @click="removeTargetLineDraft($index)">删除</el-button>
+                    <el-button link type="danger" :disabled="loadingTargetLines || savingTargetLines" @click="removeTargetLineDraft($index)">删除</el-button>
                   </template>
                 </el-table-column>
+                <template #empty>
+                  <el-empty :description="targetLineEmptyDescription">
+                    <el-button
+                      v-if="targetLineErrorMode === 'load'"
+                      type="primary"
+                      plain
+                      :loading="loadingTargetLines"
+                      @click="loadTargetLines"
+                    >
+                      重新加载目标线
+                    </el-button>
+                    <el-button
+                      v-else-if="targetLineErrorMode === 'save'"
+                      type="primary"
+                      plain
+                      :loading="savingTargetLines"
+                      @click="saveTargetLines"
+                    >
+                      重新保存目标线
+                    </el-button>
+                    <el-button
+                      v-else
+                      type="primary"
+                      plain
+                      :disabled="loadingTargetLines || savingTargetLines"
+                      @click="addTargetLineDraft"
+                    >
+                      新增目标线
+                    </el-button>
+                  </el-empty>
+                </template>
               </el-table>
             </div>
           </section>
-          <el-empty v-if="!gradeAnalytics && !scoreRecordTotal" description="当前成绩记录为 0。请先导入成绩，再查看年级分数段、名次段和班级横向对比。" />
+          <el-empty v-if="!gradeAnalytics && !loadingGradeAnalytics" :description="gradeAnalyticsEmptyDescription" />
           <div v-if="gradeAnalytics" class="metric-grid analytics-grid">
             <div class="soft-card stat-card">
               <div class="metric-label">年级均分</div>
@@ -897,7 +1138,7 @@
       </el-tab-pane>
 
       <el-tab-pane label="教师分析" name="teacher" lazy>
-        <section class="soft-card panel-block">
+        <section class="soft-card panel-block" v-loading="loadingTeacherAnalytics">
           <div class="section-head compact">
             <div>
               <h3>教师分析</h3>
@@ -913,9 +1154,17 @@
                 :value="teacher.id"
               />
             </el-select>
-            <el-button type="primary" @click="loadTeacherAnalytics">查询</el-button>
+            <el-button type="primary" :disabled="!selectedTeacherId" :loading="loadingTeacherAnalytics" @click="loadTeacherAnalytics">查询</el-button>
           </div>
-          <el-empty v-if="!teacherAnalytics && !scoreRecordTotal" description="当前成绩记录为 0。请先导入成绩并维护任教关系，再查看教师分析。" />
+          <el-alert
+            v-if="teacherAnalyticsError"
+            class="analytics-inline-alert"
+            type="warning"
+            show-icon
+            :closable="false"
+            :title="teacherAnalyticsError"
+          />
+          <el-empty v-if="!teacherAnalytics && !loadingTeacherAnalytics" :description="teacherAnalyticsEmptyDescription" />
           <div v-if="teacherAnalytics" class="metric-grid analytics-grid">
             <div class="soft-card stat-card">
               <div class="metric-label">教师均分</div>
@@ -933,6 +1182,9 @@
               <el-table-column label="优秀率" prop="excellent_rate" width="100" />
               <el-table-column label="及格率" prop="pass_rate" width="100" />
               <el-table-column label="有效人数" prop="valid_count" width="100" />
+              <template #empty>
+                <el-empty description="当前教师暂无任教班级成绩拆分。" />
+              </template>
             </el-table>
           </div>
         </section>
@@ -946,6 +1198,7 @@
           :academic-years="referenceStore.academicYears"
           :panorama="gradePanorama"
           :loading="loadingGradePanorama"
+          :error-message="gradePanoramaError"
           @load="loadGradePanorama"
           @reset="resetGradePanoramaFilters"
         />
@@ -959,6 +1212,7 @@
           :academic-years="referenceStore.academicYears"
           :panorama="classPanorama"
           :loading="loadingClassPanorama"
+          :error-message="classPanoramaError"
           @load="loadClassPanorama"
           @reset="resetClassPanoramaFilters"
         />
@@ -972,6 +1226,7 @@
           :academic-years="referenceStore.academicYears"
           :panorama="teacherPanorama"
           :loading="loadingTeacherPanorama"
+          :error-message="teacherPanoramaError"
           @load="loadTeacherPanorama"
           @reset="resetTeacherPanoramaFilters"
         />
@@ -1048,6 +1303,7 @@ import { AppFilterBar, AppPage, AppSectionCard, AppStatGrid, type StatCardItem }
 import { useReferenceStore } from "../stores/reference";
 import { buildScoreReadinessMessages } from "../utils/scoreReadiness";
 import { classKnowledgeBriefingPrintPreviewPath, studentKnowledgePrintPreviewPath } from "../utils/print";
+import { formatUserActionError } from "../utils/userFeedback";
 
 interface ExamOption {
   id: number;
@@ -1131,6 +1387,21 @@ const selectedPanoramaClassId = ref<number | null>(null);
 const selectedClassPanoramaAcademicYearIds = ref<number[]>([]);
 const selectedPanoramaTeacherId = ref<number | null>(null);
 const selectedTeacherPanoramaAcademicYearIds = ref<number[]>([]);
+type AnalysisLoadKey =
+  | "options"
+  | "students"
+  | "rankAudit"
+  | "adviser"
+  | "scoreReport"
+  | "student"
+  | "class"
+  | "grade"
+  | "teacher"
+  | "gradePanorama"
+  | "classPanorama"
+  | "teacherPanorama";
+const loadingOptions = ref(false);
+const loadingExamStudentOptions = ref(false);
 const loadingGradePanorama = ref(false);
 const loadingClassPanorama = ref(false);
 const loadingTeacherPanorama = ref(false);
@@ -1140,8 +1411,10 @@ const adviserClassId = ref<number | null>(null);
 const adviserDateRange = ref<[string, string] | null>(null);
 const adviserDashboard = ref<AdviserDashboardResponse | null>(null);
 const loadingAdviserDashboard = ref(false);
+const adviserDashboardError = ref("");
 const scoreReport = ref<ExamScoreReportResponse | null>(null);
 const loadingScoreReport = ref(false);
+const scoreReportError = ref("");
 const scoreReportClassId = ref<number | null>(null);
 const scoreReportKeyword = ref("");
 const scoreReportSortMode = ref("grade_rank:asc");
@@ -1150,37 +1423,61 @@ const scoreReportPageSize = ref(50);
 const selectedScoreReportSubjectIds = ref<number[]>([]);
 const rankAudit = ref<ScoreRankAudit | null>(null);
 const loadingRankAudit = ref(false);
+const rankAuditError = ref("");
 const rebuildingSnapshots = ref(false);
 const targetLineDrafts = ref<ScoreTargetLineDraft[]>([]);
+const loadingTargetLines = ref(false);
 const savingTargetLines = ref(false);
+const targetLineError = ref("");
+const targetLineErrorMode = ref<"load" | "save" | "">("");
+const targetLineSuccessMessage = ref("");
 const studentRadarMetric = ref<RadarMetric>("pr");
 const knowledgeSubjectFilter = ref<number | null>(null);
 const classKnowledgeSubjectFilter = ref<number | null>(null);
 const importingQuestionScores = ref(false);
 const questionImportStrategy = ref("overwrite");
 const questionImportResult = ref<(ImportFeedbackResult & { batch_id?: number; snapshot_count?: number }) | null>(null);
+const questionImportError = ref("");
 const studentRadarOptions = [
   { label: "PR", value: "pr" },
   { label: "T分", value: "t_score" },
 ];
 
 const studentAnalytics = ref<any>(null);
+const loadingStudentAnalytics = ref(false);
+const studentAnalyticsError = ref("");
 const classAnalytics = ref<any>(null);
+const loadingClassAnalytics = ref(false);
+const classAnalyticsError = ref("");
 const classKnowledgeBriefing = ref<any>(null);
 const classKnowledgeHeatmap = ref<any>(null);
 const loadingClassKnowledgeHeatmap = ref(false);
+const classKnowledgeHeatmapError = ref("");
 const selectedClassKnowledgeIds = ref<number[]>([]);
 const loadingClassKnowledgeBriefing = ref(false);
+const classKnowledgeBriefingError = ref("");
 const studentKnowledgeTaskPreview = ref<any>(null);
+const studentKnowledgeTaskError = ref("");
 const classKnowledgeTaskPreview = ref<any>(null);
+const classKnowledgeTaskError = ref("");
 const previewingStudentKnowledgeTasks = ref(false);
+const previewingClassKnowledgeTasks = ref(false);
 const generatingStudentKnowledgeTasks = ref(false);
 const generatingClassKnowledgeTasks = ref(false);
 const gradeAnalytics = ref<any>(null);
+const loadingGradeAnalytics = ref(false);
+const gradeAnalyticsError = ref("");
 const teacherAnalytics = ref<any>(null);
+const loadingTeacherAnalytics = ref(false);
+const teacherAnalyticsError = ref("");
 const gradePanorama = ref<GradePanoramaResponse | null>(null);
 const classPanorama = ref<ClassPanoramaResponse | null>(null);
 const teacherPanorama = ref<TeacherPanoramaResponse | null>(null);
+const gradePanoramaError = ref("");
+const classPanoramaError = ref("");
+const teacherPanoramaError = ref("");
+const optionsLoadError = ref("");
+const examStudentOptionsError = ref("");
 const selectedExamName = computed(
   () => examOptions.value.find((item) => item.id === selectedExamId.value)?.name ?? "未选择考试",
 );
@@ -1207,6 +1504,87 @@ const scoreReadinessMessages = computed(() =>
     selectedExamName: selectedExamId.value ? selectedExamName.value : null,
   }),
 );
+const analysisLoadErrorItems = computed<
+  Array<{ key: AnalysisLoadKey; label: string; message: string; loading: boolean }>
+>(() =>
+  [
+    { key: "options" as const, label: "基础选项", message: optionsLoadError.value, loading: loadingOptions.value },
+    {
+      key: "students" as const,
+      label: "当前考试学生",
+      message: examStudentOptionsError.value,
+      loading: loadingExamStudentOptions.value,
+    },
+    { key: "rankAudit" as const, label: "名次口径审计", message: rankAuditError.value, loading: loadingRankAudit.value },
+    {
+      key: "adviser" as const,
+      label: "班主任驾驶舱",
+      message: adviserDashboardError.value,
+      loading: loadingAdviserDashboard.value,
+    },
+    { key: "scoreReport" as const, label: "成绩报表", message: scoreReportError.value, loading: loadingScoreReport.value },
+    { key: "student" as const, label: "学生分析", message: studentAnalyticsError.value, loading: loadingStudentAnalytics.value },
+    { key: "class" as const, label: "班级分析", message: classAnalyticsError.value, loading: loadingClassAnalytics.value },
+    { key: "grade" as const, label: "年级分析", message: gradeAnalyticsError.value, loading: loadingGradeAnalytics.value },
+    { key: "teacher" as const, label: "教师分析", message: teacherAnalyticsError.value, loading: loadingTeacherAnalytics.value },
+    { key: "gradePanorama" as const, label: "年级全景", message: gradePanoramaError.value, loading: loadingGradePanorama.value },
+    { key: "classPanorama" as const, label: "班级全景", message: classPanoramaError.value, loading: loadingClassPanorama.value },
+    { key: "teacherPanorama" as const, label: "教师全景", message: teacherPanoramaError.value, loading: loadingTeacherPanorama.value },
+  ].filter((item) => item.message),
+);
+const adviserDashboardEmptyDescription = computed(() => {
+  if (adviserDashboardError.value) return "班主任驾驶舱加载失败，请点击重试。";
+  return "选择年级或班级后点击“加载驾驶舱”。";
+});
+const scoreReportEmptyDescription = computed(() => {
+  if (scoreReportError.value) return "成绩报表加载失败，请点击重试。";
+  if (!selectedExamId.value) return "请先选择考试。";
+  if (!scoreRecordTotal.value) return "当前成绩记录为 0。请先导入成绩，再查看本次考试成绩报表。";
+  return "点击“加载成绩报表”查看本次考试成绩宽表。";
+});
+const studentAnalyticsEmptyDescription = computed(() => {
+  if (studentAnalyticsError.value) return "学生分析加载失败，请点击重试。";
+  if (!selectedExamId.value) return "请先选择考试。";
+  if (!scoreRecordTotal.value) return "当前成绩记录为 0。请先到考试成绩中心导入成绩，再查看学生分析。";
+  if (examStudentOptionsError.value) return "当前考试学生列表加载失败，请先重试学生选项。";
+  if (!studentOptions.value.length) return "当前考试暂无可分析学生。请确认已导入成绩并重建成绩快照。";
+  if (!selectedStudentId.value) return "请选择学生后查询个人分析。";
+  return "点击“查询”查看学生个人分析。";
+});
+const classAnalyticsEmptyDescription = computed(() => {
+  if (classAnalyticsError.value) return "班级分析加载失败，请点击重试。";
+  if (!selectedExamId.value) return "请先选择考试。";
+  if (!scoreRecordTotal.value) return "当前成绩记录为 0。请先导入成绩，再查看班级均分、分科质量和横向比较。";
+  if (!examScopedClassOptions.value.length) return "当前考试暂无可分析班级。";
+  if (!selectedClassId.value) return "请选择班级后查询班级分析。";
+  return "点击“查询”查看班级分析。";
+});
+const classKnowledgeBriefingEmptyDescription = computed(() => {
+  if (loadingClassKnowledgeBriefing.value) return "正在加载班级知识点讲评清单";
+  if (classKnowledgeBriefingError.value) return "班级知识点讲评清单加载失败，请重试。";
+  return "当前班级暂无知识点讲评清单。请先导入题分明细。";
+});
+const targetLineEmptyDescription = computed(() => {
+  if (loadingTargetLines.value) return "正在加载目标线";
+  if (targetLineError.value) return "目标线操作失败，请处理后重试。";
+  return "当前考试还没有目标线，可以先新增一条分数线或名次线。";
+});
+const gradeAnalyticsEmptyDescription = computed(() => {
+  if (gradeAnalyticsError.value) return "年级分析加载失败，请点击重试。";
+  if (!selectedExamId.value) return "请先选择考试。";
+  if (!scoreRecordTotal.value) return "当前成绩记录为 0。请先导入成绩，再查看年级分数段、名次段和班级横向对比。";
+  if (!examScopedGradeOptions.value.length) return "当前考试暂无可分析年级。";
+  if (!selectedGradeId.value) return "请选择年级后查询年级分析。";
+  return "点击“查询”查看年级分析。";
+});
+const teacherAnalyticsEmptyDescription = computed(() => {
+  if (teacherAnalyticsError.value) return "教师分析加载失败，请点击重试。";
+  if (!selectedExamId.value) return "请先选择考试。";
+  if (!scoreRecordTotal.value) return "当前成绩记录为 0。请先导入成绩并维护任教关系，再查看教师分析。";
+  if (!teacherOptions.value.length) return "暂无教师档案。";
+  if (!selectedTeacherId.value) return "请选择教师后查询教师分析。";
+  return "点击“查询”查看教师分析。";
+});
 const analyticsOverviewCards = computed<StatCardItem[]>(() => [
   {
     label: "考试",
@@ -1335,38 +1713,98 @@ const adviserOverviewCards = computed(() => {
   ];
 });
 
-async function loadOptions(): Promise<void> {
-  await referenceStore.loadCore();
-  const [examPayload, teacherPayload] = await Promise.all([
-    apiRequest<{ items: ExamOption[] }>("/api/exams?page=1&page_size=100"),
-    apiRequest<{ items: TeacherOption[] }>("/api/teachers?page=1&page_size=200"),
-  ]);
-  try {
-    const dashboardPayload = await apiRequest<{ score_record_total?: number }>("/api/dashboard/summary");
-    scoreRecordTotal.value = dashboardPayload.score_record_total ?? 0;
-  } catch {
-    scoreRecordTotal.value = 0;
+async function reloadAnalysisErrorItem(key: AnalysisLoadKey): Promise<void> {
+  if (key === "options") {
+    await loadOptions();
+    return;
   }
-  examOptions.value = examPayload.items;
-  teacherOptions.value = teacherPayload.items;
-  if (!selectedExamId.value && examOptions.value.length) {
-    selectedExamId.value = examOptions.value[0].id;
-  }
-  if (selectedExamId.value) {
+  if (key === "students") {
     await loadExamStudentOptions({ preserveCurrent: true });
+    return;
   }
-  syncExamScopedSelections();
-  if (!selectedTeacherId.value && teacherOptions.value.length) {
-    selectedTeacherId.value = teacherOptions.value[0].id;
+  if (key === "rankAudit") {
+    await loadScoreRankAudit();
+    return;
   }
-  if (!selectedPanoramaGradeId.value && referenceStore.grades.length) {
-    selectedPanoramaGradeId.value = referenceStore.grades[0].id;
+  if (key === "adviser") {
+    await loadAdviserDashboard();
+    return;
   }
-  if (!selectedPanoramaClassId.value && referenceStore.classes.length) {
-    selectedPanoramaClassId.value = referenceStore.classes[0].id;
+  if (key === "scoreReport") {
+    await loadScoreReport();
+    return;
   }
-  if (!selectedPanoramaTeacherId.value && teacherOptions.value.length) {
-    selectedPanoramaTeacherId.value = teacherOptions.value[0].id;
+  if (key === "student") {
+    await loadStudentAnalytics();
+    return;
+  }
+  if (key === "class") {
+    await loadClassAnalytics();
+    return;
+  }
+  if (key === "grade") {
+    await loadGradeAnalytics();
+    return;
+  }
+  if (key === "teacher") {
+    await loadTeacherAnalytics();
+    return;
+  }
+  if (key === "gradePanorama") {
+    await loadGradePanorama();
+    return;
+  }
+  if (key === "classPanorama") {
+    await loadClassPanorama();
+    return;
+  }
+  await loadTeacherPanorama();
+}
+
+async function loadOptions(): Promise<void> {
+  try {
+    loadingOptions.value = true;
+    optionsLoadError.value = "";
+    await referenceStore.loadCore();
+    const [examPayload, teacherPayload] = await Promise.all([
+      apiRequest<{ items: ExamOption[] }>("/api/exams?page=1&page_size=100"),
+      apiRequest<{ items: TeacherOption[] }>("/api/teachers?page=1&page_size=200"),
+    ]);
+    try {
+      const dashboardPayload = await apiRequest<{ score_record_total?: number }>("/api/dashboard/summary");
+      scoreRecordTotal.value = dashboardPayload.score_record_total ?? 0;
+    } catch {
+      scoreRecordTotal.value = 0;
+    }
+    examOptions.value = examPayload.items;
+    teacherOptions.value = teacherPayload.items;
+    if (!selectedExamId.value && examOptions.value.length) {
+      selectedExamId.value = examOptions.value[0].id;
+    }
+    if (selectedExamId.value) {
+      await loadExamStudentOptions({ preserveCurrent: true });
+    }
+    syncExamScopedSelections();
+    if (!selectedTeacherId.value && teacherOptions.value.length) {
+      selectedTeacherId.value = teacherOptions.value[0].id;
+    }
+    if (!selectedPanoramaGradeId.value && referenceStore.grades.length) {
+      selectedPanoramaGradeId.value = referenceStore.grades[0].id;
+    }
+    if (!selectedPanoramaClassId.value && referenceStore.classes.length) {
+      selectedPanoramaClassId.value = referenceStore.classes[0].id;
+    }
+    if (!selectedPanoramaTeacherId.value && teacherOptions.value.length) {
+      selectedPanoramaTeacherId.value = teacherOptions.value[0].id;
+    }
+  } catch (error) {
+    optionsLoadError.value = formatUserActionError(
+      "加载分析中心基础选项",
+      error,
+      "请确认本地服务已启动后重试。",
+    );
+  } finally {
+    loadingOptions.value = false;
   }
 }
 
@@ -1375,8 +1813,11 @@ async function loadExamStudentOptions(options: { preserveCurrent?: boolean } = {
     studentOptions.value = [];
     selectedStudentId.value = null;
     studentAnalytics.value = null;
+    examStudentOptionsError.value = "";
     return;
   }
+  loadingExamStudentOptions.value = true;
+  examStudentOptionsError.value = "";
   try {
     const payload = await apiRequest<{ items: StudentOption[]; total: number }>(
       `/api/analytics/exams/${selectedExamId.value}/students`,
@@ -1395,7 +1836,13 @@ async function loadExamStudentOptions(options: { preserveCurrent?: boolean } = {
     studentOptions.value = [];
     selectedStudentId.value = null;
     studentAnalytics.value = null;
-    ElMessage.error((error as Error).message);
+    examStudentOptionsError.value = formatUserActionError(
+      "加载当前考试学生",
+      error,
+      "请确认已导入成绩并重建快照后重试。",
+    );
+  } finally {
+    loadingExamStudentOptions.value = false;
   }
 }
 
@@ -1414,11 +1861,23 @@ function syncExamScopedSelections(): void {
 
 async function loadStudentAnalytics(): Promise<void> {
   if (!selectedExamId.value || !selectedStudentId.value) return;
+  loadingStudentAnalytics.value = true;
+  studentAnalyticsError.value = "";
   try {
     studentAnalytics.value = await apiRequest(`/api/analytics/students/${selectedStudentId.value}?exam_id=${selectedExamId.value}`);
     studentKnowledgeTaskPreview.value = null;
+    studentKnowledgeTaskError.value = "";
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    studentAnalytics.value = null;
+    studentKnowledgeTaskPreview.value = null;
+    studentKnowledgeTaskError.value = "";
+    studentAnalyticsError.value = formatUserActionError(
+      "加载学生分析",
+      error,
+      "请确认当前考试已生成学生成绩快照后重试。",
+    );
+  } finally {
+    loadingStudentAnalytics.value = false;
   }
 }
 
@@ -1426,6 +1885,8 @@ async function handleQuestionScoreImport(uploadFileItem: UploadFile): Promise<vo
   if (!uploadFileItem.raw || !selectedExamId.value) return;
   try {
     importingQuestionScores.value = true;
+    questionImportResult.value = null;
+    questionImportError.value = "";
     questionImportResult.value = await uploadFile<ImportFeedbackResult & { batch_id: number; snapshot_count: number }>(
       `/api/exams/${selectedExamId.value}/score-questions/import`,
       uploadFileItem.raw,
@@ -1435,11 +1896,24 @@ async function handleQuestionScoreImport(uploadFileItem: UploadFile): Promise<vo
       type: questionImportResult.value.failed_rows ? "warning" : "success",
       message: questionImportResult.value.message,
     });
+    classKnowledgeBriefing.value = null;
+    classKnowledgeHeatmap.value = null;
+    classKnowledgeTaskPreview.value = null;
+    selectedClassKnowledgeIds.value = [];
+    classKnowledgeBriefingError.value = "";
+    classKnowledgeHeatmapError.value = "";
+    classKnowledgeTaskError.value = "";
     if (selectedStudentId.value) {
       await loadStudentAnalytics();
     }
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    questionImportResult.value = null;
+    questionImportError.value = formatUserActionError(
+      "导入题分明细",
+      error,
+      "请确认上传的是题分明细 Excel，并且当前考试已配置科目后重试。",
+    );
+    ElMessage.error(questionImportError.value);
   } finally {
     importingQuestionScores.value = false;
   }
@@ -1447,14 +1921,33 @@ async function handleQuestionScoreImport(uploadFileItem: UploadFile): Promise<vo
 
 async function loadClassAnalytics(): Promise<void> {
   if (!selectedExamId.value || !selectedClassId.value) return;
+  loadingClassAnalytics.value = true;
+  classAnalyticsError.value = "";
   try {
     classAnalytics.value = await apiRequest(`/api/analytics/classes/${selectedClassId.value}?exam_id=${selectedExamId.value}`);
     classKnowledgeBriefing.value = null;
     classKnowledgeHeatmap.value = null;
     classKnowledgeTaskPreview.value = null;
+    classKnowledgeBriefingError.value = "";
+    classKnowledgeHeatmapError.value = "";
+    classKnowledgeTaskError.value = "";
     selectedClassKnowledgeIds.value = [];
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    classAnalytics.value = null;
+    classKnowledgeBriefing.value = null;
+    classKnowledgeHeatmap.value = null;
+    classKnowledgeTaskPreview.value = null;
+    classKnowledgeBriefingError.value = "";
+    classKnowledgeHeatmapError.value = "";
+    classKnowledgeTaskError.value = "";
+    selectedClassKnowledgeIds.value = [];
+    classAnalyticsError.value = formatUserActionError(
+      "加载班级分析",
+      error,
+      "请确认当前考试已生成班级成绩快照后重试。",
+    );
+  } finally {
+    loadingClassAnalytics.value = false;
   }
 }
 
@@ -1462,12 +1955,23 @@ async function loadClassKnowledgeBriefing(): Promise<void> {
   if (!selectedExamId.value || !selectedClassId.value) return;
   try {
     loadingClassKnowledgeBriefing.value = true;
+    classKnowledgeBriefingError.value = "";
     const query = new URLSearchParams({ exam_id: String(selectedExamId.value) });
     if (classKnowledgeSubjectFilter.value) query.set("subject_id", String(classKnowledgeSubjectFilter.value));
     classKnowledgeBriefing.value = await apiRequest(`/api/analytics/classes/${selectedClassId.value}/knowledge-briefing?${query.toString()}`);
+    classKnowledgeTaskPreview.value = null;
+    classKnowledgeTaskError.value = "";
     selectedClassKnowledgeIds.value = [];
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    classKnowledgeBriefing.value = null;
+    classKnowledgeTaskPreview.value = null;
+    selectedClassKnowledgeIds.value = [];
+    classKnowledgeBriefingError.value = formatUserActionError(
+      "加载班级知识点讲评清单",
+      error,
+      "确认当前考试已导入题分明细后重试",
+    );
+    ElMessage.error(classKnowledgeBriefingError.value);
   } finally {
     loadingClassKnowledgeBriefing.value = false;
   }
@@ -1477,13 +1981,20 @@ async function loadClassKnowledgeHeatmap(): Promise<void> {
   if (!selectedExamId.value || !selectedClassId.value) return;
   try {
     loadingClassKnowledgeHeatmap.value = true;
+    classKnowledgeHeatmapError.value = "";
     const query = new URLSearchParams({ exam_id: String(selectedExamId.value) });
     if (classKnowledgeSubjectFilter.value) query.set("subject_id", String(classKnowledgeSubjectFilter.value));
     classKnowledgeHeatmap.value = await apiRequest(
       `/api/analytics/classes/${selectedClassId.value}/knowledge-heatmap?${query.toString()}`,
     );
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    classKnowledgeHeatmap.value = null;
+    classKnowledgeHeatmapError.value = formatUserActionError(
+      "加载班级知识点热力图",
+      error,
+      "确认当前考试已导入题分明细后重试",
+    );
+    ElMessage.error(classKnowledgeHeatmapError.value);
   } finally {
     loadingClassKnowledgeHeatmap.value = false;
   }
@@ -1493,11 +2004,18 @@ async function previewStudentKnowledgeTasks(): Promise<void> {
   if (!selectedExamId.value || !selectedStudentId.value) return;
   try {
     previewingStudentKnowledgeTasks.value = true;
+    studentKnowledgeTaskError.value = "";
     studentKnowledgeTaskPreview.value = await apiRequest(
       `/api/planning/students/${selectedStudentId.value}/knowledge-tasks/preview?exam_id=${selectedExamId.value}`,
     );
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    studentKnowledgeTaskPreview.value = null;
+    studentKnowledgeTaskError.value = formatUserActionError(
+      "预览学生补弱任务",
+      error,
+      "确认当前学生已有知识点诊断结果后重试",
+    );
+    ElMessage.error(studentKnowledgeTaskError.value);
   } finally {
     previewingStudentKnowledgeTasks.value = false;
   }
@@ -1507,6 +2025,7 @@ async function generateStudentKnowledgeTasks(): Promise<void> {
   if (!selectedExamId.value || !selectedStudentId.value) return;
   try {
     generatingStudentKnowledgeTasks.value = true;
+    studentKnowledgeTaskError.value = "";
     const result = await apiRequest<{ created_count: number; skipped_count: number }>(
       `/api/planning/students/${selectedStudentId.value}/knowledge-tasks/generate?exam_id=${selectedExamId.value}`,
       { method: "POST", body: JSON.stringify({}) },
@@ -1514,7 +2033,12 @@ async function generateStudentKnowledgeTasks(): Promise<void> {
     ElMessage.success(`已生成 ${result.created_count} 项，跳过 ${result.skipped_count} 项已有任务`);
     await previewStudentKnowledgeTasks();
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    studentKnowledgeTaskError.value = formatUserActionError(
+      "生成学生补弱任务",
+      error,
+      "确认当前学生已有知识点诊断结果且规划任务接口可用后重试",
+    );
+    ElMessage.error(studentKnowledgeTaskError.value);
   } finally {
     generatingStudentKnowledgeTasks.value = false;
   }
@@ -1523,11 +2047,21 @@ async function generateStudentKnowledgeTasks(): Promise<void> {
 async function previewClassKnowledgeTasks(): Promise<void> {
   if (!selectedExamId.value || !selectedClassId.value || !selectedClassKnowledgeIds.value.length) return;
   try {
+    previewingClassKnowledgeTasks.value = true;
+    classKnowledgeTaskError.value = "";
     const query = new URLSearchParams({ exam_id: String(selectedExamId.value) });
     selectedClassKnowledgeIds.value.forEach((id) => query.append("knowledge_point_ids", String(id)));
     classKnowledgeTaskPreview.value = await apiRequest(`/api/planning/classes/${selectedClassId.value}/knowledge-tasks/preview?${query.toString()}`);
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    classKnowledgeTaskPreview.value = null;
+    classKnowledgeTaskError.value = formatUserActionError(
+      "预览班级补弱任务",
+      error,
+      "确认已勾选知识点并且当前班级有题分诊断结果后重试",
+    );
+    ElMessage.error(classKnowledgeTaskError.value);
+  } finally {
+    previewingClassKnowledgeTasks.value = false;
   }
 }
 
@@ -1535,6 +2069,7 @@ async function generateClassKnowledgeTasks(): Promise<void> {
   if (!selectedExamId.value || !selectedClassId.value || !selectedClassKnowledgeIds.value.length) return;
   try {
     generatingClassKnowledgeTasks.value = true;
+    classKnowledgeTaskError.value = "";
     const result = await apiRequest<{ created_count: number; skipped_count: number }>(
       `/api/planning/classes/${selectedClassId.value}/knowledge-tasks/generate?exam_id=${selectedExamId.value}`,
       {
@@ -1545,7 +2080,12 @@ async function generateClassKnowledgeTasks(): Promise<void> {
     ElMessage.success(`已生成 ${result.created_count} 项，跳过 ${result.skipped_count} 项已有任务`);
     await previewClassKnowledgeTasks();
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    classKnowledgeTaskError.value = formatUserActionError(
+      "生成班级补弱任务",
+      error,
+      "确认已勾选知识点且规划任务接口可用后重试",
+    );
+    ElMessage.error(classKnowledgeTaskError.value);
   } finally {
     generatingClassKnowledgeTasks.value = false;
   }
@@ -1554,6 +2094,7 @@ async function generateClassKnowledgeTasks(): Promise<void> {
 function handleClassKnowledgeSelection(rows: Array<{ knowledge_point_id: number }>): void {
   selectedClassKnowledgeIds.value = rows.map((item) => item.knowledge_point_id);
   classKnowledgeTaskPreview.value = null;
+  classKnowledgeTaskError.value = "";
 }
 
 function openStudentKnowledgePrint(): void {
@@ -1568,32 +2109,56 @@ function openClassKnowledgePrint(): void {
 
 async function loadTeacherAnalytics(): Promise<void> {
   if (!selectedExamId.value || !selectedTeacherId.value) return;
+  loadingTeacherAnalytics.value = true;
+  teacherAnalyticsError.value = "";
   try {
     teacherAnalytics.value = await apiRequest(`/api/analytics/teachers/${selectedTeacherId.value}?exam_id=${selectedExamId.value}`);
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    teacherAnalytics.value = null;
+    teacherAnalyticsError.value = formatUserActionError(
+      "加载教师分析",
+      error,
+      "请确认当前考试已导入成绩并维护任教关系后重试。",
+    );
+  } finally {
+    loadingTeacherAnalytics.value = false;
   }
 }
 
 async function loadGradeAnalytics(): Promise<void> {
   if (!selectedExamId.value || !selectedGradeId.value) return;
+  loadingGradeAnalytics.value = true;
+  gradeAnalyticsError.value = "";
   try {
     if (!targetLineDrafts.value.length) {
       await loadTargetLines();
     }
     gradeAnalytics.value = await apiRequest(`/api/analytics/grades/${selectedGradeId.value}?exam_id=${selectedExamId.value}`);
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    gradeAnalytics.value = null;
+    gradeAnalyticsError.value = formatUserActionError(
+      "加载年级分析",
+      error,
+      "请确认当前考试已生成年级成绩快照后重试。",
+    );
+  } finally {
+    loadingGradeAnalytics.value = false;
   }
 }
 
 async function loadScoreRankAudit(): Promise<void> {
   if (!selectedExamId.value) return;
+  rankAuditError.value = "";
   try {
     loadingRankAudit.value = true;
     rankAudit.value = await apiRequest<ScoreRankAudit>(`/api/exams/${selectedExamId.value}/score-rank-audit`);
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    rankAudit.value = null;
+    rankAuditError.value = formatUserActionError(
+      "加载名次口径审计",
+      error,
+      "请确认当前考试已有成绩快照后重试。",
+    );
   } finally {
     loadingRankAudit.value = false;
   }
@@ -1628,18 +2193,30 @@ async function rebuildScoreSnapshots(): Promise<void> {
 async function loadTargetLines(): Promise<void> {
   if (!selectedExamId.value) return;
   try {
+    loadingTargetLines.value = true;
+    targetLineError.value = "";
+    targetLineErrorMode.value = "";
+    targetLineSuccessMessage.value = "";
     const payload = await apiRequest<ScoreTargetLineDraft[]>(`/api/exams/${selectedExamId.value}/score-target-lines`);
-    targetLineDrafts.value = payload.map((item, index) => ({
-      ...item,
-      sort_order: item.sort_order ?? index,
-      is_active: item.is_active ?? true,
-    }));
+    targetLineDrafts.value = normalizeTargetLineDrafts(payload);
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    targetLineDrafts.value = [];
+    targetLineError.value = formatUserActionError(
+      "加载目标线",
+      error,
+      "请确认当前考试仍然存在，并且本地服务可以访问后重试。",
+    );
+    targetLineErrorMode.value = "load";
+    ElMessage.error(targetLineError.value);
+  } finally {
+    loadingTargetLines.value = false;
   }
 }
 
 function addTargetLineDraft(): void {
+  targetLineError.value = "";
+  targetLineErrorMode.value = "";
+  targetLineSuccessMessage.value = "";
   targetLineDrafts.value.push({
     name: "",
     line_type: "score",
@@ -1654,6 +2231,9 @@ function addTargetLineDraft(): void {
 }
 
 function removeTargetLineDraft(index: number): void {
+  targetLineError.value = "";
+  targetLineErrorMode.value = "";
+  targetLineSuccessMessage.value = "";
   targetLineDrafts.value.splice(index, 1);
   targetLineDrafts.value.forEach((item, itemIndex) => {
     item.sort_order = itemIndex;
@@ -1677,25 +2257,47 @@ async function saveTargetLines(): Promise<void> {
     }));
   try {
     savingTargetLines.value = true;
-    targetLineDrafts.value = await apiRequest<ScoreTargetLineDraft[]>(
+    targetLineError.value = "";
+    targetLineErrorMode.value = "";
+    targetLineSuccessMessage.value = "";
+    const savedDrafts = await apiRequest<ScoreTargetLineDraft[]>(
       `/api/exams/${selectedExamId.value}/score-target-lines`,
       {
         method: "PUT",
         body: JSON.stringify(payload),
       },
     );
+    targetLineDrafts.value = normalizeTargetLineDrafts(savedDrafts);
+    targetLineSuccessMessage.value = selectedGradeId.value
+      ? "目标线已保存，年级分析已同步刷新。"
+      : "目标线已保存。选择年级后可查看达线统计。";
     ElMessage.success("目标线已保存");
     if (selectedGradeId.value) {
       await loadGradeAnalytics();
     }
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    targetLineError.value = formatUserActionError(
+      "保存目标线",
+      error,
+      "请检查目标线名称、分数线或名次线是否填写完整后重试。",
+    );
+    targetLineErrorMode.value = "save";
+    ElMessage.error(targetLineError.value);
   } finally {
     savingTargetLines.value = false;
   }
 }
 
+function normalizeTargetLineDrafts(items: ScoreTargetLineDraft[]): ScoreTargetLineDraft[] {
+  return items.map((item, index) => ({
+    ...item,
+    sort_order: item.sort_order ?? index,
+    is_active: item.is_active ?? true,
+  }));
+}
+
 async function loadAdviserDashboard(): Promise<void> {
+  adviserDashboardError.value = "";
   try {
     loadingAdviserDashboard.value = true;
     const query = new URLSearchParams();
@@ -1707,7 +2309,12 @@ async function loadAdviserDashboard(): Promise<void> {
     const suffix = query.toString() ? `?${query.toString()}` : "";
     adviserDashboard.value = await apiRequest<AdviserDashboardResponse>(`/api/analytics/adviser-dashboard${suffix}`);
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    adviserDashboard.value = null;
+    adviserDashboardError.value = formatUserActionError(
+      "加载班主任驾驶舱",
+      error,
+      "请确认当前考试和班级范围有效后重试。",
+    );
   } finally {
     loadingAdviserDashboard.value = false;
   }
@@ -1716,6 +2323,7 @@ async function loadAdviserDashboard(): Promise<void> {
 async function loadScoreReport(): Promise<void> {
   if (!selectedExamId.value) return;
   const [sortBy, sortOrder] = scoreReportSortMode.value.split(":");
+  scoreReportError.value = "";
   try {
     loadingScoreReport.value = true;
     const query = buildExamScoreReportQuery({
@@ -1734,7 +2342,12 @@ async function loadScoreReport(): Promise<void> {
       .filter((subject) => selectedSubjectIds.has(subject.subject_id))
       .map((subject) => subject.subject_id);
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    scoreReport.value = null;
+    scoreReportError.value = formatUserActionError(
+      "加载成绩报表",
+      error,
+      "请确认当前考试已生成成绩快照后重试。",
+    );
   } finally {
     loadingScoreReport.value = false;
   }
@@ -1775,6 +2388,7 @@ async function loadGradePanorama(): Promise<void> {
   if (!selectedPanoramaGradeId.value || loadingGradePanorama.value) return;
   try {
     loadingGradePanorama.value = true;
+    gradePanoramaError.value = "";
     const query = new URLSearchParams();
     selectedPanoramaAcademicYearIds.value.forEach((item) => {
       query.append("academic_year_ids", String(item));
@@ -1784,7 +2398,13 @@ async function loadGradePanorama(): Promise<void> {
       `/api/analytics/grades/${selectedPanoramaGradeId.value}/panorama${suffix}`,
     );
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    gradePanorama.value = null;
+    gradePanoramaError.value = formatUserActionError(
+      "加载年级全景",
+      error,
+      "确认年级、学年筛选和成绩快照可用后重试",
+    );
+    ElMessage.error(gradePanoramaError.value);
   } finally {
     loadingGradePanorama.value = false;
   }
@@ -1794,6 +2414,7 @@ async function loadClassPanorama(): Promise<void> {
   if (!selectedPanoramaClassId.value || loadingClassPanorama.value) return;
   try {
     loadingClassPanorama.value = true;
+    classPanoramaError.value = "";
     const query = new URLSearchParams();
     selectedClassPanoramaAcademicYearIds.value.forEach((item) => {
       query.append("academic_year_ids", String(item));
@@ -1803,7 +2424,13 @@ async function loadClassPanorama(): Promise<void> {
       `/api/analytics/classes/${selectedPanoramaClassId.value}/panorama${suffix}`,
     );
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    classPanorama.value = null;
+    classPanoramaError.value = formatUserActionError(
+      "加载班级全景",
+      error,
+      "确认班级、学年筛选和成绩快照可用后重试",
+    );
+    ElMessage.error(classPanoramaError.value);
   } finally {
     loadingClassPanorama.value = false;
   }
@@ -1813,6 +2440,7 @@ async function loadTeacherPanorama(): Promise<void> {
   if (!selectedPanoramaTeacherId.value || loadingTeacherPanorama.value) return;
   try {
     loadingTeacherPanorama.value = true;
+    teacherPanoramaError.value = "";
     const query = new URLSearchParams();
     selectedTeacherPanoramaAcademicYearIds.value.forEach((item) => {
       query.append("academic_year_ids", String(item));
@@ -1822,7 +2450,13 @@ async function loadTeacherPanorama(): Promise<void> {
       `/api/analytics/teachers/${selectedPanoramaTeacherId.value}/panorama${suffix}`,
     );
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    teacherPanorama.value = null;
+    teacherPanoramaError.value = formatUserActionError(
+      "加载教师全景",
+      error,
+      "确认教师档案、任教关系、学年筛选和成绩快照可用后重试",
+    );
+    ElMessage.error(teacherPanoramaError.value);
   } finally {
     loadingTeacherPanorama.value = false;
   }
@@ -1831,6 +2465,7 @@ async function loadTeacherPanorama(): Promise<void> {
 function resetGradePanoramaFilters(): void {
   selectedPanoramaAcademicYearIds.value = [];
   gradePanorama.value = null;
+  gradePanoramaError.value = "";
   if (!selectedPanoramaGradeId.value && referenceStore.grades.length) {
     selectedPanoramaGradeId.value = referenceStore.grades[0].id;
   }
@@ -1839,6 +2474,7 @@ function resetGradePanoramaFilters(): void {
 function resetClassPanoramaFilters(): void {
   selectedClassPanoramaAcademicYearIds.value = [];
   classPanorama.value = null;
+  classPanoramaError.value = "";
   if (!selectedPanoramaClassId.value && referenceStore.classes.length) {
     selectedPanoramaClassId.value = referenceStore.classes[0].id;
   }
@@ -1847,6 +2483,7 @@ function resetClassPanoramaFilters(): void {
 function resetTeacherPanoramaFilters(): void {
   selectedTeacherPanoramaAcademicYearIds.value = [];
   teacherPanorama.value = null;
+  teacherPanoramaError.value = "";
   if (!selectedPanoramaTeacherId.value && teacherOptions.value.length) {
     selectedPanoramaTeacherId.value = teacherOptions.value[0].id;
   }
@@ -1854,22 +2491,42 @@ function resetTeacherPanoramaFilters(): void {
 
 function resetAnalyticsState(): void {
   studentAnalytics.value = null;
+  studentAnalyticsError.value = "";
   scoreReport.value = null;
+  scoreReportError.value = "";
   selectedScoreReportSubjectIds.value = [];
   knowledgeSubjectFilter.value = null;
   classAnalytics.value = null;
+  classAnalyticsError.value = "";
   classKnowledgeBriefing.value = null;
   classKnowledgeHeatmap.value = null;
   classKnowledgeTaskPreview.value = null;
   studentKnowledgeTaskPreview.value = null;
+  studentKnowledgeTaskError.value = "";
+  classKnowledgeBriefingError.value = "";
+  classKnowledgeHeatmapError.value = "";
+  classKnowledgeTaskError.value = "";
   selectedClassKnowledgeIds.value = [];
+  questionImportResult.value = null;
+  questionImportError.value = "";
   gradeAnalytics.value = null;
+  gradeAnalyticsError.value = "";
+  targetLineDrafts.value = [];
+  targetLineError.value = "";
+  targetLineErrorMode.value = "";
+  targetLineSuccessMessage.value = "";
   teacherAnalytics.value = null;
+  teacherAnalyticsError.value = "";
   gradePanorama.value = null;
   classPanorama.value = null;
   teacherPanorama.value = null;
+  gradePanoramaError.value = "";
+  classPanoramaError.value = "";
+  teacherPanoramaError.value = "";
   adviserDashboard.value = null;
+  adviserDashboardError.value = "";
   rankAudit.value = null;
+  rankAuditError.value = "";
 }
 
 async function loadActivePanoramaIfNeeded(): Promise<void> {
@@ -1906,19 +2563,37 @@ function formatTargetLineCounts(value?: Record<string, number> | null): string {
 
 watch(selectedExamId, async (examId) => {
   rankAudit.value = null;
+  rankAuditError.value = "";
   scoreReport.value = null;
+  scoreReportError.value = "";
   selectedScoreReportSubjectIds.value = [];
   gradeAnalytics.value = null;
+  gradeAnalyticsError.value = "";
   studentAnalytics.value = null;
+  studentAnalyticsError.value = "";
   knowledgeSubjectFilter.value = null;
   classKnowledgeSubjectFilter.value = null;
   classKnowledgeBriefing.value = null;
   classKnowledgeHeatmap.value = null;
   classKnowledgeTaskPreview.value = null;
   studentKnowledgeTaskPreview.value = null;
+  studentKnowledgeTaskError.value = "";
+  classKnowledgeBriefingError.value = "";
+  classKnowledgeHeatmapError.value = "";
+  classKnowledgeTaskError.value = "";
   selectedClassKnowledgeIds.value = [];
   questionImportResult.value = null;
+  questionImportError.value = "";
   targetLineDrafts.value = [];
+  targetLineError.value = "";
+  targetLineErrorMode.value = "";
+  targetLineSuccessMessage.value = "";
+  classAnalytics.value = null;
+  classAnalyticsError.value = "";
+  teacherAnalytics.value = null;
+  teacherAnalyticsError.value = "";
+  adviserDashboard.value = null;
+  adviserDashboardError.value = "";
   if (examId) {
     await Promise.all([
       loadTargetLines(),
@@ -1928,6 +2603,51 @@ watch(selectedExamId, async (examId) => {
     studentOptions.value = [];
     selectedStudentId.value = null;
   }
+});
+
+watch(selectedStudentId, () => {
+  studentKnowledgeTaskPreview.value = null;
+  studentKnowledgeTaskError.value = "";
+});
+
+watch(classKnowledgeSubjectFilter, () => {
+  classKnowledgeBriefing.value = null;
+  classKnowledgeBriefingError.value = "";
+  classKnowledgeHeatmap.value = null;
+  classKnowledgeHeatmapError.value = "";
+  classKnowledgeTaskPreview.value = null;
+  classKnowledgeTaskError.value = "";
+  selectedClassKnowledgeIds.value = [];
+});
+
+watch(selectedPanoramaGradeId, () => {
+  gradePanorama.value = null;
+  gradePanoramaError.value = "";
+});
+
+watch(selectedPanoramaAcademicYearIds, () => {
+  gradePanorama.value = null;
+  gradePanoramaError.value = "";
+});
+
+watch(selectedPanoramaClassId, () => {
+  classPanorama.value = null;
+  classPanoramaError.value = "";
+});
+
+watch(selectedClassPanoramaAcademicYearIds, () => {
+  classPanorama.value = null;
+  classPanoramaError.value = "";
+});
+
+watch(selectedPanoramaTeacherId, () => {
+  teacherPanorama.value = null;
+  teacherPanoramaError.value = "";
+});
+
+watch(selectedTeacherPanoramaAcademicYearIds, () => {
+  teacherPanorama.value = null;
+  teacherPanoramaError.value = "";
 });
 
 watch(activeAnalyticsTab, () => {
@@ -1958,6 +2678,41 @@ onMounted(async () => {
 .score-readiness-stack {
   display: grid;
   gap: 10px;
+}
+
+.analysis-page-alert {
+  margin-bottom: 16px;
+}
+
+.analytics-inline-alert {
+  margin-top: 14px;
+}
+
+.analysis-load-error-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.analysis-load-error-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff7ed;
+}
+
+.analysis-load-error-item strong {
+  display: block;
+  color: #7c3f00;
+}
+
+.analysis-load-error-item p {
+  margin: 4px 0 0;
+  color: #8a5d19;
+  line-height: 1.5;
 }
 
 .overview-panel,
@@ -2356,6 +3111,10 @@ onMounted(async () => {
 }
 
 @media (max-width: 960px) {
+  .analysis-load-error-item {
+    display: grid;
+  }
+
   .adviser-filter-grid,
   .score-report-filter-grid,
   .score-report-toolbar,

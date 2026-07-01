@@ -1,5 +1,4 @@
-import { computed, onMounted, watch } from "vue";
-import ElMessage from "element-plus/es/components/message/index";
+import { computed, onMounted, ref, watch } from "vue";
 
 import { gaokaoCandidateTypeOptions, provinceOptions } from "./helpers";
 import { useRecommendationCatalogManager } from "./useRecommendationCatalogManager";
@@ -40,10 +39,18 @@ export function useRecommendationsPage() {
     recommendationForm: workflow.recommendationForm,
   });
   const loadedTabs = new Set<string>();
+  const recommendationPageLoading = ref(false);
+  const recommendationPageLoadError = ref("");
+  const loadingTabs = ref<Set<string>>(new Set());
+  const tabLoadError = ref<{ tab: string; message: string } | null>(null);
   const guideCandidateTypeOptions = computed(() =>
     volunteerWorkspace.volunteerGuideOptions.value?.candidate_types.length
       ? volunteerWorkspace.volunteerGuideOptions.value.candidate_types
       : gaokaoCandidateTypeOptions,
+  );
+  const activeRecommendationTabLoading = computed(() => loadingTabs.value.has(workflow.activeTab.value));
+  const activeRecommendationTabLoadError = computed(() =>
+    tabLoadError.value?.tab === workflow.activeTab.value ? tabLoadError.value.message : "",
   );
 
   const summaryCards = computed(() => {
@@ -61,8 +68,24 @@ export function useRecommendationsPage() {
     ].filter(Boolean);
   });
 
-  onMounted(async () => {
+  function setTabLoading(tab: string, loading: boolean): void {
+    const next = new Set(loadingTabs.value);
+    if (loading) {
+      next.add(tab);
+    } else {
+      next.delete(tab);
+    }
+    loadingTabs.value = next;
+  }
+
+  async function retryRecommendationPageLoad(): Promise<void> {
+    await loadInitialPageData();
+  }
+
+  async function loadInitialPageData(): Promise<void> {
     try {
+      recommendationPageLoading.value = true;
+      recommendationPageLoadError.value = "";
       await Promise.all([
         workflow.loadStudentAndExamOptions(),
         workflow.loadRecommendationSettings(),
@@ -76,28 +99,48 @@ export function useRecommendationsPage() {
       }
       void shandongWorkbench.loadShandongDataHealth();
     } catch (error) {
-      ElMessage.error(formatUserActionError("加载高考志愿页面", error, "确认本地服务已启动后刷新页面；若某个页签数据为空，可进入对应页签单独刷新。"));
+      recommendationPageLoadError.value = formatUserActionError(
+        "加载高考志愿页面",
+        error,
+        "确认本地服务已启动后点击重新加载；若某个页签数据为空，可进入对应页签单独刷新。",
+      );
+    } finally {
+      recommendationPageLoading.value = false;
     }
+  }
+
+  onMounted(() => {
+    void loadInitialPageData();
   });
 
-  async function loadTabData(tab: string): Promise<void> {
+  async function loadTabData(tab: string, options: { force?: boolean } = {}): Promise<void> {
+    if (options.force) {
+      loadedTabs.delete(tab);
+    }
     if (loadedTabs.has(tab)) return;
-    loadedTabs.add(tab);
     try {
+      setTabLoading(tab, true);
+      if (tabLoadError.value?.tab === tab) {
+        tabLoadError.value = null;
+      }
       if (tab === "colleges") {
         await catalog.loadColleges({ resetPage: true });
+        loadedTabs.add(tab);
         return;
       }
       if (tab === "recommendations") {
         await catalog.loadCollegeDirectory();
+        loadedTabs.add(tab);
         return;
       }
       if (tab === "majors") {
         await catalog.loadMajors({ resetPage: true });
+        loadedTabs.add(tab);
         return;
       }
       if (tab === "employment-directions") {
         await career.loadEmploymentDirections();
+        loadedTabs.add(tab);
         return;
       }
       if (tab === "major-employment-maps") {
@@ -106,6 +149,7 @@ export function useRecommendationsPage() {
           career.loadEmploymentDirections(),
           career.loadMajorEmploymentMappings({ resetPage: true }),
         ]);
+        loadedTabs.add(tab);
         return;
       }
       if (tab === "enrollment-plans") {
@@ -113,6 +157,7 @@ export function useRecommendationsPage() {
           catalog.loadCollegeDirectory(),
           planning.loadEnrollmentPlans({ resetPage: true }),
         ]);
+        loadedTabs.add(tab);
         return;
       }
       if (tab === "admissions") {
@@ -120,43 +165,60 @@ export function useRecommendationsPage() {
           catalog.loadCollegeDirectory(),
           catalog.loadAdmissions({ resetPage: true }),
         ]);
+        loadedTabs.add(tab);
         return;
       }
       if (tab === "volunteer-rules") {
         await planning.loadProvinceVolunteerRules();
+        loadedTabs.add(tab);
         return;
       }
       if (tab === "special-type-rules") {
         await planning.loadSpecialTypeRules();
+        loadedTabs.add(tab);
         return;
       }
       if (tab === "score-transform-rules") {
         await planning.loadProvinceScoreTransformRules();
+        loadedTabs.add(tab);
         return;
       }
       if (tab === "subject-requirements") {
         await planning.loadSubjectRequirementDicts();
+        loadedTabs.add(tab);
         return;
       }
       if (tab === "shandong-workbench") {
         await shandongWorkbench.loadShandongDataHealth();
+        loadedTabs.add(tab);
         return;
       }
       if (tab === "history") {
         await workflow.loadHistory();
+        loadedTabs.add(tab);
         return;
       }
       if (tab === "data-health") {
         await shandongWorkbench.loadShandongDataHealth();
+        loadedTabs.add(tab);
         return;
       }
       if (tab === "volunteer-workbench") {
         await career.loadEmploymentDirections();
+        loadedTabs.add(tab);
       }
     } catch (error) {
-      loadedTabs.delete(tab);
-      ElMessage.error(formatUserActionError("加载高考志愿页签", error, "请稍后重试，或先缩小筛选条件后再查询。"));
+      tabLoadError.value = {
+        tab,
+        message: formatUserActionError("加载高考志愿页签", error, "请稍后重试，或先缩小筛选条件后再查询。"),
+      };
+    } finally {
+      setTabLoading(tab, false);
     }
+  }
+
+  async function reloadActiveRecommendationTab(): Promise<void> {
+    await loadTabData(workflow.activeTab.value, { force: true });
   }
 
   watch(
@@ -173,8 +235,14 @@ export function useRecommendationsPage() {
     ...shandongWorkbench,
     ...volunteerWorkspace,
     ...workflow,
+    activeRecommendationTabLoadError,
+    activeRecommendationTabLoading,
     gaokaoCandidateTypeOptions: guideCandidateTypeOptions,
     provinceOptions,
+    recommendationPageLoadError,
+    recommendationPageLoading,
+    reloadActiveRecommendationTab,
+    retryRecommendationPageLoad,
     summaryCards,
   };
 }

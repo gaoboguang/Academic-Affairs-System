@@ -75,6 +75,18 @@ TEMPLATE_SPECS = [
         ],
     ),
     TemplateSpec(
+        filename="teacher_accounts_import_template.xlsx",
+        title="教师账号批量导入模板",
+        headers=["账号", "显示名称", "教师工号", "教师姓名", "额外可访问班级"],
+        sample_rows=[["t001", "李语文", "T001", "李语文", "高一1班、高一2班"]],
+        instructions=[
+            "本模板只用于批量创建教师账号；管理员账号仍需单独维护。",
+            "账号为唯一键，导入后系统自动生成临时密码，教师首次登录必须修改。",
+            "教师工号必须对应已有教师档案；教师姓名用于核对，可留空。",
+            "额外可访问班级可留空；多个班级用顿号、逗号或分号分隔，重名时建议填写“年级+班级”。",
+        ],
+    ),
+    TemplateSpec(
         filename="exam_scores_import_template.xlsx",
         title="成绩导入模板",
         headers=["考试名称", "学号", "姓名", "班级", "科目", "分数", "缺考标记", "备注", "原始分", "赋分", "成绩口径"],

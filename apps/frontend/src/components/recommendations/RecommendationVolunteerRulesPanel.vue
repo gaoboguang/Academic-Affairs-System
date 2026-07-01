@@ -6,34 +6,51 @@
         <p>按省份、年份和批次维护志愿数上限、单位类型与调剂规则，避免把志愿模式写死在页面里。</p>
       </div>
       <div class="action-row">
-        <el-button @click="emit('load')">刷新</el-button>
-        <el-button :loading="bootstrapping" @click="emit('bootstrap')">装载全国基线</el-button>
+        <el-button :loading="loading" @click="emit('load')">刷新</el-button>
+        <el-button :loading="bootstrapping" :disabled="loading" @click="emit('bootstrap')">装载全国基线</el-button>
         <el-button type="primary" @click="emit('create')">新增规则</el-button>
       </div>
     </div>
 
+    <el-alert v-if="loadError" class="rule-panel-alert" type="error" show-icon :closable="false" title="省份规则加载失败">
+      <template #default>
+        <div class="rule-alert-body">
+          <span>{{ loadError }}</span>
+          <el-button link type="primary" :loading="loading" @click="emit('load')">重新加载省份规则</el-button>
+        </div>
+      </template>
+    </el-alert>
+
     <div class="filter-grid">
-      <el-select v-model="filters.year" clearable placeholder="年份">
+      <el-select v-model="filters.year" clearable :disabled="loading" placeholder="年份">
         <el-option v-for="year in yearOptions" :key="year" :label="String(year)" :value="year" />
       </el-select>
-      <el-select v-model="filters.province" clearable filterable placeholder="省份">
+      <el-select v-model="filters.province" clearable filterable :disabled="loading" placeholder="省份">
         <el-option v-for="province in provinceOptions" :key="province" :label="province" :value="province" />
       </el-select>
-      <el-select v-model="filters.exam_mode" clearable filterable placeholder="高考模式">
+      <el-select v-model="filters.exam_mode" clearable filterable :disabled="loading" placeholder="高考模式">
         <el-option v-for="item in examModeOptions" :key="item" :label="item" :value="item" />
       </el-select>
-      <el-select v-model="filters.candidate_type" clearable filterable placeholder="考生类别">
+      <el-select v-model="filters.candidate_type" clearable filterable :disabled="loading" placeholder="考生类别">
         <el-option label="通用 / 不区分类别" value="" />
         <el-option v-for="item in candidateTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
       </el-select>
     </div>
 
     <div class="action-row toolbar-row">
-      <el-button type="primary" @click="emit('load')">查询</el-button>
-      <el-button @click="emit('reset')">重置</el-button>
+      <el-button type="primary" :loading="loading" @click="emit('load')">查询</el-button>
+      <el-button :disabled="loading" @click="emit('reset')">重置</el-button>
     </div>
 
-    <el-table :data="rules" stripe>
+    <el-table :data="rules" stripe v-loading="loading">
+      <template #empty>
+        <el-empty :description="ruleEmptyDescription">
+          <el-button v-if="loadError" type="primary" plain :loading="loading" @click="emit('load')">
+            重新加载省份规则
+          </el-button>
+          <el-button v-else-if="!hasActiveFilters" type="primary" plain @click="emit('create')">新增省份规则</el-button>
+        </el-empty>
+      </template>
       <el-table-column label="省份" prop="province" width="100" />
       <el-table-column label="年份" prop="year" width="90" />
       <el-table-column label="模式" prop="exam_mode" width="120" />
@@ -97,11 +114,12 @@
         </template>
       </el-table-column>
     </el-table>
-    <el-empty v-if="!rules.length" description="暂无省份规则" />
   </section>
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
+
 import type { ProvinceVolunteerRule } from "./types";
 
 interface ProvinceVolunteerRuleFiltersState {
@@ -111,10 +129,12 @@ interface ProvinceVolunteerRuleFiltersState {
   candidate_type: string;
 }
 
-defineProps<{
+const props = defineProps<{
   rules: ProvinceVolunteerRule[];
   filters: ProvinceVolunteerRuleFiltersState;
   bootstrapping: boolean;
+  loading: boolean;
+  loadError: string;
   yearOptions: number[];
   provinceOptions: string[];
   examModeOptions: string[];
@@ -128,6 +148,16 @@ const emit = defineEmits<{
   create: [];
   edit: [value: ProvinceVolunteerRule];
 }>();
+
+const hasActiveFilters = computed(() =>
+  Boolean(props.filters.year || props.filters.province || props.filters.exam_mode || props.filters.candidate_type),
+);
+const ruleEmptyDescription = computed(() => {
+  if (props.loadError) return "省份规则加载失败，请重新加载。";
+  if (props.loading) return "正在加载省份规则";
+  if (hasActiveFilters.value) return "没有符合当前筛选条件的省份规则。";
+  return "暂无省份规则，可以先新增规则或装载全国基线。";
+});
 
 function formatCandidateType(value: string): string {
   if (!value) return "通用";
@@ -154,6 +184,17 @@ function formatCandidateType(value: string): string {
 
 .toolbar-row {
   margin-bottom: 16px;
+}
+
+.rule-panel-alert {
+  margin-bottom: 16px;
+}
+
+.rule-alert-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
 }
 
 .tag-cluster {

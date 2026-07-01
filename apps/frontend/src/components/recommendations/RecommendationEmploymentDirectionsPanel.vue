@@ -6,24 +6,33 @@
         <p>先维护标准化就业方向对象，供学生职业意向采集、专业映射和推荐解释复用。</p>
       </div>
       <div class="action-row">
-        <el-button @click="emit('load')">刷新</el-button>
+        <el-button :loading="loading" @click="emit('load')">刷新</el-button>
         <el-button type="primary" @click="emit('create')">新增方向</el-button>
       </div>
     </div>
 
+    <el-alert v-if="loadError" class="career-panel-alert" type="error" show-icon :closable="false" title="就业方向加载失败">
+      <template #default>
+        <div class="career-alert-body">
+          <span>{{ loadError }}</span>
+          <el-button link type="primary" :loading="loading" @click="emit('load')">重新加载就业方向库</el-button>
+        </div>
+      </template>
+    </el-alert>
+
     <div class="filter-grid">
-      <el-input v-model="filters.keyword" placeholder="按方向名称筛选" />
-      <el-select v-model="filters.category" clearable filterable placeholder="方向分类">
+      <el-input v-model="filters.keyword" :disabled="loading" placeholder="按方向名称筛选" />
+      <el-select v-model="filters.category" clearable filterable :disabled="loading" placeholder="方向分类">
         <el-option v-for="item in categoryOptions" :key="item" :label="item" :value="item" />
       </el-select>
     </div>
 
     <div class="action-row toolbar-row">
-      <el-button type="primary" @click="emit('load')">查询</el-button>
-      <el-button @click="emit('reset')">重置</el-button>
+      <el-button type="primary" :loading="loading" @click="emit('load')">查询</el-button>
+      <el-button :disabled="loading" @click="emit('reset')">重置</el-button>
     </div>
 
-    <section v-if="groupedSections.length" class="direction-groups-panel">
+    <section v-if="groupedSections.length && !loadError" v-loading="loading" class="direction-groups-panel">
       <div class="section-head compact">
         <div>
           <h3>分类视图</h3>
@@ -89,7 +98,15 @@
       </div>
     </div>
 
-    <el-table :data="directions" stripe>
+    <el-table :data="directions" stripe v-loading="loading">
+      <template #empty>
+        <el-empty :description="directionEmptyDescription">
+          <el-button v-if="loadError" type="primary" plain :loading="loading" @click="emit('load')">
+            重新加载就业方向库
+          </el-button>
+          <el-button v-else-if="!hasActiveFilters" type="primary" plain @click="emit('create')">新增就业方向</el-button>
+        </el-empty>
+      </template>
       <el-table-column label="方向" min-width="220">
         <template #default="{ row }">
           <div class="name-stack">
@@ -130,7 +147,6 @@
         </template>
       </el-table-column>
     </el-table>
-    <el-empty v-if="!directions.length" description="暂无就业方向数据" />
   </section>
 </template>
 
@@ -149,6 +165,8 @@ const props = defineProps<{
   directions: EmploymentDirectionItem[];
   filters: EmploymentDirectionFiltersState;
   categoryOptions: string[];
+  loading: boolean;
+  loadError: string;
 }>();
 
 const emit = defineEmits<{
@@ -159,6 +177,13 @@ const emit = defineEmits<{
 }>();
 
 const groupedSections = computed(() => buildEmploymentDirectionCategorySections(props.directions));
+const hasActiveFilters = computed(() => Boolean(props.filters.keyword || props.filters.category));
+const directionEmptyDescription = computed(() => {
+  if (props.loadError) return "就业方向加载失败，请重新加载。";
+  if (props.loading) return "正在加载就业方向";
+  if (hasActiveFilters.value) return "没有符合当前筛选条件的就业方向。";
+  return "暂无就业方向数据，可以先新增方向。";
+});
 </script>
 
 <style scoped>
@@ -168,6 +193,17 @@ const groupedSections = computed(() => buildEmploymentDirectionCategorySections(
 
 .toolbar-row {
   margin-bottom: 16px;
+}
+
+.career-panel-alert {
+  margin-bottom: 16px;
+}
+
+.career-alert-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
 }
 
 .direction-groups-panel {

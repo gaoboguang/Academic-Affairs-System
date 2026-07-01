@@ -6,12 +6,21 @@
         <p>核对院校专业选科文本如何标准化为必选、任选、不限等结构化科目要求。</p>
       </div>
       <div class="action-row">
-        <el-button @click="emit('load')">刷新</el-button>
-        <el-button :loading="bootstrapping" @click="emit('bootstrap')">装载基线</el-button>
+        <el-button :loading="loading" @click="emit('load')">刷新</el-button>
+        <el-button :loading="bootstrapping" :disabled="loading" @click="emit('bootstrap')">装载基线</el-button>
       </div>
     </div>
 
-    <div class="rule-summary-grid">
+    <el-alert v-if="loadError" class="rule-panel-alert" type="error" show-icon :closable="false" title="选科字典加载失败">
+      <template #default>
+        <div class="rule-alert-body">
+          <span>{{ loadError }}</span>
+          <el-button link type="primary" :loading="loading" @click="emit('load')">重新加载选科字典</el-button>
+        </div>
+      </template>
+    </el-alert>
+
+    <div class="rule-summary-grid" v-loading="loading">
       <article class="rule-summary-card">
         <span>字典总数</span>
         <strong>{{ dicts.length }}</strong>
@@ -30,24 +39,31 @@
     </div>
 
     <div class="filter-grid">
-      <el-select v-model="filters.year" clearable placeholder="年份">
+      <el-select v-model="filters.year" clearable :disabled="loading" placeholder="年份">
         <el-option v-for="year in yearOptions" :key="year" :label="String(year)" :value="year" />
       </el-select>
-      <el-select v-model="filters.province" clearable filterable placeholder="省份">
+      <el-select v-model="filters.province" clearable filterable :disabled="loading" placeholder="省份">
         <el-option v-for="province in provinceOptions" :key="province" :label="province" :value="province" />
       </el-select>
-      <el-select v-model="filters.exam_mode" clearable filterable placeholder="高考模式">
+      <el-select v-model="filters.exam_mode" clearable filterable :disabled="loading" placeholder="高考模式">
         <el-option v-for="item in examModeOptions" :key="item" :label="item || '通用模式'" :value="item" />
       </el-select>
-      <el-input v-model="filters.requirement_code" clearable placeholder="要求代码" />
+      <el-input v-model="filters.requirement_code" clearable :disabled="loading" placeholder="要求代码" />
     </div>
 
     <div class="action-row toolbar-row">
-      <el-button type="primary" @click="emit('load')">查询</el-button>
-      <el-button @click="emit('reset')">重置</el-button>
+      <el-button type="primary" :loading="loading" @click="emit('load')">查询</el-button>
+      <el-button :disabled="loading" @click="emit('reset')">重置</el-button>
     </div>
 
-    <el-table :data="dicts" stripe>
+    <el-table :data="dicts" stripe v-loading="loading">
+      <template #empty>
+        <el-empty :description="dictEmptyDescription">
+          <el-button v-if="loadError" type="primary" plain :loading="loading" @click="emit('load')">
+            重新加载选科字典
+          </el-button>
+        </el-empty>
+      </template>
       <el-table-column label="省份" prop="province" width="90" />
       <el-table-column label="年份" prop="year" width="90" />
       <el-table-column label="模式" min-width="130">
@@ -69,8 +85,6 @@
       <el-table-column label="来源" prop="source_note" min-width="200" />
       <el-table-column label="备注" prop="note" min-width="180" />
     </el-table>
-
-    <el-empty v-if="!dicts.length" description="暂无选科要求字典" />
   </section>
 </template>
 
@@ -82,6 +96,8 @@ const props = defineProps<{
   dicts: SubjectRequirementDict[];
   filters: SubjectRequirementDictFiltersState;
   bootstrapping: boolean;
+  loading: boolean;
+  loadError: string;
   yearOptions: number[];
   provinceOptions: string[];
   examModeOptions: string[];
@@ -99,6 +115,15 @@ const matchModeCount = computed(() => new Set(props.dicts.map((item) => item.mat
 const subjectSetCount = computed(() =>
   new Set(props.dicts.map((item) => item.normalized_subjects_json.join("+") || "不限")).size,
 );
+const hasActiveFilters = computed(() =>
+  Boolean(props.filters.year || props.filters.province || props.filters.exam_mode || props.filters.requirement_code),
+);
+const dictEmptyDescription = computed(() => {
+  if (props.loadError) return "选科要求字典加载失败，请重新加载。";
+  if (props.loading) return "正在加载选科要求字典";
+  if (hasActiveFilters.value) return "没有符合当前筛选条件的选科要求字典。";
+  return "暂无选科要求字典，可以先装载基线。";
+});
 </script>
 
 <style scoped>
@@ -108,6 +133,17 @@ const subjectSetCount = computed(() =>
 
 .toolbar-row {
   margin-bottom: 16px;
+}
+
+.rule-panel-alert {
+  margin-bottom: 16px;
+}
+
+.rule-alert-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
 }
 
 .rule-summary-grid {

@@ -21,6 +21,7 @@ export function useCollegeCatalogBrowser() {
   const router = useRouter();
   const colleges = ref<CollegeCatalogItem[]>([]);
   const loading = ref(false);
+  const loadError = ref("");
   const filters = reactive<CollegeCatalogFilters>({
     keyword: "",
     province: "",
@@ -56,13 +57,18 @@ export function useCollegeCatalogBrowser() {
     query.set("page_size", String(pagination.page_size));
     try {
       loading.value = true;
+      loadError.value = "";
       const response = await apiRequest<CollegeCatalogPage>(`/api/colleges/catalog/page?${query.toString()}`);
       colleges.value = response.items;
       pagination.total = response.total;
       pagination.page = response.page;
       pagination.page_size = response.page_size;
     } catch (error) {
-      ElMessage.error(formatUserActionError("查看院校库", error, "请调整筛选条件或刷新页面后重试。"));
+      const message = formatUserActionError("查看院校库", error, "请调整筛选条件或刷新页面后重试。");
+      colleges.value = [];
+      pagination.total = 0;
+      loadError.value = message;
+      ElMessage.error(message);
     } finally {
       loading.value = false;
     }
@@ -100,6 +106,7 @@ export function useCollegeCatalogBrowser() {
     handlePageSizeChange,
     levelTagOptions,
     loadCatalog,
+    loadError,
     loading,
     openDetail,
     pagination,

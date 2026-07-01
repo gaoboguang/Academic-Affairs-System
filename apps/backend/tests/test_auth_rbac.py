@@ -120,6 +120,45 @@ def test_admin_can_create_reset_disable_and_enable_teacher_account(auth_client) 
     assert enable_response.json()["is_active"] is True
 
 
+def test_admin_can_import_teacher_accounts(auth_client) -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "数据"
+    sheet.append(["账号", "显示名称", "教师工号", "教师姓名", "额外可访问班级"])
+    sheet.append(["teacher02", "王数学账号", "T002", "王数学", "高一1班"])
+    sheet.append(["teacher02", "重复账号", "T002", "王数学", ""])
+    sheet.append(["missing_teacher", "缺少教师", "T999", "不存在", ""])
+    buffer = BytesIO()
+    workbook.save(buffer)
+
+    response = auth_client.post(
+        "/api/admin/users/import",
+        data={"strategy": "skip_existing"},
+        files={
+            "file": (
+                "teacher_accounts.xlsx",
+                buffer.getvalue(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total_rows"] == 3
+    assert payload["success_rows"] == 1
+    assert payload["skipped_rows"] == 1
+    assert payload["failed_rows"] == 1
+    assert payload["created_accounts"][0]["username"] == "teacher02"
+    assert payload["created_accounts"][0]["teacher_no"] == "T002"
+    assert payload["created_accounts"][0]["temporary_password"]
+    assert "教师工号不存在" in payload["error_preview"][0]
+
+    teacher_login = _login(auth_client, "teacher02", payload["created_accounts"][0]["temporary_password"])
+    assert teacher_login["user"]["teacher_name"] == "王数学"
+    assert teacher_login["user"]["must_change_password"] is True
+
+
 def test_teacher_only_sees_and_updates_students_in_owned_classes(anonymous_client) -> None:
     _seed_user(
         anonymous_client.app,

@@ -7,7 +7,7 @@
   >
     <template #actions>
       <div class="action-row">
-        <el-button @click="reloadAll">刷新驾驶舱</el-button>
+        <el-button :loading="isDashboardRefreshing" @click="reloadAll">刷新驾驶舱</el-button>
         <el-button @click="openDataCoverageReportPrintPreview"
           >打印覆盖报告</el-button
         >
@@ -17,12 +17,43 @@
       </div>
     </template>
 
+    <el-alert
+      v-if="dashboardLoadErrorItems.length"
+      class="gaokao-dashboard-alert"
+      type="warning"
+      show-icon
+      :closable="false"
+      title="高考数据驾驶舱部分数据加载失败"
+    >
+      <div class="gaokao-load-error-list">
+        <div
+          v-for="item in dashboardLoadErrorItems"
+          :key="item.key"
+          class="gaokao-load-error-item"
+        >
+          <div>
+            <strong>{{ item.label }}</strong>
+            <p>{{ item.message }}</p>
+          </div>
+          <el-button
+            size="small"
+            :loading="item.loading"
+            @click="reloadDashboardItem(item.key)"
+          >
+            重试
+          </el-button>
+        </div>
+      </div>
+    </el-alert>
+
     <el-tabs v-model="activeTab" class="gaokao-tabs">
       <el-tab-pane label="总览" name="overview">
-        <AppStatGrid :items="overviewStatCards" :columns="6" />
+        <div v-loading="loadingOverview">
+          <AppStatGrid :items="overviewStatCards" :columns="6" />
+        </div>
 
         <section class="dashboard-grid">
-          <article class="soft-card panel-block">
+          <article class="soft-card panel-block" v-loading="loadingOverview">
             <div class="section-head compact">
               <div>
                 <h3>当前口径</h3>
@@ -30,7 +61,15 @@
                   先说明这页数字来自哪里，避免把冻结基线、只读库和应用侧数据混在一起理解。
                 </p>
               </div>
+              <el-button size="small" :loading="loadingOverview" @click="loadOverview">重试</el-button>
             </div>
+            <el-alert
+              v-if="dashboardLoadErrors.overview"
+              class="gaokao-alert"
+              type="warning"
+              :closable="false"
+              :title="dashboardLoadErrors.overview"
+            />
             <div class="overview-copy">
               <div class="overview-highlight">
                 <strong>{{ overview.data_version || "待确认" }}</strong>
@@ -52,7 +91,7 @@
             />
           </article>
 
-          <article class="soft-card panel-block">
+          <article class="soft-card panel-block" v-loading="loadingImportBatches">
             <div class="section-head compact">
               <div>
                 <h3>最近批次</h3>
@@ -60,7 +99,15 @@
                   优先展示高考相关导入或冻结基线，帮助快速判断当前应用看到的是哪一波材料。
                 </p>
               </div>
+              <el-button size="small" :loading="loadingImportBatches" @click="loadImportBatches">重试</el-button>
             </div>
+            <el-alert
+              v-if="dashboardLoadErrors.importBatches"
+              class="gaokao-alert"
+              type="warning"
+              :closable="false"
+              :title="dashboardLoadErrors.importBatches"
+            />
             <div class="table-shell">
               <el-table :data="importBatches" stripe>
                 <el-table-column
@@ -86,16 +133,15 @@
                   prop="finished_at"
                   min-width="180"
                 />
+                <template #empty>
+                  <el-empty :description="importBatchesEmptyDescription" />
+                </template>
               </el-table>
             </div>
-            <el-empty
-              v-if="!importBatches.length"
-              description="暂无高考相关批次记录"
-            />
           </article>
         </section>
 
-        <section class="soft-card panel-block">
+        <section class="soft-card panel-block" v-loading="loadingDataHealth">
           <div class="section-head">
             <div>
               <h3>2026 数据发布状态</h3>
@@ -103,7 +149,15 @@
                 把已公开、已导入、待官方发布和需人工核验的数据分开看，避免把单招/综评材料误当成普通类正式计划。
               </p>
             </div>
+            <el-button size="small" :loading="loadingDataHealth" @click="loadDataHealth">重试</el-button>
           </div>
+          <el-alert
+            v-if="dashboardLoadErrors.dataHealth"
+            class="gaokao-alert"
+            type="warning"
+            :closable="false"
+            :title="dashboardLoadErrors.dataHealth"
+          />
           <div class="table-shell">
             <el-table :data="dataHealth.publication_status" stripe>
               <el-table-column label="数据项" min-width="220">
@@ -154,15 +208,14 @@
                   </ul>
                 </template>
               </el-table-column>
+              <template #empty>
+                <el-empty :description="dataHealthEmptyDescription" />
+              </template>
             </el-table>
           </div>
-          <el-empty
-            v-if="!dataHealth.publication_status.length"
-            description="暂无 2026 数据发布状态"
-          />
         </section>
 
-        <section class="soft-card panel-block">
+        <section class="soft-card panel-block" v-loading="loadingOverview">
           <div class="section-head">
             <div>
               <h3>核心表统计</h3>
@@ -207,6 +260,9 @@
                   }}</el-tag>
                 </template>
               </el-table-column>
+              <template #empty>
+                <el-empty :description="overviewTablesEmptyDescription" />
+              </template>
             </el-table>
           </div>
           <div v-if="overviewGapCards.length" class="overview-gap-grid">
@@ -240,9 +296,11 @@
       </el-tab-pane>
 
       <el-tab-pane label="山东覆盖" name="coverage">
-        <AppStatGrid :items="coverageStatCards" :columns="4" />
+        <div v-loading="loadingDataHealth">
+          <AppStatGrid :items="coverageStatCards" :columns="4" />
+        </div>
 
-        <section class="soft-card panel-block">
+        <section class="soft-card panel-block" v-loading="loadingDataHealth">
           <div class="section-head">
             <div>
               <h3>数据库补齐结果说明</h3>
@@ -255,6 +313,13 @@
               >打印覆盖报告</el-button
             >
           </div>
+          <el-alert
+            v-if="dashboardLoadErrors.dataHealth"
+            class="gaokao-alert"
+            type="warning"
+            :closable="false"
+            :title="dashboardLoadErrors.dataHealth"
+          />
           <div class="completion-card-grid">
             <article
               v-for="item in dataCompletionCards"
@@ -272,10 +337,14 @@
               <span>{{ item.detail }}</span>
             </article>
           </div>
+          <el-empty
+            v-if="!dataCompletionCards.length && !loadingDataHealth"
+            :description="dataHealthEmptyDescription"
+          />
         </section>
 
         <section class="dashboard-grid">
-          <article class="soft-card panel-block">
+          <article class="soft-card panel-block" v-loading="loadingDataHealth">
             <div class="section-head compact">
               <div>
                 <h3>健康检查摘要</h3>
@@ -291,6 +360,13 @@
                 {{ dataHealth.summary || "待检查" }}
               </el-tag>
             </div>
+            <el-alert
+              v-if="dashboardLoadErrors.dataHealth"
+              class="gaokao-alert"
+              type="warning"
+              :closable="false"
+              :title="dashboardLoadErrors.dataHealth"
+            />
             <div class="overview-copy">
               <div class="overview-highlight">
                 <strong>{{ dataHealth.schema_version || "未迁移" }}</strong>
@@ -313,10 +389,10 @@
             <ul v-if="dataHealth.gaps.length" class="health-gap-list">
               <li v-for="gap in dataHealth.gaps" :key="gap">{{ gap }}</li>
             </ul>
-            <el-empty v-else description="当前未发现 P0 规则内的明显缺口" />
+            <el-empty v-else :description="dataHealthGapEmptyDescription" />
           </article>
 
-          <article class="soft-card panel-block">
+          <article class="soft-card panel-block" v-loading="loadingDataHealth">
             <div class="section-head compact">
               <div>
                 <h3>核心表状态</h3>
@@ -341,12 +417,15 @@
                     {{ formatTableNotes(row) }}
                   </template>
                 </el-table-column>
+                <template #empty>
+                  <el-empty :description="dataHealthEmptyDescription" />
+                </template>
               </el-table>
             </div>
           </article>
         </section>
 
-        <section class="soft-card panel-block">
+        <section class="soft-card panel-block" v-loading="loadingDataHealth">
           <div class="section-head">
             <div>
               <h3>考生类型可用性</h3>
@@ -402,11 +481,14 @@
                   </ul>
                 </template>
               </el-table-column>
+              <template #empty>
+                <el-empty :description="dataHealthEmptyDescription" />
+              </template>
             </el-table>
           </div>
         </section>
 
-        <section class="soft-card panel-block">
+        <section class="soft-card panel-block" v-loading="loadingDataHealth">
           <div class="section-head">
             <div>
               <h3>2020-2026 年份覆盖矩阵</h3>
@@ -452,11 +534,11 @@
           </div>
           <el-empty
             v-if="!coverageMatrixRows.length"
-            description="暂无覆盖矩阵，请刷新数据健康检查"
+            :description="dataHealthEmptyDescription"
           />
         </section>
 
-        <section class="soft-card panel-block">
+        <section class="soft-card panel-block" v-loading="loadingDataHealth">
           <div class="section-head">
             <div>
               <h3>山东年份与类型覆盖</h3>
@@ -561,11 +643,14 @@
                   </ul>
                 </template>
               </el-table-column>
+              <template #empty>
+                <el-empty :description="dataHealthEmptyDescription" />
+              </template>
             </el-table>
           </div>
         </section>
 
-        <section class="soft-card panel-block">
+        <section class="soft-card panel-block" v-loading="loadingDataHealth">
           <div class="section-head">
             <div>
               <h3>数据导入审计摘要</h3>
@@ -601,17 +686,16 @@
                   <span v-else class="table-muted">无</span>
                 </template>
               </el-table-column>
+              <template #empty>
+                <el-empty :description="dataHealthEmptyDescription" />
+              </template>
             </el-table>
           </div>
-          <el-empty
-            v-if="!dataHealth.audit_summary.length"
-            description="暂无审计摘要"
-          />
         </section>
       </el-tab-pane>
 
       <el-tab-pane label="数据审阅" name="review">
-        <section class="soft-card panel-block">
+        <section class="soft-card panel-block" v-loading="loadingReviewSummary">
           <div class="section-head compact">
             <div>
               <h3>审阅队列</h3>
@@ -650,9 +734,16 @@
                 placeholder="按学校名 / 学校代码 / 省份 / 招生网关键词检索"
                 @keyup.enter="loadReviewSummary"
               />
-              <el-button @click="loadReviewSummary">刷新</el-button>
+              <el-button :loading="loadingReviewSummary" @click="loadReviewSummary">刷新</el-button>
             </div>
           </div>
+          <el-alert
+            v-if="dashboardLoadErrors.reviewSummary"
+            class="gaokao-alert"
+            type="warning"
+            :closable="false"
+            :title="dashboardLoadErrors.reviewSummary"
+          />
           <div class="review-metrics">
             <article
               v-for="item in reviewSummary.counts"
@@ -718,7 +809,7 @@
           />
         </section>
 
-        <section class="dashboard-grid">
+        <section class="dashboard-grid" v-loading="loadingReviewSummary">
           <article class="soft-card panel-block">
             <div class="section-head compact">
               <div>
@@ -816,12 +907,11 @@
                     </el-button>
                   </template>
                 </el-table-column>
+                <template #empty>
+                  <el-empty :description="reviewSummaryEmptyDescription" />
+                </template>
               </el-table>
             </div>
-            <el-empty
-              v-if="!reviewSummary.items.length"
-              description="当前过滤条件下暂无学校明细"
-            />
           </article>
 
           <article class="soft-card panel-block">
@@ -1043,7 +1133,7 @@
                 </ul>
                 <el-empty
                   v-if="!reviewSummary.duplicate_groups.length"
-                  description="暂无重复组明细"
+                  :description="reviewSummaryEmptyDescription"
                 />
               </div>
               <div>
@@ -1193,7 +1283,7 @@
                 </ul>
                 <el-empty
                   v-if="!reviewSummary.same_name_groups.length"
-                  description="暂无同名组明细"
+                  :description="reviewSummaryEmptyDescription"
                 />
               </div>
             </div>
@@ -1326,7 +1416,7 @@
       </el-tab-pane>
 
       <el-tab-pane label="山东监控" name="shandong">
-        <section class="soft-card panel-block">
+        <section class="soft-card panel-block" v-loading="loadingShandongMonitor">
           <div class="section-head compact">
             <div>
               <h3>山东首期数据监控</h3>
@@ -1335,19 +1425,37 @@
                 6 类材料是否齐。
               </p>
             </div>
-            <el-tag effect="light">{{
-              shandongMonitor.data_version || "待确认"
-            }}</el-tag>
+            <div class="action-row">
+              <el-tag effect="light">{{
+                shandongMonitor.data_version || "待确认"
+              }}</el-tag>
+              <el-button size="small" :loading="loadingShandongMonitor" @click="loadShandongMonitor">重试</el-button>
+            </div>
           </div>
+          <el-alert
+            v-if="dashboardLoadErrors.shandongMonitor"
+            class="gaokao-alert"
+            type="warning"
+            :closable="false"
+            :title="dashboardLoadErrors.shandongMonitor"
+          />
           <div class="review-metrics">
             <article class="review-metric-card">
               <span>已接入板块</span>
-              <strong>{{ shandongMonitor.ready_section_total }}</strong>
+              <strong>{{
+                dashboardLoadErrors.shandongMonitor
+                  ? "加载失败"
+                  : shandongMonitor.ready_section_total
+              }}</strong>
               <p>当前可直接展示或已有应用侧补充口径的山东板块数。</p>
             </article>
             <article class="review-metric-card">
               <span>待补齐板块</span>
-              <strong>{{ shandongMonitor.gap_section_total }}</strong>
+              <strong>{{
+                dashboardLoadErrors.shandongMonitor
+                  ? "加载失败"
+                  : shandongMonitor.gap_section_total
+              }}</strong>
               <p>仍处于 waiting / partial / empty 的山东板块数。</p>
             </article>
           </div>
@@ -1379,6 +1487,10 @@
               </ul>
             </article>
           </div>
+          <el-empty
+            v-if="!shandongMonitor.sections.length && !loadingShandongMonitor"
+            :description="shandongMonitorEmptyDescription"
+          />
           <el-alert
             v-for="note in shandongMonitor.notes"
             :key="note"
@@ -1467,6 +1579,24 @@ const evidenceLoading = ref(false);
 const evidenceSearchLoading = ref(false);
 const evidenceError = ref("");
 const evidence = ref<GaokaoCollegeEvidence | null>(null);
+type DashboardLoadKey =
+  | "overview"
+  | "dataHealth"
+  | "importBatches"
+  | "reviewSummary"
+  | "shandongMonitor";
+const loadingOverview = ref(false);
+const loadingDataHealth = ref(false);
+const loadingImportBatches = ref(false);
+const loadingReviewSummary = ref(false);
+const loadingShandongMonitor = ref(false);
+const dashboardLoadErrors = reactive<Record<DashboardLoadKey, string>>({
+  overview: "",
+  dataHealth: "",
+  importBatches: "",
+  reviewSummary: "",
+  shandongMonitor: "",
+});
 
 const overview = reactive<GaokaoDataOverview>({
   source_mode: "doc_baseline",
@@ -1563,12 +1693,98 @@ const coverageMatrixRows = computed<CoverageMatrixRow[]>(() =>
   buildCoverageMatrixRows(dataHealth),
 );
 const pageMeta = computed<PageMetaItem[]>(() => [
-  { label: "当前版本", value: overview.data_version || "待确认" },
-  { label: "数据来源", value: formatSourceMode(overview.source_mode) },
+  {
+    label: "当前版本",
+    value: dashboardLoadErrors.overview ? "加载失败" : overview.data_version || "待确认",
+  },
+  {
+    label: "数据来源",
+    value: dashboardLoadErrors.overview ? "加载失败" : formatSourceMode(overview.source_mode),
+  },
   { label: "学校总数", value: overview.school_total || "-" },
-  { label: "山东监控", value: shandongMonitor.sections.length },
-  { label: "P0 缺口", value: dataHealth.gaps.length },
+  {
+    label: "山东监控",
+    value: dashboardLoadErrors.shandongMonitor ? "加载失败" : shandongMonitor.sections.length,
+  },
+  {
+    label: "P0 缺口",
+    value: dashboardLoadErrors.dataHealth ? "加载失败" : dataHealth.gaps.length,
+  },
 ]);
+const isDashboardRefreshing = computed(
+  () =>
+    loadingOverview.value ||
+    loadingDataHealth.value ||
+    loadingImportBatches.value ||
+    loadingReviewSummary.value ||
+    loadingShandongMonitor.value,
+);
+const dashboardLoadErrorItems = computed<
+  Array<{ key: DashboardLoadKey; label: string; message: string; loading: boolean }>
+>(() =>
+  [
+    {
+      key: "overview" as const,
+      label: "总览口径",
+      message: dashboardLoadErrors.overview,
+      loading: loadingOverview.value,
+    },
+    {
+      key: "importBatches" as const,
+      label: "最近批次",
+      message: dashboardLoadErrors.importBatches,
+      loading: loadingImportBatches.value,
+    },
+    {
+      key: "dataHealth" as const,
+      label: "数据健康与覆盖",
+      message: dashboardLoadErrors.dataHealth,
+      loading: loadingDataHealth.value,
+    },
+    {
+      key: "reviewSummary" as const,
+      label: "审阅队列",
+      message: dashboardLoadErrors.reviewSummary,
+      loading: loadingReviewSummary.value,
+    },
+    {
+      key: "shandongMonitor" as const,
+      label: "山东监控",
+      message: dashboardLoadErrors.shandongMonitor,
+      loading: loadingShandongMonitor.value,
+    },
+  ].filter((item) => item.message),
+);
+const dataHealthEmptyDescription = computed(() => {
+  if (loadingDataHealth.value) return "正在加载高考数据健康检查。";
+  if (dashboardLoadErrors.dataHealth) return "数据健康检查加载失败，请点击重试。";
+  return "暂无高考数据健康检查结果。";
+});
+const dataHealthGapEmptyDescription = computed(() => {
+  if (loadingDataHealth.value) return "正在加载 P0 缺口检查。";
+  if (dashboardLoadErrors.dataHealth) return "数据健康检查加载失败，暂时无法判断 P0 缺口。";
+  return "当前未发现 P0 规则内的明显缺口。";
+});
+const importBatchesEmptyDescription = computed(() => {
+  if (loadingImportBatches.value) return "正在加载高考相关导入批次。";
+  if (dashboardLoadErrors.importBatches) return "导入批次加载失败，请点击重试。";
+  return "暂无高考相关批次记录。";
+});
+const overviewTablesEmptyDescription = computed(() => {
+  if (loadingOverview.value) return "正在加载核心表统计。";
+  if (dashboardLoadErrors.overview) return "核心表统计加载失败，请点击重试。";
+  return "暂无核心表统计。";
+});
+const reviewSummaryEmptyDescription = computed(() => {
+  if (loadingReviewSummary.value) return "正在加载审阅队列。";
+  if (dashboardLoadErrors.reviewSummary) return "审阅队列加载失败，请点击重试。";
+  return "当前过滤条件下暂无审阅明细。";
+});
+const shandongMonitorEmptyDescription = computed(() => {
+  if (loadingShandongMonitor.value) return "正在加载山东数据监控。";
+  if (dashboardLoadErrors.shandongMonitor) return "山东数据监控加载失败，请点击重试。";
+  return "暂无山东监控板块。";
+});
 const overviewStatCards = computed<StatCardItem[]>(() => [
   {
     label: "学校总数",
@@ -1650,18 +1866,74 @@ async function reloadAll(): Promise<void> {
   ]);
 }
 
+async function reloadDashboardItem(key: DashboardLoadKey): Promise<void> {
+  if (key === "overview") {
+    await loadOverview();
+    return;
+  }
+  if (key === "dataHealth") {
+    await loadDataHealth();
+    return;
+  }
+  if (key === "importBatches") {
+    await loadImportBatches();
+    return;
+  }
+  if (key === "reviewSummary") {
+    await loadReviewSummary();
+    return;
+  }
+  await loadShandongMonitor();
+}
+
 async function loadOverview(): Promise<void> {
-  const payload = await api.get("/api/gaokao/data-overview");
-  Object.assign(overview, payload);
+  loadingOverview.value = true;
+  dashboardLoadErrors.overview = "";
+  try {
+    const payload = await api.get("/api/gaokao/data-overview");
+    Object.assign(overview, payload);
+  } catch (error) {
+    dashboardLoadErrors.overview = formatUserActionError(
+      "加载高考数据总览",
+      error,
+      "请确认本地服务已启动后重试。",
+    );
+  } finally {
+    loadingOverview.value = false;
+  }
 }
 
 async function loadImportBatches(): Promise<void> {
-  importBatches.value = await api.get("/api/gaokao/import-batches");
+  loadingImportBatches.value = true;
+  dashboardLoadErrors.importBatches = "";
+  try {
+    importBatches.value = await api.get("/api/gaokao/import-batches");
+  } catch (error) {
+    dashboardLoadErrors.importBatches = formatUserActionError(
+      "加载高考导入批次",
+      error,
+      "请确认本地服务已启动后重试。",
+    );
+  } finally {
+    loadingImportBatches.value = false;
+  }
 }
 
 async function loadDataHealth(): Promise<void> {
-  const payload = await api.get("/api/gaokao/data-health");
-  Object.assign(dataHealth, payload);
+  loadingDataHealth.value = true;
+  dashboardLoadErrors.dataHealth = "";
+  try {
+    const payload = await api.get("/api/gaokao/data-health");
+    Object.assign(dataHealth, payload);
+  } catch (error) {
+    dashboardLoadErrors.dataHealth = formatUserActionError(
+      "加载高考数据健康检查",
+      error,
+      "请确认本地服务已启动后重试。",
+    );
+  } finally {
+    loadingDataHealth.value = false;
+  }
 }
 
 function openDataCoverageReportPrintPreview(): void {
@@ -1678,19 +1950,31 @@ function openDataCoverageReportPrintPreview(): void {
 }
 
 async function loadReviewSummary(): Promise<void> {
-  const keyword = reviewKeyword.value.trim();
-  const payload = await api.get("/api/gaokao/review-summary", {
-    query: {
-      status: reviewFilter.value,
-      focus: reviewFocus.value,
-      sort: reviewSort.value,
-      keyword: keyword || null,
-    },
-  });
-  Object.assign(reviewSummary, payload);
-  reviewFilter.value = payload.active_filter;
-  reviewFocus.value = payload.active_focus;
-  reviewSort.value = payload.active_sort;
+  loadingReviewSummary.value = true;
+  dashboardLoadErrors.reviewSummary = "";
+  try {
+    const keyword = reviewKeyword.value.trim();
+    const payload = await api.get("/api/gaokao/review-summary", {
+      query: {
+        status: reviewFilter.value,
+        focus: reviewFocus.value,
+        sort: reviewSort.value,
+        keyword: keyword || null,
+      },
+    });
+    Object.assign(reviewSummary, payload);
+    reviewFilter.value = payload.active_filter;
+    reviewFocus.value = payload.active_focus;
+    reviewSort.value = payload.active_sort;
+  } catch (error) {
+    dashboardLoadErrors.reviewSummary = formatUserActionError(
+      "加载高考数据审阅队列",
+      error,
+      "请确认本地服务已启动后重试。",
+    );
+  } finally {
+    loadingReviewSummary.value = false;
+  }
 }
 
 async function applyReviewFocus(focusCode: string): Promise<void> {
@@ -1699,8 +1983,20 @@ async function applyReviewFocus(focusCode: string): Promise<void> {
 }
 
 async function loadShandongMonitor(): Promise<void> {
-  const payload = await api.get("/api/gaokao/shandong-monitor");
-  Object.assign(shandongMonitor, payload);
+  loadingShandongMonitor.value = true;
+  dashboardLoadErrors.shandongMonitor = "";
+  try {
+    const payload = await api.get("/api/gaokao/shandong-monitor");
+    Object.assign(shandongMonitor, payload);
+  } catch (error) {
+    dashboardLoadErrors.shandongMonitor = formatUserActionError(
+      "加载山东数据监控",
+      error,
+      "请确认本地服务已启动后重试。",
+    );
+  } finally {
+    loadingShandongMonitor.value = false;
+  }
 }
 
 async function searchEvidenceColleges(
@@ -1853,6 +2149,37 @@ onMounted(async () => {
 
 .gaokao-alert {
   margin-top: 14px;
+}
+
+.gaokao-dashboard-alert {
+  margin-bottom: 16px;
+}
+
+.gaokao-load-error-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.gaokao-load-error-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(255, 251, 235, 0.92);
+}
+
+.gaokao-load-error-item strong {
+  display: block;
+  color: #7a4d12;
+}
+
+.gaokao-load-error-item p {
+  margin: 4px 0 0;
+  color: #8a5d19;
+  line-height: 1.5;
 }
 
 .overview-copy {
@@ -2381,6 +2708,10 @@ onMounted(async () => {
   .review-filter,
   .evidence-input {
     width: 100%;
+  }
+
+  .gaokao-load-error-item {
+    display: grid;
   }
 }
 </style>

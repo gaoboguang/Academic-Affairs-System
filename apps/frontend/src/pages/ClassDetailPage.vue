@@ -7,13 +7,54 @@
   >
     <template #actions>
       <el-button @click="router.push('/classes')">返回速览</el-button>
-      <el-button @click="openClassEdit">编辑班级</el-button>
-      <el-button @click="openAssignmentDialog">设置任课教师</el-button>
-      <el-button type="primary" @click="openHonorDialog()">新增荣誉</el-button>
+      <el-button :disabled="!profile || profileLoading || savingClass" @click="openClassEdit">编辑班级</el-button>
+      <el-button :disabled="!profile || profileLoading || optionsLoading || savingAssignment" @click="openAssignmentDialog">
+        设置任课教师
+      </el-button>
+      <el-button type="primary" :disabled="!profile || profileLoading || savingHonor" @click="openHonorDialog()">新增荣誉</el-button>
     </template>
 
-    <div v-if="loading" class="loading-panel">正在加载班级档案...</div>
-    <template v-else-if="profile">
+    <el-alert
+      v-if="optionsLoadError"
+      class="class-detail-alert"
+      type="error"
+      :title="optionsLoadError"
+      show-icon
+      :closable="false"
+    >
+      <template #default>
+        <el-button size="small" :loading="optionsLoading" @click="loadOptionsWithFeedback">重新加载基础选项</el-button>
+      </template>
+    </el-alert>
+
+    <el-alert
+      v-if="profileLoadError"
+      class="class-detail-alert"
+      type="error"
+      :title="profileLoadError"
+      show-icon
+      :closable="false"
+    >
+      <template #default>
+        <el-button size="small" :loading="profileLoading" @click="loadProfileWithFeedback">重新加载班级档案</el-button>
+      </template>
+    </el-alert>
+
+    <el-alert
+      v-if="classActionError"
+      class="class-detail-alert"
+      type="error"
+      :title="classActionError"
+      show-icon
+      :closable="false"
+    >
+      <template #default>
+        <el-button size="small" :loading="profileLoading" @click="loadProfileWithFeedback">刷新班级档案</el-button>
+      </template>
+    </el-alert>
+
+    <div v-loading="loading || profileLoading" class="class-detail-body">
+      <template v-if="profile">
       <AppStatGrid :items="profileCards" :columns="5" />
 
       <AppSectionCard title="班级概览" description="班级对象的核心台账和最近教学信号。">
@@ -40,7 +81,7 @@
         <el-tab-pane label="学生" name="students">
           <AppFilterBar title="学生名单" description="按学生状态和类别筛选，点击姓名进入学生详情。" :sticky="false">
             <div class="filter-grid detail-filter-grid">
-              <el-select v-model="studentFilters.status" clearable placeholder="学生状态">
+              <el-select v-model="studentFilters.status" clearable placeholder="学生状态" :disabled="profileLoading || optionsLoading">
                 <el-option
                   v-for="item in referenceStore.dicts.student_status ?? []"
                   :key="String(item.code)"
@@ -48,7 +89,12 @@
                   :value="item.code"
                 />
               </el-select>
-              <el-select v-model="studentFilters.studentType" clearable placeholder="学生类别">
+              <el-select
+                v-model="studentFilters.studentType"
+                clearable
+                placeholder="学生类别"
+                :disabled="profileLoading || optionsLoading"
+              >
                 <el-option
                   v-for="item in referenceStore.dicts.student_type ?? []"
                   :key="String(item.code)"
@@ -59,7 +105,10 @@
             </div>
           </AppFilterBar>
           <AppTableShell>
-            <el-table :data="filteredStudents" stripe>
+            <el-table v-loading="profileLoading" :data="filteredStudents" stripe>
+              <template #empty>
+                <el-empty :description="studentEmptyDescription" />
+              </template>
               <el-table-column label="学号" prop="student_no" min-width="120" />
               <el-table-column label="姓名" min-width="120">
                 <template #default="{ row }">
@@ -82,9 +131,28 @@
         <el-tab-pane label="任课教师" name="teachers">
           <AppTableShell title="任课教师" description="按当前学期展示班级任课关系。">
             <template #actions>
-              <el-button type="primary" plain @click="openAssignmentDialog">新增任教关系</el-button>
+              <el-button
+                type="primary"
+                plain
+                :disabled="profileLoading || optionsLoading || savingAssignment"
+                @click="openAssignmentDialog"
+              >
+                新增任教关系
+              </el-button>
             </template>
-            <el-table :data="profile.assignments" stripe>
+            <el-table v-loading="profileLoading" :data="profile.assignments" stripe>
+              <template #empty>
+                <el-empty description="当前学期暂无任课关系。">
+                  <el-button
+                    type="primary"
+                    plain
+                    :disabled="profileLoading || optionsLoading || savingAssignment"
+                    @click="openAssignmentDialog"
+                  >
+                    设置任课教师
+                  </el-button>
+                </el-empty>
+              </template>
               <el-table-column label="教师" prop="teacher_name" min-width="120" />
               <el-table-column label="学科" prop="subject_name" min-width="110" />
               <el-table-column label="课程类型" min-width="110">
@@ -93,18 +161,18 @@
               <el-table-column label="周课时" prop="weekly_periods_manual" width="100" />
               <el-table-column label="学期" prop="semester_name" min-width="170" />
             </el-table>
-            <el-empty v-if="!profile.assignments.length" description="当前学期暂无任课关系。">
-              <el-button type="primary" plain @click="openAssignmentDialog">设置任课教师</el-button>
-            </el-empty>
           </AppTableShell>
         </el-tab-pane>
 
         <el-tab-pane label="荣誉" name="honors">
           <AppTableShell title="班级荣誉" description="结构化记录班级荣誉，便于后续统计、筛选和导出。">
             <template #actions>
-              <el-button type="primary" @click="openHonorDialog()">新增荣誉</el-button>
+              <el-button type="primary" :disabled="profileLoading || savingHonor" @click="openHonorDialog()">新增荣誉</el-button>
             </template>
-            <el-table :data="profile.honors" stripe>
+            <el-table v-loading="profileLoading" :data="profile.honors" stripe>
+              <template #empty>
+                <el-empty description="暂无班级荣誉。" />
+              </template>
               <el-table-column label="荣誉" prop="title" min-width="180" />
               <el-table-column label="级别" prop="honor_level" min-width="100" />
               <el-table-column label="日期" prop="awarded_on" width="120" />
@@ -112,12 +180,21 @@
               <el-table-column label="备注" prop="note" min-width="180" />
               <el-table-column label="操作" width="140" fixed="right">
                 <template #default="{ row }">
-                  <el-button link type="primary" @click="openHonorDialog(row)">编辑</el-button>
-                  <el-button link type="danger" @click="deleteHonor(row)">删除</el-button>
+                  <el-button link type="primary" :disabled="profileLoading || savingHonor || deletingHonorId !== null" @click="openHonorDialog(row)">
+                    编辑
+                  </el-button>
+                  <el-button
+                    link
+                    type="danger"
+                    :loading="deletingHonorId === row.id"
+                    :disabled="profileLoading || savingHonor || (deletingHonorId !== null && deletingHonorId !== row.id)"
+                    @click="deleteHonor(row)"
+                  >
+                    删除
+                  </el-button>
                 </template>
               </el-table-column>
             </el-table>
-            <el-empty v-if="!profile.honors.length" description="暂无班级荣誉。" />
           </AppTableShell>
         </el-tab-pane>
 
@@ -142,13 +219,18 @@
           </div>
         </el-tab-pane>
       </el-tabs>
-    </template>
-    <el-empty v-else description="班级不存在或已停用。" />
+      </template>
+      <el-empty v-else :description="classDetailEmptyDescription">
+        <el-button v-if="profileLoadError" type="primary" plain :loading="profileLoading" @click="loadProfileWithFeedback">
+          重新加载班级档案
+        </el-button>
+      </el-empty>
+    </div>
 
     <el-dialog v-model="classDialogVisible" title="编辑班级" width="620px" destroy-on-close>
-      <el-form label-width="100px">
+      <el-form label-width="100px" :disabled="classFormDisabled">
         <el-form-item label="所属年级">
-          <el-select v-model="classForm.grade_id" style="width: 100%">
+          <el-select v-model="classForm.grade_id" :loading="optionsLoading" style="width: 100%">
             <el-option v-for="grade in referenceStore.grades" :key="grade.id" :label="grade.name" :value="grade.id" />
           </el-select>
         </el-form-item>
@@ -156,7 +238,7 @@
           <el-input v-model="classForm.name" />
         </el-form-item>
         <el-form-item label="班型">
-          <el-select v-model="classForm.class_type" clearable style="width: 100%">
+          <el-select v-model="classForm.class_type" clearable :loading="optionsLoading" style="width: 100%">
             <el-option
               v-for="item in referenceStore.dicts.class_type ?? []"
               :key="String(item.code)"
@@ -166,7 +248,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="班主任">
-          <el-select v-model="classForm.head_teacher_id" clearable filterable style="width: 100%">
+          <el-select v-model="classForm.head_teacher_id" clearable filterable :loading="optionsLoading" style="width: 100%">
             <el-option v-for="teacher in teacherOptions" :key="teacher.id" :label="teacher.name" :value="teacher.id" />
           </el-select>
         </el-form-item>
@@ -174,14 +256,15 @@
           <el-input-number v-model="classForm.student_count" :min="0" :max="300" style="width: 100%" />
         </el-form-item>
       </el-form>
+      <el-alert v-if="classFormError" class="dialog-alert" type="error" :title="classFormError" show-icon :closable="false" />
       <template #footer>
-        <el-button @click="classDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="savingClass" @click="saveClass">保存</el-button>
+        <el-button :disabled="savingClass" @click="classDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="savingClass" :disabled="optionsLoading" @click="saveClass">保存</el-button>
       </template>
     </el-dialog>
 
     <el-dialog v-model="honorDialogVisible" :title="editingHonorId ? '编辑荣誉' : '新增荣誉'" width="620px" destroy-on-close>
-      <el-form label-width="100px">
+      <el-form label-width="100px" :disabled="honorFormDisabled">
         <el-form-item label="荣誉标题">
           <el-input v-model="honorForm.title" />
         </el-form-item>
@@ -198,21 +281,22 @@
           <el-input v-model="honorForm.note" type="textarea" :rows="3" />
         </el-form-item>
       </el-form>
+      <el-alert v-if="honorFormError" class="dialog-alert" type="error" :title="honorFormError" show-icon :closable="false" />
       <template #footer>
-        <el-button @click="honorDialogVisible = false">取消</el-button>
+        <el-button :disabled="savingHonor" @click="honorDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="savingHonor" @click="saveHonor">保存</el-button>
       </template>
     </el-dialog>
 
     <el-dialog v-model="assignmentDialogVisible" title="新增任教关系" width="620px" destroy-on-close>
-      <el-form label-width="100px">
+      <el-form label-width="100px" :disabled="assignmentFormDisabled">
         <el-form-item label="教师">
-          <el-select v-model="assignmentForm.teacher_id" filterable style="width: 100%">
+          <el-select v-model="assignmentForm.teacher_id" filterable :loading="optionsLoading" style="width: 100%">
             <el-option v-for="teacher in teacherOptions" :key="teacher.id" :label="teacher.name" :value="teacher.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="学期">
-          <el-select v-model="assignmentForm.semester_id" filterable style="width: 100%">
+          <el-select v-model="assignmentForm.semester_id" filterable :loading="optionsLoading" style="width: 100%">
             <el-option
               v-for="semester in referenceStore.semesters"
               :key="semester.id"
@@ -222,12 +306,12 @@
           </el-select>
         </el-form-item>
         <el-form-item label="学科">
-          <el-select v-model="assignmentForm.subject_id" clearable style="width: 100%">
+          <el-select v-model="assignmentForm.subject_id" clearable :loading="optionsLoading" style="width: 100%">
             <el-option v-for="subject in referenceStore.subjects" :key="subject.id" :label="subject.name" :value="subject.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="课程类型">
-          <el-select v-model="assignmentForm.course_type" clearable style="width: 100%">
+          <el-select v-model="assignmentForm.course_type" clearable :loading="optionsLoading" style="width: 100%">
             <el-option
               v-for="item in referenceStore.dicts.course_type ?? []"
               :key="String(item.code)"
@@ -240,9 +324,10 @@
           <el-input-number v-model="assignmentForm.weekly_periods_manual" :min="0" :max="40" style="width: 100%" />
         </el-form-item>
       </el-form>
+      <el-alert v-if="assignmentFormError" class="dialog-alert" type="error" :title="assignmentFormError" show-icon :closable="false" />
       <template #footer>
-        <el-button @click="assignmentDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="savingAssignment" @click="saveAssignment">保存</el-button>
+        <el-button :disabled="savingAssignment" @click="assignmentDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="savingAssignment" :disabled="optionsLoading" @click="saveAssignment">保存</el-button>
       </template>
     </el-dialog>
   </AppPage>
@@ -262,6 +347,7 @@ import {
   AppStatGrid,
   AppTableShell,
   type PageMetaItem,
+  type StatCardItem,
 } from "../components/ui";
 import {
   buildClassProfileCards,
@@ -272,6 +358,7 @@ import {
   type StudentListItem,
 } from "../components/classes/classProfile";
 import { useReferenceStore, type OptionItem } from "../stores/reference";
+import { formatUserActionError } from "../utils/userFeedback";
 
 interface TeacherOption {
   id: number;
@@ -283,8 +370,13 @@ const router = useRouter();
 const referenceStore = useReferenceStore();
 const classId = computed(() => Number(route.params.classId));
 const loading = ref(false);
+const optionsLoading = ref(false);
+const profileLoading = ref(false);
 const profile = ref<ClassProfileResponse | null>(null);
 const teacherOptions = ref<TeacherOption[]>([]);
+const optionsLoadError = ref("");
+const profileLoadError = ref("");
+const classActionError = ref("");
 const activeTab = ref("students");
 const classDialogVisible = ref(false);
 const honorDialogVisible = ref(false);
@@ -293,6 +385,10 @@ const savingClass = ref(false);
 const savingHonor = ref(false);
 const savingAssignment = ref(false);
 const editingHonorId = ref<number | null>(null);
+const deletingHonorId = ref<number | null>(null);
+const classFormError = ref("");
+const honorFormError = ref("");
+const assignmentFormError = ref("");
 const studentFilters = reactive({
   status: "" as string | undefined,
   studentType: "" as string | undefined,
@@ -324,13 +420,27 @@ const assignmentForm = reactive({
   is_active: true,
 });
 
+const classFormDisabled = computed(() => savingClass.value || optionsLoading.value);
+const honorFormDisabled = computed(() => savingHonor.value);
+const assignmentFormDisabled = computed(() => savingAssignment.value || optionsLoading.value);
 const pageMeta = computed<PageMetaItem[]>(() => [
   { label: "年级", value: profile.value?.overview.grade_name ?? "-" },
   { label: "班主任", value: profile.value?.overview.head_teacher_name ?? "未维护" },
   { label: "学生", value: profile.value?.overview.active_student_count ?? 0 },
   { label: "荣誉", value: profile.value?.overview.honor_count ?? 0 },
 ]);
-const profileCards = computed(() => buildClassProfileCards(profile.value));
+const profileCards = computed<StatCardItem[]>(() =>
+  buildClassProfileCards(profile.value).map((item) => ({
+    ...item,
+    loading: profileLoading.value,
+  })),
+);
+const activeStudentFilterCount = computed(() => {
+  let count = 0;
+  if (studentFilters.status) count += 1;
+  if (studentFilters.studentType) count += 1;
+  return count;
+});
 const filteredStudents = computed<StudentListItem[]>(() =>
   (profile.value?.students ?? []).filter((item) => {
     if (studentFilters.status && item.status !== studentFilters.status) return false;
@@ -338,6 +448,14 @@ const filteredStudents = computed<StudentListItem[]>(() =>
     return true;
   }),
 );
+const studentEmptyDescription = computed(() =>
+  activeStudentFilterCount.value ? "没有符合筛选条件的学生。" : "当前班级暂无学生。",
+);
+const classDetailEmptyDescription = computed(() => {
+  if (profileLoadError.value) return "班级档案加载失败，请重新加载。";
+  if (loading.value || profileLoading.value) return "正在加载班级档案。";
+  return "班级不存在或已停用。";
+});
 
 function readQueryValue(value: unknown): string | null {
   if (Array.isArray(value)) return typeof value[0] === "string" ? value[0] : null;
@@ -382,20 +500,53 @@ async function loadProfile(): Promise<void> {
   profile.value = await apiRequest<ClassProfileResponse>(`/api/classes/${classId.value}/profile`);
 }
 
-async function reloadAll(): Promise<void> {
+async function loadOptionsWithFeedback(): Promise<void> {
   try {
-    loading.value = true;
-    await Promise.all([loadOptions(), loadProfile()]);
+    optionsLoading.value = true;
+    optionsLoadError.value = "";
+    await loadOptions();
+  } catch (error) {
+    teacherOptions.value = [];
+    optionsLoadError.value = formatUserActionError(
+      "加载班级基础选项",
+      error,
+      "确认本地后端服务正常运行后，点击重新加载基础选项。",
+    );
+    ElMessage.error(optionsLoadError.value);
+  } finally {
+    optionsLoading.value = false;
+  }
+}
+
+async function loadProfileWithFeedback(): Promise<void> {
+  try {
+    profileLoading.value = true;
+    profileLoadError.value = "";
+    await loadProfile();
+    classActionError.value = "";
     applyRouteIntent();
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    profile.value = null;
+    profileLoadError.value = formatUserActionError(
+      "加载班级档案",
+      error,
+      "确认班级仍然启用且本地后端服务正常运行后，点击重新加载班级档案。",
+    );
+    ElMessage.error(profileLoadError.value);
   } finally {
-    loading.value = false;
+    profileLoading.value = false;
   }
+}
+
+async function reloadAll(): Promise<void> {
+  loading.value = true;
+  await Promise.all([loadOptionsWithFeedback(), loadProfileWithFeedback()]);
+  loading.value = false;
 }
 
 function openClassEdit(): void {
   if (!profile.value) return;
+  classFormError.value = "";
   Object.assign(classForm, {
     grade_id: profile.value.overview.grade_id,
     name: profile.value.overview.class_name,
@@ -409,20 +560,23 @@ function openClassEdit(): void {
 
 async function saveClass(): Promise<void> {
   if (!classForm.grade_id || !classForm.name.trim()) {
-    ElMessage.warning("年级和班级名称不能为空");
+    classFormError.value = "年级和班级名称不能为空";
+    ElMessage.warning(classFormError.value);
     return;
   }
   try {
     savingClass.value = true;
+    classFormError.value = "";
     await apiRequest(`/api/base/classes/${classId.value}`, {
       method: "PUT",
       body: JSON.stringify(classForm),
     });
     ElMessage.success("班级保存成功");
     classDialogVisible.value = false;
-    await loadProfile();
+    await loadProfileWithFeedback();
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    classFormError.value = formatUserActionError("保存班级", error, "检查年级、班级名称和班主任后重试。");
+    ElMessage.error(classFormError.value);
   } finally {
     savingClass.value = false;
   }
@@ -430,6 +584,7 @@ async function saveClass(): Promise<void> {
 
 function resetHonorForm(): void {
   editingHonorId.value = null;
+  honorFormError.value = "";
   Object.assign(honorForm, {
     title: "",
     honor_level: "",
@@ -458,11 +613,13 @@ function openHonorDialog(row?: ClassHonorRead): void {
 
 async function saveHonor(): Promise<void> {
   if (!honorForm.title.trim()) {
-    ElMessage.warning("荣誉标题不能为空");
+    honorFormError.value = "荣誉标题不能为空";
+    ElMessage.warning(honorFormError.value);
     return;
   }
   try {
     savingHonor.value = true;
+    honorFormError.value = "";
     const path = editingHonorId.value
       ? `/api/classes/${classId.value}/honors/${editingHonorId.value}`
       : `/api/classes/${classId.value}/honors`;
@@ -472,9 +629,10 @@ async function saveHonor(): Promise<void> {
     });
     ElMessage.success("班级荣誉保存成功");
     honorDialogVisible.value = false;
-    await loadProfile();
+    await loadProfileWithFeedback();
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    honorFormError.value = formatUserActionError("保存班级荣誉", error, "检查荣誉标题和日期格式后重试。");
+    ElMessage.error(honorFormError.value);
   } finally {
     savingHonor.value = false;
   }
@@ -483,18 +641,27 @@ async function saveHonor(): Promise<void> {
 async function deleteHonor(row: ClassHonorRead): Promise<void> {
   try {
     await ElMessageBox.confirm(`确认删除“${row.title}”？`, "删除班级荣誉", { type: "warning" });
+    deletingHonorId.value = row.id;
+    classActionError.value = "";
     await apiRequest(`/api/classes/${classId.value}/honors/${row.id}`, { method: "DELETE" });
     ElMessage.success("班级荣誉已删除");
-    await loadProfile();
+    await loadProfileWithFeedback();
   } catch (error) {
     if (error instanceof Error) {
-      ElMessage.error(error.message);
+      classActionError.value = formatUserActionError("删除班级荣誉", error, "确认该荣誉仍可操作后重试。");
+      ElMessage.error(classActionError.value);
+    }
+  } finally {
+    if (deletingHonorId.value === row.id) {
+      deletingHonorId.value = null;
     }
   }
 }
 
 function openAssignmentDialog(): void {
+  if (!profile.value) return;
   activeTab.value = "teachers";
+  assignmentFormError.value = "";
   assignmentForm.teacher_id = null;
   assignmentForm.semester_id = referenceStore.semesters.find((item) => item.is_current)?.id ?? referenceStore.semesters[0]?.id ?? null;
   assignmentForm.grade_id = profile.value?.overview.grade_id ?? null;
@@ -507,20 +674,23 @@ function openAssignmentDialog(): void {
 
 async function saveAssignment(): Promise<void> {
   if (!assignmentForm.teacher_id || !assignmentForm.semester_id) {
-    ElMessage.warning("教师和学期不能为空");
+    assignmentFormError.value = "教师和学期不能为空";
+    ElMessage.warning(assignmentFormError.value);
     return;
   }
   try {
     savingAssignment.value = true;
+    assignmentFormError.value = "";
     await apiRequest("/api/teachers/assignments", {
       method: "POST",
       body: JSON.stringify(assignmentForm),
     });
     ElMessage.success("任教关系保存成功");
     assignmentDialogVisible.value = false;
-    await loadProfile();
+    await loadProfileWithFeedback();
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    assignmentFormError.value = formatUserActionError("保存任教关系", error, "检查教师、学期、学科和课程类型后重试。");
+    ElMessage.error(assignmentFormError.value);
   } finally {
     savingAssignment.value = false;
   }
@@ -540,16 +710,27 @@ watch(
   () => applyRouteIntent(),
 );
 
+watch(classId, () => {
+  profile.value = null;
+  void reloadAll();
+});
+
 onMounted(reloadAll);
 </script>
 
 <style scoped>
-.loading-panel {
-  padding: 22px;
-  border-radius: 8px;
-  border: 1px solid var(--border-soft);
-  background: var(--bg-panel);
-  color: var(--text-muted);
+.class-detail-alert {
+  margin-top: -4px;
+}
+
+.dialog-alert {
+  margin-top: 12px;
+}
+
+.class-detail-body {
+  display: grid;
+  gap: 16px;
+  min-height: 320px;
 }
 
 .class-summary-grid {

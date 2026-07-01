@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const fs = require("node:fs");
+const { spawnSync } = require("node:child_process");
 const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
@@ -8,6 +9,7 @@ const path = require("node:path");
 const rootDir = path.resolve(__dirname, "..");
 const logDir = path.join(rootDir, "data", "logs", "local-services");
 const defaultHost = "127.0.0.1";
+const isWindows = process.platform === "win32";
 
 const services = [
   { name: "frontend", label: "前端", port: 5173, healthPath: "/" },
@@ -22,11 +24,27 @@ function readPid(service) {
   const pidPath = pidPathFor(service);
   if (!fs.existsSync(pidPath)) return null;
   try {
-    const data = JSON.parse(fs.readFileSync(pidPath, "utf8"));
+    const data = JSON.parse(fs.readFileSync(pidPath, "utf8").replace(/^\uFEFF/, ""));
     return Number(data.pid) || null;
   } catch {
     return null;
   }
+}
+
+function findWindowsPidByPort(port) {
+  if (!isWindows) return null;
+  const command = [
+    "$conn = Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort",
+    String(port),
+    "-State Listen -ErrorAction SilentlyContinue | Select-Object -First 1;",
+    "if ($conn) { [Console]::Write($conn.OwningProcess) }",
+  ].join(" ");
+  const result = spawnSync("powershell.exe", ["-NoProfile", "-Command", command], {
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  const pid = Number(String(result.stdout || "").trim());
+  return Number.isInteger(pid) && pid > 0 ? pid : null;
 }
 
 function removePidFile(service) {
@@ -47,6 +65,13 @@ function isProcessRunning(pid) {
 }
 
 function stopPidGroup(pid) {
+  if (isWindows) {
+    const result = spawnSync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
+      stdio: "ignore",
+    });
+    return result.status === 0;
+  }
+
   try {
     process.kill(-pid, "SIGTERM");
     return true;
@@ -117,7 +142,17 @@ async function main() {
       removePidFile(service);
       const healthy = await checkHttpHealth(service);
       if (healthy) {
-        console.log(`[${service.label}] 没有后台启动记录，但端口仍有可用服务：${defaultHost}:${service.port}`);
+        const portPid = findWindowsPidByPort(service.port);
+        if (portPid && stopPidGroup(portPid)) {
+          const stoppedCleanly = await waitUntilStopped(service);
+          console.log(
+            stoppedCleanly
+              ? `[${service.label}] 已按端口停止，pid=${portPid}`
+              : `[${service.label}] 已按端口发送停止请求，pid=${portPid}；端口可能仍在释放中`,
+          );
+        } else {
+          console.log(`[${service.label}] 没有后台启动记录，但端口仍有可用服务：${defaultHost}:${service.port}`);
+        }
       } else {
         console.log(`[${service.label}] 没有找到后台启动记录，跳过。`);
       }

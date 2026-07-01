@@ -8,190 +8,379 @@
     <template #actions>
       <el-button @click="router.push('/colleges')">返回院校库</el-button>
       <el-button @click="router.push('/recommendations')">志愿工作台</el-button>
+      <el-button type="primary" :loading="collegeReloadBusy" @click="reloadCollegeDetail">
+        刷新院校
+      </el-button>
     </template>
 
-    <div v-if="loading" class="loading-panel">正在加载院校详情...</div>
-    <el-empty v-else-if="error" :description="error" />
-    <template v-else-if="detail">
-      <AppStatGrid :items="statCards" :columns="4" />
+    <el-alert
+      v-if="detailLoadError"
+      class="detail-alert"
+      type="error"
+      show-icon
+      :closable="false"
+      title="院校详情加载失败"
+      :description="detailLoadError"
+    >
+      <template #default>
+        <el-button size="small" type="primary" plain :loading="loading" @click="reloadCollegeDetail">
+          重新加载院校详情
+        </el-button>
+      </template>
+    </el-alert>
 
-      <AppSectionCard title="院校概览" description="院校基础台账和招生画像。">
-        <div class="detail-grid">
-          <article class="summary-panel">
-            <span>院校代码</span>
-            <strong>{{ detail.college.college_code || detail.profile?.enrollment_code || '-' }}</strong>
-            <p>{{ [detail.college.province, detail.college.city, detail.college.school_type].filter(Boolean).join(' / ') || '-' }}</p>
-          </article>
-          <article class="summary-panel">
-            <span>办学层次</span>
-            <strong>{{ detail.profile?.education_level || '未维护' }}</strong>
-            <p>{{ levelTags.join('、') || '暂无层级标签' }}</p>
-          </article>
-          <article class="summary-panel">
-            <span>主管部门</span>
-            <strong>{{ detail.profile?.authority_department || '-' }}</strong>
-            <p>{{ detail.profile?.address || '暂无地址' }}</p>
-          </article>
-        </div>
-        <p class="body-copy">{{ detail.profile?.summary || detail.college.intro || '暂无院校简介。' }}</p>
-      </AppSectionCard>
+    <div v-loading="loading" class="college-detail-body">
+      <template v-if="detail">
+        <AppStatGrid :items="statCards" :columns="4" />
 
-      <AppSectionCard title="联系方式" description="官网、招生网、电话和邮箱。">
-        <div class="contact-list">
-          <span>官网：{{ detail.profile?.official_website || detail.college.website || '-' }}</span>
-          <span>招生网：{{ detail.profile?.admission_website || '-' }}</span>
-          <span>电话：{{ detail.profile?.phone || '-' }}</span>
-          <span>邮箱：{{ detail.profile?.email || '-' }}</span>
-        </div>
-      </AppSectionCard>
+        <AppSectionCard title="院校概览" description="院校基础台账和招生画像。">
+          <div class="detail-grid">
+            <article class="summary-panel">
+              <span>院校代码</span>
+              <strong>{{ detail.college.college_code || detail.profile?.enrollment_code || "-" }}</strong>
+              <p>
+                {{
+                  [detail.college.province, detail.college.city, detail.college.school_type].filter(Boolean).join(" / ") ||
+                  "-"
+                }}
+              </p>
+            </article>
+            <article class="summary-panel">
+              <span>办学层次</span>
+              <strong>{{ detail.profile?.education_level || "未维护" }}</strong>
+              <p>{{ levelTags.join("、") || "暂无层级标签" }}</p>
+            </article>
+            <article class="summary-panel">
+              <span>主管部门</span>
+              <strong>{{ detail.profile?.authority_department || "-" }}</strong>
+              <p>{{ detail.profile?.address || "暂无地址" }}</p>
+            </article>
+          </div>
+          <p class="body-copy">{{ detail.profile?.summary || detail.college.intro || "暂无院校简介。" }}</p>
+        </AppSectionCard>
 
-      <AppTableShell title="山东近年趋势" description="按年份展示计划、专业数、最低位次和估算最低分。">
-        <el-table :data="detail.year_summaries" stripe>
-          <el-table-column label="年份" prop="year" width="90" />
-          <el-table-column label="计划数" prop="total_plan_count" width="100" />
-          <el-table-column label="专业数" prop="specialty_count" width="100" />
-          <el-table-column label="最低位次" prop="min_rank" width="120" />
-          <el-table-column label="估算最低分" prop="estimated_min_score" width="120" />
-          <el-table-column label="说明" prop="source_note" min-width="220" />
-        </el-table>
-      </AppTableShell>
+        <AppSectionCard title="联系方式" description="官网、招生网、电话和邮箱。">
+          <div class="contact-list">
+            <span>官网：{{ detail.profile?.official_website || detail.college.website || "-" }}</span>
+            <span>招生网：{{ detail.profile?.admission_website || "-" }}</span>
+            <span>电话：{{ detail.profile?.phone || "-" }}</span>
+            <span>邮箱：{{ detail.profile?.email || "-" }}</span>
+          </div>
+        </AppSectionCard>
 
-      <AppTableShell title="开设专业画像" description="学校-专业关系、特色标签和来源。">
-        <el-table :data="detail.major_profiles" stripe>
-          <el-table-column label="专业" min-width="180">
-            <template #default="{ row }">
-              <el-button link type="primary" @click="router.push(`/majors/${row.major_id}`)">{{ row.major_name || '-' }}</el-button>
+        <AppTableShell title="山东近年趋势" description="按年份展示计划、专业数、最低位次和估算最低分。">
+          <el-table :data="detail.year_summaries" stripe>
+            <el-table-column label="年份" prop="year" width="90" />
+            <el-table-column label="计划数" prop="total_plan_count" width="100" />
+            <el-table-column label="专业数" prop="specialty_count" width="100" />
+            <el-table-column label="最低位次" prop="min_rank" width="120" />
+            <el-table-column label="估算最低分" prop="estimated_min_score" width="120" />
+            <el-table-column label="说明" prop="source_note" min-width="220" />
+            <template #empty>
+              <el-empty description="暂无山东近年趋势数据" />
             </template>
-          </el-table-column>
-          <el-table-column label="层次" prop="education_level" width="110" />
-          <el-table-column label="学制" prop="schooling_years" width="100" />
-          <el-table-column label="特色" min-width="220">
-            <template #default="{ row }">
-              <div class="tag-cluster">
-                <el-tag v-if="row.is_national_feature" size="small">国家特色</el-tag>
-                <el-tag v-if="row.is_provincial_feature" size="small" type="success">省级特色</el-tag>
-                <el-tag v-if="row.is_key_major" size="small" type="warning">重点专业</el-tag>
-                <span>{{ row.school_major_feature || '-' }}</span>
+          </el-table>
+        </AppTableShell>
+
+        <AppTableShell title="开设专业画像" description="学校-专业关系、特色标签和来源。">
+          <el-table :data="detail.major_profiles" stripe>
+            <el-table-column label="专业" min-width="180">
+              <template #default="{ row }">
+                <el-button link type="primary" @click="router.push(`/majors/${row.major_id}`)">
+                  {{ row.major_name || "-" }}
+                </el-button>
+              </template>
+            </el-table-column>
+            <el-table-column label="层次" prop="education_level" width="110" />
+            <el-table-column label="学制" prop="schooling_years" width="100" />
+            <el-table-column label="特色" min-width="220">
+              <template #default="{ row }">
+                <div class="tag-cluster">
+                  <el-tag v-if="row.is_national_feature" size="small">国家特色</el-tag>
+                  <el-tag v-if="row.is_provincial_feature" size="small" type="success">省级特色</el-tag>
+                  <el-tag v-if="row.is_key_major" size="small" type="warning">重点专业</el-tag>
+                  <span>{{ row.school_major_feature || "-" }}</span>
+                </div>
+              </template>
+            </el-table-column>
+            <template #empty>
+              <el-empty description="暂无开设专业画像" />
+            </template>
+          </el-table>
+        </AppTableShell>
+
+        <AppTableShell title="招生数据" description="按院校查看完整招生计划和录取/投档历史，支持筛选后分页浏览。">
+          <el-tabs v-model="activeAdmissionTab">
+            <el-tab-pane label="录取/投档">
+              <el-alert
+                v-if="admissionsLoadError"
+                class="inline-alert"
+                type="error"
+                show-icon
+                :closable="false"
+                :title="admissionsLoadError"
+              >
+                <template #default>
+                  <el-button size="small" type="primary" plain :loading="admissionsLoading" @click="loadAdmissions()">
+                    重新加载录取数据
+                  </el-button>
+                </template>
+              </el-alert>
+
+              <div class="detail-filter-grid">
+                <el-input
+                  v-model.number="admissionFilters.year"
+                  clearable
+                  placeholder="年份"
+                  :disabled="admissionControlsDisabled"
+                />
+                <el-input
+                  v-model="admissionFilters.province"
+                  clearable
+                  placeholder="省份"
+                  :disabled="admissionControlsDisabled"
+                />
+                <el-input
+                  v-model="admissionFilters.batch"
+                  clearable
+                  placeholder="批次"
+                  :disabled="admissionControlsDisabled"
+                />
+                <el-input
+                  v-model="admissionFilters.student_type"
+                  clearable
+                  placeholder="考生类型"
+                  :disabled="admissionControlsDisabled"
+                />
+                <el-button
+                  type="primary"
+                  :loading="admissionsLoading"
+                  :disabled="admissionControlsDisabled"
+                  @click="loadAdmissions({ resetPage: true })"
+                >
+                  查询
+                </el-button>
+                <el-button :disabled="admissionControlsDisabled" @click="resetAdmissionFilters()">重置</el-button>
               </div>
+
+              <el-table v-loading="admissionsLoading" :data="admissions" stripe>
+                <el-table-column label="年份" prop="year" width="90" />
+                <el-table-column label="省份" prop="province" width="100" />
+                <el-table-column label="批次" prop="batch" min-width="120" />
+                <el-table-column label="专业" min-width="180">
+                  <template #default="{ row }">
+                    <el-button v-if="row.major_id" link type="primary" @click="router.push(`/majors/${row.major_id}`)">
+                      {{ row.major_name || "-" }}
+                    </el-button>
+                    <span v-else>{{ row.major_name || "-" }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="类型" prop="student_type" width="110" />
+                <el-table-column label="最低分" prop="min_score" width="100" />
+                <el-table-column label="最低位次" prop="min_rank" width="120" />
+                <el-table-column label="计划/录取数" prop="plan_count" width="120" />
+                <template #empty>
+                  <el-empty :description="admissionsEmptyDescription">
+                    <el-button
+                      v-if="admissionsLoadError"
+                      type="primary"
+                      plain
+                      :loading="admissionsLoading"
+                      @click="loadAdmissions()"
+                    >
+                      重新加载录取数据
+                    </el-button>
+                    <el-button
+                      v-else-if="hasCustomAdmissionFilters"
+                      type="primary"
+                      plain
+                      :disabled="admissionControlsDisabled"
+                      @click="resetAdmissionFilters()"
+                    >
+                      清空筛选条件
+                    </el-button>
+                  </el-empty>
+                </template>
+              </el-table>
+
+              <el-pagination
+                v-if="admissionPagination.total"
+                class="table-pagination"
+                background
+                layout="total, sizes, prev, pager, next"
+                :current-page="admissionPagination.page"
+                :page-size="admissionPagination.page_size"
+                :page-sizes="[50, 100, 200]"
+                :total="admissionPagination.total"
+                :disabled="admissionsLoading"
+                @current-change="handleAdmissionPageChange"
+                @size-change="handleAdmissionPageSizeChange"
+              />
+            </el-tab-pane>
+
+            <el-tab-pane label="招生计划">
+              <el-alert
+                v-if="plansLoadError"
+                class="inline-alert"
+                type="error"
+                show-icon
+                :closable="false"
+                :title="plansLoadError"
+              >
+                <template #default>
+                  <el-button size="small" type="primary" plain :loading="plansLoading" @click="loadPlans()">
+                    重新加载招生计划
+                  </el-button>
+                </template>
+              </el-alert>
+
+              <div class="detail-filter-grid">
+                <el-input
+                  v-model.number="planFilters.year"
+                  clearable
+                  placeholder="年份"
+                  :disabled="planControlsDisabled"
+                />
+                <el-input
+                  v-model="planFilters.province"
+                  clearable
+                  placeholder="省份"
+                  :disabled="planControlsDisabled"
+                />
+                <el-input
+                  v-model="planFilters.batch"
+                  clearable
+                  placeholder="批次"
+                  :disabled="planControlsDisabled"
+                />
+                <el-input
+                  v-model="planFilters.student_type"
+                  clearable
+                  placeholder="考生类型"
+                  :disabled="planControlsDisabled"
+                />
+                <el-input
+                  v-model="planFilters.keyword"
+                  clearable
+                  placeholder="专业关键词"
+                  :disabled="planControlsDisabled"
+                />
+                <el-button
+                  type="primary"
+                  :loading="plansLoading"
+                  :disabled="planControlsDisabled"
+                  @click="loadPlans({ resetPage: true })"
+                >
+                  查询
+                </el-button>
+                <el-button :disabled="planControlsDisabled" @click="resetPlanFilters()">重置</el-button>
+              </div>
+
+              <el-table v-loading="plansLoading" :data="plans" stripe>
+                <el-table-column label="年份" prop="year" width="90" />
+                <el-table-column label="省份" prop="province" width="100" />
+                <el-table-column label="批次" prop="batch" min-width="120" />
+                <el-table-column label="专业" min-width="180">
+                  <template #default="{ row }">
+                    <el-button v-if="row.major_id" link type="primary" @click="router.push(`/majors/${row.major_id}`)">
+                      {{ row.major_name || "-" }}
+                    </el-button>
+                    <span v-else>{{ row.major_name || "-" }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="专业组" prop="major_group_code" width="110" />
+                <el-table-column label="计划数" prop="plan_count" width="100" />
+                <el-table-column label="类型" prop="student_type" width="110" />
+                <el-table-column label="选科要求" prop="subject_requirement" min-width="140" />
+                <template #empty>
+                  <el-empty :description="plansEmptyDescription">
+                    <el-button
+                      v-if="plansLoadError"
+                      type="primary"
+                      plain
+                      :loading="plansLoading"
+                      @click="loadPlans()"
+                    >
+                      重新加载招生计划
+                    </el-button>
+                    <el-button
+                      v-else-if="hasCustomPlanFilters"
+                      type="primary"
+                      plain
+                      :disabled="planControlsDisabled"
+                      @click="resetPlanFilters()"
+                    >
+                      清空筛选条件
+                    </el-button>
+                  </el-empty>
+                </template>
+              </el-table>
+
+              <el-pagination
+                v-if="planPagination.total"
+                class="table-pagination"
+                background
+                layout="total, sizes, prev, pager, next"
+                :current-page="planPagination.page"
+                :page-size="planPagination.page_size"
+                :page-sizes="[50, 100, 200]"
+                :total="planPagination.total"
+                :disabled="plansLoading"
+                @current-change="handlePlanPageChange"
+                @size-change="handlePlanPageSizeChange"
+              />
+            </el-tab-pane>
+          </el-tabs>
+        </AppTableShell>
+
+        <AppTableShell title="来源证据" description="本地 scraper 文件、官方页面或结构化来源记录。">
+          <el-table :data="detail.source_documents" stripe>
+            <el-table-column label="类型" prop="source_type" width="160" />
+            <el-table-column label="标题" prop="title" min-width="180" />
+            <el-table-column label="路径" prop="source_path" min-width="260" />
+            <el-table-column label="SHA256" prop="source_sha256" min-width="220" show-overflow-tooltip />
+            <template #empty>
+              <el-empty description="暂无来源证据" />
             </template>
-          </el-table-column>
-        </el-table>
-      </AppTableShell>
+          </el-table>
+        </AppTableShell>
+      </template>
 
-      <AppTableShell title="招生数据" description="按院校查看完整招生计划和录取/投档历史，支持筛选后分页浏览。">
-        <el-tabs v-model="activeAdmissionTab">
-          <el-tab-pane label="录取/投档">
-            <div class="detail-filter-grid">
-              <el-input v-model.number="admissionFilters.year" clearable placeholder="年份" />
-              <el-input v-model="admissionFilters.province" clearable placeholder="省份" />
-              <el-input v-model="admissionFilters.batch" clearable placeholder="批次" />
-              <el-input v-model="admissionFilters.student_type" clearable placeholder="考生类型" />
-              <el-button type="primary" @click="loadAdmissions({ resetPage: true })">查询</el-button>
-              <el-button @click="resetAdmissionFilters()">重置</el-button>
-            </div>
-            <el-table v-loading="admissionsLoading" :data="admissions" stripe>
-              <el-table-column label="年份" prop="year" width="90" />
-              <el-table-column label="省份" prop="province" width="100" />
-              <el-table-column label="批次" prop="batch" min-width="120" />
-              <el-table-column label="专业" min-width="180">
-                <template #default="{ row }">
-                  <el-button v-if="row.major_id" link type="primary" @click="router.push(`/majors/${row.major_id}`)">{{ row.major_name || '-' }}</el-button>
-                  <span v-else>{{ row.major_name || '-' }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column label="类型" prop="student_type" width="110" />
-              <el-table-column label="最低分" prop="min_score" width="100" />
-              <el-table-column label="最低位次" prop="min_rank" width="120" />
-              <el-table-column label="计划/录取数" prop="plan_count" width="120" />
-            </el-table>
-            <el-pagination
-              v-if="admissionPagination.total"
-              class="table-pagination"
-              background
-              layout="total, sizes, prev, pager, next"
-              :current-page="admissionPagination.page"
-              :page-size="admissionPagination.page_size"
-              :page-sizes="[50, 100, 200]"
-              :total="admissionPagination.total"
-              @current-change="handleAdmissionPageChange"
-              @size-change="handleAdmissionPageSizeChange"
-            />
-          </el-tab-pane>
-          <el-tab-pane label="招生计划">
-            <div class="detail-filter-grid">
-              <el-input v-model.number="planFilters.year" clearable placeholder="年份" />
-              <el-input v-model="planFilters.province" clearable placeholder="省份" />
-              <el-input v-model="planFilters.batch" clearable placeholder="批次" />
-              <el-input v-model="planFilters.student_type" clearable placeholder="考生类型" />
-              <el-input v-model="planFilters.keyword" clearable placeholder="专业关键词" />
-              <el-button type="primary" @click="loadPlans({ resetPage: true })">查询</el-button>
-              <el-button @click="resetPlanFilters()">重置</el-button>
-            </div>
-            <el-table v-loading="plansLoading" :data="plans" stripe>
-              <el-table-column label="年份" prop="year" width="90" />
-              <el-table-column label="省份" prop="province" width="100" />
-              <el-table-column label="批次" prop="batch" min-width="120" />
-              <el-table-column label="专业" min-width="180">
-                <template #default="{ row }">
-                  <el-button v-if="row.major_id" link type="primary" @click="router.push(`/majors/${row.major_id}`)">{{ row.major_name || '-' }}</el-button>
-                  <span v-else>{{ row.major_name || '-' }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column label="专业组" prop="major_group_code" width="110" />
-              <el-table-column label="计划数" prop="plan_count" width="100" />
-              <el-table-column label="类型" prop="student_type" width="110" />
-              <el-table-column label="选科要求" prop="subject_requirement" min-width="140" />
-            </el-table>
-            <el-pagination
-              v-if="planPagination.total"
-              class="table-pagination"
-              background
-              layout="total, sizes, prev, pager, next"
-              :current-page="planPagination.page"
-              :page-size="planPagination.page_size"
-              :page-sizes="[50, 100, 200]"
-              :total="planPagination.total"
-              @current-change="handlePlanPageChange"
-              @size-change="handlePlanPageSizeChange"
-            />
-          </el-tab-pane>
-        </el-tabs>
-      </AppTableShell>
-
-      <AppTableShell title="来源证据" description="本地 scraper 文件、官方页面或结构化来源记录。">
-        <el-table :data="detail.source_documents" stripe>
-          <el-table-column label="类型" prop="source_type" width="160" />
-          <el-table-column label="标题" prop="title" min-width="180" />
-          <el-table-column label="路径" prop="source_path" min-width="260" />
-          <el-table-column label="SHA256" prop="source_sha256" min-width="220" show-overflow-tooltip />
-        </el-table>
-      </AppTableShell>
-    </template>
+      <el-empty v-else :description="collegeDetailEmptyDescription">
+        <el-button v-if="detailLoadError" type="primary" :loading="loading" @click="reloadCollegeDetail">
+          重新加载院校详情
+        </el-button>
+      </el-empty>
+    </div>
   </AppPage>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { ElMessage } from "element-plus";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import { apiRequest } from "../api/client";
+import type { CollegeDetail } from "../components/recommendations/detailTypes";
+import type { AdmissionRecord, EnrollmentPlanItem, PaginatedResponse, PaginationState } from "../components/recommendations/types";
 import AppPage from "../components/ui/AppPage.vue";
 import AppSectionCard from "../components/ui/AppSectionCard.vue";
 import AppStatGrid from "../components/ui/AppStatGrid.vue";
 import AppTableShell from "../components/ui/AppTableShell.vue";
-import type { CollegeDetail } from "../components/recommendations/detailTypes";
-import type { AdmissionRecord, EnrollmentPlanItem, PaginatedResponse, PaginationState } from "../components/recommendations/types";
+import { formatUserActionError, getErrorMessage } from "../utils/userFeedback";
 
 const route = useRoute();
 const router = useRouter();
 const detail = ref<CollegeDetail | null>(null);
 const loading = ref(false);
-const error = ref("");
+const detailLoadError = ref("");
 const activeAdmissionTab = ref("0");
 const admissions = ref<AdmissionRecord[]>([]);
 const plans = ref<EnrollmentPlanItem[]>([]);
 const admissionsLoading = ref(false);
 const plansLoading = ref(false);
+const admissionsLoadError = ref("");
+const plansLoadError = ref("");
 const admissionPagination = reactive<PaginationState>({ page: 1, page_size: 50, total: 0 });
 const planPagination = reactive<PaginationState>({ page: 1, page_size: 50, total: 0 });
 const admissionFilters = reactive({
@@ -227,15 +416,45 @@ const pageMeta = computed(() => [
   { label: "地区", value: detail.value?.college.province || "未维护" },
   { label: "类型", value: detail.value?.college.school_type || "未维护" },
   { label: "层级", value: levelTags.value.join("、") || "未维护" },
+  { label: "院校 ID", value: Number.isFinite(collegeId.value) ? String(collegeId.value) : "-" },
 ]);
+const collegeDetailEmptyDescription = computed(() =>
+  detailLoadError.value ? "院校详情暂时无法加载，请稍后重试。" : "暂无院校详情数据。",
+);
+const admissionsEmptyDescription = computed(() =>
+  admissionsLoadError.value ? "录取/投档数据加载失败，请重试。" : "暂无符合条件的录取/投档数据。",
+);
+const plansEmptyDescription = computed(() =>
+  plansLoadError.value ? "招生计划加载失败，请重试。" : "暂无符合条件的招生计划。",
+);
+const collegeReloadBusy = computed(() => loading.value || admissionsLoading.value || plansLoading.value);
+const admissionControlsDisabled = computed(() => loading.value || admissionsLoading.value);
+const planControlsDisabled = computed(() => loading.value || plansLoading.value);
+const hasCustomAdmissionFilters = computed(
+  () =>
+    Boolean(admissionFilters.year) ||
+    admissionFilters.province !== "山东" ||
+    Boolean(admissionFilters.batch.trim()) ||
+    Boolean(admissionFilters.student_type.trim()),
+);
+const hasCustomPlanFilters = computed(
+  () =>
+    Boolean(planFilters.year) ||
+    planFilters.province !== "山东" ||
+    Boolean(planFilters.batch.trim()) ||
+    Boolean(planFilters.student_type.trim()) ||
+    Boolean(planFilters.keyword.trim()),
+);
 
 async function loadDetail(): Promise<void> {
   loading.value = true;
-  error.value = "";
+  detailLoadError.value = "";
   try {
     detail.value = await apiRequest<CollegeDetail>(`/api/colleges/${collegeId.value}/detail`);
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : "加载失败";
+  } catch (error) {
+    detail.value = null;
+    detailLoadError.value = getErrorMessage(error);
+    ElMessage.error(formatUserActionError("加载院校详情", error, "请检查院校是否存在或稍后重试。"));
   } finally {
     loading.value = false;
   }
@@ -252,12 +471,18 @@ async function loadAdmissions(options: { resetPage?: boolean } = {}): Promise<vo
   query.set("page", String(admissionPagination.page));
   query.set("page_size", String(admissionPagination.page_size));
   admissionsLoading.value = true;
+  admissionsLoadError.value = "";
   try {
     const response = await apiRequest<PaginatedResponse<AdmissionRecord>>(`/api/admissions/page?${query.toString()}`);
     admissions.value = response.items;
     admissionPagination.total = response.total;
     admissionPagination.page = response.page;
     admissionPagination.page_size = response.page_size;
+  } catch (error) {
+    admissions.value = [];
+    admissionPagination.total = 0;
+    admissionsLoadError.value = formatUserActionError("加载录取/投档数据", error, "请检查筛选条件或稍后重试");
+    ElMessage.error(admissionsLoadError.value);
   } finally {
     admissionsLoading.value = false;
   }
@@ -275,15 +500,32 @@ async function loadPlans(options: { resetPage?: boolean } = {}): Promise<void> {
   query.set("page", String(planPagination.page));
   query.set("page_size", String(planPagination.page_size));
   plansLoading.value = true;
+  plansLoadError.value = "";
   try {
     const response = await apiRequest<PaginatedResponse<EnrollmentPlanItem>>(`/api/enrollment-plans/page?${query.toString()}`);
     plans.value = response.items;
     planPagination.total = response.total;
     planPagination.page = response.page;
     planPagination.page_size = response.page_size;
+  } catch (error) {
+    plans.value = [];
+    planPagination.total = 0;
+    plansLoadError.value = formatUserActionError("加载招生计划", error, "请检查筛选条件或稍后重试");
+    ElMessage.error(plansLoadError.value);
   } finally {
     plansLoading.value = false;
   }
+}
+
+async function reloadCollegeDetail(): Promise<void> {
+  detail.value = null;
+  admissions.value = [];
+  plans.value = [];
+  admissionPagination.page = 1;
+  admissionPagination.total = 0;
+  planPagination.page = 1;
+  planPagination.total = 0;
+  await Promise.all([loadDetail(), loadAdmissions({ resetPage: true }), loadPlans({ resetPage: true })]);
 }
 
 function handleAdmissionPageChange(page: number): void {
@@ -326,16 +568,24 @@ function resetPlanFilters(): void {
 }
 
 onMounted(() => {
-  void loadDetail();
-  void loadAdmissions();
-  void loadPlans();
+  void reloadCollegeDetail();
+});
+
+watch(collegeId, () => {
+  void reloadCollegeDetail();
 });
 </script>
 
 <style scoped>
-.loading-panel {
-  padding: 28px;
-  color: #5d6b7a;
+.detail-alert,
+.inline-alert {
+  margin-bottom: 16px;
+}
+
+.college-detail-body {
+  min-height: 260px;
+  display: grid;
+  gap: 16px;
 }
 
 .detail-grid {

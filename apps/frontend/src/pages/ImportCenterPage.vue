@@ -7,7 +7,7 @@
   >
     <template #actions>
       <div class="action-row">
-        <el-button @click="router.push('/system-tools')">备份与审计</el-button>
+        <el-button :disabled="loading" @click="router.push('/system-tools')">备份与审计</el-button>
         <el-button type="primary" :loading="loading" @click="loadBatches">刷新</el-button>
       </div>
     </template>
@@ -36,13 +36,15 @@
           <h3>真实学校数据试跑流程</h3>
           <p>按这个顺序跑一份真实或脱敏数据；每次大批量导入前先备份，导入后先看摘要和错误报告。</p>
         </div>
-        <el-button type="primary" plain @click="router.push('/system-tools')">先创建备份</el-button>
+        <el-button type="primary" plain :disabled="loading" @click="router.push('/system-tools')">先创建备份</el-button>
       </div>
       <div class="trial-step-grid">
         <article v-for="item in importCenterTrialRunSteps" :key="item.title" class="trial-step-card">
           <strong>{{ item.title }}</strong>
           <p>{{ item.detail }}</p>
-          <el-button link type="primary" @click="router.push(item.path)">{{ item.actionLabel }}</el-button>
+          <el-button link type="primary" :disabled="loading" @click="router.push(item.path)">
+            {{ item.actionLabel }}
+          </el-button>
         </article>
       </div>
       <el-alert
@@ -70,17 +72,22 @@
       title="模板与上传入口"
       description="下载系统模板后，进入对应业务页完成上传、预检和结果确认。"
     >
-      <div class="template-grid">
-        <article v-for="item in payload.templates" :key="item.job_type" class="template-card">
-          <div>
-            <strong>{{ item.job_type_label }}</strong>
-            <p>{{ item.guidance }}</p>
-          </div>
-          <div class="template-actions">
-            <el-button link type="primary" @click="openFile(item.download_url)">下载模板</el-button>
-            <el-button link @click="router.push(item.business_path)">进入上传</el-button>
-          </div>
-        </article>
+      <div class="template-grid-shell" v-loading="loading && !payload.templates.length">
+        <div v-if="payload.templates.length" class="template-grid">
+          <article v-for="item in payload.templates" :key="item.job_type" class="template-card">
+            <div>
+              <strong>{{ item.job_type_label }}</strong>
+              <p>{{ item.guidance }}</p>
+            </div>
+            <div class="template-actions">
+              <el-button link type="primary" :disabled="loading" @click="openFile(item.download_url)">下载模板</el-button>
+              <el-button link :disabled="loading" @click="router.push(item.business_path)">进入上传</el-button>
+            </div>
+          </article>
+        </div>
+        <el-empty v-else-if="!loading" :description="templateEmptyDescription">
+          <el-button type="primary" plain :loading="loading" @click="loadBatches">重新加载模板</el-button>
+        </el-empty>
       </div>
     </AppSectionCard>
 
@@ -90,7 +97,14 @@
     >
       <template #actions>
         <div class="filter-row">
-          <el-select v-model="filters.jobType" clearable placeholder="导入类型" style="width: 180px" @change="loadBatches">
+          <el-select
+            v-model="filters.jobType"
+            clearable
+            :disabled="batchFiltersDisabled"
+            placeholder="导入类型"
+            style="width: 180px"
+            @change="loadBatches"
+          >
             <el-option
               v-for="item in payload.templates"
               :key="item.job_type"
@@ -98,13 +112,21 @@
               :value="item.job_type"
             />
           </el-select>
-          <el-select v-model="filters.status" clearable placeholder="状态" style="width: 150px" @change="loadBatches">
+          <el-select
+            v-model="filters.status"
+            clearable
+            :disabled="batchFiltersDisabled"
+            placeholder="状态"
+            style="width: 150px"
+            @change="loadBatches"
+          >
             <el-option label="成功" value="success" />
             <el-option label="部分成功" value="partially_failed" />
             <el-option label="失败" value="failed" />
             <el-option label="处理中" value="running" />
             <el-option label="已回滚" value="rolled_back" />
           </el-select>
+          <el-button v-if="hasBatchFilters" plain :disabled="loading" @click="clearBatchFilters">清空筛选</el-button>
         </div>
       </template>
 
@@ -132,7 +154,15 @@
           <el-table-column label="结束时间" prop="finished_at" min-width="170" />
           <el-table-column label="操作" width="250" fixed="right">
             <template #default="{ row }">
-              <el-button link type="primary" @click="openDetail(row)">详情</el-button>
+              <el-button
+                link
+                type="primary"
+                :loading="loadingDetailBatchId === row.id"
+                :disabled="detailLoading && loadingDetailBatchId !== row.id"
+                @click="openDetail(row)"
+              >
+                详情
+              </el-button>
               <el-button
                 link
                 type="primary"
@@ -145,33 +175,62 @@
               <el-button link type="warning" @click="openRollbackHint(row)">撤销说明</el-button>
             </template>
           </el-table-column>
+          <template #empty>
+            <el-empty :description="importBatchEmptyDescription">
+              <el-button
+                v-if="loadError"
+                type="primary"
+                plain
+                :loading="loading"
+                @click="loadBatches"
+              >
+                重新刷新
+              </el-button>
+              <el-button v-else-if="hasBatchFilters" plain @click="clearBatchFilters">清空筛选</el-button>
+            </el-empty>
+          </template>
       </el-table>
-      <el-empty
-        v-if="!loading && !payload.batches.length"
-        description="当前没有符合条件的导入批次。可先下载模板，到对应业务页完成上传；如果刚导入过，请点击刷新。"
-      />
     </AppTableShell>
 
-    <el-drawer v-model="detailVisible" title="导入批次详情" size="520px">
-      <div v-if="selectedDetail" class="detail-stack">
+    <el-drawer v-model="detailVisible" title="导入批次详情" size="520px" @closed="resetDetailDrawer">
+      <div class="detail-stack detail-drawer-body" v-loading="detailLoading">
         <el-alert
-          :title="selectedDetail.batch.rollback_hint"
-          type="warning"
+          v-if="detailError"
+          type="error"
           show-icon
           :closable="false"
-        />
-        <el-descriptions :column="1" border>
-          <el-descriptions-item label="导入类型">{{ selectedDetail.batch.job_type_label }}</el-descriptions-item>
-          <el-descriptions-item label="批次来源">{{ selectedDetail.batch.source_type_label }}</el-descriptions-item>
-          <el-descriptions-item label="状态">
-            <el-tag :type="importCenterStatusType(selectedDetail.batch.status)" effect="light">
-              {{ formatImportCenterStatus(selectedDetail.batch.status) }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="来源文件">{{ selectedDetail.batch.source_filename ?? "-" }}</el-descriptions-item>
-          <el-descriptions-item label="行数摘要">{{ buildImportCenterRowSummary(selectedDetail.batch) }}</el-descriptions-item>
-          <el-descriptions-item label="详情">{{ selectedDetail.batch.detail_summary }}</el-descriptions-item>
-        </el-descriptions>
+          title="导入详情加载失败"
+        >
+          <template #default>
+            <p class="alert-detail">{{ detailError }}</p>
+            <div class="action-row toolbar-row">
+              <el-button size="small" type="danger" plain :loading="detailLoading" @click="retryDetail">重新读取详情</el-button>
+              <el-button size="small" plain :disabled="!activeDetailBatch" @click="activeDetailBatch && router.push(activeDetailBatch.business_path)">
+                回到业务页
+              </el-button>
+            </div>
+          </template>
+        </el-alert>
+
+        <template v-if="selectedDetail">
+          <el-alert
+            :title="selectedDetail.batch.rollback_hint"
+            type="warning"
+            show-icon
+            :closable="false"
+          />
+          <el-descriptions :column="1" border>
+            <el-descriptions-item label="导入类型">{{ selectedDetail.batch.job_type_label }}</el-descriptions-item>
+            <el-descriptions-item label="批次来源">{{ selectedDetail.batch.source_type_label }}</el-descriptions-item>
+            <el-descriptions-item label="状态">
+              <el-tag :type="importCenterStatusType(selectedDetail.batch.status)" effect="light">
+                {{ formatImportCenterStatus(selectedDetail.batch.status) }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="来源文件">{{ selectedDetail.batch.source_filename ?? "-" }}</el-descriptions-item>
+            <el-descriptions-item label="行数摘要">{{ buildImportCenterRowSummary(selectedDetail.batch) }}</el-descriptions-item>
+            <el-descriptions-item label="详情">{{ selectedDetail.batch.detail_summary }}</el-descriptions-item>
+          </el-descriptions>
 
         <section v-if="selectedDetail.error_items.length" class="detail-section">
           <h4>错误预览</h4>
@@ -228,6 +287,11 @@
           <el-button @click="router.push(selectedDetail.batch.business_path)">回到业务页</el-button>
           <el-button @click="router.push('/system-tools')">备份恢复</el-button>
         </div>
+        </template>
+        <el-empty
+          v-else-if="!detailLoading && !detailError"
+          description="请选择一个导入批次查看详情。"
+        />
       </div>
     </el-drawer>
   </AppPage>
@@ -265,9 +329,13 @@ import { formatUserActionError } from "../utils/userFeedback";
 
 const router = useRouter();
 const loading = ref(false);
+const detailLoading = ref(false);
 const detailVisible = ref(false);
+const activeDetailBatch = ref<ImportCenterBatch | null>(null);
+const loadingDetailBatchId = ref("");
 const selectedDetail = ref<ImportCenterBatchDetail | null>(null);
 const loadError = ref("");
+const detailError = ref("");
 const filters = reactive({
   jobType: "",
   status: "",
@@ -285,39 +353,74 @@ const payload = reactive<ImportCenterResponse>({
   batches: [],
 });
 
+const batchFiltersDisabled = computed(() => loading.value || Boolean(loadError.value && !payload.templates.length));
 const reviewBatchCount = computed(() => payload.summary.failed_batches + payload.summary.partial_batches);
 const latestBackupLabel = computed(() => formatLatestBackupLabel(payload.latest_backup));
+const hasBatchFilters = computed(() => Boolean(filters.jobType || filters.status));
+const templateEmptyDescription = computed(() => (
+  loadError.value
+    ? "模板入口暂时加载失败，请重新加载导入中心。"
+    : "当前没有可用导入模板；请确认本地服务和导入中心接口可用。"
+));
+const importBatchEmptyDescription = computed(() => {
+  if (loadError.value && !payload.batches.length) return "导入批次暂时加载失败，请重新刷新。";
+  if (hasBatchFilters.value) return "当前筛选条件下没有导入批次，可清空筛选或回到业务页完成上传。";
+  return "当前没有导入批次。可先下载模板，到对应业务页完成上传；如果刚导入过，请点击刷新。";
+});
 const importPageMeta = computed<PageMetaItem[]>(() => [
-  { label: "批次", value: payload.summary.total_batches },
-  { label: "需复核", value: reviewBatchCount.value },
-  { label: "最近备份", value: latestBackupLabel.value },
+  { label: "批次", value: loadError.value ? "加载失败" : payload.summary.total_batches },
+  { label: "需复核", value: loadError.value ? "加载失败" : reviewBatchCount.value },
+  { label: "最近备份", value: loadError.value ? "加载失败" : latestBackupLabel.value },
 ]);
 const importStatCards = computed<StatCardItem[]>(() => [
   {
     label: "导入批次",
-    value: payload.summary.total_batches,
-    help: "系统记录的导入任务总数。",
-    tone: "primary",
+    value: loadError.value ? "加载失败" : payload.summary.total_batches,
+    help: loadError.value ? "请重新刷新导入中心。" : "系统记录的导入任务总数。",
+    tone: loadError.value ? "danger" : "primary",
+    loading: loading.value && !loadError.value,
   },
   {
     label: "需复核批次",
-    value: reviewBatchCount.value,
-    help: "失败或部分成功的批次建议优先处理。",
-    tone: reviewBatchCount.value ? "warning" : "success",
+    value: loadError.value ? "加载失败" : reviewBatchCount.value,
+    help: loadError.value ? "当前无法判断需复核批次。" : "失败或部分成功的批次建议优先处理。",
+    tone: loadError.value ? "danger" : reviewBatchCount.value ? "warning" : "success",
+    loading: loading.value && !loadError.value,
   },
   {
     label: "错误报告",
-    value: payload.summary.error_report_count,
-    help: "可下载并回到业务页修正的数据问题。",
-    tone: payload.summary.error_report_count ? "danger" : "neutral",
+    value: loadError.value ? "加载失败" : payload.summary.error_report_count,
+    help: loadError.value ? "重新刷新后再下载错误报告。" : "可下载并回到业务页修正的数据问题。",
+    tone: loadError.value ? "danger" : payload.summary.error_report_count ? "danger" : "neutral",
+    loading: loading.value && !loadError.value,
   },
   {
     label: "模板入口",
-    value: payload.templates.length,
-    help: "覆盖当前已统一治理的导入类型。",
-    tone: "info",
+    value: loadError.value ? "加载失败" : payload.templates.length,
+    help: loadError.value ? "模板入口已清空，请重新刷新。" : "覆盖当前已统一治理的导入类型。",
+    tone: loadError.value ? "danger" : "info",
+    loading: loading.value && !loadError.value,
   },
 ]);
+
+function createEmptyImportCenterResponse(): ImportCenterResponse {
+  return {
+    generated_at: "",
+    summary: {
+      total_batches: 0,
+      failed_batches: 0,
+      partial_batches: 0,
+      error_report_count: 0,
+    },
+    latest_backup: null,
+    templates: [],
+    batches: [],
+  };
+}
+
+function resetPayload(): void {
+  Object.assign(payload, createEmptyImportCenterResponse());
+}
 
 async function loadBatches(): Promise<void> {
   try {
@@ -329,6 +432,7 @@ async function loadBatches(): Promise<void> {
     const response = await apiRequest<ImportCenterResponse>(`/api/import-center/batches?${params.toString()}`);
     Object.assign(payload, response);
   } catch (error) {
+    resetPayload();
     loadError.value = formatUserActionError("刷新导入中心", error, "确认本地服务已启动，再点击“重新刷新”；如果是刚导入失败，请回到业务页检查模板。");
     ElMessage.error(loadError.value);
   } finally {
@@ -336,15 +440,48 @@ async function loadBatches(): Promise<void> {
   }
 }
 
+function clearBatchFilters(): void {
+  filters.jobType = "";
+  filters.status = "";
+  void loadBatches();
+}
+
 async function openDetail(batch: ImportCenterBatch): Promise<void> {
+  const requestedBatchId = batch.id;
+  activeDetailBatch.value = batch;
+  detailVisible.value = true;
+  detailLoading.value = true;
+  loadingDetailBatchId.value = requestedBatchId;
+  detailError.value = "";
+  selectedDetail.value = null;
   try {
-    selectedDetail.value = await apiRequest<ImportCenterBatchDetail>(
+    const response = await apiRequest<ImportCenterBatchDetail>(
       `/api/import-center/batches/${batch.source_type}/${batch.numeric_id}`,
     );
-    detailVisible.value = true;
+    if (activeDetailBatch.value?.id !== requestedBatchId) return;
+    selectedDetail.value = response;
   } catch (error) {
-    ElMessage.error(formatUserActionError("读取导入详情", error, "先刷新批次列表；如果仍失败，请下载错误报告或到业务页重新查看本次导入。"));
+    if (activeDetailBatch.value?.id !== requestedBatchId) return;
+    detailError.value = formatUserActionError("读取导入详情", error, "先刷新批次列表；如果仍失败，请下载错误报告或到业务页重新查看本次导入。");
+  } finally {
+    if (activeDetailBatch.value?.id === requestedBatchId) {
+      detailLoading.value = false;
+      loadingDetailBatchId.value = "";
+    }
   }
+}
+
+function retryDetail(): void {
+  if (!activeDetailBatch.value) return;
+  void openDetail(activeDetailBatch.value);
+}
+
+function resetDetailDrawer(): void {
+  activeDetailBatch.value = null;
+  selectedDetail.value = null;
+  detailError.value = "";
+  detailLoading.value = false;
+  loadingDetailBatchId.value = "";
 }
 
 function openErrorReport(batch: ImportCenterBatch): void {
@@ -435,6 +572,10 @@ onMounted(loadBatches);
   gap: 12px;
 }
 
+.template-grid-shell {
+  min-height: 120px;
+}
+
 .template-card {
   display: flex;
   justify-content: space-between;
@@ -481,6 +622,17 @@ onMounted(loadBatches);
 .detail-stack {
   display: grid;
   gap: 16px;
+}
+
+.detail-drawer-body {
+  min-height: 220px;
+  align-content: start;
+}
+
+.alert-detail {
+  margin: 0;
+  color: #52687c;
+  line-height: 1.6;
 }
 
 .detail-section {

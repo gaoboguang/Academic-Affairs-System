@@ -68,7 +68,7 @@
             v-model="targetYear"
             :min="2020"
             :max="2100"
-            @change="refreshEvaluations"
+            @change="() => refreshEvaluations()"
           />
         </div>
         <div class="pathway-filter-copy">
@@ -81,12 +81,45 @@
     <AppStatGrid :items="pageStatCards" :columns="4" />
 
     <el-alert
-      v-if="errorMessage"
+      v-if="loadErrorItems.length"
+      class="pathway-page-alert"
       type="error"
       show-icon
       :closable="false"
-      :title="errorMessage"
-    />
+      title="升学方案中心部分数据加载失败"
+    >
+      <template #default>
+        <ul class="pathway-load-error-list">
+          <li v-for="item in loadErrorItems" :key="item.label">
+            <strong>{{ item.label }}</strong>
+            <span>{{ item.message }}</span>
+          </li>
+        </ul>
+        <div class="action-row">
+          <el-button
+            v-if="supportLoadError"
+            size="small"
+            type="danger"
+            plain
+            :loading="loading"
+            @click="reloadAll(true)"
+          >
+            重新加载方案中心
+          </el-button>
+          <el-button
+            v-if="evaluationLoadError"
+            size="small"
+            type="danger"
+            plain
+            :loading="evaluating"
+            :disabled="!selectedStudentId"
+            @click="refreshEvaluations(true)"
+          >
+            重新评估当前学生
+          </el-button>
+        </div>
+      </template>
+    </el-alert>
 
     <section class="pathway-overview-grid" v-loading="loading">
       <article class="soft-card panel-block">
@@ -110,7 +143,10 @@
             <strong>{{ item.value }}</strong>
           </div>
         </div>
-        <el-empty v-else description="请选择学生后查看升学画像摘要" />
+        <el-empty
+          v-else
+          :description="profileEmptyDescription"
+        />
       </article>
 
       <article class="soft-card panel-block">
@@ -213,7 +249,7 @@
           </div>
         </article>
       </div>
-      <el-empty v-else description="暂无路径评估结果，请先选择学生并刷新。" />
+      <el-empty v-else :description="pathwayCardsEmptyDescription" />
     </section>
 
     <section class="pathway-bottom-grid">
@@ -438,7 +474,8 @@ const evaluations = ref<StudentPathwayEvaluation[]>([]);
 const dataHealth = ref<ShandongRecommendationDataHealth | null>(null);
 const loading = ref(false);
 const evaluating = ref(false);
-const errorMessage = ref<string | null>(null);
+const supportLoadError = ref("");
+const evaluationLoadError = ref("");
 const detailDrawerVisible = ref(false);
 const selectedCard = ref<PathwayCenterCard | null>(null);
 const exportingReport = ref(false);
@@ -477,15 +514,35 @@ const nextActions = computed(() =>
 const pageMeta = computed<PageMetaItem[]>(() => [
   { label: "学生", value: selectedStudent.value?.name || "未选择" },
   { label: "目标年份", value: targetYear.value },
-  { label: "路径卡", value: cards.value.length },
-  { label: "P0 缺口", value: dataHealth.value?.gaps.length ?? "-" },
+  { label: "路径卡", value: evaluationLoadError.value ? "评估失败" : cards.value.length },
+  { label: "P0 缺口", value: supportLoadError.value ? "加载失败" : dataHealth.value?.gaps.length ?? "-" },
 ]);
+const loadErrorItems = computed(() => [
+  { label: "方案中心基础数据", message: supportLoadError.value },
+  { label: "当前学生路径评估", message: evaluationLoadError.value },
+].filter((item) => item.message));
+const profileEmptyDescription = computed(() => {
+  if (loading.value) return "正在加载学生升学画像摘要。";
+  if (supportLoadError.value) return "方案中心基础数据加载失败，请先重新加载。";
+  if (evaluationLoadError.value) return "当前学生路径评估失败，暂时无法显示画像摘要。";
+  if (!selectedStudentId.value) return "请选择学生后查看升学画像摘要。";
+  return "当前学生暂未维护升学画像，请进入学生详情补齐。";
+});
+const pathwayCardsEmptyDescription = computed(() => {
+  if (evaluating.value) return "正在刷新当前学生的升学路径评估。";
+  if (supportLoadError.value) return "方案中心基础数据加载失败，请先重新加载。";
+  if (evaluationLoadError.value) return "当前学生路径评估失败，请点击重新评估。";
+  if (!selectedStudentId.value) return "请选择学生后刷新升学路径评估。";
+  if (!pathways.value.length) return "当前没有可评估的山东升学路径，请先检查路径规则数据。";
+  return "暂无路径评估结果，请刷新当前学生。";
+});
 const pageStatCards = computed<StatCardItem[]>(() => [
   {
     label: "路径卡",
     value: cards.value.length,
     help: statusSummaryCopy.value,
     tone: cards.value.length ? "primary" : "neutral",
+    loading: evaluating.value,
   },
   {
     label: "材料缺口",
@@ -537,14 +594,15 @@ async function loadDataHealth(): Promise<void> {
   );
 }
 
-async function refreshEvaluations(): Promise<void> {
+async function refreshEvaluations(showToast = false): Promise<void> {
   if (!selectedStudentId.value) {
     profile.value = null;
     evaluations.value = [];
+    evaluationLoadError.value = "";
     return;
   }
   evaluating.value = true;
-  errorMessage.value = null;
+  evaluationLoadError.value = "";
   try {
     const payload = await apiRequest<StudentPathwayEvaluationResponse>(
       `/api/gaokao/students/${selectedStudentId.value}/pathway-evaluations/preview?target_year=${targetYear.value}&province=山东`,
@@ -553,28 +611,37 @@ async function refreshEvaluations(): Promise<void> {
     profile.value = payload.profile;
     evaluations.value = payload.evaluations;
   } catch (error) {
-    errorMessage.value = formatUserActionError(
+    profile.value = null;
+    evaluations.value = [];
+    evaluationLoadError.value = formatUserActionError(
       "刷新山东升学路径评估",
       error,
       "先确认学生画像和路径规则已装载，再重新刷新。",
     );
+    if (showToast) {
+      ElMessage.error(evaluationLoadError.value);
+    }
   } finally {
     evaluating.value = false;
   }
 }
 
-async function reloadAll(): Promise<void> {
+async function reloadAll(showToast = false): Promise<void> {
   loading.value = true;
-  errorMessage.value = null;
+  supportLoadError.value = "";
+  evaluationLoadError.value = "";
   try {
     await Promise.all([loadStudents(), loadPathways(), loadDataHealth()]);
-    await refreshEvaluations();
+    await refreshEvaluations(showToast);
   } catch (error) {
-    errorMessage.value = formatUserActionError(
+    supportLoadError.value = formatUserActionError(
       "加载山东升学方案中心",
       error,
       "确认本地服务已启动，再刷新本页。",
     );
+    if (showToast) {
+      ElMessage.error(supportLoadError.value);
+    }
   } finally {
     loading.value = false;
   }
@@ -719,6 +786,32 @@ onMounted(reloadAll);
 <style scoped>
 .pathway-center-page {
   gap: 20px;
+}
+
+.pathway-page-alert {
+  margin-top: -2px;
+}
+
+.pathway-load-error-list {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.pathway-load-error-list li {
+  display: grid;
+  gap: 4px;
+}
+
+.pathway-load-error-list strong {
+  color: #7f1d1d;
+}
+
+.pathway-load-error-list span {
+  color: #6b3d3d;
+  line-height: 1.55;
 }
 
 .pathway-filter-grid {

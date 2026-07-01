@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.schemas.common import ORMModel
+from app.schemas.common import ImportResult, ORMModel
 
 UserRole = Literal["admin", "teacher"]
 
@@ -115,3 +115,15 @@ class AdminUserCreateResponse(BaseModel):
 class AdminUserResetPasswordResponse(BaseModel):
     user: AppUserRead
     temporary_password: str
+
+
+class AdminUserBatchImportCreatedAccount(BaseModel):
+    username: str
+    display_name: str
+    teacher_no: str | None = None
+    teacher_name: str | None = None
+    temporary_password: str
+
+
+class AdminUserBatchImportResponse(ImportResult):
+    created_accounts: list[AdminUserBatchImportCreatedAccount] = Field(default_factory=list)

@@ -1,24 +1,28 @@
 <template>
-  <section class="soft-card panel-block">
+  <section class="soft-card panel-block" v-loading="loadingResults">
     <div class="section-head">
       <div>
         <h3>结果汇总</h3>
         <p>展示周课时、月度课时、学期课时和学期工作量，并保留可追溯计算明细。</p>
       </div>
-      <el-button :disabled="!results.length" @click="emit('export-results')">导出工作量</el-button>
+      <el-button :disabled="exportDisabled" @click="emit('export-results')">导出工作量</el-button>
     </div>
-    <el-empty
-      v-if="!results.length"
-      description="当前还没有工作量结果。请先确认学期、规则版本和课表批次，再点击“计算工作量”。"
+    <el-alert
+      v-if="resultsError"
+      class="panel-alert"
+      type="warning"
+      show-icon
+      :closable="false"
+      :title="resultsError"
     />
-    <div v-else class="result-review-grid">
+    <div v-if="!resultsError && results.length" class="result-review-grid">
       <article v-for="item in resultReviewCards" :key="item.label" class="result-review-card" :class="item.tone">
         <span>{{ item.label }}</span>
         <strong>{{ item.value }}</strong>
         <p>{{ item.help }}</p>
       </article>
     </div>
-    <div v-if="results.length" class="table-shell">
+    <div class="table-shell">
       <el-table :data="results" stripe>
         <el-table-column label="教师" prop="teacher_name" min-width="120" />
         <el-table-column label="周课时" prop="weekly_hours" width="90" />
@@ -30,11 +34,21 @@
           </template>
         </el-table-column>
         <el-table-column label="计算时间" prop="calculated_at" min-width="170" />
-        <el-table-column label="操作" width="120" fixed="right">
-          <template #default="{ row }">
-            <el-button link type="primary" @click="emit('open-result-drawer', row)">查看明细</el-button>
-          </template>
-        </el-table-column>
+          <el-table-column label="操作" width="120" fixed="right">
+            <template #default="{ row }">
+            <el-button
+              link
+              type="primary"
+              :disabled="rowActionsDisabled"
+              @click="emit('open-result-drawer', row)"
+            >
+              查看明细
+            </el-button>
+            </template>
+          </el-table-column>
+        <template #empty>
+          <el-empty :description="resultsEmptyDescription" />
+        </template>
       </el-table>
     </div>
 
@@ -127,6 +141,10 @@ const props = defineProps<{
   drawerVisible: boolean;
   courseTypeOptions: OptionItem[];
   resultReviewCards: StatusCard[];
+  loadingResults: boolean;
+  resultsError: string;
+  exportDisabled: boolean;
+  rowActionsDisabled: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -138,6 +156,11 @@ const emit = defineEmits<{
 const drawerVisibleModel = computed({
   get: () => props.drawerVisible,
   set: (value: boolean) => emit("update:drawerVisible", value),
+});
+
+const resultsEmptyDescription = computed(() => {
+  if (props.resultsError) return "工作量结果加载失败，请使用页面顶部重试入口重新加载。";
+  return "当前还没有工作量结果。请先确认学期、规则版本和课表批次，再点击“计算工作量”。";
 });
 </script>
 
@@ -209,5 +232,9 @@ const drawerVisibleModel = computed({
   font-size: 30px;
   font-weight: 700;
   color: #244560;
+}
+
+.panel-alert {
+  margin-bottom: 14px;
 }
 </style>

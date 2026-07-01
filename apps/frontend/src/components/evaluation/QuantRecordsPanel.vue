@@ -6,13 +6,27 @@
         <p>按学期、教师查看量化明细和汇总，附件上传先于记录绑定。</p>
       </div>
       <div class="action-row">
-        <el-button @click="emit('reload')">刷新</el-button>
-        <el-button type="primary" @click="emit('open-create-quant-record')">新增量化记录</el-button>
+        <el-button :loading="loadingQuantData" :disabled="controlsDisabled" @click="emit('reload')">刷新</el-button>
+        <el-button type="primary" :disabled="createDisabled" @click="emit('open-create-quant-record')">新增量化记录</el-button>
       </div>
     </div>
 
+    <el-alert
+      v-if="quantDataError || teacherOptionsError"
+      class="panel-alert"
+      type="error"
+      show-icon
+      :closable="false"
+      title="量化记录加载失败"
+    >
+      <template #default>
+        <p v-if="quantDataError">{{ quantDataError }}</p>
+        <p v-if="teacherOptionsError">{{ teacherOptionsError }}</p>
+      </template>
+    </el-alert>
+
     <div class="filter-grid">
-      <el-select v-model="quantFilters.semester_id" filterable placeholder="学期">
+      <el-select v-model="quantFilters.semester_id" filterable :disabled="controlsDisabled" placeholder="学期">
         <el-option
           v-for="item in semesters"
           :key="item.id"
@@ -20,7 +34,14 @@
           :value="item.id"
         />
       </el-select>
-      <el-select v-model="quantFilters.teacher_id" clearable filterable placeholder="教师">
+      <el-select
+        v-model="quantFilters.teacher_id"
+        clearable
+        filterable
+        :loading="loadingTeacherOptions"
+        :disabled="controlsDisabled || loadingTeacherOptions"
+        placeholder="教师"
+      >
         <el-option
           v-for="teacher in teacherOptions"
           :key="teacher.id"
@@ -28,18 +49,18 @@
           :value="teacher.id"
         />
       </el-select>
-      <el-select v-model="quantFilters.rule_version_id" clearable filterable placeholder="规则版本">
+      <el-select v-model="quantFilters.rule_version_id" clearable filterable :disabled="controlsDisabled" placeholder="规则版本">
         <el-option v-for="rule in ruleVersions" :key="rule.id" :label="rule.name" :value="rule.id" />
       </el-select>
     </div>
 
     <div class="action-row toolbar-row">
-      <el-button type="primary" @click="emit('reload')">查询</el-button>
-      <el-button @click="emit('reset-filters')">重置</el-button>
+      <el-button type="primary" :loading="loadingQuantData" :disabled="controlsDisabled" @click="emit('reload')">查询</el-button>
+      <el-button :disabled="controlsDisabled" @click="emit('reset-filters')">重置</el-button>
     </div>
 
     <div class="detail-grid-box">
-      <div class="soft-card inner-card">
+      <div class="soft-card inner-card" v-loading="loadingQuantData">
         <h4>汇总</h4>
         <el-table :data="quantSummary" stripe>
           <el-table-column label="教师" prop="teacher_name" min-width="120" />
@@ -52,13 +73,12 @@
               {{ (row.class_names ?? []).join(" / ") || "-" }}
             </template>
           </el-table-column>
+          <template #empty>
+            <el-empty :description="quantDataError ? '量化汇总暂时加载失败。' : '当前筛选条件下暂无量化汇总。请先新增量化记录或调整学期、教师、规则版本。'" />
+          </template>
         </el-table>
-        <el-empty
-          v-if="!quantSummary.length"
-          description="当前筛选条件下暂无量化汇总。请先新增量化记录或调整学期、教师、规则版本。"
-        />
       </div>
-      <div class="soft-card inner-card">
+      <div class="soft-card inner-card" v-loading="loadingQuantData">
         <h4>明细</h4>
         <el-table :data="quantRecords" stripe>
           <el-table-column label="月份" prop="record_month" width="90" />
@@ -73,14 +93,13 @@
           </el-table-column>
           <el-table-column label="操作" width="90" fixed="right">
             <template #default="{ row }">
-              <el-button link type="primary" @click="emit('edit-quant-record', row)">编辑</el-button>
+              <el-button link type="primary" :disabled="rowActionsDisabled" @click="emit('edit-quant-record', row)">编辑</el-button>
             </template>
           </el-table-column>
+          <template #empty>
+            <el-empty :description="quantDataError ? '量化明细暂时加载失败。' : '当前筛选条件下暂无量化明细。新增记录后会在这里显示附件和分值。'" />
+          </template>
         </el-table>
-        <el-empty
-          v-if="!quantRecords.length"
-          description="当前筛选条件下暂无量化明细。新增记录后会在这里显示附件和分值。"
-        />
       </div>
     </div>
   </section>
@@ -98,6 +117,13 @@ defineProps<{
   ruleVersions: RuleVersion[];
   quantSummary: QuantSummary[];
   quantRecords: QuantRecord[];
+  loadingQuantData: boolean;
+  quantDataError: string;
+  loadingTeacherOptions: boolean;
+  teacherOptionsError: string;
+  controlsDisabled: boolean;
+  createDisabled: boolean;
+  rowActionsDisabled: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -111,6 +137,15 @@ const emit = defineEmits<{
 <style scoped>
 .toolbar-row {
   margin-bottom: 16px;
+}
+
+.panel-alert {
+  margin-bottom: 14px;
+}
+
+.panel-alert p {
+  margin: 0 0 4px;
+  line-height: 1.5;
 }
 
 .detail-grid-box {

@@ -7,39 +7,60 @@
       </div>
       <div class="action-row">
         <el-button @click="emit('download-template')">模板下载</el-button>
-        <el-upload :show-file-list="false" :auto-upload="false" :on-change="handleImport">
-          <el-button type="primary">导入招生计划</el-button>
+        <el-upload
+          :show-file-list="false"
+          :auto-upload="false"
+          :disabled="importing || loading"
+          :on-change="handleImport"
+        >
+          <el-button type="primary" :loading="importing" :disabled="loading || importing">导入招生计划</el-button>
         </el-upload>
       </div>
     </div>
 
+    <el-alert v-if="loadError" class="planning-panel-alert" type="error" show-icon :closable="false" title="招生计划加载失败">
+      <template #default>
+        <div class="planning-alert-body">
+          <span>{{ loadError }}</span>
+          <el-button link type="primary" :loading="loading" @click="emit('load')">重新加载招生计划库</el-button>
+        </div>
+      </template>
+    </el-alert>
+
     <ImportFeedbackPanel :result="enrollmentPlanImportResult" />
 
     <div class="filter-grid">
-      <el-select v-model="filters.year" clearable placeholder="年份">
+      <el-select v-model="filters.year" clearable :disabled="loading" placeholder="年份">
         <el-option v-for="year in yearOptions" :key="year" :label="String(year)" :value="year" />
       </el-select>
-      <el-select v-model="filters.province" clearable filterable placeholder="省份">
+      <el-select v-model="filters.province" clearable filterable :disabled="loading" placeholder="省份">
         <el-option v-for="province in provinceOptions" :key="province" :label="province" :value="province" />
       </el-select>
-      <el-select v-model="filters.batch" clearable filterable placeholder="批次">
+      <el-select v-model="filters.batch" clearable filterable :disabled="loading" placeholder="批次">
         <el-option v-for="item in batchOptions" :key="item" :label="item" :value="item" />
       </el-select>
-      <el-select v-model="filters.college_id" clearable filterable placeholder="院校">
+      <el-select v-model="filters.college_id" clearable filterable :disabled="loading" placeholder="院校">
         <el-option v-for="college in collegeOptions" :key="college.id" :label="college.name" :value="college.id" />
       </el-select>
-      <el-select v-model="filters.student_type" clearable filterable placeholder="学生类别">
+      <el-select v-model="filters.student_type" clearable filterable :disabled="loading" placeholder="学生类别">
         <el-option v-for="item in studentTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
       </el-select>
-      <el-input v-model="filters.keyword" placeholder="按院校 / 专业 / 专业组筛选" />
+      <el-input v-model="filters.keyword" :disabled="loading" placeholder="按院校 / 专业 / 专业组筛选" />
     </div>
 
     <div class="action-row toolbar-row">
-      <el-button type="primary" @click="emit('load')">查询</el-button>
-      <el-button @click="emit('reset')">重置</el-button>
+      <el-button type="primary" :loading="loading" @click="emit('load')">查询</el-button>
+      <el-button :disabled="loading" @click="emit('reset')">重置</el-button>
     </div>
 
-    <el-table :data="enrollmentPlans" stripe>
+    <el-table :data="enrollmentPlans" stripe v-loading="loading">
+      <template #empty>
+        <el-empty :description="enrollmentPlanEmptyDescription">
+          <el-button v-if="loadError" type="primary" plain :loading="loading" @click="emit('load')">
+            重新加载招生计划库
+          </el-button>
+        </el-empty>
+      </template>
       <el-table-column label="年份" prop="year" width="90" />
       <el-table-column label="省份" prop="province" width="110" />
       <el-table-column label="批次" prop="batch" min-width="110" />
@@ -80,11 +101,11 @@
       @current-change="emit('page-change', $event)"
       @size-change="emit('page-size-change', $event)"
     />
-    <el-empty v-if="!enrollmentPlans.length" description="暂无招生计划数据" />
   </section>
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import type { UploadFile } from "element-plus";
 
 import ImportFeedbackPanel from "../common/ImportFeedbackPanel.vue";
@@ -99,7 +120,7 @@ interface EnrollmentPlanFiltersState {
   keyword: string;
 }
 
-defineProps<{
+const props = defineProps<{
   enrollmentPlans: EnrollmentPlanItem[];
   filters: EnrollmentPlanFiltersState;
   yearOptions: number[];
@@ -109,6 +130,9 @@ defineProps<{
   studentTypeOptions: Array<{ value: string; label: string }>;
   enrollmentPlanImportResult: EnrollmentPlanImportResponse | null;
   pagination: PaginationState;
+  loading: boolean;
+  loadError: string;
+  importing: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -145,6 +169,23 @@ function formatStudentType(value?: string | null): string {
   };
   return mapping[value] ?? value;
 }
+
+const hasActiveFilters = computed(() =>
+  Boolean(
+    props.filters.year ||
+      props.filters.province !== "山东" ||
+      props.filters.batch ||
+      props.filters.college_id ||
+      props.filters.student_type ||
+      props.filters.keyword,
+  ),
+);
+const enrollmentPlanEmptyDescription = computed(() => {
+  if (props.loadError) return "招生计划加载失败，请重新加载。";
+  if (props.loading) return "正在加载招生计划";
+  if (hasActiveFilters.value) return "没有符合当前筛选条件的招生计划。";
+  return "暂无招生计划数据，可以先下载模板并导入。";
+});
 </script>
 
 <style scoped>
@@ -154,6 +195,17 @@ function formatStudentType(value?: string | null): string {
 
 .toolbar-row {
   margin-bottom: 16px;
+}
+
+.planning-panel-alert {
+  margin-bottom: 16px;
+}
+
+.planning-alert-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
 }
 
 .table-pagination {

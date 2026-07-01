@@ -8,7 +8,7 @@
     </div>
 
     <div class="filter-grid">
-      <el-select v-model="selectedClassIdModel" filterable placeholder="选择班级">
+      <el-select v-model="selectedClassIdModel" filterable placeholder="选择班级" :disabled="loading">
         <el-option v-for="schoolClass in classes" :key="schoolClass.id" :label="schoolClass.name" :value="schoolClass.id" />
       </el-select>
       <el-select
@@ -18,6 +18,7 @@
         clearable
         filterable
         placeholder="筛选学年，可多选"
+        :disabled="loading"
       >
         <el-option
           v-for="year in academicYears"
@@ -27,12 +28,28 @@
         />
       </el-select>
       <div class="action-row">
-        <el-button type="primary" :loading="loading" @click="emit('load')">查询</el-button>
-        <el-button @click="emit('reset')">重置</el-button>
+        <el-button type="primary" :loading="loading" :disabled="!selectedClassId" @click="emit('load')">查询</el-button>
+        <el-button :disabled="loading" @click="emit('reset')">重置</el-button>
       </div>
     </div>
 
+    <el-alert
+      v-if="selectedClassId && errorMessage"
+      class="panorama-load-alert"
+      type="error"
+      show-icon
+      :closable="false"
+      :title="errorMessage"
+    >
+      <template #default>
+        <el-button size="small" type="danger" plain :loading="loading" @click="emit('load')">重新加载</el-button>
+      </template>
+    </el-alert>
+
     <el-empty v-if="!selectedClassId" description="请先选择班级" />
+    <el-empty v-else-if="errorMessage" description="班级全景加载失败，请重试。">
+      <el-button type="primary" plain :loading="loading" @click="emit('load')">重新加载</el-button>
+    </el-empty>
     <el-empty v-else-if="!panorama" description="当前还没有加载班级全景数据" />
     <template v-else>
       <div class="metric-grid analytics-grid">
@@ -203,6 +220,7 @@ const props = defineProps<{
   selectedAcademicYearIds: number[];
   panorama: ClassPanoramaResponse | null;
   loading: boolean;
+  errorMessage: string;
 }>();
 
 const emit = defineEmits<{
@@ -296,6 +314,10 @@ function alertTagType(label: string): "danger" | "warning" | "info" {
 
 .panorama-battle-grid {
   margin-top: 16px;
+}
+
+.panorama-load-alert {
+  margin: 14px 0;
 }
 
 .metric-help {

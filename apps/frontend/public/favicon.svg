@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="本地教务工具">
+  <rect width="64" height="64" rx="12" fill="#1f405b"/>
+  <path d="M18 17h21c4.4 0 8 3.6 8 8v22H26c-4.4 0-8-3.6-8-8V17z" fill="#f2b15e"/>
+  <path d="M26 24h14M26 31h14M26 38h9" stroke="#1f405b" stroke-width="4" stroke-linecap="round"/>
+</svg>

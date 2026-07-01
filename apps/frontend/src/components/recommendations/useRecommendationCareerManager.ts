@@ -41,6 +41,10 @@ export function useRecommendationCareerManager(options: RecommendationCareerMana
   const editingMajorEmploymentMappingId = ref<number | null>(null);
   const savingEmploymentDirection = ref(false);
   const savingMajorEmploymentMapping = ref(false);
+  const loadingEmploymentDirections = ref(false);
+  const employmentDirectionsLoadError = ref("");
+  const loadingMajorEmploymentMappings = ref(false);
+  const majorEmploymentMappingsLoadError = ref("");
 
   const employmentDirectionFilters = reactive<EmploymentDirectionFiltersState>({
     keyword: "",
@@ -71,6 +75,8 @@ export function useRecommendationCareerManager(options: RecommendationCareerMana
   );
 
   async function loadEmploymentDirections(): Promise<void> {
+    loadingEmploymentDirections.value = true;
+    employmentDirectionsLoadError.value = "";
     try {
       const query = new URLSearchParams();
       if (employmentDirectionFilters.keyword) query.set("keyword", employmentDirectionFilters.keyword);
@@ -79,11 +85,20 @@ export function useRecommendationCareerManager(options: RecommendationCareerMana
         `/api/employment-directions?${query.toString()}`,
       );
     } catch (error) {
-      reportError(error);
+      employmentDirections.value = [];
+      employmentDirectionsLoadError.value = formatUserActionError(
+        "加载就业方向库",
+        error,
+        "检查筛选条件或本地服务后重新加载就业方向库",
+      );
+    } finally {
+      loadingEmploymentDirections.value = false;
     }
   }
 
   async function loadMajorEmploymentMappings(options: { resetPage?: boolean } = {}): Promise<void> {
+    loadingMajorEmploymentMappings.value = true;
+    majorEmploymentMappingsLoadError.value = "";
     try {
       if (options.resetPage) majorEmploymentMappingPagination.page = 1;
       const query = new URLSearchParams();
@@ -101,7 +116,15 @@ export function useRecommendationCareerManager(options: RecommendationCareerMana
       majorEmploymentMappingPagination.page = response.page;
       majorEmploymentMappingPagination.page_size = response.page_size;
     } catch (error) {
-      reportError(error);
+      majorEmploymentMappings.value = [];
+      majorEmploymentMappingPagination.total = 0;
+      majorEmploymentMappingsLoadError.value = formatUserActionError(
+        "加载专业就业映射",
+        error,
+        "检查筛选条件、专业库和就业方向库后重新加载专业就业映射",
+      );
+    } finally {
+      loadingMajorEmploymentMappings.value = false;
     }
   }
 
@@ -255,6 +278,8 @@ export function useRecommendationCareerManager(options: RecommendationCareerMana
     handleMajorEmploymentMappingPageChange,
     handleMajorEmploymentMappingPageSizeChange,
     handleMajorEmploymentMappingDialogClosed,
+    loadingEmploymentDirections,
+    loadingMajorEmploymentMappings,
     loadEmploymentDirections,
     loadMajorEmploymentMappings,
     majorDirectory: options.majorDirectory,
@@ -262,8 +287,10 @@ export function useRecommendationCareerManager(options: RecommendationCareerMana
     majorEmploymentMappingDialogVisible,
     majorEmploymentMappingFilters,
     majorEmploymentMappingForm,
+    majorEmploymentMappingsLoadError,
     majorEmploymentMappingPagination,
     majorEmploymentMappings,
+    employmentDirectionsLoadError,
     employmentMappingStrengthOptions,
     openCreateEmploymentDirection,
     openCreateMajorEmploymentMapping,

@@ -7,26 +7,82 @@
   >
     <template #actions>
       <div class="action-row">
-        <el-button type="primary" :loading="creatingBackup" @click="createBackup">立即备份</el-button>
+        <el-button
+          type="primary"
+          :loading="creatingBackup"
+          :disabled="createBackupDisabled"
+          @click="createBackup"
+        >
+          立即备份
+        </el-button>
         <el-switch
           v-model="autoBackupBeforeRestore"
           inline-prompt
           active-text="恢复前自动备份"
           inactive-text="直接恢复"
+          :disabled="restoreToggleDisabled"
         />
       </div>
     </template>
 
     <AppStatGrid :items="overviewCards" :columns="4" />
 
-    <section class="soft-card panel-block safety-panel">
+    <el-alert
+      v-if="loadErrorSummary.length"
+      class="page-alert"
+      type="error"
+      show-icon
+      :closable="false"
+      title="部分系统状态加载失败"
+    >
+      <template #default>
+        <ul class="load-error-list">
+          <li v-for="item in loadErrorSummary" :key="item.label">
+            <strong>{{ item.label }}</strong>
+            <span>{{ item.message }}</span>
+          </li>
+        </ul>
+        <el-button
+          size="small"
+          type="danger"
+          plain
+          :loading="reloadingMeta"
+          @click="reloadMeta(true)"
+        >
+          重新加载系统状态
+        </el-button>
+      </template>
+    </el-alert>
+
+    <el-alert
+      v-if="systemActionError"
+      class="page-alert"
+      type="error"
+      show-icon
+      title="系统操作失败"
+      @close="clearSystemActionError"
+    >
+      <template #default>
+        <p class="action-error-content">{{ systemActionError }}</p>
+      </template>
+    </el-alert>
+
+    <section class="soft-card panel-block safety-panel" v-loading="safetyLoading">
       <div class="section-head">
         <div>
           <h3>本地数据保险箱</h3>
           <p>查看主库路径、目录大小、最近备份/恢复、SQLite 完整性和迁移版本。</p>
         </div>
-        <el-button @click="loadSafetyStatus">重新检查</el-button>
+        <el-button :loading="safetyLoading" :disabled="systemWriteBusy" @click="loadSafetyStatus(true)">重新检查</el-button>
       </div>
+      <el-alert
+        v-if="safetyLoadError"
+        class="system-alert"
+        type="error"
+        show-icon
+        :closable="false"
+        :title="safetyLoadError"
+      />
       <div class="safety-grid">
         <article v-for="item in safetyCards" :key="item.label" class="safety-card">
           <span>{{ item.label }}</span>
@@ -47,13 +103,39 @@
 
     <el-tabs>
       <el-tab-pane label="参数配置">
-        <section v-for="group in configGroups" :key="group.config_group" class="soft-card panel-block">
+        <el-alert
+          v-if="configLoadError"
+          class="page-alert"
+          type="error"
+          show-icon
+          :closable="false"
+          :title="configLoadError"
+        >
+          <template #default>
+            <el-button size="small" type="danger" plain :loading="configLoading" @click="loadConfigGroups(true)">
+              重新加载参数配置
+            </el-button>
+          </template>
+        </el-alert>
+        <div v-if="configLoading && !configGroups.length" class="section-loading" v-loading="configLoading"></div>
+        <el-empty
+          v-if="!configLoading && !configLoadError && !configGroups.length"
+          description="暂无可维护的系统参数"
+        />
+        <section v-for="group in configGroups" :key="group.config_group" class="soft-card panel-block" v-loading="configLoading">
           <div class="section-head">
             <div>
               <h3>{{ group.title }}</h3>
               <p>{{ group.config_group }}</p>
             </div>
-            <el-button type="primary" @click="saveGroup(group)">保存本组</el-button>
+            <el-button
+              type="primary"
+              :loading="savingConfigGroup === group.config_group"
+            :disabled="configLoading || (savingConfigGroup !== null && savingConfigGroup !== group.config_group) || systemWriteBusy"
+            @click="saveGroup(group)"
+          >
+              保存本组
+            </el-button>
           </div>
           <div class="config-grid">
             <article v-for="item in group.items" :key="item.config_key" class="config-card">
@@ -62,16 +144,19 @@
               <el-switch
                 v-if="item.value_type === 'bool'"
                 v-model="item.draft_value"
+                :disabled="configLoading || savingConfigGroup === group.config_group || systemWriteBusy"
               />
               <el-input
                 v-else-if="item.value_type === 'json'"
                 v-model="item.draft_value"
                 type="textarea"
                 :rows="5"
+                :disabled="configLoading || savingConfigGroup === group.config_group || systemWriteBusy"
               />
               <el-input
                 v-else
                 v-model="item.draft_value"
+                :disabled="configLoading || savingConfigGroup === group.config_group || systemWriteBusy"
               />
             </article>
           </div>
@@ -79,15 +164,24 @@
       </el-tab-pane>
 
       <el-tab-pane label="模板管理">
-        <section class="soft-card panel-block">
+        <section class="soft-card panel-block" v-loading="templatesLoading">
           <div class="section-head">
             <div>
               <h3>导入模板</h3>
               <p>统一查看当前运行目录里的模板文件，便于学生、教师、成绩、课表等导入前下载。</p>
             </div>
+            <el-button :loading="templatesLoading" @click="loadTemplates(true)">刷新模板</el-button>
           </div>
+          <el-alert
+            v-if="templatesLoadError"
+            class="system-alert"
+            type="error"
+            show-icon
+            :closable="false"
+            :title="templatesLoadError"
+          />
           <div class="table-shell">
-            <el-table :data="templates" stripe>
+            <el-table :data="templates" stripe v-loading="templatesLoading">
               <el-table-column label="模板名" prop="name" min-width="220" />
               <el-table-column label="文件名" prop="file_name" min-width="220" />
               <el-table-column label="更新时间" prop="updated_at" min-width="180" />
@@ -98,24 +192,44 @@
               </el-table-column>
               <el-table-column label="操作" width="100" fixed="right">
                 <template #default="{ row }">
-                  <el-button link type="primary" @click="openFile(row.download_url)">下载</el-button>
+                  <el-button link type="primary" :disabled="templatesLoading || !row.download_url" @click="openFile(row.download_url)">下载</el-button>
                 </template>
               </el-table-column>
+              <template #empty>
+                <el-empty :description="templatesEmptyDescription">
+                  <el-button
+                    v-if="templatesLoadError"
+                    type="primary"
+                    plain
+                    :loading="templatesLoading"
+                    @click="loadTemplates(true)"
+                  >
+                    重新加载模板
+                  </el-button>
+                </el-empty>
+              </template>
             </el-table>
           </div>
-          <el-empty v-if="!templates.length" description="暂无模板文件" />
         </section>
       </el-tab-pane>
 
       <el-tab-pane label="数据修复">
-        <section class="soft-card panel-block">
+        <section class="soft-card panel-block" v-loading="repairScanLoading">
           <div class="section-head">
             <div>
               <h3>修复扫描</h3>
               <p>优先修正年级班级不一致、班级人数不一致、学籍历史缺失等问题。</p>
             </div>
-            <el-button @click="loadRepairScan">重新扫描</el-button>
+            <el-button :loading="repairScanLoading" :disabled="systemWriteBusy" @click="loadRepairScan(true)">重新扫描</el-button>
           </div>
+          <el-alert
+            v-if="repairScanLoadError"
+            class="system-alert"
+            type="error"
+            show-icon
+            :closable="false"
+            :title="repairScanLoadError"
+          />
           <div v-if="repairScan?.issues.length" class="repair-grid">
             <article v-for="issue in repairScan.issues" :key="issue.code" class="repair-card">
               <div class="repair-head">
@@ -131,7 +245,7 @@
               </div>
             </article>
           </div>
-          <el-empty v-else description="当前没有待处理的数据问题" />
+          <el-empty v-else-if="!repairScanLoading && !repairScanLoadError" description="当前没有待处理的数据问题" />
 
           <div class="section-split"></div>
           <div class="section-head compact">
@@ -148,27 +262,40 @@
               </div>
               <el-button
                 type="primary"
-                :disabled="!action.enabled"
+                :disabled="!action.enabled || repairActionControlsDisabled"
                 :loading="repairingAction === action.code"
                 @click="executeRepair(action.code)"
               >
                 执行
               </el-button>
             </div>
+            <el-empty
+              v-if="!repairScanLoading && !repairScanLoadError && !(repairScan?.actions.length)"
+              description="当前没有可执行的自动修复动作"
+            />
           </div>
         </section>
       </el-tab-pane>
 
       <el-tab-pane label="备份恢复">
-        <section class="soft-card panel-block">
+        <section class="soft-card panel-block" v-loading="backupsLoading">
           <div class="section-head">
             <div>
               <h3>备份记录</h3>
               <p>备份包含数据库、上传附件、模板和配置文件。</p>
             </div>
+            <el-button :loading="backupsLoading" :disabled="backupActionBusy" @click="loadBackups(true)">刷新备份</el-button>
           </div>
+          <el-alert
+            v-if="backupsLoadError"
+            class="system-alert"
+            type="error"
+            show-icon
+            :closable="false"
+            :title="backupsLoadError"
+          />
           <div class="table-shell">
-            <el-table :data="backups" stripe>
+            <el-table :data="backups" stripe v-loading="backupsLoading">
               <el-table-column label="备份名称" prop="backup_name" min-width="220" />
               <el-table-column label="文件大小" width="120">
                 <template #default="{ row }">
@@ -190,34 +317,65 @@
               </el-table-column>
               <el-table-column label="操作" width="280" fixed="right">
                 <template #default="{ row }">
-                  <el-button link type="primary" @click="openFile(row.download_url)">下载</el-button>
-                  <el-button link type="primary" :loading="verifyingBackupId === row.id" @click="verifyBackup(row.id)">
+                  <el-button link type="primary" :disabled="backupRowActionsDisabled || !row.download_url" @click="openFile(row.download_url)">下载</el-button>
+                  <el-button link type="primary" :disabled="backupRowActionsDisabled" :loading="verifyingBackupId === row.id" @click="verifyBackup(row.id)">
                     校验
                   </el-button>
-                  <el-button link type="warning" :loading="dryRunningBackupId === row.id" @click="dryRunRestore(row.id)">
+                  <el-button link type="warning" :disabled="backupRowActionsDisabled" :loading="dryRunningBackupId === row.id" @click="dryRunRestore(row.id)">
                     演练
                   </el-button>
-                  <el-button link type="danger" :loading="restoringBackupId === row.id" @click="restoreBackup(row.id)">
+                  <el-button link type="danger" :disabled="backupRowActionsDisabled" :loading="restoringBackupId === row.id" @click="restoreBackup(row.id)">
                     恢复
                   </el-button>
                 </template>
               </el-table-column>
+              <template #empty>
+                <el-empty :description="backupsEmptyDescription">
+                  <el-button
+                    v-if="backupsLoadError"
+                    type="primary"
+                    plain
+                    :loading="backupsLoading"
+                    @click="loadBackups(true)"
+                  >
+                    重新加载备份
+                  </el-button>
+                  <el-button
+                    v-else
+                    type="primary"
+                    plain
+                    :loading="creatingBackup"
+                    :disabled="createBackupDisabled"
+                    @click="createBackup"
+                  >
+                    立即创建备份
+                  </el-button>
+                </el-empty>
+              </template>
             </el-table>
           </div>
-          <el-empty v-if="!backups.length" description="暂无备份记录" />
         </section>
       </el-tab-pane>
 
       <el-tab-pane label="操作日志">
-        <section class="soft-card panel-block">
+        <section class="soft-card panel-block" v-loading="auditLogsLoading">
           <div class="section-head">
             <div>
               <h3>审计日志</h3>
               <p>记录导入、导出、备份、恢复、配置变更与关键数据修复动作。</p>
             </div>
+            <el-button :loading="auditLogsLoading" @click="loadAuditLogs(true)">刷新日志</el-button>
           </div>
+          <el-alert
+            v-if="auditLogsLoadError"
+            class="system-alert"
+            type="error"
+            show-icon
+            :closable="false"
+            :title="auditLogsLoadError"
+          />
           <div class="table-shell">
-            <el-table :data="auditLogs" stripe>
+            <el-table :data="auditLogs" stripe v-loading="auditLogsLoading">
               <el-table-column label="时间" prop="created_at" min-width="170" />
               <el-table-column label="模块" prop="module" width="120" />
               <el-table-column label="动作" prop="action" width="160" />
@@ -231,6 +389,19 @@
                   {{ formatDetails(row.detail_json) }}
                 </template>
               </el-table-column>
+              <template #empty>
+                <el-empty :description="auditLogsEmptyDescription">
+                  <el-button
+                    v-if="auditLogsLoadError"
+                    type="primary"
+                    plain
+                    :loading="auditLogsLoading"
+                    @click="loadAuditLogs(true)"
+                  >
+                    重新加载日志
+                  </el-button>
+                </el-empty>
+              </template>
             </el-table>
           </div>
         </section>
@@ -246,6 +417,7 @@ import ElMessageBox from "element-plus/es/components/message-box/index";
 
 import { apiRequest, openFile } from "../api/client";
 import { AppPage, AppStatGrid, type PageMetaItem, type StatCardItem } from "../components/ui";
+import { formatUserActionError, getErrorMessage } from "../utils/userFeedback";
 
 interface BackupRecord {
   id: number;
@@ -351,7 +523,22 @@ const restoringBackupId = ref<number | null>(null);
 const verifyingBackupId = ref<number | null>(null);
 const dryRunningBackupId = ref<number | null>(null);
 const repairingAction = ref<string | null>(null);
+const savingConfigGroup = ref<string | null>(null);
 const autoBackupBeforeRestore = ref(true);
+const configLoading = ref(false);
+const templatesLoading = ref(false);
+const repairScanLoading = ref(false);
+const backupsLoading = ref(false);
+const auditLogsLoading = ref(false);
+const safetyLoading = ref(false);
+const reloadingMeta = ref(false);
+const configLoadError = ref("");
+const templatesLoadError = ref("");
+const repairScanLoadError = ref("");
+const backupsLoadError = ref("");
+const auditLogsLoadError = ref("");
+const safetyLoadError = ref("");
+const systemActionError = ref("");
 
 const configItemCount = computed(
   () => configGroups.value.reduce((sum, group) => sum + group.items.length, 0),
@@ -360,37 +547,79 @@ const repairErrorCount = computed(
   () => repairScan.value?.issues.filter((item) => item.severity === "error").length ?? 0,
 );
 const latestBackupName = computed(() => backups.value[0]?.backup_name ?? "暂无");
+const backupActionBusy = computed(
+  () => creatingBackup.value
+    || verifyingBackupId.value !== null
+    || dryRunningBackupId.value !== null
+    || restoringBackupId.value !== null,
+);
+const systemWriteBusy = computed(
+  () => backupActionBusy.value || repairingAction.value !== null || savingConfigGroup.value !== null,
+);
+const createBackupDisabled = computed(() => reloadingMeta.value || backupsLoading.value || systemWriteBusy.value);
+const restoreToggleDisabled = computed(() => reloadingMeta.value || backupsLoading.value || systemWriteBusy.value);
+const backupRowActionsDisabled = computed(() => reloadingMeta.value || backupsLoading.value || systemWriteBusy.value);
+const repairActionControlsDisabled = computed(
+  () => repairScanLoading.value || systemWriteBusy.value || reloadingMeta.value,
+);
+const templatesEmptyDescription = computed(() => {
+  if (templatesLoading.value) return "正在加载模板文件";
+  if (templatesLoadError.value) return "模板加载失败，请重试。";
+  return "暂无模板文件";
+});
+const backupsEmptyDescription = computed(() => {
+  if (backupsLoading.value) return "正在加载备份记录";
+  if (backupsLoadError.value) return "备份记录加载失败，请重试。";
+  return "暂无备份记录，建议先创建一个备份。";
+});
+const auditLogsEmptyDescription = computed(() => {
+  if (auditLogsLoading.value) return "正在加载审计日志";
+  if (auditLogsLoadError.value) return "审计日志加载失败，请重试。";
+  return "暂无审计日志";
+});
 const systemPageMeta = computed<PageMetaItem[]>(() => [
-  { label: "配置项", value: configItemCount.value },
-  { label: "模板", value: templates.value.length },
-  { label: "高风险问题", value: repairErrorCount.value },
-  { label: "最近备份", value: latestBackupName.value },
-  { label: "主库状态", value: safetyStatus.value?.sqlite_integrity ?? "待检查" },
+  { label: "配置项", value: configLoadError.value ? "加载失败" : configItemCount.value },
+  { label: "模板", value: templatesLoadError.value ? "加载失败" : templates.value.length },
+  { label: "高风险问题", value: repairScanLoadError.value ? "加载失败" : repairErrorCount.value },
+  { label: "最近备份", value: backupsLoadError.value ? "加载失败" : latestBackupName.value },
+  { label: "主库状态", value: safetyLoadError.value ? "加载失败" : safetyStatus.value?.sqlite_integrity ?? "待检查" },
 ]);
+const loadErrorSummary = computed(() => [
+  { label: "参数配置", message: configLoadError.value },
+  { label: "模板管理", message: templatesLoadError.value },
+  { label: "数据修复", message: repairScanLoadError.value },
+  { label: "备份恢复", message: backupsLoadError.value },
+  { label: "操作日志", message: auditLogsLoadError.value },
+  { label: "本地数据保险箱", message: safetyLoadError.value },
+].filter((item) => item.message));
 const overviewCards = computed<StatCardItem[]>(() => [
   {
     label: "配置项",
-    value: configItemCount.value,
-    help: "当前可在系统设置中维护的参数数量。",
-    tone: "primary",
+    value: configLoadError.value ? "加载失败" : configItemCount.value,
+    help: configLoadError.value ? "参数配置读取失败，请重新加载。" : "当前可在系统设置中维护的参数数量。",
+    tone: configLoadError.value ? "danger" : "primary",
+    loading: configLoading.value,
   },
   {
     label: "模板文件",
-    value: templates.value.length,
-    help: "运行目录中可下载的导入模板。",
-    tone: "info",
+    value: templatesLoadError.value ? "加载失败" : templates.value.length,
+    help: templatesLoadError.value ? "模板目录读取失败，请重新加载。" : "运行目录中可下载的导入模板。",
+    tone: templatesLoadError.value ? "danger" : "info",
+    loading: templatesLoading.value,
   },
   {
     label: "数据问题",
-    value: repairScan.value?.issues.length ?? 0,
-    help: "数据修复扫描发现的问题总数。",
-    tone: repairErrorCount.value ? "danger" : "success",
+    value: repairScanLoadError.value ? "加载失败" : repairScan.value?.issues.length ?? 0,
+    help: repairScanLoadError.value ? "数据修复扫描失败，请重新扫描。" : "数据修复扫描发现的问题总数。",
+    tone: repairScanLoadError.value || repairErrorCount.value ? "danger" : "success",
+    loading: repairScanLoading.value,
   },
   {
     label: "备份数量",
-    value: backups.value.length,
-    help: "恢复前建议确认最近一次可用备份。",
-    tone: backups.value.length ? "warning" : "neutral",
+    value: backupsLoadError.value ? "加载失败" : backups.value.length,
+    help: backupsLoadError.value ? "备份记录读取失败，请重新加载。" : "恢复前建议确认最近一次可用备份。",
+    tone: backupsLoadError.value ? "danger" : backups.value.length ? "warning" : "neutral",
+    loading: backupsLoading.value,
   },
 ]);
 const safetyCards = computed(() => [
@@ -476,51 +705,137 @@ function formatDraftValue(item: Omit<ConfigItemRow, "draft_value">): string | bo
   return String(item.parsed_value ?? item.config_value ?? "");
 }
 
-async function loadConfigGroups(): Promise<void> {
-  const payload = await apiRequest<Array<Omit<ConfigGroup, "items"> & { items: Omit<ConfigItemRow, "draft_value">[] }>>(
-    "/api/system/config-groups",
-  );
-  configGroups.value = payload.map((group) => ({
-    ...group,
-    items: group.items.map((item) => ({
-      ...item,
-      draft_value: formatDraftValue(item),
-    })),
-  }));
-  const restoreConfig = configGroups.value
-    .flatMap((group) => group.items)
-    .find((item) => item.config_key === "auto_backup_before_restore");
-  if (restoreConfig?.value_type === "bool") {
-    autoBackupBeforeRestore.value = Boolean(restoreConfig.draft_value);
+function handleLoadError(action: string, error: unknown, showToast: boolean): string {
+  if (showToast) {
+    ElMessage.error(formatUserActionError(action, error, "确认本地后端服务正常后重试。"));
+  }
+  return getErrorMessage(error);
+}
+
+function clearSystemActionError(): void {
+  systemActionError.value = "";
+}
+
+function setSystemActionError(action: string, error: unknown, suggestion: string): void {
+  const message = formatUserActionError(action, error, suggestion);
+  systemActionError.value = message;
+  ElMessage.error(message);
+}
+
+async function loadConfigGroups(showToast = false): Promise<void> {
+  try {
+    configLoading.value = true;
+    configLoadError.value = "";
+    const payload = await apiRequest<Array<Omit<ConfigGroup, "items"> & { items: Omit<ConfigItemRow, "draft_value">[] }>>(
+      "/api/system/config-groups",
+    );
+    configGroups.value = payload.map((group) => ({
+      ...group,
+      items: group.items.map((item) => ({
+        ...item,
+        draft_value: formatDraftValue(item),
+      })),
+    }));
+    const restoreConfig = configGroups.value
+      .flatMap((group) => group.items)
+      .find((item) => item.config_key === "auto_backup_before_restore");
+    if (restoreConfig?.value_type === "bool") {
+      autoBackupBeforeRestore.value = Boolean(restoreConfig.draft_value);
+    }
+  } catch (error) {
+    configGroups.value = [];
+    configLoadError.value = handleLoadError("加载参数配置", error, showToast);
+  } finally {
+    configLoading.value = false;
   }
 }
 
-async function loadTemplates(): Promise<void> {
-  templates.value = await apiRequest<TemplateItem[]>("/api/system/templates");
+async function loadTemplates(showToast = false): Promise<void> {
+  try {
+    templatesLoading.value = true;
+    templatesLoadError.value = "";
+    templates.value = await apiRequest<TemplateItem[]>("/api/system/templates");
+  } catch (error) {
+    templates.value = [];
+    templatesLoadError.value = handleLoadError("加载模板列表", error, showToast);
+  } finally {
+    templatesLoading.value = false;
+  }
 }
 
-async function loadRepairScan(): Promise<void> {
-  repairScan.value = await apiRequest<RepairScan>("/api/system/data-repair/scan");
+async function loadRepairScan(showToast = false): Promise<void> {
+  try {
+    repairScanLoading.value = true;
+    repairScanLoadError.value = "";
+    repairScan.value = await apiRequest<RepairScan>("/api/system/data-repair/scan");
+  } catch (error) {
+    repairScan.value = null;
+    repairScanLoadError.value = handleLoadError("加载数据修复扫描", error, showToast);
+  } finally {
+    repairScanLoading.value = false;
+  }
 }
 
-async function loadBackups(): Promise<void> {
-  backups.value = await apiRequest<BackupRecord[]>("/api/system/backups");
+async function loadBackups(showToast = false): Promise<void> {
+  try {
+    backupsLoading.value = true;
+    backupsLoadError.value = "";
+    backups.value = await apiRequest<BackupRecord[]>("/api/system/backups");
+  } catch (error) {
+    backups.value = [];
+    backupVerifications.value = {};
+    backupsLoadError.value = handleLoadError("加载备份记录", error, showToast);
+  } finally {
+    backupsLoading.value = false;
+  }
 }
 
-async function loadAuditLogs(): Promise<void> {
-  auditLogs.value = await apiRequest<AuditLog[]>("/api/system/audit-logs?limit=100");
+async function loadAuditLogs(showToast = false): Promise<void> {
+  try {
+    auditLogsLoading.value = true;
+    auditLogsLoadError.value = "";
+    auditLogs.value = await apiRequest<AuditLog[]>("/api/system/audit-logs?limit=100");
+  } catch (error) {
+    auditLogs.value = [];
+    auditLogsLoadError.value = handleLoadError("加载审计日志", error, showToast);
+  } finally {
+    auditLogsLoading.value = false;
+  }
 }
 
-async function loadSafetyStatus(): Promise<void> {
-  safetyStatus.value = await apiRequest<SystemSafetyStatus>("/api/system/safety-status");
+async function loadSafetyStatus(showToast = false): Promise<void> {
+  try {
+    safetyLoading.value = true;
+    safetyLoadError.value = "";
+    safetyStatus.value = await apiRequest<SystemSafetyStatus>("/api/system/safety-status");
+  } catch (error) {
+    safetyStatus.value = null;
+    safetyLoadError.value = handleLoadError("加载本地数据保险箱", error, showToast);
+  } finally {
+    safetyLoading.value = false;
+  }
 }
 
-async function reloadMeta(): Promise<void> {
-  await Promise.all([loadTemplates(), loadRepairScan(), loadBackups(), loadAuditLogs(), loadSafetyStatus()]);
+async function reloadMeta(showToast = false): Promise<void> {
+  try {
+    reloadingMeta.value = true;
+    await Promise.all([
+      loadConfigGroups(showToast),
+      loadTemplates(showToast),
+      loadRepairScan(showToast),
+      loadBackups(showToast),
+      loadAuditLogs(showToast),
+      loadSafetyStatus(showToast),
+    ]);
+  } finally {
+    reloadingMeta.value = false;
+  }
 }
 
 async function saveGroup(group: ConfigGroup): Promise<void> {
   try {
+    clearSystemActionError();
+    savingConfigGroup.value = group.config_group;
     const payload = group.items.map((item) => ({
       config_group: item.config_group,
       config_key: item.config_key,
@@ -535,12 +850,15 @@ async function saveGroup(group: ConfigGroup): Promise<void> {
     ElMessage.success(`${group.title}已保存`);
     await loadConfigGroups();
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    setSystemActionError("保存系统参数", error, "检查 JSON 配置格式，确认无误后重试。");
+  } finally {
+    savingConfigGroup.value = null;
   }
 }
 
 async function executeRepair(actionCode: string): Promise<void> {
   try {
+    clearSystemActionError();
     const action = repairScan.value?.actions.find((item) => item.code === actionCode);
     await ElMessageBox.confirm(
       `${action?.description ?? "该修复会直接调整当前数据。"} 建议先确认最近备份可用。是否继续？`,
@@ -556,7 +874,7 @@ async function executeRepair(actionCode: string): Promise<void> {
     await Promise.all([loadRepairScan(), loadAuditLogs()]);
   } catch (error) {
     if (error === "cancel" || error === "close") return;
-    ElMessage.error((error as Error).message);
+    setSystemActionError("执行数据修复", error, "先确认最近备份可用，再重新执行修复。");
   } finally {
     repairingAction.value = null;
   }
@@ -564,12 +882,13 @@ async function executeRepair(actionCode: string): Promise<void> {
 
 async function createBackup(): Promise<void> {
   try {
+    clearSystemActionError();
     creatingBackup.value = true;
     const result = await apiRequest<{ message: string }>("/api/system/backup", { method: "POST" });
     await Promise.all([loadBackups(), loadAuditLogs(), loadSafetyStatus()]);
     ElMessage.success(result.message);
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    setSystemActionError("创建备份", error, "检查 data/backups 目录权限和磁盘空间后重试。");
   } finally {
     creatingBackup.value = false;
   }
@@ -583,16 +902,18 @@ function backupVerificationText(backupId: number): string {
 
 async function verifyBackup(backupId: number): Promise<void> {
   try {
+    clearSystemActionError();
     verifyingBackupId.value = backupId;
     const result = await apiRequest<BackupVerification>(`/api/system/backups/${backupId}/verify`);
     backupVerifications.value = { ...backupVerifications.value, [backupId]: result };
     if (result.valid) {
       ElMessage.success(result.message);
     } else {
+      systemActionError.value = `备份校验未通过：${result.message}`;
       ElMessage.warning(result.message);
     }
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    setSystemActionError("校验备份", error, "确认备份文件仍在本地备份目录后重试。");
   } finally {
     verifyingBackupId.value = null;
   }
@@ -600,6 +921,7 @@ async function verifyBackup(backupId: number): Promise<void> {
 
 async function dryRunRestore(backupId: number): Promise<void> {
   try {
+    clearSystemActionError();
     dryRunningBackupId.value = backupId;
     const result = await apiRequest<BackupVerification>(`/api/system/backups/${backupId}/restore-dry-run`, {
       method: "POST",
@@ -608,10 +930,11 @@ async function dryRunRestore(backupId: number): Promise<void> {
     if (result.valid) {
       ElMessage.success(result.message);
     } else {
+      systemActionError.value = `恢复演练未通过：${result.message}`;
       ElMessage.warning(result.message);
     }
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    setSystemActionError("恢复演练", error, "确认备份文件可读，并先重新校验该备份。");
   } finally {
     dryRunningBackupId.value = null;
   }
@@ -619,11 +942,13 @@ async function dryRunRestore(backupId: number): Promise<void> {
 
 async function restoreBackup(backupId: number): Promise<void> {
   try {
+    clearSystemActionError();
     const backup = backups.value.find((item) => item.id === backupId);
     const verifyResult = backupVerifications.value[backupId]
       ?? await apiRequest<BackupVerification>(`/api/system/backups/${backupId}/verify`);
     backupVerifications.value = { ...backupVerifications.value, [backupId]: verifyResult };
     if (!verifyResult.valid) {
+      systemActionError.value = `备份校验未通过，已中止恢复：${verifyResult.message}`;
       ElMessage.warning(verifyResult.message);
       return;
     }
@@ -649,18 +974,14 @@ async function restoreBackup(backupId: number): Promise<void> {
     ElMessage.success(result.message);
   } catch (error) {
     if (error === "cancel" || error === "close") return;
-    ElMessage.error((error as Error).message);
+    setSystemActionError("恢复备份", error, "停止其他页面操作，确认备份校验通过后再重试。");
   } finally {
     restoringBackupId.value = null;
   }
 }
 
 onMounted(async () => {
-  try {
-    await Promise.all([loadConfigGroups(), reloadMeta()]);
-  } catch (error) {
-    ElMessage.error((error as Error).message);
-  }
+  await reloadMeta();
 });
 </script>
 
@@ -806,6 +1127,39 @@ onMounted(async () => {
   margin-top: 2px;
 }
 
+.page-alert {
+  margin: 16px 0;
+}
+
+.load-error-list {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.load-error-list li {
+  display: grid;
+  gap: 4px;
+}
+
+.load-error-list strong {
+  color: #7f1d1d;
+}
+
+.load-error-list span {
+  color: #6b3d3d;
+  line-height: 1.55;
+}
+
+.section-loading {
+  min-height: 180px;
+  border-radius: 8px;
+  border: 1px solid rgba(114, 132, 150, 0.14);
+  background: rgba(255, 255, 255, 0.72);
+}
+
 .section-head {
   display: flex;
   align-items: flex-start;
@@ -838,7 +1192,7 @@ onMounted(async () => {
 .repair-card,
 .action-card {
   padding: 16px;
-  border-radius: 18px;
+  border-radius: 8px;
   border: 1px solid rgba(114, 132, 150, 0.14);
   background: rgba(255, 255, 255, 0.8);
 }

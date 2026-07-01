@@ -5,9 +5,10 @@
     width="760px"
     destroy-on-close
     :close-on-click-modal="false"
+    :close-on-press-escape="!saving && !uploadingAttachments"
     @closed="emit('closed')"
   >
-    <el-form label-width="92px">
+    <el-form label-width="92px" :disabled="controlsDisabled">
       <div class="form-grid">
         <el-form-item label="教师">
           <el-select v-model="form.teacher_id" filterable style="width: 100%">
@@ -62,6 +63,7 @@
         class="file-input"
         type="file"
         multiple
+        :disabled="controlsDisabled"
         @change="emit('upload-attachments', $event)"
       />
     </div>
@@ -69,7 +71,7 @@
       <el-tag
         v-for="item in form.attachments"
         :key="item.id"
-        closable
+        :closable="!controlsDisabled"
         @close="emit('remove-attachment', item.id)"
       >
         {{ item.original_filename }}
@@ -78,8 +80,8 @@
     </div>
 
     <template #footer>
-      <el-button @click="dialogVisible = false">取消</el-button>
-      <el-button type="primary" :loading="saving" @click="emit('save')">保存记录</el-button>
+      <el-button :disabled="controlsDisabled" @click="dialogVisible = false">取消</el-button>
+      <el-button type="primary" :loading="saving || uploadingAttachments" :disabled="controlsDisabled" @click="emit('save')">保存记录</el-button>
     </template>
   </el-dialog>
 </template>
@@ -95,6 +97,8 @@ const props = defineProps<{
   visible: boolean;
   title: string;
   saving: boolean;
+  controlsDisabled: boolean;
+  uploadingAttachments: boolean;
   form: QuantFormState;
   teacherOptions: TeacherOption[];
   classes: OptionItem[];

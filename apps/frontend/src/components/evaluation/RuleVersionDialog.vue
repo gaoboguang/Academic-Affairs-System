@@ -5,9 +5,10 @@
     width="620px"
     destroy-on-close
     :close-on-click-modal="false"
+    :close-on-press-escape="!saving"
     @closed="emit('closed')"
   >
-    <el-form label-width="92px">
+    <el-form label-width="92px" :disabled="controlsDisabled">
       <div class="form-grid">
         <el-form-item label="版本名称">
           <el-input v-model="form.name" />
@@ -41,8 +42,8 @@
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="dialogVisible = false">取消</el-button>
-      <el-button type="primary" :loading="saving" @click="emit('save')">保存版本</el-button>
+      <el-button :disabled="controlsDisabled" @click="dialogVisible = false">取消</el-button>
+      <el-button type="primary" :loading="saving" :disabled="controlsDisabled" @click="emit('save')">保存版本</el-button>
     </template>
   </el-dialog>
 </template>
@@ -58,6 +59,7 @@ const props = defineProps<{
   visible: boolean;
   title: string;
   saving: boolean;
+  controlsDisabled: boolean;
   form: RuleVersionFormState;
   semesters: OptionItem[];
 }>();

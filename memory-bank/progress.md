@@ -6,6 +6,491 @@
 - 后端与前端基础功能已覆盖多个业务域，README 中已记录到 M0-M6 的实现范围。
 - 后端测试与前端构建在此前环境中已验证通过。
 
+## 2026-07-02 新增
+
+- 已补齐评教量化页面关键操作状态：
+  - `apps/frontend/src/components/evaluation/useEvaluationQuantPage.ts` 新增页面级评教操作失败提示、量化附件上传状态和统一忙碌 / 禁用状态，模板保存、评教导入、规则版本保存、规则项保存、量化记录保存和附件上传失败会留在页面内。
+  - `apps/frontend/src/pages/EvaluationQuantPage.vue` 接入页面级错误提示和统计卡失败口径，模板、批次分析、规则版本或量化记录加载失败时显示“加载失败”。
+  - `apps/frontend/src/components/evaluation/EvaluationTemplatesPanel.vue`、`EvaluationBatchOverviewPanel.vue`、`QuantRulesPanel.vue`、`QuantRecordsPanel.vue`、`EvaluationTemplateDialog.vue`、`RuleVersionDialog.vue`、`QuantRecordDialog.vue` 已收紧加载、保存、导入和上传中的控件禁用。
+  - 本轮未新增后端接口、未新增数据库迁移、未修改运行数据；验证通过 `npm run frontend:lint`、`npm run frontend:build`，并确认评教量化页和后端健康接口均可访问。
+- 已完成发布前 Git 元数据恢复：
+  - 首次检查发现当前 `.git` 是空目录，缺少 `HEAD` 与 `config`；已按项目文档记录的 `gaoboguang/Academic-Affairs-System` 远程重新初始化 Git 元数据。
+  - 已拉取 `origin/main`，并切到 `codex/local-ui-wrapup-20260702` 分支完成本地提交。
+  - `.playwright-cli/` 已加入 `.gitignore`，避免上传本地浏览器检查日志和页面快照。
+  - 当前分支推送暂未完成：Windows 侧到 GitHub 443 连接超时，SSH 侧没有可用私钥；网络或认证恢复后可直接继续 `git push -u origin codex/local-ui-wrapup-20260702`。
+
+## 2026-07-01 新增
+
+- 已补齐课表与工作量页面关键操作状态：
+  - `apps/frontend/src/components/workload/useTimetableWorkloadPage.ts` 新增页面级操作失败提示和统一忙碌状态，导入课表、保存修正、保存规则项、创建规则版本、新增附加项、计算工作量的失败会留在页面内。
+  - `apps/frontend/src/pages/TimetableWorkloadPage.vue` 顶部刷新、模板下载、计算按钮接入禁用/加载状态，统计卡在课表批次、规则项、附加项或结果加载失败时显示“加载失败”。
+  - `apps/frontend/src/components/workload/WorkloadContextPanel.vue`、`WorkloadTimetablePanel.vue`、`WorkloadRulesPanel.vue`、`WorkloadResultsPanel.vue`、`WorkloadEntryDialog.vue`、`WorkloadRuleVersionDialog.vue` 已收紧加载、保存、导入和计算中的控件禁用。
+  - 本轮未新增后端接口、未新增数据库迁移、未修改运行数据；验证通过 `npm run frontend:lint`、`npm run frontend:build`，并确认课表工作量页和后端健康接口均可访问。
+- 已复查账号管理教师账号批量导入功能，并确认服务可检查：
+  - 账号管理页顶部、“新建教师账号”弹窗内容区和弹窗底部均已有“批量导入教师账号”入口，指向同一套 Excel 导入弹窗。
+  - 导入流程已覆盖模板下载、重复账号策略、Excel 上传、导入反馈、临时密码清单展示与复制，后端已有模板下载和导入接口。
+  - 本轮未新增后端接口、未新增数据库迁移、未修改运行数据；验证通过账号导入后端测试、前端静态检查和前端构建，并确认本地前后端服务可访问。
+- 已补齐系统设置页高风险动作状态：
+  - `apps/frontend/src/pages/SystemToolsPage.vue` 为参数保存、数据修复、创建备份、备份校验、恢复演练和恢复备份补齐页面内持久错误提示，失败原因会留在系统设置页中。
+  - 参数、模板、数据修复扫描和备份记录统计卡在加载失败时显示“加载失败”并使用 danger 口径，不再把失败后清空的结果展示成 0。
+  - 备份恢复、数据修复和参数保存之间新增互斥禁用，系统级写操作进行中会临时锁住其它高风险按钮。
+  - 本轮未新增后端接口、未新增数据库迁移、未修改运行数据；验证通过 `npm run frontend:lint`、`npm run frontend:build`，并确认系统设置页和后端健康接口均可访问。
+- 已补齐基础数据中心和通用维护块局部状态：
+  - `apps/frontend/src/components/BaseCrudSection.vue` 新增外层禁用原因、弹窗内错误保留、保存中表单禁用和必填字段校验能力，通用维护块保存失败后不再只依赖临时提示。
+  - `apps/frontend/src/pages/BaseDataPage.vue` 为学年、学期、年级、班级、学科、字典类型、字典项维护区补齐依赖禁用、加载失败统计口径和关键字段必填校验。
+  - 学期维护会等待学年数据就绪，班级维护会等待年级数据就绪，字典项维护会等待字典类型选中且加载成功，减少基础依赖缺失时的误操作。
+  - 本轮未新增后端接口、未新增数据库迁移、未修改运行数据；验证通过 `npm run frontend:lint`、`npm run frontend:build`，并确认基础数据页和后端健康接口均可访问。
+- 已补齐考试成绩中心列表、科目配置和成绩导入局部状态：
+  - `apps/frontend/src/pages/ExamsPage.vue` 在考试列表加载失败且无可用数据时，会让顶部 meta、统计卡和列表计数显示“加载失败”，不再把失败后的清空结果误显示为 0。
+  - 成绩记录状态读取失败会显示页内错误和重试入口；失败时不会继续按 0 条成绩记录生成 readiness 提醒。
+  - 考试筛选、新建考试、考试行操作、科目维护、成绩识别、统一模板导入、智能导入和批次刷新在相关请求进行中会临时禁用，减少重复操作和状态错位。
+  - 新建/编辑考试、科目配置、成绩单识别、成绩导入和快照重建失败会保留在页面或弹窗内；成绩导入失败提供重新下载成绩模板入口。
+  - 本轮未新增后端接口、未新增数据库迁移、未修改运行数据；验证通过 `npm run frontend:lint`、`npm run frontend:build`，并确认考试成绩中心页面和后端健康接口均可访问。
+
+## 2026-06-30 新增
+
+- 已补齐学生中心列表、导入和升学画像批量维护局部状态：
+  - `apps/frontend/src/pages/StudentsPage.vue` 在学生列表加载失败时会让页面顶部 meta 和统计卡显示“加载失败”，不再把接口失败后的清空结果误显示为 0。
+  - 学生筛选、模板下载、导出、新增、导入、批量调班、批量删除和表格行操作在相关请求进行中会临时禁用，减少加载中重复操作和状态错位。
+  - 学生导入失败新增页内错误提示与重新下载模板入口；升学画像导入失败新增页内错误提示与重新下载画像模板入口。
+  - 学生新增/编辑的校验或保存失败会留在弹窗内；编辑详情读取失败会在页面顶部显示“学生操作失败”，并提供重新加载学生列表入口。
+  - 升学画像导入成功后会刷新学生列表，避免继续展示导入前的字段统计。
+  - 本轮未新增后端接口、未新增数据库迁移、未修改运行数据；验证通过 `npm run frontend:lint`、`npm run frontend:build`，并确认学生中心页面和后端健康接口均可访问。
+
+## 2026-06-29 新增
+
+- 已补齐教师中心列表、导入和任教关系维护局部状态：
+  - `apps/frontend/src/pages/TeachersPage.vue` 在教师列表加载失败时会让页面顶部 meta 和统计卡显示“加载失败”，不再把接口失败后的清空结果误显示为 0。
+  - 筛选、导入策略、导入按钮、维护任教关系和表格行操作在相关请求进行中会临时禁用，减少加载中重复操作和状态错位。
+  - 教师导入失败新增页内错误提示与重新下载模板入口；教师新增/编辑、任教关系新增的校验或保存失败会留在弹窗内。
+  - 编辑教师详情读取失败会在页面顶部显示“教师操作失败”，并提供重新加载教师列表入口。
+  - 本轮未新增后端接口、未新增数据库迁移、未修改运行数据；验证通过 `npm run frontend:lint`、`npm run frontend:build`，并确认教师中心页面和后端健康接口均可访问。
+- 已补齐专业详情页面加载失败态：
+  - `apps/frontend/src/pages/MajorDetailPage.vue` 将专业统计卡移到详情内容外层，详情加载失败时统计卡显示“加载失败”，避免统计区消失造成误读。
+  - 专业详情加载失败时，页面顶部 meta 显示“专业详情：加载失败”和专业 ID，不再把代码、门类、层次误显示成“未维护”。
+  - 空状态现在区分正在加载、加载失败和暂无数据；无效专业 ID 会直接提示从志愿工作台重新进入。
+  - 本轮未新增后端接口、未新增数据库迁移、未修改运行数据；验证通过 `npm run frontend:lint`、`npm run frontend:build`，并确认前端入口和后端健康接口均可访问。
+- 已补齐年级详情页面加载失败态：
+  - `apps/frontend/src/pages/GradeDetailPage.vue` 将基础选项与年级档案改为并行加载，基础选项失败不再阻断年级档案展示。
+  - 年级档案加载失败时，页面顶部 meta 和统计卡明确显示“加载失败”，避免统计区消失后用户误判为暂无数据。
+  - 刷新按钮覆盖两类加载状态；基础选项重试按钮新增独立 loading；无效年级 ID 会直接显示明确错误。
+  - 本轮未新增后端接口、未新增数据库迁移、未修改运行数据；验证通过 `npm run frontend:lint`、`npm run frontend:build`，并确认前端入口和后端健康接口均可访问。
+- 已补齐年级班级页面基础选项和班级速览加载失败态：
+  - `apps/frontend/src/pages/ClassesOverviewPage.vue` 将基础筛选选项与班级速览改为独立加载，基础选项失败不会阻断班级速览刷新。
+  - 基础选项加载失败时会清空旧考试下拉，并在页面内提示筛选选项不完整；班级速览加载失败时顶部 meta 和统计卡显示“加载失败”，不再把失败误显示成 0。
+  - 刷新过程中筛选控件、视图切换、重置和顶部维护入口会临时禁用，减少加载中继续修改条件造成的页面状态错位。
+  - 本轮未新增后端接口、未新增数据库迁移、未修改运行数据；验证通过 `npm run frontend:lint`、`npm run frontend:build`，并确认前端入口和后端健康接口均可访问。
+- 已补齐导入中心失败态和刷新态：
+  - `apps/frontend/src/pages/ImportCenterPage.vue` 在批次列表刷新失败时会清空旧模板、旧批次、旧统计和最近备份信息，避免继续展示上一轮残留数据。
+  - 顶部 meta 和统计卡在加载失败时明确显示“加载失败”，刷新中显示 loading；模板入口、试跑流程入口和筛选控件在对应状态下禁用。
+  - 本轮未新增后端接口、未新增数据库迁移、未修改运行数据；验证通过 `npm run frontend:lint`、`npm run frontend:test -- tests/import-center.test.ts`、`npm run frontend:build`，并确认当前前端导入中心页面和后端健康接口均可访问。
+- 已复核账号管理“新建教师账号”里的批量导入账号功能：
+  - 账号管理页已有页面顶部、“新建教师账号”弹窗内容区和弹窗底部三处“批量导入教师账号”入口，均指向同一套教师账号 Excel 导入弹窗。
+  - 后端已有教师账号导入模板下载与导入接口，导入测试覆盖创建、重复跳过、缺失教师失败和临时密码登录。
+  - 本轮清理 `DashboardPage.vue` 未使用导入，保持前端静态检查通过。
+  - 验证通过 `npm run frontend:lint`、`npm run frontend:build`、`npm run backend:test -- apps/backend/tests/test_auth_rbac.py -q`；构建保留既有 chunk size warning。
+- 已补齐报表中心生成和导出记录状态：
+  - `apps/frontend/src/pages/ReportsPage.vue` 为报表场景切换、报表类型、参数选择、日期选择、生成报表和打印预览补齐加载/生成中的禁用状态。
+  - 报表生成失败新增页内错误提示和“重新生成报表”入口，切换报表或修改参数时会清理旧生成失败提示。
+  - 报表选项加载失败时清空旧候选，避免用上一轮考试、学生、教师、规则版本、推荐方案、志愿草稿或评教批次生成报表。
+  - 导出记录加载失败时清空旧记录，区块提示和表格空状态都提供重新加载入口；下载按钮在记录加载中或缺少下载地址时禁用。
+  - 本轮未新增后端接口、未新增数据库迁移、未修改运行数据；验证通过 `npm run frontend:lint` 与 `npm run frontend:build`，构建保留既有 chunk size warning。
+- 已补齐院校详情页招生数据筛选和分页状态：
+  - `apps/frontend/src/pages/CollegeDetailPage.vue` 为录取/投档和招生计划筛选区新增加载中禁用，查询、重置、分页和顶部刷新会在相关请求中互斥，减少重复请求和结果错位。
+  - 录取/投档与招生计划加载失败时，页面内错误提示改为“操作失败 + 原因 + 建议”，失败后清空旧表格和分页总数，并在表格空状态保留重试入口。
+  - 筛选无结果且存在自定义筛选条件时，表格空状态提供“清空筛选条件”入口。
+  - 本轮未新增后端接口、未新增数据库迁移、未修改运行数据；验证通过 `npm run frontend:lint` 与 `npm run frontend:build`，构建保留既有 chunk size warning。
+- 已强化账号管理“新建教师账号”里的批量导入入口：
+  - `apps/frontend/src/pages/AccountManagementPage.vue` 在页面顶部、“新建教师账号”弹窗内容区和弹窗底部动作区都提供“批量导入教师账号”入口，方便管理员从单个新增流程直接切到 Excel 批量创建。
+  - 批量导入弹窗继续复用现有模板下载、重复账号策略、Excel 上传、导入反馈、临时密码清单展示与复制流程。
+  - 导入失败新增弹窗内错误提示和重新下载模板入口，失败原因会留在页面内，便于按模板修正后重试。
+  - 本轮未新增后端接口、未新增数据库迁移、未修改运行数据；验证通过 `npm run frontend:lint` 与 `npm run frontend:build`，构建保留既有 chunk size warning。
+- 已补齐学生详情页评语、附件和辅助数据局部状态：
+  - `apps/frontend/src/pages/StudentDetailPage.vue` 为调班记录、教师评语、学生风险概览、附件上传/删除新增局部 loading / error 状态。
+  - 调班记录失败时在学籍历史和成长档案区块内显示错误与重试入口，调班记录表格支持局部 loading。
+  - 教师评语加载失败、发布前校验失败和发布失败会留在教师评语区块内；评语加载或发布时禁用输入、科目选择和发布按钮。
+  - 学生风险概览失败时在 360 总览区块内提供重试；附件上传/删除失败时在附件区块内提示，删除附件新增行级 loading。
+  - 本轮未新增后端接口、未新增数据库迁移、未修改运行数据；验证通过 `npm run frontend:lint` 与 `npm run frontend:build`，构建保留既有 chunk size warning。
+- 已补齐教师详情页职称历史维护和详情表格局部状态：
+  - `apps/frontend/src/pages/TeacherDetailPage.vue` 为职称历史新增页内错误提示，保存失败和空白职称校验会保留在职称历史区块内。
+  - 职称历史保存中会禁用新增、移除、职称选择、日期和备注输入；基础选项加载中也会禁用职称维护，避免选项未就绪时误操作。
+  - 任教安排、考试趋势、同科对比三张表新增表格 loading，教师分析打印按钮在档案加载或职称保存中禁用。
+  - 教师档案加载失败时清空旧档案和旧职称历史，降低残留数据误导。
+  - 本轮未新增后端接口、未新增数据库迁移、未修改运行数据；验证通过 `npm run frontend:lint` 与 `npm run frontend:build`，构建保留既有 chunk size warning。
+- 已补齐班级详情页编辑、任教关系和荣誉维护局部状态：
+  - `apps/frontend/src/pages/ClassDetailPage.vue` 为学生筛选、任课教师列表、班级荣誉列表和页面主操作补齐加载中禁用与表格 loading。
+  - 班级编辑、荣誉新增/编辑、任教关系新增弹窗新增错误提示，必填校验和保存失败会保留在弹窗内，保存中禁用表单和取消按钮。
+  - 班级荣誉删除新增行级 loading 和页面内错误提示，失败后可刷新班级档案确认最新状态。
+  - 基础选项加载失败时清空教师候选，班级档案加载失败时清空旧档案，降低残留数据误导。
+  - 本轮未新增后端接口、未新增数据库迁移、未修改运行数据；验证通过 `npm run frontend:lint` 与 `npm run frontend:build`，构建保留既有 chunk size warning。
+- 已补齐成长档案页保存、附件上传和删除局部状态：
+  - `apps/frontend/src/pages/GrowthArchivePage.vue` 为成长记录删除新增行级 loading 和页面内错误提示，失败后可直接刷新时间线确认状态。
+  - 新增/编辑成长记录弹窗新增保存失败页内提示，保存中禁用表单输入、取消按钮和附件调整，避免重复提交。
+  - 附件上传新增弹窗内错误提示，上传中禁用重复选择、保存和附件移除；移除附件时清理旧上传错误。
+  - 时间线加载失败时表格空状态提供重新加载入口，筛选控件在时间线加载中禁用，减少结果和筛选条件错位。
+  - 本轮未新增后端接口、未新增数据库迁移、未修改运行数据；验证通过 `npm run frontend:lint` 与 `npm run frontend:build`，构建保留既有 chunk size warning。
+- 已补齐分析中心目标线保存和题分明细导入局部状态：
+  - `apps/frontend/src/pages/AnalyticsPage.vue` 为年级目标线加载/保存新增独立 loading、页内错误提示、成功提示和失败重试入口。
+  - 目标线加载失败时清空旧草稿并提供重新加载；保存失败时保留当前草稿并提供重新保存，表格空状态也按失败类型显示对应操作。
+  - 目标线加载或保存过程中禁用新增、编辑、删除和重复保存；切换考试或清空结果时同步清理旧目标线错误、成功提示和错误模式。
+  - 题分明细导入新增页内错误提示，导入中禁用重复上传和策略切换；导入成功后清理旧知识点补弱结果，降低过期分析误导。
+  - 本轮未新增后端接口、未新增数据库迁移、未修改运行数据；验证通过 `npm run frontend:lint` 与 `npm run frontend:build`，构建保留既有 chunk size warning。
+- 已补齐分析中心知识点补弱相关局部状态：
+  - `apps/frontend/src/pages/AnalyticsPage.vue` 为学生知识点补弱任务、班级知识点讲评清单、班级知识点补弱任务补齐页内错误提示、重试入口、预览/生成 loading 与互斥禁用状态。
+  - `apps/frontend/src/components/analytics/ClassKnowledgeHeatmapCard.vue` 新增热力图加载失败提示和重新加载入口，并区分未加载、加载失败、接口提示三类状态。
+  - 失败时会清理对应旧数据和旧选择，切换学生、考试或知识点筛选时同步清理旧预览/旧错误，降低过期结果误导。
+  - 本轮未新增后端接口、未新增数据库迁移、未修改运行数据；验证通过 `npm run frontend:lint`、`npm run frontend:build`、`npm run backend:test -- apps/backend/tests/test_auth_rbac.py -q`，构建保留既有 chunk size warning。
+- 已再次复核账号管理“新建教师账号”里的批量导入入口：
+  - `apps/frontend/src/pages/AccountManagementPage.vue` 页面顶部和“新建教师账号”弹窗内均已有批量导入入口，弹窗入口会切换到同一套 Excel 导入流程。
+  - 后端继续复用 `GET /api/admin/users/import-template` 与 `POST /api/admin/users/import`，只批量创建教师账号并一次性返回临时密码。
+  - 本轮未新增账号导入业务代码、未新增后端接口、未新增迁移、未改运行数据。
+- 已补齐分析中心全景页签次级错误状态：
+  - `apps/frontend/src/pages/AnalyticsPage.vue` 为年级全景、班级全景、教师全景新增独立错误状态，并纳入顶部“分析中心部分数据加载失败”汇总。
+  - 三个全景接口加载失败时会清空对应旧画像，避免用户继续看到上一轮筛选结果。
+  - 切换全景筛选对象或学年筛选时会清理旧结果和旧错误，避免新条件下残留旧状态。
+  - `GradePanoramaPanel.vue`、`ClassPanoramaPanel.vue`、`TeacherPanoramaPanel.vue` 新增局部错误提示、空状态重试入口，并在加载中禁用筛选和重置操作。
+  - 本轮未新增后端接口、未新增数据库迁移、未修改运行数据；验证通过 `npm run frontend:lint` 与 `npm run frontend:build`，构建保留既有 chunk size warning。
+
+- 已补齐基础数据中心分区加载和维护表状态：
+  - `apps/frontend/src/pages/BaseDataPage.vue` 将首屏依赖拆成引用数据、字典类型、教师选项三块独立 loading / error 状态，单块失败不再拖垮整页刷新。
+  - 页面顶部新增“基础数据部分内容加载失败”汇总，可分别重试引用数据、字典类型和教师选项；统计卡和 meta 在失败时显示“加载失败”，避免误读为真实 0 值。
+  - 字典类型加载失败时会清空旧选项、禁用字典选择，并在字典项区域提供失败空状态和重试入口。
+  - `apps/frontend/src/components/BaseCrudSection.vue` 增加通用维护区加载态、错误提示、表格内空状态和重试入口；保存中禁用表单输入，保存失败提示改为“操作失败 + 原因 + 建议”。
+  - 本轮未新增后端接口、未新增数据库迁移、未修改运行数据；验证通过 `npm run frontend:lint` 与 `npm run frontend:build`，构建保留既有 chunk size warning。
+
+- 已补齐系统设置页关键状态反馈：
+  - `apps/frontend/src/pages/SystemToolsPage.vue` 的总重试入口已覆盖参数配置、模板、数据修复、备份、审计日志和本地数据保险箱，避免参数配置加载失败后只能单独去页签里重试。
+  - 参数配置保存新增按钮级 loading 和当前组输入禁用，降低重复提交系统参数的风险。
+  - 参数配置、模板、修复扫描、备份记录、审计日志、本地数据保险箱加载失败时会清空对应旧数据，避免继续展示上一轮残留状态。
+  - 模板、备份、审计日志表格空状态新增表格内操作：失败时可直接重试；没有备份时可直接创建备份。
+  - 本轮未新增后端接口、未新增数据库迁移、未修改运行数据；验证通过 `npm run frontend:lint` 与 `npm run frontend:build`，构建保留既有 chunk size warning。
+
+- 已补齐推荐中心院校库/专业库面板加载状态：
+  - `apps/frontend/src/components/recommendations/useRecommendationCatalogManager.ts` 为院校库与专业库分页读取新增独立 loading 和加载失败状态，失败时清空对应旧列表和分页总数。
+  - `apps/frontend/src/components/recommendations/RecommendationCollegesPanel.vue` 新增院校库面板内错误提示、重试入口、筛选控件 loading 禁用、表格 loading 和表格内空状态。
+  - `apps/frontend/src/components/recommendations/RecommendationMajorsPanel.vue` 新增专业库面板内错误提示、重试入口、筛选控件 loading 禁用、表格 loading 和表格内空状态。
+  - `apps/frontend/src/pages/RecommendationsPage.vue` 已把新增状态传入两个子面板，推荐中心数据与规则页签里的院校/专业维护不再只靠临时 toast 判断加载失败。
+  - 本轮未新增后端接口、未新增数据库迁移、未修改运行数据；验证通过 `npm run frontend:lint` 与 `npm run frontend:build`，构建保留既有 chunk size warning。
+
+- 已复核账号管理“新增教师账号”里的批量导入能力：
+  - `apps/frontend/src/pages/AccountManagementPage.vue` 页面顶部与“新建教师账号”弹窗内均已有批量导入入口。
+  - 导入弹窗支持模板下载、重复账号策略、Excel 上传、导入反馈、临时密码清单展示与复制。
+  - 后端继续使用既有 `GET /api/admin/users/import-template` 与 `POST /api/admin/users/import`，只批量创建教师账号，不涉及管理员账号批量创建。
+  - 本轮未修改业务代码、未新增数据库迁移、未改运行数据；补充更新 `memory-bank/handoff.md`。
+  - 验证通过：`npm run frontend:lint`、`npm run backend:test -- apps/backend/tests/test_auth_rbac.py -q`（8 passed，1 条既有兼容警告）、`npm run frontend:build`（保留既有 chunk size warning）。
+
+- 已补齐知识库页面基础选项、数据加载、导入和停用状态：
+  - `apps/frontend/src/pages/KnowledgeBasePage.vue` 将基础引用选项加载拆成独立 `referenceLoading` / `referenceLoadError`，基础学科失败不再阻断知识库列表读取。
+  - 知识库数据新增 `loadError`，加载失败时清空旧知识点、别名和错因标签，并在页面顶部显示可重试错误提示。
+  - 知识点、平台别名、错因标签三张表新增 `#empty` 空状态，区分加载中、加载失败、当前学科无数据和暂无数据，并在失败时提供表格内重试。
+  - 导入知识库时禁用重复上传并清空上一轮导入反馈；停用知识点、别名、错因标签新增行级 loading 和格式化失败提示。
+  - 验证通过：
+    - `npm run frontend:lint`
+    - `npm run frontend:build`，保留既有 chunk size warning
+
+- 已补齐院校库页面加载失败、筛选操作和表格空状态：
+  - `apps/frontend/src/components/colleges/useCollegeCatalogBrowser.ts` 为院校目录读取新增 `loadError`，加载失败时清空旧院校列表和分页总数，并保留页面内可展示的错误信息。
+  - `apps/frontend/src/pages/CollegesPage.vue` 将刷新、查询接入 loading，筛选输入和下拉在加载中禁用，减少重复刷新和筛选状态错位。
+  - 院校列表加载失败时在页面内展示错误提示和“重新加载院校库”入口，不再只依赖临时 toast。
+  - 院校表格新增 `#empty` 空状态，能区分加载中、加载失败、筛选无结果和暂无院校，并在失败时提供表格内重试。
+  - 验证通过：
+    - `npm run frontend:lint`
+    - `npm run frontend:build`，保留既有 chunk size warning
+
+- 已补齐考试成绩中心基础选项、考试列表、行级操作和成绩导入状态：
+  - `apps/frontend/src/pages/ExamsPage.vue` 将基础引用选项加载拆成独立 `referenceLoading` / `referenceLoadError`，基础选项失败不再阻断考试列表和成绩记录摘要加载。
+  - 考试中心顶部、考试编辑弹窗、科目配置弹窗新增基础选项失败提示和重试入口；学期、年级范围、科目选择、智能映射科目下拉接入 loading / disabled。
+  - 考试列表失败时清空旧列表和总数，表格空状态区分加载中、加载失败、筛选无结果和暂无考试，并在表格内提供重试。
+  - 编辑考试、科目配置、导入成绩、重建快照新增行级 loading；重建成功后刷新成绩记录摘要。
+  - 成绩导入弹窗新增平台模板加载状态、失败提示和重试入口，智能识别/统一模板上传时禁用重复上传。
+  - 最近导入批次失败时清空旧批次，表格空状态区分加载中、加载失败和暂无批次，并在表格内提供重试。
+  - 验证通过：
+    - `npm run frontend:lint`
+    - `npm run frontend:build`，保留既有 chunk size warning
+
+- 已补齐学生中心基础选项、学生列表、导入和批量动作状态：
+  - `apps/frontend/src/pages/StudentsPage.vue` 将基础引用选项加载拆成独立 `referenceLoading` / `referenceLoadError`，基础字典失败不再阻断学生列表
+  - 学生中心顶部和学生编辑弹窗新增基础选项失败提示和重试入口，年级、班级、学生状态、类别、艺体方向下拉接入 loading / disabled
+  - 学生列表失败时清空旧列表、分页总数和当前勾选，表格空状态能区分加载中、加载失败、筛选无结果和暂无学生，并在表格内提供重试
+  - 学生导入、升学画像上传和编辑详情读取新增按钮级 / 行级 loading，导入过程中禁用重复上传
+  - 批量调班在学生列表加载、基础选项加载或班级选项缺失时禁用；批量删除在学生列表加载时禁用，避免用过期选择发起高风险动作
+  - 验证通过：
+    - `npm run frontend:lint`
+    - `npm run frontend:build`，保留既有 chunk size warning
+
+- 已补齐教师中心基础选项、教师列表和任教关系局部状态：
+  - `apps/frontend/src/pages/TeachersPage.vue` 将基础引用选项加载拆成独立 `referenceLoading` / `referenceLoadError`，基础字典失败不再阻断教师列表和任教关系加载
+  - 教师中心顶部、教师编辑弹窗、任教关系弹窗新增基础选项失败提示和重试入口，下拉选择框接入 loading / disabled 状态
+  - 教师列表失败时清空旧列表与总数，表格空状态能区分加载中、加载失败、筛选无结果和暂无教师，并在表格内提供重试
+  - 任教关系失败时清空旧列表，弹窗表格空状态能区分加载中、加载失败和暂无任教关系，并在表格内提供重试
+  - 教师导入、编辑详情读取和任教关系保存新增按钮级 loading，导入过程中禁用重复上传
+  - 验证通过：
+    - `npm run frontend:lint`
+    - `npm run frontend:build`，保留既有 chunk size warning
+
+## 2026-06-28 新增
+
+- 已补齐推荐中心就业方向库与专业就业映射面板状态：
+  - `apps/frontend/src/components/recommendations/useRecommendationCareerManager.ts` 将就业方向库和专业就业映射加载拆成独立 loading / error 状态，失败时清空对应旧列表和分页总数
+  - `apps/frontend/src/components/recommendations/RecommendationEmploymentDirectionsPanel.vue` 增加加载失败提示、重试入口、筛选 loading 禁用、分类视图 loading 和表格内空状态
+  - `apps/frontend/src/components/recommendations/RecommendationMajorEmploymentMappingsPanel.vue` 增加加载失败提示、重试入口、筛选 loading 禁用、表格 loading 和表格内空状态
+  - `apps/frontend/src/pages/RecommendationsPage.vue` 已把新增状态传入就业方向库和专业就业映射面板
+  - 验证通过：
+    - `npm run frontend:lint`
+    - `npm run frontend:build`，保留既有 chunk size warning
+
+- 已补齐账号管理页加载、错误和空状态：
+  - `apps/frontend/src/pages/AccountManagementPage.vue` 将账号列表加载失败与教师/班级基础选项失败拆成独立页面状态，支持分别重试
+  - 账号列表增加刷新入口和表格内空状态，能区分正在加载、加载失败和暂无账号
+  - 新建/编辑账号弹窗在基础选项加载不完整时给出提示，教师和班级选择框接入 loading
+  - 账号保存增加前置校验；重置密码、启用/停用账号增加行级 loading 和格式化失败提示
+  - 验证通过：
+    - `npm run frontend:lint`
+    - `npm run frontend:build`，保留既有 chunk size warning
+
+- 已优化账号管理教师账号批量导入入口：
+  - `apps/frontend/src/pages/AccountManagementPage.vue` 在“新建教师账号”弹窗内新增“批量导入”入口，和顶部“批量导入教师账号”按钮指向同一导入弹窗
+  - 批量导入弹窗打开时清空上一轮导入结果，上传过程中禁用重复选择，保留模板下载、重复账号策略、导入反馈和临时密码清单复制能力
+  - 继续复用既有教师账号批量导入后端接口和测试，不新增数据库迁移
+  - 验证通过：
+    - `npm run frontend:lint`
+    - `npm run backend:test -- apps/backend/tests/test_auth_rbac.py -q`
+    - `npm run frontend:build`，保留既有 chunk size warning
+
+- 已补齐推荐中心首屏与页签加载状态：
+  - `apps/frontend/src/components/recommendations/useRecommendationsPage.ts` 新增推荐中心基础数据加载中/失败、当前页签加载中/失败和强制重试状态
+  - `apps/frontend/src/pages/RecommendationsPage.vue` 新增页面内状态条，能显示首屏初始化失败、当前页签加载失败和页签加载中的反馈
+  - 页签懒加载失败后不再只靠 toast，失败页签不会被标记为已加载，可直接点击“重新加载当前页签”
+  - 重新加载当前页签只刷新当前页签数据，不清空推荐向导表单或其它已加载页签
+  - 验证通过：
+    - `npm run frontend:lint`
+    - `npm run frontend:build`，保留既有 chunk size warning
+
+- 已补齐高考志愿推荐向导局部错误态：
+  - `apps/frontend/src/pages/RecommendationsPage.vue`、`apps/frontend/src/components/recommendations/useGaokaoVolunteerWorkspace.ts`、`apps/frontend/src/components/recommendations/RecommendationVolunteerWorkbenchPanel.vue` 为字段选项、智能筛选、学生升学画像、历史草稿和草稿对比补页面内错误提示
+  - 字段选项失败时说明使用本地兜底选项；画像失败时保留手工填写入口；智能筛选失败时清空旧筛选结果，避免过期候选继续展示
+  - 历史草稿和草稿对比失败在草稿区块内展示，可通过刷新或重新选择对比草稿恢复
+  - 清空志愿工作台时同步清理筛选、草稿、画像相关错误状态
+  - 验证通过：
+    - `npm run frontend:lint`
+    - `npm run frontend:build`，保留既有 chunk size warning
+
+- 已补齐课表与工作量页分区状态与局部重试：
+  - `apps/frontend/src/pages/TimetableWorkloadPage.vue` 与工作量相关组件将基础选项、教师候选、规则版本、规则项、课表批次、课表条目、附加项和工作量结果拆成独立加载与失败状态
+  - 页面顶部新增“课表与工作量部分数据加载失败”汇总，并提供按失败区块重试入口
+  - 计算上下文、课表导入与修正、规则与附加项、工作量结果面板补局部加载态、页面内错误提示和表格内空状态
+  - 加载失败时清空对应旧批次、旧条目、旧规则项、旧附加项或旧结果，避免保留过期判断
+  - 验证通过：
+    - `npm run frontend:lint`
+    - `npm run frontend:build`，保留既有 chunk size warning
+
+## 2026-06-26 新增
+
+- 已补齐评教量化页分区状态与局部重试：
+  - `apps/frontend/src/pages/EvaluationQuantPage.vue` 与评教相关组件将基础选项、教师候选、模板、批次、批次总览、教师详情、批次对比、规则版本、规则项、量化记录和汇总拆成独立加载与失败状态
+  - 页面顶部新增“评教量化部分数据加载失败”汇总，并提供按失败区块重试入口
+  - 评教模板、导入批次、批次总览/对比/教师详情、量化规则、量化记录面板补局部加载态、页面内错误提示和表格内空状态
+  - 加载失败时清空对应旧详情或旧表格，避免继续展示上一轮残留判断
+  - 验证通过：
+    - `npm run frontend:lint`
+    - `npm run frontend:build`，保留既有 chunk size warning
+
+- 已补齐导入中心模板、批次和详情状态：
+  - `apps/frontend/src/pages/ImportCenterPage.vue` 为模板入口补加载占位和空状态，模板加载失败时可在模板区直接重试
+  - 导入批次表改为表格内空状态，按加载失败、筛选无结果、暂无批次分别给出文案和操作入口
+  - 批次详情抽屉点击后立即打开并显示加载态，详情读取失败时在抽屉内展示错误、重试和回业务页入口
+  - 当前行详情按钮会显示加载状态，并避免详情加载期间重复点击其它行造成结果错位
+  - 验证通过：
+    - `npm run frontend:lint`
+    - `npm run frontend:build`，保留既有 chunk size warning
+
+- 已补齐分析中心核心查询状态与局部重试：
+  - `apps/frontend/src/pages/AnalyticsPage.vue` 将分析选项、考试学生候选、排名审计、班主任驾驶舱、成绩明细、学生分析、班级分析、年级分析和教师分析拆成独立加载与失败状态
+  - 页面顶部新增“分析中心部分数据加载失败”汇总，并提供按区块重试入口
+  - 班主任驾驶舱、成绩明细、学生分析、班级分析、年级分析和教师分析区块补局部加载态、错误提示和更精确的空状态
+  - 加载失败时清空对应旧分析结果或旧表格，考试切换时同步清理相关旧状态，避免保留过期判断
+  - 验证通过：
+    - `npm run frontend:lint`
+    - `npm run frontend:build`，保留既有 chunk size warning
+
+- 已补齐高考数据页状态与局部重试：
+  - `apps/frontend/src/pages/GaokaoDataPage.vue` 将总览口径、最近批次、数据健康与覆盖、审阅队列、山东监控拆成独立加载与失败状态
+  - 页面顶部新增“高考数据驾驶舱部分数据加载失败”汇总，并提供按区块重试入口
+  - 总览、山东覆盖、数据审阅和山东监控的关键区块补局部加载态、错误提示和重试按钮，刷新时单个接口失败不会影响其它接口成功展示
+  - 最近批次、数据健康、覆盖矩阵、审计摘要、审阅队列、山东监控等位置补更准确的空状态，失败时不再误显示“无缺口”或默认 0 值判断
+  - 验证通过：
+    - `npm run frontend:lint`
+    - `npm run frontend:build`，保留既有 chunk size warning
+
+- 已补齐升学方案中心状态与评估反馈：
+  - `apps/frontend/src/pages/GaokaoPathwaysPage.vue` 将方案中心基础数据加载错误和当前学生路径评估错误拆成独立状态，避免一个失败状态误导整页
+  - 页面顶部新增“升学方案中心部分数据加载失败”汇总，并提供分别重试基础数据和当前学生评估的入口
+  - 学生升学画像与路径卡片补清晰空状态，可区分加载中、基础数据失败、评估失败、未选学生和暂无路径规则
+  - 当前学生评估失败时清空旧画像和旧路径结果，避免保留过期判断
+  - 验证通过：
+    - `npm run frontend:lint`
+    - `npm run frontend:build`，保留既有 chunk size warning
+
+- 已补齐报表中心状态与记录反馈：
+  - `apps/frontend/src/pages/ReportsPage.vue` 将报表选项和导出记录拆成独立加载失败状态，避免一个接口失败覆盖另一个接口的提示
+  - 页面顶部新增“报表中心部分数据加载失败”汇总，并提供分别重试报表选项和导出记录的入口
+  - 报表参数区在选项加载失败时给出页面内错误提示和重试按钮
+  - 导出记录区新增刷新按钮、局部错误提示，表格空状态改为表格内 `#empty` 插槽
+  - 验证通过：
+    - `npm run frontend:lint`
+    - `npm run frontend:build`，保留既有 chunk size warning
+
+- 已补齐系统设置页状态与操作反馈：
+  - `apps/frontend/src/pages/SystemToolsPage.vue` 为参数配置、模板管理、数据修复、备份恢复、操作日志和本地数据保险箱增加分区级加载态、失败提示和重试入口
+  - 页面顶部新增系统状态加载失败汇总，避免多个系统接口失败时只靠临时 toast 提示
+  - 模板、备份和审计日志表格补表格内空状态；数据修复页补无修复动作的空状态
+  - 保存参数、执行修复、创建备份、校验备份、恢复演练、恢复备份的失败提示改为更明确的用户操作反馈
+  - 验证通过：
+    - `npm run frontend:lint`
+    - `npm run frontend:build`；首次沙箱内因 esbuild `spawn EPERM` 失败，提升权限重跑通过，保留既有 chunk size warning
+
+- 已补齐工作台首页状态与入口：
+  - `apps/frontend/src/pages/DashboardPage.vue` 迁回统一 `AppPage / AppSectionCard / AppStatCard` 页面体系，恢复清晰页头、页面说明、状态 meta 和刷新入口
+  - 工作台新增加载态、加载失败页内提示、重试入口和首次加载失败保护，避免接口失败时继续展示 0 值概览
+  - 学生、教师、考试、成绩、高考数据、最近备份和最近导入统计卡改为可点击入口，直达对应业务页面
+  - 最近导入表格补表格内空状态，待处理事项、最近考试、快捷入口、基础数据修复提醒和最近导入区块统一为工作台卡片
+  - 验证通过：
+    - `npm run frontend:lint`
+    - `npm run frontend:build`，保留既有 chunk size warning
+
+- 已补齐升学资料详情页状态：
+  - `apps/frontend/src/pages/CollegeDetailPage.vue` 移除旧单行加载面板，改为局部加载，并补院校详情加载失败提示、重试入口、路由切换自动重载
+  - 院校详情页的录取/投档与招生计划分页表补独立失败提示、重试入口、查询 loading、失败后清空旧数据和表格内空状态
+  - `apps/frontend/src/pages/MajorDetailPage.vue` 移除旧单行加载面板，改为局部加载，并补专业详情加载失败提示、重试入口、路由切换自动重载
+  - 专业详情页的开设院校、录取/投档、招生计划、就业映射和来源证据均补表格内空状态
+  - 验证通过：
+    - `npm run frontend:lint`
+    - `npm run frontend:build`，保留既有 chunk size warning
+
+- 已补齐年级详情页状态：
+  - `apps/frontend/src/pages/GradeDetailPage.vue` 移除旧单行加载面板，改为局部加载态
+  - 新增年级档案加载失败的页面内错误提示、重试入口和基础选项加载失败提示
+  - 班级横向矩阵补表格内空状态
+  - 年级路由参数变化时会重新加载，避免沿用旧年级档案
+  - 加载失败提示更明确
+- 验证通过：
+  - `npm run frontend:lint`：通过
+  - `npm run frontend:build`：通过，保留既有 chunk size warning
+
+- 已补齐学生详情页状态：
+  - `apps/frontend/src/pages/StudentDetailPage.vue` 迁到统一 `AppPage` 壳并接入公共统计卡
+  - 新增学生档案加载失败的页面内错误提示、重试入口和局部加载态
+  - 班级历史、调班记录、考试趋势、成长记录、推荐历史、附件表格补更清晰空状态
+  - 学生路由参数变化时会重新加载，避免沿用旧学生档案
+  - 跟进包生成、教师评语、附件上传/删除失败提示更明确
+- 验证通过：
+  - `npm run frontend:lint`：通过
+  - `npm run frontend:build`：通过，保留既有 chunk size warning
+
+- 已补齐教师详情页状态：
+  - `apps/frontend/src/pages/TeacherDetailPage.vue` 迁到统一 `AppPage` 壳并接入公共统计卡
+  - 新增教师档案和基础选项加载失败的页面内错误提示、重试入口和局部加载态
+  - 职称历史、任教安排、考试趋势、同科对比补更清晰空状态
+  - 教师路由参数变化时会重新加载，避免沿用旧教师档案
+  - 保存职称历史失败提示更明确
+- 验证通过：
+  - `npm run frontend:lint`：通过
+  - `npm run frontend:build`：通过，保留既有 chunk size warning
+
+- 已补齐班级详情页状态：
+  - `apps/frontend/src/pages/ClassDetailPage.vue` 新增班级档案和基础选项加载失败的页面内错误提示、重试入口和局部加载态
+  - 学生、任课教师、班级荣誉表格均补表格内空状态；学生空态区分筛选无结果和当前班级无学生
+  - 班级路由参数变化时会重新加载，避免同组件复用时沿用旧班级档案
+  - 班级、荣誉、任课保存失败提示更明确
+- 验证通过：
+  - `npm run frontend:lint`：通过
+  - `npm run frontend:build`：通过，保留既有 chunk size warning
+
+- 已补齐年级班级视图页面状态：
+  - `apps/frontend/src/pages/ClassesOverviewPage.vue` 在现有统一页面壳基础上补齐基础选项和班级速览的页面内错误提示、重试入口、局部加载态和空状态文案
+  - 页面 meta 新增启用筛选数；统计卡刷新时展示加载占位
+  - 表格模式补空数据插槽，筛选无结果时提示更清晰
+- 验证通过：
+  - `npm run frontend:lint`：通过
+  - `npm run frontend:build`：通过，保留既有 chunk size warning
+
+- 已补齐成长档案页 UI 状态：
+  - `apps/frontend/src/pages/GrowthArchivePage.vue` 迁到公共 `AppPage`、`AppStatGrid`、`AppFilterBar` 和 `AppTableShell`
+  - 学生列表与成长时间线新增加载态、页面内错误提示、重试入口和空状态文案
+  - 切换学生后自动刷新时间线；日期范围清空做空值兜底
+  - 附件上传、保存记录、删除记录失败时给出更明确的操作反馈
+- 验证通过：
+  - `npm run frontend:lint`：通过
+  - `npm run frontend:build`：通过，保留既有 chunk size warning
+
+- 已补齐考试成绩中心页面状态：
+  - `apps/frontend/src/pages/ExamsPage.vue` 的考试列表新增加载态、错误提示、重试入口和空状态文案
+  - 成绩导入弹窗中的最近导入批次新增加载态、错误提示、重试入口和空状态文案
+  - 页面 meta 新增启用筛选数；查询和批次刷新按钮会展示加载状态
+- 验证通过：
+  - `npm run frontend:lint`：通过
+  - `npm run frontend:build`：通过，保留既有 chunk size warning
+
+- 已补齐教师中心页面状态并清理旧样式：
+  - `apps/frontend/src/pages/TeachersPage.vue` 的教师列表新增加载态、错误提示、重试入口和空状态文案
+  - 任教关系维护弹窗新增加载态、错误提示、重试入口和空状态文案
+  - 页面 meta 新增启用筛选数；教师导入前清空上一轮导入反馈
+  - 清理教师页残留的旧 overview 统计卡样式
+- 验证通过：
+  - `npm run frontend:lint`：通过
+  - `npm run frontend:build`：通过，保留既有 chunk size warning
+
+- 已统一学生中心页面 UI：
+  - `apps/frontend/src/pages/StudentsPage.vue` 接入公共 `AppStatGrid`、`AppFilterBar`、`AppSectionCard` 和 `AppTableShell`
+  - 保留原有学生列表、新增 / 编辑、详情跳转、学生导入、升学画像导入、批量调班、批量删除等能力
+  - 列表补加载态、错误提示、重试入口和空状态文案；筛选查询会自动回到第 1 页
+- 验证通过：
+  - `npm run frontend:lint`：通过
+  - `npm run frontend:build`：通过，保留既有 chunk size warning
+
+- 已统一登录、首次改密和无权限页 UI：
+  - 新增 `apps/frontend/src/components/auth/AuthShell.vue`，提供统一认证入口页面壳
+  - `apps/frontend/src/pages/LoginPage.vue` 改用新认证壳，并补空账号 / 空密码前置提示
+  - `apps/frontend/src/pages/ChangePasswordPage.vue` 改用新认证壳，并补当前密码、新密码、长度、字母数字组合前置提示
+  - `apps/frontend/src/pages/ForbiddenPage.vue` 改用新认证壳，保留“返回工作台”入口并补管理员权限提示
+  - 新增 `apps/frontend/public/favicon.svg`，`apps/frontend/index.html` 增加 favicon 声明，消除浏览器默认请求 `favicon.ico` 的 404
+- 验证通过：
+  - `npm run frontend:lint`：通过
+  - `npm run frontend:build`：通过，保留既有 chunk size warning
+  - 浏览器打开 `http://127.0.0.1:5173/login`：页面结构正常；favicon 404 已消失；`/api/auth/me` 401 为未登录态预期
+
+- 已统一基础数据页 UI：
+  - `apps/frontend/src/pages/BaseDataPage.vue` 迁到公共 `AppPage` 页面壳，并接入 `AppStatGrid` 与 `AppSectionCard`
+  - 保留学年、学期、年级、班级、学科、字典类型、字典项的既有 CRUD 能力
+  - 新增页面 meta、主数据统计卡、加载错误提示、跳转年级班级视图按钮
+  - 字典项维护区改为左右布局，并在下拉中同时展示字典名称和编码；当默认字典不存在时自动落到第一个可用字典
+- 验证通过：
+  - `npm run frontend:lint`：通过
+  - `npm run frontend:build`：通过，保留既有 chunk size warning
+
+- 已把知识库页由静态说明页改为实际维护界面：
+  - `apps/frontend/src/pages/KnowledgeBasePage.vue` 接入 `/api/knowledge/points`、`/api/knowledge/aliases`、`/api/knowledge/error-tags` 与 `/api/knowledge/import`
+  - 支持按学科筛选，分别维护标准知识点、平台别名、错因标签
+  - 支持模板下载、Excel 批量导入、导入结果反馈、刷新统计、表格查看、新增 / 编辑 / 删除
+  - 页面复用现有 `AppPage`、`AppStatGrid`、`AppFilterBar`、`AppTableShell`、`ImportFeedbackPanel` 与 Element Plus 组件
+- 验证通过：
+  - `npm run frontend:lint`：通过
+  - `npm run frontend:build`：通过，保留既有 chunk size warning
+
+## 2026-06-25 新增
+
+- 已在账号管理页补齐教师账号批量导入：
+  - `apps/frontend/src/pages/AccountManagementPage.vue` 新增“批量导入账号”弹窗、模板下载、导入策略、上传反馈、临时密码清单和复制清单入口
+  - `apps/backend/app/exporters/templates.py` 新增 `teacher_accounts_import_template.xlsx` 模板规格
+  - `apps/backend/app/api/routes/auth.py` 新增模板下载和批量导入接口
+  - `apps/backend/app/services/auth.py` 新增教师账号 Excel 导入逻辑，复用现有单账号创建、临时密码、首次改密和审计链路
+  - `apps/backend/app/schemas/auth.py` 新增批量导入响应结构，返回成功创建账号的临时密码清单
+  - `apps/backend/tests/test_auth_rbac.py` 新增批量导入回归，覆盖成功创建、重复账号跳过和错误行
+- 验证通过：
+  - `npm run backend:test -- apps/backend/tests/test_auth_rbac.py -q`：8 passed，保留既有 Starlette/httpx deprecation warning
+  - `npm run frontend:lint`：通过
+  - `npm run frontend:build`：通过，保留既有 chunk size warning
+
 ## 2026-06-24 新增
 
 - 已重写 GitHub About 与 README 项目介绍，平衡学校使用者和开发者视角；移除 README 阶段流水账，保留产品定位、核心能力、数据安全、快速启动、技术架构、验证命令和文档入口。
@@ -1862,3 +2347,9 @@
   - 重点重构 `AnalyticsPage.vue`，完成 sticky 全局考试筛选、指标卡、Tabs、风险 Tag 和建议动作按钮组
   - `DashboardPage.vue`、`StudentsPage.vue`、`ReportsPage.vue` 接入 `AppPage`
   - 验证已通过前端 lint、前端单测、前端构建，以及分析/班主任/工作台/学生/报表/推荐/志愿相关 E2E 共 32 条
+- 2026-06-29 继续补齐首页工作台加载与失败态：
+  - `apps/frontend/src/pages/DashboardPage.vue` 在 `/api/dashboard/summary` 加载失败且无可用摘要时仍保留顶部指标卡区域，七张关键指标卡统一显示“加载失败”，避免首页直接退成空白或误显示 0。
+  - 首页顶部 meta 失败时同步显示“加载失败”，下方依赖真实摘要的待处理事项、最近考试、快捷入口、数据修复提醒和最近导入区域改为统一重试空状态。
+  - 失败态下工作台卡片和快捷入口会临时禁用，保留刷新/重新加载入口，减少接口失败后继续基于无效摘要操作的风险。
+  - 本轮只改首页前端状态层，未新增后端接口、未新增数据库迁移、未修改运行数据。
+  - 验证通过 `npm run frontend:lint`、`npm run frontend:build`；确认 `http://127.0.0.1:5173/` 与 `http://127.0.0.1:8000/api/system/health` 均可访问。构建保留既有 chunk size warning，`git status --short` 仍返回 `fatal: not a git repository...`。

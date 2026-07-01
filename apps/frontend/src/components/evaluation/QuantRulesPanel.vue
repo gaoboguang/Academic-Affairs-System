@@ -6,13 +6,27 @@
         <p>规则版本一旦产生记录就不能原地改规则项，避免历史得分被新规则覆盖。</p>
       </div>
       <div class="action-row">
-        <el-button @click="emit('reload-rule-versions')">刷新</el-button>
-        <el-button type="primary" @click="emit('open-create-rule-version')">新增规则版本</el-button>
+        <el-button :loading="loadingRuleVersions" :disabled="ruleActionsDisabled" @click="emit('reload-rule-versions')">刷新</el-button>
+        <el-button type="primary" :disabled="ruleActionsDisabled" @click="emit('open-create-rule-version')">新增规则版本</el-button>
       </div>
     </div>
 
+    <el-alert
+      v-if="ruleVersionsError || ruleItemsError"
+      class="panel-alert"
+      type="error"
+      show-icon
+      :closable="false"
+      title="量化规则加载失败"
+    >
+      <template #default>
+        <p v-if="ruleVersionsError">{{ ruleVersionsError }}</p>
+        <p v-if="ruleItemsError">{{ ruleItemsError }}</p>
+      </template>
+    </el-alert>
+
     <div class="quant-shell">
-      <div class="soft-card inner-card">
+      <div class="soft-card inner-card" v-loading="loadingRuleVersions">
         <el-table :data="ruleVersions" stripe>
           <el-table-column label="规则版本" prop="name" min-width="180" />
           <el-table-column label="学期" prop="semester_name" min-width="160" />
@@ -32,17 +46,16 @@
           </el-table-column>
           <el-table-column label="操作" width="100" fixed="right">
             <template #default="{ row }">
-              <el-button link type="primary" @click="emit('select-rule-version', row.id)">规则项</el-button>
+              <el-button link type="primary" :disabled="ruleActionsDisabled" @click="emit('select-rule-version', row.id)">规则项</el-button>
             </template>
           </el-table-column>
+          <template #empty>
+            <el-empty :description="ruleVersionsError ? '量化规则版本暂时加载失败。' : '还没有量化规则版本。请先新增规则版本，再配置规则项。'" />
+          </template>
         </el-table>
-        <el-empty
-          v-if="!ruleVersions.length"
-          description="还没有量化规则版本。请先新增规则版本，再配置规则项。"
-        />
       </div>
 
-      <div class="soft-card inner-card">
+      <div class="soft-card inner-card" v-loading="loadingRuleItems">
         <div class="section-head compact">
           <div>
             <h4>规则项</h4>
@@ -53,10 +66,10 @@
             <p v-else>先选择一个规则版本</p>
           </div>
           <div class="action-row">
-            <el-button :disabled="!selectedRuleVersionId" @click="emit('add-rule-item-row')">新增规则项</el-button>
+            <el-button :disabled="ruleItemControlsDisabled" @click="emit('add-rule-item-row')">新增规则项</el-button>
             <el-button
               type="primary"
-              :disabled="!selectedRuleVersionId"
+              :disabled="ruleItemControlsDisabled"
               :loading="savingRuleItems"
               @click="emit('save-rule-items')"
             >
@@ -68,40 +81,42 @@
         <el-table :data="ruleItemRows" stripe>
           <el-table-column label="量化项" min-width="160">
             <template #default="{ row }">
-              <el-input v-model="row.item_name" />
+              <el-input v-model="row.item_name" :disabled="ruleItemControlsDisabled" />
             </template>
           </el-table-column>
           <el-table-column label="类型" min-width="130">
             <template #default="{ row }">
-              <el-input v-model="row.item_type" />
+              <el-input v-model="row.item_type" :disabled="ruleItemControlsDisabled" />
             </template>
           </el-table-column>
           <el-table-column label="默认分值" width="110">
             <template #default="{ row }">
-              <el-input-number v-model="row.default_score" :step="0.5" />
+              <el-input-number v-model="row.default_score" :step="0.5" :disabled="ruleItemControlsDisabled" />
             </template>
           </el-table-column>
           <el-table-column label="附件" width="90">
             <template #default="{ row }">
-              <el-switch v-model="row.requires_attachment" />
+              <el-switch v-model="row.requires_attachment" :disabled="ruleItemControlsDisabled" />
             </template>
           </el-table-column>
           <el-table-column label="排序" width="90">
             <template #default="{ row }">
-              <el-input-number v-model="row.sort_order" :min="0" />
+              <el-input-number v-model="row.sort_order" :min="0" :disabled="ruleItemControlsDisabled" />
             </template>
           </el-table-column>
           <el-table-column label="操作" width="90">
             <template #default="{ $index }">
-              <el-button link type="danger" @click="emit('remove-rule-item-row', $index)">删除</el-button>
+              <el-button link type="danger" :disabled="ruleItemControlsDisabled" @click="emit('remove-rule-item-row', $index)">删除</el-button>
             </template>
           </el-table-column>
+          <template #empty>
+            <el-empty
+              v-if="selectedRuleVersionId"
+              :description="ruleItemsError ? '量化规则项暂时加载失败。' : '当前规则版本还没有规则项。请点击“新增规则项”后保存。'"
+            />
+            <el-empty v-else description="请先在左侧选择一个规则版本" />
+          </template>
         </el-table>
-        <el-empty
-          v-if="selectedRuleVersionId && !ruleItemRows.length"
-          description="当前规则版本还没有规则项。请点击“新增规则项”后保存。"
-        />
-        <el-empty v-if="!selectedRuleVersionId" description="请先在左侧选择一个规则版本" />
       </div>
     </div>
   </section>
@@ -117,6 +132,12 @@ defineProps<{
   selectedRuleVersionMeta: RuleVersion | null;
   ruleItemRows: RuleItem[];
   savingRuleItems: boolean;
+  loadingRuleVersions: boolean;
+  ruleVersionsError: string;
+  loadingRuleItems: boolean;
+  ruleItemsError: string;
+  ruleActionsDisabled: boolean;
+  ruleItemControlsDisabled: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -134,6 +155,15 @@ const emit = defineEmits<{
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   gap: 16px;
+}
+
+.panel-alert {
+  margin-bottom: 14px;
+}
+
+.panel-alert p {
+  margin: 0 0 4px;
+  line-height: 1.5;
 }
 
 .inner-card {

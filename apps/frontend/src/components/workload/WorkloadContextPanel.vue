@@ -13,13 +13,25 @@
       </article>
     </section>
 
-    <section class="soft-card panel-block">
+    <section class="soft-card panel-block" v-loading="contextLoading">
       <div class="section-head compact">
         <div>
           <h3>计算上下文</h3>
           <p>工作量结果由学期、规则版本和课表批次共同决定，切换其中任一项后都建议重新确认结果。</p>
         </div>
       </div>
+      <el-alert
+        v-if="contextErrors.length"
+        class="panel-alert"
+        type="warning"
+        show-icon
+        :closable="false"
+        title="计算上下文加载不完整"
+      >
+        <div class="panel-alert-list">
+          <p v-for="item in contextErrors" :key="item">{{ item }}</p>
+        </div>
+      </el-alert>
       <div class="process-grid">
         <article v-for="item in processCards" :key="item.label" class="process-card" :class="item.tone">
           <span>{{ item.label }}</span>
@@ -28,7 +40,13 @@
         </article>
       </div>
       <div class="filter-grid">
-        <el-select v-model="semesterModel" filterable placeholder="选择学期">
+        <el-select
+          v-model="semesterModel"
+          filterable
+          placeholder="选择学期"
+          :loading="loadingReference"
+          :disabled="controlsDisabled || loadingReference"
+        >
           <el-option
             v-for="semester in semesterOptions"
             :key="semester.id"
@@ -36,7 +54,13 @@
             :value="semester.id"
           />
         </el-select>
-        <el-select v-model="ruleVersionModel" filterable placeholder="选择规则版本">
+        <el-select
+          v-model="ruleVersionModel"
+          filterable
+          placeholder="选择规则版本"
+          :loading="loadingRuleVersions"
+          :disabled="controlsDisabled || loadingRuleVersions"
+        >
           <el-option
             v-for="rule in ruleVersions"
             :key="rule.id"
@@ -44,7 +68,14 @@
             :value="rule.id"
           />
         </el-select>
-        <el-select v-model="batchModel" filterable clearable placeholder="选择课表批次">
+        <el-select
+          v-model="batchModel"
+          filterable
+          clearable
+          placeholder="选择课表批次"
+          :loading="loadingBatches"
+          :disabled="controlsDisabled || loadingBatches || !selectedSemesterId"
+        >
           <el-option
             v-for="batch in timetableBatches"
             :key="batch.id"
@@ -64,10 +95,15 @@
         />
       </div>
       <div class="action-row toolbar-row">
-        <el-button type="primary" :loading="calculating" @click="emit('calculate')">
+        <el-button
+          type="primary"
+          :loading="calculating"
+          :disabled="calculateDisabled"
+          @click="emit('calculate')"
+        >
           计算工作量
         </el-button>
-        <el-button :disabled="!resultCount" @click="emit('export-results')">
+        <el-button :disabled="exportDisabled" @click="emit('export-results')">
           导出工作量
         </el-button>
       </div>
@@ -112,6 +148,17 @@ const props = defineProps<{
   resultCount: number;
   totalWorkload: string;
   calculating: boolean;
+  loadingReference: boolean;
+  referenceError: string;
+  loadingRuleVersions: boolean;
+  ruleVersionsError: string;
+  loadingBatches: boolean;
+  batchesError: string;
+  loadingResults: boolean;
+  resultsError: string;
+  controlsDisabled: boolean;
+  calculateDisabled: boolean;
+  exportDisabled: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -136,6 +183,20 @@ const batchModel = computed<number | undefined>({
   get: () => props.selectedBatchId ?? undefined,
   set: (value) => emit("update:selectedBatchId", value ?? null),
 });
+
+const contextLoading = computed(() =>
+  props.loadingReference
+  || props.loadingRuleVersions
+  || props.loadingBatches
+  || props.loadingResults,
+);
+
+const contextErrors = computed(() => [
+  props.referenceError,
+  props.ruleVersionsError,
+  props.batchesError,
+  props.resultsError,
+].filter(Boolean));
 </script>
 
 <style scoped>
@@ -272,6 +333,10 @@ const batchModel = computed<number | undefined>({
   box-shadow: inset 0 4px 0 rgba(66, 145, 102, 0.76);
 }
 
+.tone-red {
+  box-shadow: inset 0 4px 0 rgba(207, 91, 91, 0.82);
+}
+
 .toolbar-row {
   margin-top: 14px;
 }
@@ -280,6 +345,20 @@ const batchModel = computed<number | undefined>({
   display: grid;
   gap: 10px;
   margin-top: 14px;
+}
+
+.panel-alert {
+  margin-bottom: 16px;
+}
+
+.panel-alert-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.panel-alert-list p {
+  margin: 0;
 }
 
 @media (max-width: 1180px) {

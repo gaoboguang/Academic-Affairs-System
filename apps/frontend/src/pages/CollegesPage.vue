@@ -6,7 +6,7 @@
     :meta="pageMeta"
   >
     <template #actions>
-      <el-button @click="loadCatalog()">刷新</el-button>
+      <el-button :loading="loading" @click="loadCatalog()">刷新</el-button>
       <el-button type="primary" @click="router.push('/recommendations')">志愿工作台</el-button>
     </template>
 
@@ -15,36 +15,63 @@
         <el-input
           v-model="filters.keyword"
           clearable
+          :disabled="loading"
           placeholder="院校名称或代码"
           @keyup.enter="loadCatalog({ resetPage: true })"
         />
-        <el-select v-model="filters.province" clearable filterable allow-create placeholder="省份">
+        <el-select v-model="filters.province" clearable filterable allow-create :disabled="loading" placeholder="省份">
           <el-option v-for="province in provinceOptions" :key="province" :label="province" :value="province" />
         </el-select>
-        <el-select v-model="filters.school_type" clearable filterable allow-create placeholder="院校类型">
+        <el-select
+          v-model="filters.school_type"
+          clearable
+          filterable
+          allow-create
+          :disabled="loading"
+          placeholder="院校类型"
+        >
           <el-option v-for="type in schoolTypeOptions" :key="type" :label="type" :value="type" />
         </el-select>
-        <el-select v-model="filters.level_tag" clearable filterable allow-create placeholder="层级标签">
+        <el-select
+          v-model="filters.level_tag"
+          clearable
+          filterable
+          allow-create
+          :disabled="loading"
+          placeholder="层级标签"
+        >
           <el-option v-for="tag in levelTagOptions" :key="tag" :label="tag" :value="tag" />
         </el-select>
-        <el-select v-model="filters.has_profile" placeholder="画像状态">
+        <el-select v-model="filters.has_profile" :disabled="loading" placeholder="画像状态">
           <el-option label="全部画像状态" value="all" />
           <el-option label="已有画像" value="true" />
           <el-option label="暂无画像" value="false" />
         </el-select>
-        <el-select v-model="filters.has_admission_data" placeholder="招生数据">
+        <el-select v-model="filters.has_admission_data" :disabled="loading" placeholder="招生数据">
           <el-option label="全部招生数据" value="all" />
           <el-option label="已有计划或录取" value="true" />
           <el-option label="暂无计划和录取" value="false" />
         </el-select>
       </div>
       <template #actions>
-        <el-button type="primary" @click="loadCatalog({ resetPage: true })">查询</el-button>
-        <el-button @click="resetFilters()">重置</el-button>
+        <el-button type="primary" :loading="loading" @click="loadCatalog({ resetPage: true })">查询</el-button>
+        <el-button :disabled="loading" @click="resetFilters()">重置</el-button>
       </template>
     </AppFilterBar>
 
     <AppTableShell title="院校列表" description="列表只读展示；院校维护仍在高考志愿工作台的数据与规则中心完成。">
+      <el-alert
+        v-if="loadError"
+        class="catalog-page-alert"
+        type="error"
+        :title="loadError"
+        show-icon
+        :closable="false"
+      >
+        <template #default>
+          <el-button size="small" :loading="loading" @click="loadCatalog()">重新加载院校库</el-button>
+        </template>
+      </el-alert>
       <el-table v-loading="loading" :data="colleges" stripe>
         <el-table-column label="院校" min-width="230">
           <template #default="{ row }">
@@ -103,6 +130,19 @@
             <el-button link type="primary" @click="openDetail(row.id)">详情</el-button>
           </template>
         </el-table-column>
+        <template #empty>
+          <el-empty :description="catalogEmptyDescription">
+            <el-button
+              v-if="loadError"
+              type="primary"
+              plain
+              :loading="loading"
+              @click="loadCatalog()"
+            >
+              重新加载院校库
+            </el-button>
+          </el-empty>
+        </template>
       </el-table>
       <el-pagination
         v-if="pagination.total"
@@ -116,7 +156,6 @@
         @current-change="handlePageChange"
         @size-change="handlePageSizeChange"
       />
-      <el-empty v-if="!loading && !colleges.length" description="暂无符合条件的院校" />
     </AppTableShell>
   </AppPage>
 </template>
@@ -138,6 +177,7 @@ const {
   handlePageSizeChange,
   levelTagOptions,
   loadCatalog,
+  loadError,
   loading,
   openDetail,
   pagination,
@@ -148,6 +188,22 @@ const {
 
 const withProfileCount = computed(() => colleges.value.filter((item) => item.has_profile).length);
 const withAdmissionDataCount = computed(() => colleges.value.filter((item) => item.plan_count || item.admission_count).length);
+const activeFilterCount = computed(
+  () =>
+    [
+      filters.keyword,
+      filters.province,
+      filters.school_type,
+      filters.level_tag,
+      filters.has_profile !== "all" ? filters.has_profile : "",
+      filters.has_admission_data !== "all" ? filters.has_admission_data : "",
+    ].filter(Boolean).length,
+);
+const catalogEmptyDescription = computed(() => {
+  if (loading.value) return "正在加载院校库";
+  if (loadError.value) return "院校库加载失败，请重新加载。";
+  return activeFilterCount.value ? "没有找到符合当前筛选条件的院校" : "暂无院校记录";
+});
 const pageMeta = computed(() => [
   { label: "本页院校", value: colleges.value.length ? `${colleges.value.length} 所` : "暂无" },
   { label: "总数", value: pagination.total ? `${pagination.total} 所` : "暂无" },
@@ -165,6 +221,10 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
+}
+
+.catalog-page-alert {
+  margin-bottom: 14px;
 }
 
 .name-stack,

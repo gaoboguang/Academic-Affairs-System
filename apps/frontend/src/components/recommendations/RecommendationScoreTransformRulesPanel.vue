@@ -6,12 +6,21 @@
         <p>核对不同省份、年份和高考模式下的赋分科目、等级表、折算公式和来源说明。</p>
       </div>
       <div class="action-row">
-        <el-button @click="emit('load')">刷新</el-button>
-        <el-button :loading="bootstrapping" @click="emit('bootstrap')">装载基线</el-button>
+        <el-button :loading="loading" @click="emit('load')">刷新</el-button>
+        <el-button :loading="bootstrapping" :disabled="loading" @click="emit('bootstrap')">装载基线</el-button>
       </div>
     </div>
 
-    <div class="rule-summary-grid">
+    <el-alert v-if="loadError" class="rule-panel-alert" type="error" show-icon :closable="false" title="赋分规则加载失败">
+      <template #default>
+        <div class="rule-alert-body">
+          <span>{{ loadError }}</span>
+          <el-button link type="primary" :loading="loading" @click="emit('load')">重新加载赋分规则</el-button>
+        </div>
+      </template>
+    </el-alert>
+
+    <div class="rule-summary-grid" v-loading="loading">
       <article class="rule-summary-card">
         <span>规则总数</span>
         <strong>{{ rules.length }}</strong>
@@ -30,24 +39,31 @@
     </div>
 
     <div class="filter-grid">
-      <el-select v-model="filters.year" clearable placeholder="年份">
+      <el-select v-model="filters.year" clearable :disabled="loading" placeholder="年份">
         <el-option v-for="year in yearOptions" :key="year" :label="String(year)" :value="year" />
       </el-select>
-      <el-select v-model="filters.province" clearable filterable placeholder="省份">
+      <el-select v-model="filters.province" clearable filterable :disabled="loading" placeholder="省份">
         <el-option v-for="province in provinceOptions" :key="province" :label="province" :value="province" />
       </el-select>
-      <el-select v-model="filters.exam_mode" clearable filterable placeholder="高考模式">
+      <el-select v-model="filters.exam_mode" clearable filterable :disabled="loading" placeholder="高考模式">
         <el-option v-for="item in examModeOptions" :key="item" :label="item || '通用模式'" :value="item" />
       </el-select>
-      <el-input v-model="filters.subject_name" clearable placeholder="科目" />
+      <el-input v-model="filters.subject_name" clearable :disabled="loading" placeholder="科目" />
     </div>
 
     <div class="action-row toolbar-row">
-      <el-button type="primary" @click="emit('load')">查询</el-button>
-      <el-button @click="emit('reset')">重置</el-button>
+      <el-button type="primary" :loading="loading" @click="emit('load')">查询</el-button>
+      <el-button :disabled="loading" @click="emit('reset')">重置</el-button>
     </div>
 
-    <el-table :data="rules" stripe>
+    <el-table :data="rules" stripe v-loading="loading">
+      <template #empty>
+        <el-empty :description="ruleEmptyDescription">
+          <el-button v-if="loadError" type="primary" plain :loading="loading" @click="emit('load')">
+            重新加载赋分规则
+          </el-button>
+        </el-empty>
+      </template>
       <el-table-column label="省份" prop="province" width="90" />
       <el-table-column label="年份" prop="year" width="90" />
       <el-table-column label="模式" min-width="130">
@@ -81,8 +97,6 @@
       <el-table-column label="来源" prop="source_note" min-width="200" />
       <el-table-column label="备注" prop="note" min-width="180" />
     </el-table>
-
-    <el-empty v-if="!rules.length" description="暂无赋分/成绩转换规则" />
   </section>
 </template>
 
@@ -94,6 +108,8 @@ const props = defineProps<{
   rules: ProvinceScoreTransformRule[];
   filters: ProvinceScoreTransformRuleFiltersState;
   bootstrapping: boolean;
+  loading: boolean;
+  loadError: string;
   yearOptions: number[];
   provinceOptions: string[];
   examModeOptions: string[];
@@ -109,6 +125,15 @@ const yearCount = computed(() => new Set(props.rules.map((item) => item.year)).s
 const subjectCount = computed(() => new Set(props.rules.map((item) => item.subject_name)).size);
 const scoreModeCount = computed(() => new Set(props.rules.map((item) => item.score_mode)).size);
 const gradeTableRuleCount = computed(() => props.rules.filter((item) => item.grade_table_json.length).length);
+const hasActiveFilters = computed(() =>
+  Boolean(props.filters.year || props.filters.province || props.filters.exam_mode || props.filters.subject_name),
+);
+const ruleEmptyDescription = computed(() => {
+  if (props.loadError) return "赋分/成绩转换规则加载失败，请重新加载。";
+  if (props.loading) return "正在加载赋分/成绩转换规则";
+  if (hasActiveFilters.value) return "没有符合当前筛选条件的赋分规则。";
+  return "暂无赋分/成绩转换规则，可以先装载基线。";
+});
 
 const ruleFieldLabels: Record<string, string> = {
   grade: "等级",
@@ -150,6 +175,17 @@ function formatRuleValue(value: unknown): string {
 
 .toolbar-row {
   margin-bottom: 16px;
+}
+
+.rule-panel-alert {
+  margin-bottom: 16px;
+}
+
+.rule-alert-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
 }
 
 .rule-summary-grid {

@@ -6,30 +6,47 @@
         <p>把专业和标准化就业方向做成可维护映射，为工作台职业意向和推荐排序增强做底座。</p>
       </div>
       <div class="action-row">
-        <el-button @click="emit('load')">刷新</el-button>
+        <el-button :loading="loading" @click="emit('load')">刷新</el-button>
         <el-button type="primary" @click="emit('create')">新增映射</el-button>
       </div>
     </div>
 
+    <el-alert v-if="loadError" class="career-panel-alert" type="error" show-icon :closable="false" title="专业就业映射加载失败">
+      <template #default>
+        <div class="career-alert-body">
+          <span>{{ loadError }}</span>
+          <el-button link type="primary" :loading="loading" @click="emit('load')">重新加载专业就业映射</el-button>
+        </div>
+      </template>
+    </el-alert>
+
     <div class="filter-grid">
-      <el-input v-model="filters.keyword" placeholder="按专业或就业方向筛选" />
-      <el-select v-model="filters.major_id" clearable filterable placeholder="专业">
+      <el-input v-model="filters.keyword" :disabled="loading" placeholder="按专业或就业方向筛选" />
+      <el-select v-model="filters.major_id" clearable filterable :disabled="loading" placeholder="专业">
         <el-option v-for="item in majorOptions" :key="item.id" :label="item.name" :value="item.id" />
       </el-select>
-      <el-select v-model="filters.direction_id" clearable filterable placeholder="就业方向">
+      <el-select v-model="filters.direction_id" clearable filterable :disabled="loading" placeholder="就业方向">
         <el-option v-for="item in directionOptions" :key="item.id" :label="item.name" :value="item.id" />
       </el-select>
-      <el-select v-model="filters.strength" clearable placeholder="映射强度">
+      <el-select v-model="filters.strength" clearable :disabled="loading" placeholder="映射强度">
         <el-option v-for="item in strengthOptions" :key="item.value" :label="item.label" :value="item.value" />
       </el-select>
     </div>
 
     <div class="action-row toolbar-row">
-      <el-button type="primary" @click="emit('load')">查询</el-button>
-      <el-button @click="emit('reset')">重置</el-button>
+      <el-button type="primary" :loading="loading" @click="emit('load')">查询</el-button>
+      <el-button :disabled="loading" @click="emit('reset')">重置</el-button>
     </div>
 
-    <el-table :data="mappings" stripe>
+    <el-table :data="mappings" stripe v-loading="loading">
+      <template #empty>
+        <el-empty :description="mappingEmptyDescription">
+          <el-button v-if="loadError" type="primary" plain :loading="loading" @click="emit('load')">
+            重新加载专业就业映射
+          </el-button>
+          <el-button v-else-if="!hasActiveFilters" type="primary" plain @click="emit('create')">新增专业就业映射</el-button>
+        </el-empty>
+      </template>
       <el-table-column label="专业" min-width="180" prop="major_name" />
       <el-table-column label="就业方向" min-width="220">
         <template #default="{ row }">
@@ -91,11 +108,12 @@
       @current-change="emit('page-change', $event)"
       @size-change="emit('page-size-change', $event)"
     />
-    <el-empty v-if="!mappings.length" description="暂无专业就业映射" />
   </section>
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
+
 import { recommendationStudentTypeOptions } from "./helpers";
 
 import type { EmploymentDirectionItem, MajorEmploymentMappingItem, MajorItem, PaginationState } from "./types";
@@ -107,13 +125,15 @@ interface MajorEmploymentMappingFiltersState {
   strength: string;
 }
 
-defineProps<{
+const props = defineProps<{
   mappings: MajorEmploymentMappingItem[];
   filters: MajorEmploymentMappingFiltersState;
   pagination: PaginationState;
   majorOptions: MajorItem[];
   directionOptions: EmploymentDirectionItem[];
   strengthOptions: Array<{ value: string; label: string }>;
+  loading: boolean;
+  loadError: string;
 }>();
 
 const emit = defineEmits<{
@@ -147,6 +167,16 @@ function strengthTagType(value: string): "success" | "warning" | "info" {
 function studentTypeLabel(value: string): string {
   return recommendationStudentTypeOptions.find((item) => item.value === value)?.label ?? value;
 }
+
+const hasActiveFilters = computed(() =>
+  Boolean(props.filters.keyword || props.filters.major_id || props.filters.direction_id || props.filters.strength),
+);
+const mappingEmptyDescription = computed(() => {
+  if (props.loadError) return "专业就业映射加载失败，请重新加载。";
+  if (props.loading) return "正在加载专业就业映射";
+  if (hasActiveFilters.value) return "没有符合当前筛选条件的专业就业映射。";
+  return "暂无专业就业映射，可以先新增映射。";
+});
 </script>
 
 <style scoped>
@@ -156,6 +186,17 @@ function studentTypeLabel(value: string): string {
 
 .toolbar-row {
   margin-bottom: 16px;
+}
+
+.career-panel-alert {
+  margin-bottom: 16px;
+}
+
+.career-alert-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
 }
 
 .table-pagination {

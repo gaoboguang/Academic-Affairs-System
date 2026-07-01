@@ -76,10 +76,21 @@ export function useGaokaoPlanningManager(options: GaokaoPlanningManagerOptions) 
   const specialTypeRules = ref<SpecialTypeRule[]>([]);
   const enrollmentPlanImportResult = ref<EnrollmentPlanImportResponse | null>(null);
   const enrollmentPlanPagination = reactive<PaginationState>({ page: 1, page_size: 50, total: 0 });
+  const loadingEnrollmentPlans = ref(false);
+  const enrollmentPlansLoadError = ref("");
+  const importingEnrollmentPlans = ref(false);
 
   const volunteerRuleDialogVisible = ref(false);
   const editingVolunteerRuleId = ref<number | null>(null);
   const savingVolunteerRule = ref(false);
+  const loadingVolunteerRules = ref(false);
+  const volunteerRulesLoadError = ref("");
+  const loadingScoreTransformRules = ref(false);
+  const scoreTransformRulesLoadError = ref("");
+  const loadingSubjectRequirementDicts = ref(false);
+  const subjectRequirementDictsLoadError = ref("");
+  const loadingSpecialTypeRules = ref(false);
+  const specialTypeRulesLoadError = ref("");
   const bootstrappingVolunteerRules = ref(false);
   const bootstrappingScoreTransformRules = ref(false);
   const bootstrappingSubjectRequirementDicts = ref(false);
@@ -189,6 +200,8 @@ export function useGaokaoPlanningManager(options: GaokaoPlanningManagerOptions) 
   }
 
   async function loadEnrollmentPlans(options: { resetPage?: boolean } = {}): Promise<void> {
+    loadingEnrollmentPlans.value = true;
+    enrollmentPlansLoadError.value = "";
     try {
       if (options.resetPage) enrollmentPlanPagination.page = 1;
       const query = new URLSearchParams();
@@ -208,11 +221,21 @@ export function useGaokaoPlanningManager(options: GaokaoPlanningManagerOptions) 
       enrollmentPlanPagination.page = response.page;
       enrollmentPlanPagination.page_size = response.page_size;
     } catch (error) {
-      reportError(error);
+      enrollmentPlans.value = [];
+      enrollmentPlanPagination.total = 0;
+      enrollmentPlansLoadError.value = formatUserActionError(
+        "加载招生计划库",
+        error,
+        "检查筛选条件或本地服务后重新加载招生计划库",
+      );
+    } finally {
+      loadingEnrollmentPlans.value = false;
     }
   }
 
   async function loadProvinceVolunteerRules(): Promise<void> {
+    loadingVolunteerRules.value = true;
+    volunteerRulesLoadError.value = "";
     try {
       const query = new URLSearchParams();
       if (volunteerRuleFilters.year) query.set("year", String(volunteerRuleFilters.year));
@@ -221,11 +244,20 @@ export function useGaokaoPlanningManager(options: GaokaoPlanningManagerOptions) 
       if (volunteerRuleFilters.candidate_type) query.set("candidate_type", volunteerRuleFilters.candidate_type);
       provinceVolunteerRules.value = await apiRequest<ProvinceVolunteerRule[]>(`/api/province-volunteer-rules?${query.toString()}`);
     } catch (error) {
-      reportError(error);
+      provinceVolunteerRules.value = [];
+      volunteerRulesLoadError.value = formatUserActionError(
+        "加载省份规则",
+        error,
+        "检查筛选条件或本地服务后重新加载省份规则",
+      );
+    } finally {
+      loadingVolunteerRules.value = false;
     }
   }
 
   async function loadProvinceScoreTransformRules(): Promise<void> {
+    loadingScoreTransformRules.value = true;
+    scoreTransformRulesLoadError.value = "";
     try {
       const query = new URLSearchParams();
       if (scoreTransformRuleFilters.year) query.set("year", String(scoreTransformRuleFilters.year));
@@ -236,11 +268,20 @@ export function useGaokaoPlanningManager(options: GaokaoPlanningManagerOptions) 
         `/api/province-score-transform-rules?${query.toString()}`,
       );
     } catch (error) {
-      reportError(error);
+      provinceScoreTransformRules.value = [];
+      scoreTransformRulesLoadError.value = formatUserActionError(
+        "加载赋分/成绩转换规则",
+        error,
+        "检查筛选条件或本地服务后重新加载赋分规则",
+      );
+    } finally {
+      loadingScoreTransformRules.value = false;
     }
   }
 
   async function loadSubjectRequirementDicts(): Promise<void> {
+    loadingSubjectRequirementDicts.value = true;
+    subjectRequirementDictsLoadError.value = "";
     try {
       const query = new URLSearchParams();
       if (subjectRequirementDictFilters.year) query.set("year", String(subjectRequirementDictFilters.year));
@@ -251,11 +292,20 @@ export function useGaokaoPlanningManager(options: GaokaoPlanningManagerOptions) 
         `/api/subject-requirement-dicts?${query.toString()}`,
       );
     } catch (error) {
-      reportError(error);
+      subjectRequirementDicts.value = [];
+      subjectRequirementDictsLoadError.value = formatUserActionError(
+        "加载选科要求字典",
+        error,
+        "检查筛选条件或本地服务后重新加载选科字典",
+      );
+    } finally {
+      loadingSubjectRequirementDicts.value = false;
     }
   }
 
   async function loadSpecialTypeRules(): Promise<void> {
+    loadingSpecialTypeRules.value = true;
+    specialTypeRulesLoadError.value = "";
     try {
       const query = new URLSearchParams();
       if (specialTypeRuleFilters.year) query.set("year", String(specialTypeRuleFilters.year));
@@ -263,7 +313,14 @@ export function useGaokaoPlanningManager(options: GaokaoPlanningManagerOptions) 
       if (specialTypeRuleFilters.student_type) query.set("student_type", specialTypeRuleFilters.student_type);
       specialTypeRules.value = await apiRequest<SpecialTypeRule[]>(`/api/special-type-rules?${query.toString()}`);
     } catch (error) {
-      reportError(error);
+      specialTypeRules.value = [];
+      specialTypeRulesLoadError.value = formatUserActionError(
+        "加载特殊类型规则",
+        error,
+        "检查筛选条件或本地服务后重新加载特殊类型规则",
+      );
+    } finally {
+      loadingSpecialTypeRules.value = false;
     }
   }
 
@@ -562,7 +619,9 @@ export function useGaokaoPlanningManager(options: GaokaoPlanningManagerOptions) 
 
   async function handleEnrollmentPlanImport(uploadFileItem: UploadFile): Promise<void> {
     if (!uploadFileItem.raw) return;
+    importingEnrollmentPlans.value = true;
     try {
+      enrollmentPlanImportResult.value = null;
       enrollmentPlanImportResult.value = await uploadFile<EnrollmentPlanImportResponse>(
         "/api/enrollment-plans/import",
         uploadFileItem.raw,
@@ -577,6 +636,8 @@ export function useGaokaoPlanningManager(options: GaokaoPlanningManagerOptions) 
       });
     } catch (error) {
       reportError(error);
+    } finally {
+      importingEnrollmentPlans.value = false;
     }
   }
 
@@ -594,6 +655,7 @@ export function useGaokaoPlanningManager(options: GaokaoPlanningManagerOptions) 
     enrollmentPlanFilters,
     enrollmentPlanImportResult,
     enrollmentPlanPagination,
+    enrollmentPlansLoadError,
     enrollmentPlans,
     examModeOptions,
     gaokaoCandidateTypeOptions,
@@ -601,11 +663,17 @@ export function useGaokaoPlanningManager(options: GaokaoPlanningManagerOptions) 
     handleEnrollmentPlanPageChange,
     handleEnrollmentPlanPageSizeChange,
     handleVolunteerRuleDialogClosed,
+    importingEnrollmentPlans,
     loadEnrollmentPlans,
     loadProvinceVolunteerRules,
     loadProvinceScoreTransformRules,
     loadSpecialTypeRules,
     loadSubjectRequirementDicts,
+    loadingEnrollmentPlans,
+    loadingScoreTransformRules,
+    loadingSpecialTypeRules,
+    loadingSubjectRequirementDicts,
+    loadingVolunteerRules,
     openCreateVolunteerRule,
     openEditVolunteerRule,
     planYearOptions,
@@ -621,12 +689,15 @@ export function useGaokaoPlanningManager(options: GaokaoPlanningManagerOptions) 
     ruleYearOptions,
     savingVolunteerRule,
     parallelRuleModeOptions,
+    scoreTransformRulesLoadError,
     specialRuleOptions,
     scoreTransformRuleFilters,
     scoreTransformRuleYearOptions,
+    specialTypeRulesLoadError,
     specialTypeRuleFilters,
     specialTypeRuleYearOptions,
     specialTypeRules,
+    subjectRequirementDictsLoadError,
     subjectRequirementDictFilters,
     subjectRequirementDictYearOptions,
     subjectRequirementDicts,
@@ -637,6 +708,7 @@ export function useGaokaoPlanningManager(options: GaokaoPlanningManagerOptions) 
     volunteerRuleDialogVisible,
     volunteerRuleFilters,
     volunteerRuleForm,
+    volunteerRulesLoadError,
     volunteerUnitTypeOptions,
   };
 }

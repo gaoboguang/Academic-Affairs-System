@@ -6,18 +6,35 @@
     :meta="reportsPageMeta"
   >
     <template #actions>
-      <el-button :loading="optionsLoading" @click="loadOptions">刷新选项</el-button>
-      <el-button type="primary" plain :loading="recordsLoading" @click="loadExportRecords">刷新记录</el-button>
+      <el-button :loading="optionsLoading" @click="loadOptions(true)">刷新选项</el-button>
+      <el-button type="primary" plain :loading="recordsLoading" @click="loadExportRecords(true)">刷新记录</el-button>
     </template>
 
     <el-alert
-      v-if="pageLoadError"
+      v-if="loadErrorItems.length"
       class="page-alert"
       type="error"
       show-icon
       :closable="false"
-      :title="pageLoadError"
-    />
+      title="报表中心部分数据加载失败"
+    >
+      <template #default>
+        <ul class="load-error-list">
+          <li v-for="item in loadErrorItems" :key="item.label">
+            <strong>{{ item.label }}</strong>
+            <span>{{ item.message }}</span>
+          </li>
+        </ul>
+        <div class="action-row toolbar-row">
+          <el-button v-if="optionsLoadError" size="small" type="danger" plain :loading="optionsLoading" @click="loadOptions(true)">
+            重新加载选项
+          </el-button>
+          <el-button v-if="recordsLoadError" size="small" type="danger" plain :loading="recordsLoading" @click="loadExportRecords(true)">
+            重新加载记录
+          </el-button>
+        </div>
+      </template>
+    </el-alert>
 
     <section class="report-workspace">
       <aside class="soft-card report-picker" aria-label="报表类型选择">
@@ -34,6 +51,7 @@
             :key="group.key"
             class="domain-tab"
             :class="{ active: group.key === selectedCatalogDomain }"
+            :disabled="formInteractionDisabled"
             type="button"
             @click="selectedCatalogDomain = group.key"
           >
@@ -52,6 +70,7 @@
             :key="item.value"
             class="report-list-item"
             :class="{ selected: item.value === form.report_type }"
+            :disabled="formInteractionDisabled"
             type="button"
             @click="selectReportType(item.value)"
           >
@@ -71,6 +90,20 @@
             <p>只显示当前报表需要的条件。</p>
           </div>
         </div>
+        <el-alert
+          v-if="optionsLoadError"
+          class="report-alert"
+          type="error"
+          show-icon
+          :closable="false"
+          :title="optionsLoadError"
+        >
+          <template #default>
+            <el-button size="small" type="danger" plain :loading="optionsLoading" @click="loadOptions(true)">
+              重新加载报表选项
+            </el-button>
+          </template>
+        </el-alert>
 
         <div v-if="currentReportCatalogItem" class="current-report-strip">
           <div>
@@ -100,7 +133,7 @@
         </div>
 
         <div class="filter-grid">
-          <el-select v-model="form.report_type" placeholder="报表类型">
+          <el-select v-model="form.report_type" placeholder="报表类型" :disabled="formInteractionDisabled">
             <el-option
               v-for="item in reportTypeOptions"
               :key="item.value"
@@ -108,7 +141,7 @@
               :value="item.value"
             />
           </el-select>
-          <el-select v-if="requiresExam" v-model="form.exam_id" filterable placeholder="考试">
+          <el-select v-if="requiresExam" v-model="form.exam_id" filterable placeholder="考试" :disabled="formInteractionDisabled">
             <el-option
               v-for="exam in examOptions"
               :key="exam.id"
@@ -116,7 +149,7 @@
               :value="exam.id"
             />
           </el-select>
-          <el-select v-if="requiresStudent" v-model="form.student_id" filterable placeholder="学生">
+          <el-select v-if="requiresStudent" v-model="form.student_id" filterable placeholder="学生" :disabled="formInteractionDisabled">
             <el-option
               v-for="student in studentOptions"
               :key="student.id"
@@ -124,7 +157,7 @@
               :value="student.id"
             />
           </el-select>
-          <el-select v-if="requiresScheme" v-model="form.scheme_id" filterable placeholder="推荐方案">
+          <el-select v-if="requiresScheme" v-model="form.scheme_id" filterable placeholder="推荐方案" :disabled="formInteractionDisabled">
             <el-option
               v-for="item in recommendationOptions"
               :key="item.scheme_id"
@@ -132,7 +165,7 @@
               :value="item.scheme_id"
             />
           </el-select>
-          <el-select v-if="requiresDraft" v-model="form.draft_id" filterable placeholder="志愿草稿">
+          <el-select v-if="requiresDraft" v-model="form.draft_id" filterable placeholder="志愿草稿" :disabled="formInteractionDisabled">
             <el-option
               v-for="item in volunteerDraftOptions"
               :key="item.id"
@@ -140,7 +173,7 @@
               :value="item.id"
             />
           </el-select>
-          <el-select v-if="requiresBatch" v-model="form.batch_id" filterable placeholder="评教批次">
+          <el-select v-if="requiresBatch" v-model="form.batch_id" filterable placeholder="评教批次" :disabled="formInteractionDisabled">
             <el-option
               v-for="item in evaluationBatchOptions"
               :key="item.id"
@@ -148,7 +181,7 @@
               :value="item.id"
             />
           </el-select>
-          <el-select v-if="requiresClass" v-model="form.class_id" filterable placeholder="班级">
+          <el-select v-if="requiresClass" v-model="form.class_id" filterable placeholder="班级" :disabled="formInteractionDisabled">
             <el-option
               v-for="item in referenceStore.classes"
               :key="item.id"
@@ -156,7 +189,7 @@
               :value="item.id"
             />
           </el-select>
-          <el-select v-if="requiresGrade" v-model="form.grade_id" filterable placeholder="年级">
+          <el-select v-if="requiresGrade" v-model="form.grade_id" filterable placeholder="年级" :disabled="formInteractionDisabled">
             <el-option
               v-for="item in referenceStore.grades"
               :key="item.id"
@@ -164,7 +197,7 @@
               :value="item.id"
             />
           </el-select>
-          <el-select v-if="requiresTeacher" v-model="form.teacher_id" filterable placeholder="教师">
+          <el-select v-if="requiresTeacher" v-model="form.teacher_id" filterable placeholder="教师" :disabled="formInteractionDisabled">
             <el-option
               v-for="teacher in teacherOptions"
               :key="teacher.id"
@@ -172,7 +205,7 @@
               :value="teacher.id"
             />
           </el-select>
-          <el-select v-if="requiresSemester" v-model="form.semester_id" filterable placeholder="学期">
+          <el-select v-if="requiresSemester" v-model="form.semester_id" filterable placeholder="学期" :disabled="formInteractionDisabled">
             <el-option
               v-for="semester in referenceStore.semesters"
               :key="semester.id"
@@ -180,7 +213,14 @@
               :value="semester.id"
             />
           </el-select>
-          <el-select v-if="optionalRuleVersion" v-model="form.rule_version_id" clearable filterable placeholder="规则版本，可选">
+          <el-select
+            v-if="optionalRuleVersion"
+            v-model="form.rule_version_id"
+            clearable
+            filterable
+            placeholder="规则版本，可选"
+            :disabled="formInteractionDisabled"
+          >
             <el-option
               v-for="rule in currentRuleOptions"
               :key="rule.id"
@@ -193,24 +233,45 @@
             v-model="form.start_date"
             value-format="YYYY-MM-DD"
             placeholder="开始日期，可选"
+            :disabled="formInteractionDisabled"
           />
           <el-date-picker
             v-if="usesEndDate"
             v-model="form.end_date"
             value-format="YYYY-MM-DD"
             placeholder="结束日期，可选"
+            :disabled="formInteractionDisabled"
           />
         </div>
         <div class="action-row toolbar-row">
-          <el-button type="primary" :loading="exporting" @click="exportReport">生成报表</el-button>
+          <el-button type="primary" :loading="exporting" :disabled="optionsLoading" @click="exportReport">
+            生成报表
+          </el-button>
           <el-button
             v-if="supportsPrintPreview"
-            :disabled="Boolean(missingRequiredFields.length) || !printPreviewPath"
+            :disabled="printPreviewDisabled"
             @click="openPrintPreview"
           >
             打印预览
           </el-button>
         </div>
+        <el-alert
+          v-if="exportActionError"
+          class="report-alert"
+          type="error"
+          show-icon
+          :closable="false"
+          title="报表生成失败"
+        >
+          <template #default>
+            <div class="action-row toolbar-row">
+              <span>{{ exportActionError }}</span>
+              <el-button size="small" type="danger" plain :loading="exporting" @click="exportReport">
+                重新生成报表
+              </el-button>
+            </div>
+          </template>
+        </el-alert>
         <el-alert
           v-if="missingRequiredFields.length"
           class="report-alert"
@@ -247,7 +308,22 @@
           <h3>导出记录</h3>
           <p>记录报表类型、参数、导出时间和下载入口，方便复现。</p>
         </div>
+        <el-button :loading="recordsLoading" @click="loadExportRecords(true)">刷新记录</el-button>
       </div>
+      <el-alert
+        v-if="recordsLoadError"
+        class="report-alert"
+        type="error"
+        show-icon
+        :closable="false"
+        :title="recordsLoadError"
+      >
+        <template #default>
+          <el-button size="small" type="danger" plain :loading="recordsLoading" @click="loadExportRecords(true)">
+            重新加载导出记录
+          </el-button>
+        </template>
+      </el-alert>
       <div class="table-shell">
         <el-table :data="exportRecords" stripe v-loading="recordsLoading">
           <el-table-column label="报表名称" prop="report_name" min-width="180" />
@@ -271,15 +347,26 @@
           </el-table-column>
           <el-table-column label="操作" width="100" fixed="right">
             <template #default="{ row }">
-              <el-button link type="primary" @click="openFile(row.download_url)">下载</el-button>
+              <el-button link type="primary" :disabled="recordsLoading || !row.download_url" @click="openFile(row.download_url)">
+                下载
+              </el-button>
             </template>
           </el-table-column>
+          <template #empty>
+            <el-empty :description="exportRecordsEmptyDescription">
+              <el-button
+                v-if="recordsLoadError"
+                type="primary"
+                plain
+                :loading="recordsLoading"
+                @click="loadExportRecords(true)"
+              >
+                重新加载导出记录
+              </el-button>
+            </el-empty>
+          </template>
         </el-table>
       </div>
-      <el-empty
-        v-if="!recordsLoading && !exportRecords.length"
-        description="暂无导出记录。请先在上方选择报表类型并补齐参数，再点击“生成报表”。"
-      />
     </section>
   </AppPage>
 </template>
@@ -409,7 +496,9 @@ const reportInsightError = ref("");
 const exporting = ref(false);
 const optionsLoading = ref(false);
 const recordsLoading = ref(false);
-const pageLoadError = ref("");
+const optionsLoadError = ref("");
+const recordsLoadError = ref("");
+const exportActionError = ref("");
 const scoreRecordTotal = ref(0);
 const reportTypeOptions = REPORT_TYPE_OPTIONS;
 const groupedReportCatalog = getGroupedReportCatalog();
@@ -457,12 +546,25 @@ const currentReportTypeLabel = computed(() => getReportTypeLabel(form.report_typ
 const reportsPageMeta = computed(() => [
   { label: "报表类型", value: reportTypeOptions.length },
   { label: "当前类型", value: currentReportTypeLabel.value },
-  { label: "导出记录", value: exportRecords.value.length },
-  { label: "推荐方案", value: recommendationOptions.value.length },
-  { label: "志愿草稿", value: volunteerDraftOptions.value.length },
+  { label: "导出记录", value: recordsLoadError.value ? "加载失败" : exportRecords.value.length },
+  { label: "推荐方案", value: optionsLoadError.value ? "加载失败" : recommendationOptions.value.length },
+  { label: "志愿草稿", value: optionsLoadError.value ? "加载失败" : volunteerDraftOptions.value.length },
 ]);
+const formInteractionDisabled = computed(() => optionsLoading.value || exporting.value);
+const loadErrorItems = computed(() => [
+  { label: "报表选项", message: optionsLoadError.value },
+  { label: "导出记录", message: recordsLoadError.value },
+].filter((item) => item.message));
 const missingRequiredFields = computed(() => getMissingRequiredReportFields(form));
 const missingRequiredFieldsMessage = computed(() => getMissingRequiredReportFieldsMessage(form));
+const printPreviewDisabled = computed(
+  () => formInteractionDisabled.value || Boolean(missingRequiredFields.value.length) || !printPreviewPath.value,
+);
+const exportRecordsEmptyDescription = computed(() =>
+  recordsLoadError.value
+    ? "导出记录加载失败，请重试。"
+    : "暂无导出记录。请先在上方选择报表类型并补齐参数，再点击“生成报表”。",
+);
 const scoreReportGuardMessages = computed(() =>
   buildScoreReportGuardMessages(form.report_type, {
     examCount: examOptions.value.length,
@@ -526,11 +628,25 @@ function formatParams(value?: Record<string, unknown> | null): string {
 
 function selectReportType(reportType: string): void {
   form.report_type = reportType;
+  exportActionError.value = "";
 }
 
-async function loadOptions(): Promise<void> {
+function clearReportOptions(): void {
+  examOptions.value = [];
+  studentOptions.value = [];
+  teacherOptions.value = [];
+  ruleVersions.value = [];
+  adviserRuleVersions.value = [];
+  recommendationOptions.value = [];
+  volunteerDraftOptions.value = [];
+  evaluationBatchOptions.value = [];
+  scoreRecordTotal.value = 0;
+}
+
+async function loadOptions(showToast = false): Promise<void> {
   optionsLoading.value = true;
-  pageLoadError.value = "";
+  optionsLoadError.value = "";
+  exportActionError.value = "";
   try {
     await referenceStore.loadCore();
     const [examPayload, studentPayload, teacherPayload, rulePayload, adviserRulePayload, draftPayload] = await Promise.all([
@@ -556,21 +672,23 @@ async function loadOptions(): Promise<void> {
     ruleVersions.value = rulePayload;
     adviserRuleVersions.value = adviserRulePayload;
   } catch (error) {
-    pageLoadError.value = formatUserActionError("刷新报表选项", error, "确认考试、学生、教师或推荐数据接口可用后重试。");
-    ElMessage.error(pageLoadError.value);
+    clearReportOptions();
+    optionsLoadError.value = formatUserActionError("刷新报表选项", error, "确认考试、学生、教师或推荐数据接口可用后重试。");
+    if (showToast) ElMessage.error(optionsLoadError.value);
   } finally {
     optionsLoading.value = false;
   }
 }
 
-async function loadExportRecords(): Promise<void> {
+async function loadExportRecords(showToast = false): Promise<void> {
   recordsLoading.value = true;
-  pageLoadError.value = "";
+  recordsLoadError.value = "";
   try {
     exportRecords.value = await apiRequest<ExportRecord[]>("/api/reports/exports");
   } catch (error) {
-    pageLoadError.value = formatUserActionError("刷新导出记录", error, "确认本地服务已启动后重试；不影响你重新生成报表。");
-    ElMessage.error(pageLoadError.value);
+    exportRecords.value = [];
+    recordsLoadError.value = formatUserActionError("刷新导出记录", error, "确认本地服务已启动后重试；不影响你重新生成报表。");
+    if (showToast) ElMessage.error(recordsLoadError.value);
   } finally {
     recordsLoading.value = false;
   }
@@ -607,6 +725,7 @@ async function reloadReportInsights(): Promise<void> {
 
 async function exportReport(): Promise<void> {
   try {
+    exportActionError.value = "";
     if (missingRequiredFields.value.length) {
       ElMessage.warning(missingRequiredFieldsMessage.value);
       return;
@@ -625,7 +744,8 @@ async function exportReport(): Promise<void> {
     openFile(result.download_url);
     ElMessage.success("报表已生成");
   } catch (error) {
-    ElMessage.error(formatUserActionError("生成报表", error, "先确认报表参数完整；如果仍失败，请回到对应业务页复核源数据。"));
+    exportActionError.value = formatUserActionError("生成报表", error, "先确认报表参数完整；如果仍失败，请回到对应业务页复核源数据。");
+    ElMessage.error(exportActionError.value);
   } finally {
     exporting.value = false;
   }
@@ -677,6 +797,7 @@ watch(
       currentRecommendationInsightContext.value.compareScheme?.scheme_id,
     ] as const,
   async () => {
+    exportActionError.value = "";
     try {
       await loadReportInsights();
     } catch (error) {
@@ -690,13 +811,8 @@ watch(
 );
 
 onMounted(async () => {
-  try {
-    applyRoutePrefill();
-    await loadOptions();
-    await loadExportRecords();
-  } catch (error) {
-    ElMessage.error(formatUserActionError("加载报表中心", error, "确认本地服务已启动后，分别点击“刷新选项”和“刷新记录”。"));
-  }
+  applyRoutePrefill();
+  await Promise.all([loadOptions(), loadExportRecords()]);
 });
 
 function applyRoutePrefill(): void {
@@ -716,6 +832,28 @@ function applyRoutePrefill(): void {
 <style scoped>
 .page-alert {
   margin-top: -4px;
+}
+
+.load-error-list {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.load-error-list li {
+  display: grid;
+  gap: 4px;
+}
+
+.load-error-list strong {
+  color: #7f1d1d;
+}
+
+.load-error-list span {
+  color: #6b3d3d;
+  line-height: 1.55;
 }
 
 .report-workspace {
@@ -753,6 +891,12 @@ function applyRoutePrefill(): void {
   border-color: #1f6c98;
   background: #e9f4fb;
   color: #1f6c98;
+}
+
+.domain-tab:disabled,
+.report-list-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
 }
 
 .active-domain-copy {

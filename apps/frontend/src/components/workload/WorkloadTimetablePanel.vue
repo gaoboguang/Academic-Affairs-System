@@ -13,13 +13,20 @@
           class="file-input"
           type="file"
           accept=".xlsx,.xls"
+          :disabled="controlsDisabled"
           @change="emit('file-change', $event)"
         />
-        <el-input v-model="importRemarkModel" placeholder="导入备注，可选" maxlength="120" style="max-width: 280px" />
+        <el-input
+          v-model="importRemarkModel"
+          placeholder="导入备注，可选"
+          maxlength="120"
+          style="max-width: 280px"
+          :disabled="controlsDisabled"
+        />
         <el-button
           type="primary"
           :loading="importing"
-          :disabled="!canImport"
+          :disabled="importDisabled || !canImport"
           @click="emit('import-timetable')"
         >
           上传课表
@@ -38,13 +45,21 @@
       </div>
     </section>
 
-    <section class="soft-card panel-block">
+    <section class="soft-card panel-block" v-loading="loadingBatches">
       <div class="section-head">
         <div>
           <h3>导入批次</h3>
           <p>支持多份课表批次管理，默认取当前学期最新有效批次参与计算。</p>
         </div>
       </div>
+      <el-alert
+        v-if="batchesError"
+        class="panel-alert"
+        type="warning"
+        show-icon
+        :closable="false"
+        :title="batchesError"
+      />
       <div class="table-shell">
         <el-table :data="timetableBatches" stripe>
           <el-table-column label="导入时间" min-width="170">
@@ -65,39 +80,55 @@
           <el-table-column label="备注" prop="remark" min-width="140" />
           <el-table-column label="操作" width="120" fixed="right">
             <template #default="{ row }">
-              <el-button link type="primary" @click="emit('select-batch', row.id)">查看条目</el-button>
+              <el-button
+                link
+                type="primary"
+                :disabled="rowActionsDisabled"
+                @click="emit('select-batch', row.id)"
+              >
+                查看条目
+              </el-button>
             </template>
           </el-table-column>
+          <template #empty>
+            <el-empty :description="batchesEmptyDescription" />
+          </template>
         </el-table>
       </div>
-      <el-empty
-        v-if="!timetableBatches.length"
-        description="当前学期还没有课表批次。请先选择学期、上传课表模板，再回到这里查看未匹配项。"
-      />
     </section>
 
-    <section class="soft-card panel-block">
+    <section class="soft-card panel-block" v-loading="loadingEntries">
       <div class="section-head">
         <div>
           <h3>课表条目</h3>
           <p>未匹配条目修正后会重新判断是否可参与课时统计。</p>
         </div>
         <div class="action-row">
-          <el-radio-group v-model="viewModeModel" size="small">
+          <el-radio-group
+            v-model="viewModeModel"
+            size="small"
+            :disabled="controlsDisabled || loadingEntries"
+          >
             <el-radio-button label="raw">原始顺序</el-radio-button>
             <el-radio-button label="teacher">按教师</el-radio-button>
             <el-radio-button label="class">按班级</el-radio-button>
           </el-radio-group>
-          <el-switch v-model="unresolvedOnlyModel" />
+          <el-switch
+            v-model="unresolvedOnlyModel"
+            :disabled="controlsDisabled || loadingEntries || !selectedBatchId"
+          />
           <span class="hint-text">仅看未匹配</span>
         </div>
       </div>
-      <el-empty v-if="!selectedBatchId" description="请先选择一个课表批次" />
-      <el-empty
-        v-else-if="!timetableEntries.length"
-        description="当前批次没有符合筛选条件的课表条目。可以关闭“仅看未匹配”，或重新选择批次。"
+      <el-alert
+        v-if="entriesError"
+        class="panel-alert"
+        type="warning"
+        show-icon
+        :closable="false"
+        :title="entriesError"
       />
-      <div v-else class="table-shell">
+      <div class="table-shell">
         <el-table :data="displayedEntries" stripe>
           <el-table-column label="星期/节次" width="110">
             <template #default="{ row }">
@@ -138,9 +169,19 @@
           </el-table-column>
           <el-table-column label="操作" width="120" fixed="right">
             <template #default="{ row }">
-              <el-button link type="primary" @click="emit('open-entry-dialog', row)">修正</el-button>
+              <el-button
+                link
+                type="primary"
+                :disabled="rowActionsDisabled"
+                @click="emit('open-entry-dialog', row)"
+              >
+                修正
+              </el-button>
             </template>
           </el-table-column>
+          <template #empty>
+            <el-empty :description="entriesEmptyDescription" />
+          </template>
         </el-table>
       </div>
     </section>
@@ -163,6 +204,9 @@ const props = defineProps<{
   importRemark: string;
   importing: boolean;
   canImport: boolean;
+  controlsDisabled: boolean;
+  importDisabled: boolean;
+  rowActionsDisabled: boolean;
   timetableBatches: TimetableBatchItem[];
   selectedBatchId: number | null;
   unresolvedOnly: boolean;
@@ -170,6 +214,10 @@ const props = defineProps<{
   timetableEntries: TimetableEntryItem[];
   reviewCards: StatusCard[];
   courseTypeOptions: OptionItem[];
+  loadingBatches: boolean;
+  batchesError: string;
+  loadingEntries: boolean;
+  entriesError: string;
 }>();
 
 const emit = defineEmits<{
@@ -195,6 +243,17 @@ const unresolvedOnlyModel = computed({
 const viewModeModel = computed({
   get: () => props.viewMode,
   set: (value: "raw" | "teacher" | "class") => emit("update:viewMode", value),
+});
+
+const batchesEmptyDescription = computed(() => {
+  if (props.batchesError) return "课表批次加载失败，请使用页面顶部重试入口重新加载。";
+  return "当前学期还没有课表批次。请先选择学期、上传课表模板，再回到这里查看未匹配项。";
+});
+
+const entriesEmptyDescription = computed(() => {
+  if (!props.selectedBatchId) return "请先选择一个课表批次。";
+  if (props.entriesError) return "课表条目加载失败，请使用页面顶部重试入口重新加载。";
+  return "当前批次没有符合筛选条件的课表条目。可以关闭“仅看未匹配”，或重新选择批次。";
 });
 
 const displayedEntries = computed(() => {
@@ -267,5 +326,9 @@ const displayedEntries = computed(() => {
 
 .tone-slate {
   box-shadow: inset 0 4px 0 rgba(92, 111, 129, 0.74);
+}
+
+.panel-alert {
+  margin-bottom: 14px;
 }
 </style>
