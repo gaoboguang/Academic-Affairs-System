@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+import re
 
 from fastapi import HTTPException, Request
 from sqlalchemy import select, update
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.config import Settings
 from app.core.security import (
@@ -16,9 +17,19 @@ from app.core.security import (
     hash_session_token,
     verify_password,
 )
+from app.importers.base import (
+    RowError,
+    build_error_preview,
+    build_row_error,
+    read_template_rows,
+    resolve_import_status,
+    save_error_report,
+)
 from app.models import AppSession, AppUser, AppUserClassScope, SchoolClass, Teacher, TeachingAssignment
 from app.repositories.system import write_audit_log
 from app.schemas.auth import (
+    AdminUserBatchImportCreatedAccount,
+    AdminUserBatchImportResponse,
     AdminUserCreatePayload,
     AdminUserCreateResponse,
     AdminUserResetPasswordResponse,
@@ -29,6 +40,7 @@ from app.schemas.auth import (
     CurrentUserResponse,
     LoginPayload,
 )
+from app.utils.parsers import clean_text
 
 ADMIN_PERMISSIONS = [
     "admin:*",
@@ -56,6 +68,8 @@ PUBLIC_API_PATHS = {
     "/api/auth/login",
     "/api/system/health",
 }
+
+TEACHER_ACCOUNT_IMPORT_HEADERS = ["账号", "显示名称", "教师工号", "教师姓名", "额外可访问班级"]
 
 
 @dataclass(frozen=True)
@@ -383,6 +397,182 @@ def create_user(
         detail_json={"username": user.username, "role": user.role},
     )
     return AdminUserCreateResponse(user=serialize_user(session, user), temporary_password=temp_password)
+
+
+def _clean_import_text(value: object) -> str | None:
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return clean_text(value)
+
+
+def _exception_message(exc: Exception) -> str:
+    if isinstance(exc, HTTPException):
+        return str(exc.detail)
+    return str(exc)
+
+
+def _split_import_values(value: object) -> list[str]:
+    text = _clean_import_text(value)
+    if not text:
+        return []
+    return [item.strip() for item in re.split(r"[、,，;；|\n\r]+", text) if item.strip()]
+
+
+def _resolve_teacher_for_account_import(session: Session, row: dict[str, object]) -> Teacher:
+    teacher_no = _clean_import_text(row.get("教师工号"))
+    teacher_name = _clean_import_text(row.get("教师姓名"))
+    if not teacher_no and not teacher_name:
+        raise ValueError("教师工号或教师姓名不能为空")
+
+    if teacher_no:
+        teacher = session.scalar(select(Teacher).where(Teacher.teacher_no == teacher_no))
+        if not teacher:
+            raise ValueError(f"教师工号不存在: {teacher_no}")
+        if teacher_name and teacher.name != teacher_name:
+            raise ValueError(f"教师工号与姓名不匹配: {teacher_no} / {teacher_name}")
+        return teacher
+
+    matches = session.scalars(select(Teacher).where(Teacher.name == teacher_name)).all()
+    if not matches:
+        raise ValueError(f"教师姓名不存在: {teacher_name}")
+    if len(matches) > 1:
+        raise ValueError(f"教师姓名不唯一: {teacher_name}，请填写教师工号")
+    return matches[0]
+
+
+def _build_class_lookup(session: Session) -> dict[str, list[int]]:
+    lookup: dict[str, list[int]] = {}
+    classes = session.scalars(
+        select(SchoolClass)
+        .options(joinedload(SchoolClass.grade))
+        .where(SchoolClass.is_active.is_(True))
+    ).all()
+    for school_class in classes:
+        grade_name = school_class.grade.name if school_class.grade else ""
+        keys = {
+            str(school_class.id),
+            school_class.name,
+            f"{grade_name}{school_class.name}",
+            f"{grade_name} {school_class.name}",
+        }
+        for key in keys:
+            if key:
+                lookup.setdefault(key, []).append(school_class.id)
+    return lookup
+
+
+def _resolve_import_class_ids(class_lookup: dict[str, list[int]], value: object) -> list[int]:
+    class_ids: list[int] = []
+    for item in _split_import_values(value):
+        matched_ids = class_lookup.get(item, [])
+        if not matched_ids:
+            raise ValueError(f"额外可访问班级不存在: {item}")
+        unique_ids = sorted(set(matched_ids))
+        if len(unique_ids) > 1:
+            raise ValueError(f"额外可访问班级不唯一: {item}，请填写年级+班级或班级ID")
+        class_ids.append(unique_ids[0])
+    return sorted(set(class_ids))
+
+
+def import_teacher_accounts(
+    session: Session,
+    settings: Settings,
+    *,
+    filename: str | None,
+    content: bytes,
+    strategy: str,
+    context: AuthContext,
+) -> AdminUserBatchImportResponse:
+    if strategy not in {"skip_existing", "create"}:
+        raise HTTPException(status_code=400, detail="账号导入策略不支持")
+
+    headers, rows = read_template_rows(content)
+    if headers[: len(TEACHER_ACCOUNT_IMPORT_HEADERS)] != TEACHER_ACCOUNT_IMPORT_HEADERS:
+        raise HTTPException(status_code=400, detail="教师账号导入模板表头不匹配，请先下载系统模板。")
+
+    success_rows = 0
+    failed_rows = 0
+    skipped_rows = 0
+    created_rows = 0
+    row_errors: list[RowError] = []
+    created_accounts: list[AdminUserBatchImportCreatedAccount] = []
+    class_lookup = _build_class_lookup(session)
+
+    for row_number, row_values in rows:
+        savepoint = session.begin_nested()
+        try:
+            username = _clean_import_text(row_values.get("账号"))
+            if not username:
+                raise ValueError("账号不能为空")
+            teacher = _resolve_teacher_for_account_import(session, row_values)
+            display_name = _clean_import_text(row_values.get("显示名称")) or teacher.name
+            extra_class_ids = _resolve_import_class_ids(class_lookup, row_values.get("额外可访问班级"))
+            if _load_user_by_username(session, username):
+                if strategy == "skip_existing":
+                    savepoint.rollback()
+                    skipped_rows += 1
+                    continue
+                raise ValueError(f"账号已存在: {username}")
+
+            response = create_user(
+                session,
+                AdminUserCreatePayload(
+                    username=username,
+                    display_name=display_name,
+                    role="teacher",
+                    teacher_id=teacher.id,
+                    extra_class_ids=extra_class_ids,
+                ),
+                context,
+            )
+            savepoint.commit()
+            created_rows += 1
+            success_rows += 1
+            created_accounts.append(
+                AdminUserBatchImportCreatedAccount(
+                    username=response.user.username,
+                    display_name=response.user.display_name,
+                    teacher_no=teacher.teacher_no,
+                    teacher_name=teacher.name,
+                    temporary_password=response.temporary_password,
+                )
+            )
+        except Exception as exc:
+            if savepoint.is_active:
+                savepoint.rollback()
+            failed_rows += 1
+            row_errors.append(
+                build_row_error(
+                    row_number=row_number,
+                    values=row_values,
+                    message=_exception_message(exc),
+                )
+            )
+
+    error_report_path = save_error_report(
+        settings=settings,
+        prefix="teacher_account_import_errors",
+        headers=TEACHER_ACCOUNT_IMPORT_HEADERS,
+        errors=row_errors,
+    )
+    return AdminUserBatchImportResponse(
+        status=resolve_import_status(
+            total_rows=len(rows),
+            success_rows=success_rows,
+            failed_rows=failed_rows,
+        ),
+        total_rows=len(rows),
+        success_rows=success_rows,
+        failed_rows=failed_rows,
+        skipped_rows=skipped_rows,
+        created_rows=created_rows,
+        updated_rows=0,
+        error_report_path=error_report_path,
+        error_preview=build_error_preview(row_errors),
+        notice_preview=["临时密码只在本次导入结果中显示，请及时记录。"] if created_accounts else [],
+        message=f"教师账号导入完成，成功 {success_rows} 条，失败 {failed_rows} 条，跳过 {skipped_rows} 条。",
+        created_accounts=created_accounts,
+    )
 
 
 def update_user(

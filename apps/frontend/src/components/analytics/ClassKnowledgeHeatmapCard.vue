@@ -9,8 +9,20 @@
         <el-button :loading="loading" @click="emit('refresh')">{{ heatmap ? "刷新" : "加载热力图" }}</el-button>
       </div>
     </header>
-    <div v-if="!heatmap" class="hint">点击「加载热力图」从 API 拉取数据。</div>
-    <div v-else-if="heatmap.notices?.length" class="hint">{{ heatmap.notices[0] }}</div>
+    <el-alert
+      v-if="errorMessage"
+      type="error"
+      show-icon
+      :closable="false"
+      :title="errorMessage"
+    >
+      <template #default>
+        <el-button size="small" type="danger" plain :loading="loading" @click="emit('refresh')">重新加载热力图</el-button>
+      </template>
+    </el-alert>
+    <div v-if="!heatmap && !errorMessage" class="hint">点击「加载热力图」从 API 拉取数据。</div>
+    <div v-else-if="!heatmap && errorMessage" class="hint">热力图加载失败，请检查题分明细和班级筛选后重试。</div>
+    <div v-else-if="heatmap?.notices?.length" class="hint">{{ heatmap.notices[0] }}</div>
     <section
       v-for="group in (heatmap?.subject_groups ?? [])"
       :key="group.subject_id"
@@ -53,6 +65,7 @@ interface HeatmapPayload {
 defineProps<{
   heatmap: HeatmapPayload | null;
   loading: boolean;
+  errorMessage: string;
 }>();
 
 const emit = defineEmits<{ (event: "refresh"): void }>();

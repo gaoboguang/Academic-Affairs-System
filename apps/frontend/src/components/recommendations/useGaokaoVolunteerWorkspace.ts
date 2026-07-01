@@ -89,6 +89,10 @@ function reportError(error: unknown): void {
   ElMessage.error(formatUserActionError("处理志愿推荐向导", error, "先确认学生、考试、批次、规则和草稿状态正确；如果仍失败，请重新生成智能筛选后重试。"));
 }
 
+function buildWorkspaceLoadError(action: string, error: unknown): string {
+  return formatUserActionError(action, error, "可先重试当前区块；如果仍失败，再检查本地服务或刷新页面。");
+}
+
 async function confirmWarningAction(message: string, title: string, confirmButtonText: string): Promise<boolean> {
   try {
     await ElMessageBox.confirm(message, title, {
@@ -110,11 +114,13 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
   const volunteerWorkbenchForm = reactive(createVolunteerWorkbenchForm());
   const workbenchPreview = ref<VolunteerWorkbenchPreviewResponse | null>(null);
   const volunteerGuidePreview = ref<VolunteerGuidePreviewResponse | null>(null);
+  const workbenchPreviewError = ref("");
   const workbenchLoading = ref(false);
   const volunteerDraft = ref<VolunteerDraftItem[]>([]);
   const volunteerDraftName = ref("");
   const currentVolunteerDraftId = ref<number>();
   const savedVolunteerDrafts = ref<VolunteerDraftSummary[]>([]);
+  const volunteerDraftsError = ref("");
   const loadingVolunteerDrafts = ref(false);
   const savingVolunteerDraft = ref(false);
   const exportingVolunteerDraftId = ref<number | null>(null);
@@ -122,13 +128,16 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
   const persistedVolunteerRule = ref<ProvinceVolunteerRule | null>(null);
   const compareVolunteerDraftId = ref<number>();
   const compareVolunteerDraftLoading = ref(false);
+  const compareVolunteerDraftError = ref("");
   const compareVolunteerDraftDetail = ref<VolunteerDraftDetail | null>(null);
   const studentCareerPreference = ref<StudentCareerPreference | null>(null);
+  const studentProfileError = ref("");
   const loadingStudentCareerPreference = ref(false);
   const savingStudentCareerPreference = ref(false);
   const loadingExamScoreAutofill = ref(false);
   const loadingVolunteerGuideOptions = ref(false);
   const volunteerGuideOptions = ref<VolunteerGuideOptions | null>(null);
+  const volunteerGuideOptionsError = ref("");
   const currentExamScoreAutofillSource = ref<VolunteerExamScoreAutofillSource | null>(null);
   const lastAppliedExamScoreAutofillSource = ref<VolunteerExamScoreAutofillSource | null>(null);
   const examScoreAutofillStatus = ref<VolunteerExamScoreAutofillStatus>("idle");
@@ -318,11 +327,14 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
     });
     workbenchPreview.value = null;
     volunteerGuidePreview.value = null;
+    workbenchPreviewError.value = "";
     volunteerDraft.value = [];
     volunteerDraftName.value = "";
     currentVolunteerDraftId.value = undefined;
+    volunteerDraftsError.value = "";
     persistedVolunteerRule.value = null;
     studentCareerPreference.value = null;
+    studentProfileError.value = "";
     currentExamScoreAutofillSource.value = null;
     lastAppliedExamScoreAutofillSource.value = null;
     examScoreAutofillStatus.value = "idle";
@@ -359,6 +371,7 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
 
     try {
       workbenchLoading.value = true;
+      workbenchPreviewError.value = "";
       const guide = await apiRequest<VolunteerGuidePreviewResponse>(
         "/api/recommendations/volunteer-guide/preview",
         {
@@ -383,7 +396,9 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
       }
       if (!options.silent) ElMessage.success(`智能筛选已生成，共 ${preview.candidate_count} 条可选计划`);
     } catch (error) {
-      reportError(error);
+      workbenchPreviewError.value = buildWorkspaceLoadError("生成智能筛选", error);
+      volunteerGuidePreview.value = null;
+      workbenchPreview.value = null;
     } finally {
       workbenchLoading.value = false;
     }
@@ -394,6 +409,7 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
     const year = volunteerWorkbenchForm.target_year || new Date().getFullYear();
     try {
       loadingVolunteerGuideOptions.value = true;
+      volunteerGuideOptionsError.value = "";
       const query = new URLSearchParams({ province, year: String(year) });
       const payload = await apiRequest<VolunteerGuideOptions>(`/api/recommendations/volunteer-guide/options?${query.toString()}`);
       volunteerGuideOptions.value = payload;
@@ -403,7 +419,7 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
       }
     } catch (error) {
       volunteerGuideOptions.value = null;
-      ElMessage.warning(formatUserActionError("读取志愿字段选项", error, "将暂时使用本地兜底选项，建议稍后刷新页面。"));
+      volunteerGuideOptionsError.value = buildWorkspaceLoadError("读取志愿字段选项", error);
     } finally {
       loadingVolunteerGuideOptions.value = false;
     }
@@ -465,10 +481,12 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
   async function loadVolunteerDrafts(): Promise<void> {
     if (!volunteerWorkbenchForm.student_id) {
       savedVolunteerDrafts.value = [];
+      volunteerDraftsError.value = "";
       return;
     }
     try {
       loadingVolunteerDrafts.value = true;
+      volunteerDraftsError.value = "";
       const query = new URLSearchParams();
       query.set("student_id", String(volunteerWorkbenchForm.student_id));
       if (volunteerWorkbenchForm.exam_id) query.set("exam_id", String(volunteerWorkbenchForm.exam_id));
@@ -476,7 +494,8 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
         `/api/recommendations/volunteer-drafts?${query.toString()}`,
       );
     } catch (error) {
-      reportError(error);
+      volunteerDraftsError.value = buildWorkspaceLoadError("加载历史草稿", error);
+      savedVolunteerDrafts.value = [];
     } finally {
       loadingVolunteerDrafts.value = false;
     }
@@ -610,20 +629,23 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
     const studentId = volunteerWorkbenchForm.student_id;
     if (!studentId) {
       studentCareerPreference.value = null;
+      studentProfileError.value = "";
       return;
     }
     const province = volunteerWorkbenchForm.province || "山东";
     try {
       loadingStudentCareerPreference.value = true;
+      studentProfileError.value = "";
       const profile = await apiRequest<Record<string, unknown> | null>(
         `/api/gaokao/students/${studentId}/pathway-profile?province=${encodeURIComponent(province)}`,
-      ).catch(() => null);
+      );
       // Pathway profile is the single source of truth; we no longer mirror to
       // a separate career-preference table here.
       studentCareerPreference.value = null;
       applyStudentPathwayProfileToForm(volunteerWorkbenchForm, profile as never);
     } catch (error) {
-      reportError(error);
+      studentProfileError.value = buildWorkspaceLoadError("读取学生升学画像", error);
+      studentCareerPreference.value = null;
     } finally {
       loadingStudentCareerPreference.value = false;
     }
@@ -863,12 +885,13 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
     try {
       compareVolunteerDraftLoading.value = true;
       compareVolunteerDraftId.value = draftId;
+      compareVolunteerDraftError.value = "";
       compareVolunteerDraftDetail.value = await apiRequest<VolunteerDraftDetail>(
         `/api/recommendations/volunteer-drafts/${draftId}`,
       );
     } catch (error) {
-      clearVolunteerDraftComparison();
-      reportError(error);
+      compareVolunteerDraftDetail.value = null;
+      compareVolunteerDraftError.value = buildWorkspaceLoadError("加载草稿对比", error);
     } finally {
       compareVolunteerDraftLoading.value = false;
     }
@@ -878,6 +901,7 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
     compareVolunteerDraftId.value = undefined;
     compareVolunteerDraftDetail.value = null;
     compareVolunteerDraftLoading.value = false;
+    compareVolunteerDraftError.value = "";
   }
 
   return {
@@ -885,6 +909,7 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
     applyCurrentExamScoreToWorkbench,
     applyStudentCareerPreference,
     compareVolunteerDraftId,
+    compareVolunteerDraftError,
     compareVolunteerDraftLoading,
     compareVolunteerDraftOptions,
     currentVolunteerDraftId,
@@ -894,13 +919,17 @@ export function useGaokaoVolunteerWorkspace(options: VolunteerWorkspaceOptions) 
     exportingVolunteerDraftId,
     examScoreAutofillNotice,
     loadVolunteerWorkbenchPreview,
+    workbenchPreviewError,
     loadingVolunteerGuideOptions,
+    volunteerGuideOptionsError,
     loadVolunteerDraftDetail,
     loadVolunteerDrafts,
     loadVolunteerDraftComparison,
     loadingVolunteerDrafts,
+    volunteerDraftsError,
     loadingExamScoreAutofill,
     loadingStudentCareerPreference,
+    studentProfileError,
     moveVolunteerCandidate,
     openVolunteerDraftPrintPreview,
     remainingVolunteerSlots,

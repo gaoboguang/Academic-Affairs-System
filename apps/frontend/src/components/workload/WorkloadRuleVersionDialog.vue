@@ -5,11 +5,18 @@
     width="520px"
     destroy-on-close
     :close-on-click-modal="false"
+    :close-on-press-escape="!saving"
     @closed="emit('closed')"
   >
     <div class="filter-grid">
-      <el-input v-model="form.name" placeholder="规则名称" />
-      <el-select v-model="form.semester_id" clearable filterable placeholder="适用学期，可不选">
+      <el-input v-model="form.name" placeholder="规则名称" :disabled="controlsDisabled" />
+      <el-select
+        v-model="form.semester_id"
+        clearable
+        filterable
+        placeholder="适用学期，可不选"
+        :disabled="controlsDisabled"
+      >
         <el-option
           v-for="semester in semesterOptions"
           :key="semester.id"
@@ -17,7 +24,7 @@
           :value="semester.id"
         />
       </el-select>
-      <el-select v-model="form.status" placeholder="状态">
+      <el-select v-model="form.status" placeholder="状态" :disabled="controlsDisabled">
         <el-option
           v-for="option in ruleVersionStatusOptions"
           :key="option.value"
@@ -25,13 +32,25 @@
           :value="option.value"
         />
       </el-select>
-      <el-switch v-model="form.is_default" inline-prompt active-text="默认" inactive-text="普通" />
-      <el-input v-model="form.note" placeholder="备注" />
-      <el-switch v-model="form.is_active" inline-prompt active-text="启用" inactive-text="停用" />
+      <el-switch
+        v-model="form.is_default"
+        inline-prompt
+        active-text="默认"
+        inactive-text="普通"
+        :disabled="controlsDisabled"
+      />
+      <el-input v-model="form.note" placeholder="备注" :disabled="controlsDisabled" />
+      <el-switch
+        v-model="form.is_active"
+        inline-prompt
+        active-text="启用"
+        inactive-text="停用"
+        :disabled="controlsDisabled"
+      />
     </div>
     <template #footer>
-      <el-button @click="dialogVisible = false">取消</el-button>
-      <el-button type="primary" :loading="saving" @click="emit('save')">创建</el-button>
+      <el-button :disabled="saving" @click="dialogVisible = false">取消</el-button>
+      <el-button type="primary" :loading="saving" :disabled="controlsDisabled" @click="emit('save')">创建</el-button>
     </template>
   </el-dialog>
 </template>
@@ -48,6 +67,7 @@ const props = defineProps<{
   form: CreateRuleForm;
   semesterOptions: OptionItem[];
   saving: boolean;
+  controlsDisabled: boolean;
 }>();
 
 const emit = defineEmits<{

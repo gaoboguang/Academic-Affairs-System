@@ -6,17 +6,43 @@
     :meta="pageMeta"
   >
     <template #actions>
-      <el-button :loading="loading" @click="reloadAll">刷新速览</el-button>
-      <el-button @click="router.push('/teachers?assignments=1')">批量维护任课</el-button>
-      <el-button type="primary" @click="router.push('/base-data')">维护主数据</el-button>
+      <el-button :loading="loading || overviewLoading" @click="reloadAll">刷新速览</el-button>
+      <el-button :disabled="controlsDisabled" @click="router.push('/teachers?assignments=1')">批量维护任课</el-button>
+      <el-button type="primary" :disabled="controlsDisabled" @click="router.push('/base-data')">维护主数据</el-button>
     </template>
 
     <AppStatGrid :items="overviewCards" :columns="5" />
 
+    <el-alert
+      v-if="optionsLoadError"
+      class="class-page-alert"
+      type="error"
+      :title="optionsLoadError"
+      show-icon
+      :closable="false"
+    >
+      <template #default>
+        <el-button size="small" :loading="loading" @click="reloadAll">重新加载基础选项</el-button>
+      </template>
+    </el-alert>
+
+    <el-alert
+      v-if="overviewLoadError"
+      class="class-page-alert"
+      type="error"
+      :title="overviewLoadError"
+      show-icon
+      :closable="false"
+    >
+      <template #default>
+        <el-button size="small" :loading="overviewLoading" @click="loadOverview">重新加载班级速览</el-button>
+      </template>
+    </el-alert>
+
     <AppFilterBar title="筛选班级" description="按年级、班型、班主任覆盖、任课完整度和荣誉记录快速缩小范围。" sticky>
       <div class="filter-grid class-filter-grid">
-        <el-input v-model="filters.keyword" clearable placeholder="搜索班级、教师或荣誉" />
-        <el-select v-model="filters.gradeId" clearable placeholder="年级">
+        <el-input v-model="filters.keyword" clearable :disabled="controlsDisabled" placeholder="搜索班级、教师或荣誉" />
+        <el-select v-model="filters.gradeId" clearable :disabled="controlsDisabled" placeholder="年级">
           <el-option
             v-for="grade in referenceStore.grades"
             :key="grade.id"
@@ -24,7 +50,7 @@
             :value="grade.id"
           />
         </el-select>
-        <el-select v-model="filters.classType" clearable placeholder="班型">
+        <el-select v-model="filters.classType" clearable :disabled="controlsDisabled" placeholder="班型">
           <el-option
             v-for="item in referenceStore.dicts.class_type ?? []"
             :key="String(item.code)"
@@ -32,22 +58,22 @@
             :value="item.code"
           />
         </el-select>
-        <el-select v-model="filters.headTeacher" placeholder="班主任">
+        <el-select v-model="filters.headTeacher" :disabled="controlsDisabled" placeholder="班主任">
           <el-option label="全部" value="all" />
           <el-option label="已维护" value="assigned" />
           <el-option label="未维护" value="missing" />
         </el-select>
-        <el-select v-model="filters.teaching" placeholder="任课">
+        <el-select v-model="filters.teaching" :disabled="controlsDisabled" placeholder="任课">
           <el-option label="全部" value="all" />
           <el-option label="有任课" value="complete" />
           <el-option label="缺任课" value="missing" />
         </el-select>
-        <el-select v-model="filters.honor" placeholder="荣誉">
+        <el-select v-model="filters.honor" :disabled="controlsDisabled" placeholder="荣誉">
           <el-option label="全部" value="all" />
           <el-option label="有荣誉" value="has" />
           <el-option label="无荣誉" value="none" />
         </el-select>
-        <el-select v-model="selectedSemesterId" clearable placeholder="任教学期">
+        <el-select v-model="selectedSemesterId" clearable :disabled="controlsDisabled" placeholder="任教学期">
           <el-option
             v-for="semester in referenceStore.semesters"
             :key="semester.id"
@@ -55,7 +81,7 @@
             :value="semester.id"
           />
         </el-select>
-        <el-select v-model="selectedExamId" clearable placeholder="成绩考试">
+        <el-select v-model="selectedExamId" clearable :disabled="controlsDisabled" placeholder="成绩考试">
           <el-option
             v-for="exam in examOptions"
             :key="exam.id"
@@ -65,13 +91,12 @@
         </el-select>
       </div>
       <template #actions>
-        <el-segmented v-model="viewMode" :options="viewModeOptions" />
-        <el-button @click="resetFilters">重置</el-button>
+        <el-segmented v-model="viewMode" :options="viewModeOptions" :disabled="controlsDisabled" />
+        <el-button :disabled="controlsDisabled || !activeFilterCount" @click="resetFilters">重置</el-button>
       </template>
     </AppFilterBar>
 
-    <div v-if="loading" class="loading-panel">正在加载年级班级速览...</div>
-    <template v-else>
+    <div v-loading="loading || overviewLoading" class="class-overview-body">
       <AppSectionCard
         v-for="group in visibleGradeGroups"
         :key="group.grade_id"
@@ -126,6 +151,9 @@
 
         <AppTableShell v-else>
           <el-table :data="group.classes" stripe>
+            <template #empty>
+              <el-empty description="当前年级没有符合条件的班级" />
+            </template>
             <el-table-column label="班级" min-width="120">
               <template #default="{ row }">
                 <el-button link type="primary" @click="router.push(`/classes/${row.class_id}`)">
@@ -160,8 +188,8 @@
         </AppTableShell>
       </AppSectionCard>
 
-      <el-empty v-if="!visibleGradeGroups.length" description="没有符合筛选条件的班级。" />
-    </template>
+      <el-empty v-if="!visibleGradeGroups.length" :description="classesEmptyDescription" />
+    </div>
   </AppPage>
 </template>
 
@@ -178,6 +206,7 @@ import {
   AppStatGrid,
   AppTableShell,
   type PageMetaItem,
+  type StatCardItem,
 } from "../components/ui";
 import {
   buildTeachingSetupPath,
@@ -191,6 +220,7 @@ import {
   type GradeOverviewGroup,
 } from "../components/classes/classProfile";
 import { useReferenceStore, type OptionItem } from "../stores/reference";
+import { formatUserActionError, getErrorMessage } from "../utils/userFeedback";
 
 interface ExamOption {
   id: number;
@@ -200,8 +230,11 @@ interface ExamOption {
 const referenceStore = useReferenceStore();
 const router = useRouter();
 const loading = ref(false);
+const overviewLoading = ref(false);
 const overview = ref<ClassesOverviewResponse | null>(null);
 const examOptions = ref<ExamOption[]>([]);
+const optionsLoadError = ref("");
+const overviewLoadError = ref("");
 const selectedSemesterId = ref<number | null>(null);
 const selectedExamId = ref<number | null>(null);
 const viewMode = ref<"cards" | "table">("cards");
@@ -218,12 +251,46 @@ const filters = reactive({
   honor: "all" as "all" | "has" | "none",
 });
 
-const overviewCards = computed(() => buildClassOverviewCards(overview.value));
+const controlsDisabled = computed(() => loading.value || overviewLoading.value);
+const activeFilterCount = computed(() => {
+  let count = 0;
+  if (filters.keyword.trim()) count += 1;
+  if (filters.gradeId) count += 1;
+  if (filters.classType) count += 1;
+  if (filters.headTeacher !== "all") count += 1;
+  if (filters.teaching !== "all") count += 1;
+  if (filters.honor !== "all") count += 1;
+  if (selectedSemesterId.value) count += 1;
+  if (selectedExamId.value) count += 1;
+  return count;
+});
+
+const overviewLoadFailed = computed(() => Boolean(overviewLoadError.value && !overview.value));
+const failedOverviewCards: StatCardItem[] = [
+  { label: "年级", value: "加载失败", help: "请重新加载班级速览。", tone: "danger" },
+  { label: "班级", value: "加载失败", help: "请重新加载班级速览。", tone: "danger" },
+  { label: "学生", value: "加载失败", help: "请重新加载班级速览。", tone: "danger" },
+  { label: "班主任覆盖", value: "加载失败", help: "请重新加载班级速览。", tone: "danger" },
+  { label: "班级荣誉", value: "加载失败", help: "请重新加载班级速览。", tone: "danger" },
+];
+const overviewCards = computed<StatCardItem[]>(() => {
+  if (overviewLoadFailed.value) {
+    return failedOverviewCards.map((item) => ({
+      ...item,
+      loading: controlsDisabled.value,
+    }));
+  }
+  return buildClassOverviewCards(overview.value).map((item) => ({
+    ...item,
+    loading: controlsDisabled.value,
+  }));
+});
 const pageMeta = computed<PageMetaItem[]>(() => [
-  { label: "任教学期", value: overview.value?.semester_name ?? "当前学期" },
-  { label: "成绩考试", value: overview.value?.exam_name ?? "最近考试" },
-  { label: "班级", value: overview.value?.total_classes ?? 0 },
-  { label: "荣誉", value: overview.value?.total_honors ?? 0 },
+  { label: "任教学期", value: overviewLoadFailed.value ? "加载失败" : overview.value?.semester_name ?? "当前学期" },
+  { label: "成绩考试", value: overviewLoadFailed.value ? "加载失败" : overview.value?.exam_name ?? "最近考试" },
+  { label: "班级", value: overviewLoadFailed.value ? "加载失败" : overview.value?.total_classes ?? 0 },
+  { label: "荣誉", value: overviewLoadFailed.value ? "加载失败" : overview.value?.total_honors ?? 0 },
+  { label: "启用筛选", value: activeFilterCount.value },
 ]);
 const visibleGradeGroups = computed<GradeOverviewGroup[]>(() => {
   const groups = overview.value?.grades ?? [];
@@ -240,6 +307,12 @@ const visibleGradeGroups = computed<GradeOverviewGroup[]>(() => {
       }),
     }))
     .filter((group) => group.classes.length > 0);
+});
+const classesEmptyDescription = computed(() => {
+  if (overviewLoadError.value) return "班级速览加载失败，请重新加载。";
+  if (!overview.value) return "班级速览尚未加载。";
+  if (activeFilterCount.value) return "没有符合筛选条件的班级。";
+  return "暂无班级数据，可以先到基础数据维护年级班级。";
 });
 
 function formatSemesterName(item: OptionItem): string {
@@ -261,40 +334,69 @@ function resetFilters(): void {
 }
 
 async function loadOptions(): Promise<void> {
-  await referenceStore.loadAll();
-  const exams = await apiRequest<{ items: ExamOption[] }>("/api/exams?page=1&page_size=100");
-  examOptions.value = exams.items;
-}
-
-async function loadOverview(): Promise<void> {
-  const query = new URLSearchParams();
-  if (filters.gradeId) query.set("grade_id", String(filters.gradeId));
-  if (selectedSemesterId.value) query.set("semester_id", String(selectedSemesterId.value));
-  if (selectedExamId.value) query.set("exam_id", String(selectedExamId.value));
-  const suffix = query.toString() ? `?${query.toString()}` : "";
-  overview.value = await apiRequest<ClassesOverviewResponse>(`/api/classes/overview${suffix}`);
-}
-
-async function reloadAll(): Promise<void> {
   try {
     loading.value = true;
-    await loadOptions();
-    await loadOverview();
-  } catch (error) {
-    ElMessage.error((error as Error).message);
+    optionsLoadError.value = "";
+    const [referenceResult, examResult] = await Promise.allSettled([
+      referenceStore.loadAll(),
+      apiRequest<{ items: ExamOption[] }>("/api/exams?page=1&page_size=100"),
+    ]);
+    const failures: string[] = [];
+    if (referenceResult.status === "rejected") {
+      failures.push(`基础选项：${getErrorMessage(referenceResult.reason)}`);
+    }
+    if (examResult.status === "fulfilled") {
+      examOptions.value = examResult.value.items;
+    } else {
+      examOptions.value = [];
+      failures.push(`考试选项：${getErrorMessage(examResult.reason)}`);
+    }
+    if (failures.length) {
+      optionsLoadError.value = `部分筛选选项加载失败：${failures.join("；")}。班级速览已单独加载，可稍后重试。`;
+      ElMessage.error(optionsLoadError.value);
+    }
   } finally {
     loading.value = false;
   }
 }
 
+async function loadOverview(): Promise<void> {
+  try {
+    overviewLoading.value = true;
+    overviewLoadError.value = "";
+    const query = new URLSearchParams();
+    if (filters.gradeId) query.set("grade_id", String(filters.gradeId));
+    if (selectedSemesterId.value) query.set("semester_id", String(selectedSemesterId.value));
+    if (selectedExamId.value) query.set("exam_id", String(selectedExamId.value));
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    overview.value = await apiRequest<ClassesOverviewResponse>(`/api/classes/overview${suffix}`);
+  } catch (error) {
+    overview.value = null;
+    overviewLoadError.value = formatUserActionError(
+      "加载年级班级速览",
+      error,
+      "确认本地后端服务正常运行后，点击重新加载班级速览。",
+    );
+    ElMessage.error(overviewLoadError.value);
+  } finally {
+    overviewLoading.value = false;
+  }
+}
+
+async function reloadAll(): Promise<void> {
+  await Promise.all([loadOptions(), loadOverview()]);
+}
+
 watch([selectedSemesterId, selectedExamId], () => {
-  void loadOverview().catch((error: Error) => ElMessage.error(error.message));
+  if (controlsDisabled.value) return;
+  void loadOverview();
 });
 
 watch(
   () => filters.gradeId,
   () => {
-    void loadOverview().catch((error: Error) => ElMessage.error(error.message));
+    if (controlsDisabled.value) return;
+    void loadOverview();
   },
 );
 
@@ -304,6 +406,16 @@ onMounted(reloadAll);
 <style scoped>
 .class-filter-grid {
   grid-template-columns: repeat(4, minmax(160px, 1fr));
+}
+
+.class-page-alert {
+  margin-top: -4px;
+}
+
+.class-overview-body {
+  display: grid;
+  gap: 16px;
+  min-height: 260px;
 }
 
 .class-card-grid {
@@ -387,14 +499,6 @@ onMounted(reloadAll);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.loading-panel {
-  padding: 22px;
-  border-radius: 8px;
-  border: 1px solid var(--border-soft);
-  background: var(--bg-panel);
-  color: var(--text-muted);
 }
 
 @media (max-width: 980px) {

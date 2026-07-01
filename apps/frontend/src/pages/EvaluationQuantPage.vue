@@ -7,15 +7,49 @@
   >
     <template #actions>
       <div class="action-row">
-        <el-button @click="downloadEvaluationTemplate">评教模板下载</el-button>
-        <el-button @click="downloadQuantTemplate">量化模板下载</el-button>
-        <el-button type="primary" @click="activeTab = 'evaluation'"
+        <el-button :disabled="topActionsDisabled" @click="downloadEvaluationTemplate">评教模板下载</el-button>
+        <el-button :disabled="topActionsDisabled" @click="downloadQuantTemplate">量化模板下载</el-button>
+        <el-button type="primary" :disabled="topActionsDisabled" @click="activeTab = 'evaluation'"
           >进入评教</el-button
         >
       </div>
     </template>
 
     <AppStatGrid :items="pageStatCards" :columns="4" />
+
+    <el-alert
+      v-if="evaluationActionError"
+      class="evaluation-page-alert"
+      type="error"
+      show-icon
+      title="评教量化操作失败"
+      @close="clearEvaluationActionError"
+    >
+      <template #default>{{ evaluationActionError }}</template>
+    </el-alert>
+
+    <el-alert
+      v-if="evaluationLoadErrorItems.length"
+      class="evaluation-page-alert"
+      type="warning"
+      show-icon
+      :closable="false"
+      title="评教量化部分数据加载失败"
+    >
+      <template #default>
+        <div class="evaluation-load-error-list">
+          <article v-for="item in evaluationLoadErrorItems" :key="item.key" class="evaluation-load-error-item">
+            <div>
+              <strong>{{ item.label }}</strong>
+              <p>{{ item.message }}</p>
+            </div>
+            <el-button size="small" type="warning" plain :loading="item.loading" @click="retryEvaluationLoadItem(item.key)">
+              重试
+            </el-button>
+          </article>
+        </div>
+      </template>
+    </el-alert>
 
     <AppSectionCard
       title="当前操作提示"
@@ -47,6 +81,14 @@
             :evaluation-import-result="evaluationImportResult"
             :evaluation-import-form="evaluationImportForm"
             :semesters="referenceStore.semesters"
+            :loading-templates="loadingTemplates"
+            :templates-error="templatesError"
+            :loading-batches="loadingBatches"
+            :batches-error="batchesError"
+            :importing-evaluation="importingEvaluation"
+            :template-actions-disabled="templateActionsDisabled"
+            :evaluation-import-disabled="evaluationImportDisabled"
+            :batch-actions-disabled="batchActionsDisabled"
             @reload-templates="loadTemplates"
             @open-create-template="openCreateTemplate"
             @edit-template="openEditTemplate"
@@ -65,6 +107,13 @@
             :trend-delta-score="trendDeltaScore"
             :trend-rank-delta="trendRankDelta"
             :trend-peak-score="trendPeakScore"
+            :loading-evaluation-overview="loadingEvaluationOverview"
+            :evaluation-overview-error="evaluationOverviewError"
+            :loading-evaluation-comparison="loadingEvaluationComparison"
+            :evaluation-comparison-error="evaluationComparisonError"
+            :loading-teacher-detail="loadingTeacherDetail"
+            :teacher-detail-error="teacherDetailError"
+            :controls-disabled="evaluationOverviewControlsDisabled"
             @change-compare-batch="handleCompareBatchChange"
             @load-teacher-detail="loadTeacherDetail"
           />
@@ -78,6 +127,12 @@
               :selected-rule-version-meta="selectedRuleVersionMeta"
               :rule-item-rows="ruleItemRows"
               :saving-rule-items="savingRuleItems"
+              :loading-rule-versions="loadingRuleVersions"
+              :rule-versions-error="ruleVersionsError"
+              :loading-rule-items="loadingRuleItems"
+              :rule-items-error="ruleItemsError"
+              :rule-actions-disabled="ruleActionsDisabled"
+              :rule-item-controls-disabled="ruleItemControlsDisabled"
               @reload-rule-versions="loadRuleVersions"
               @open-create-rule-version="openCreateRuleVersion"
               @select-rule-version="selectRuleVersion"
@@ -93,6 +148,13 @@
               :rule-versions="ruleVersions"
               :quant-summary="quantSummary"
               :quant-records="quantRecords"
+              :loading-quant-data="loadingQuantData"
+              :quant-data-error="quantDataError"
+              :loading-teacher-options="loadingTeacherOptions"
+              :teacher-options-error="teacherOptionsError"
+              :controls-disabled="quantControlsDisabled"
+              :create-disabled="createQuantRecordDisabled"
+              :row-actions-disabled="quantRowActionsDisabled"
               @reload="reloadQuantData"
               @open-create-quant-record="openCreateQuantRecord"
               @reset-filters="resetQuantFilters"
@@ -107,6 +169,7 @@
       v-model:visible="templateDialogVisible"
       :title="templateDialogTitle"
       :saving="savingTemplate"
+      :controls-disabled="savingTemplate"
       :form="templateForm"
       :questions="templateQuestions"
       @closed="handleTemplateDialogClosed"
@@ -119,6 +182,7 @@
       v-model:visible="ruleVersionDialogVisible"
       :title="ruleVersionDialogTitle"
       :saving="savingRuleVersion"
+      :controls-disabled="savingRuleVersion"
       :form="ruleVersionForm"
       :semesters="referenceStore.semesters"
       @closed="handleRuleVersionDialogClosed"
@@ -129,6 +193,8 @@
       v-model:visible="quantDialogVisible"
       :title="quantDialogTitle"
       :saving="savingQuant"
+      :controls-disabled="savingQuant || uploadingQuantAttachments"
+      :uploading-attachments="uploadingQuantAttachments"
       :form="quantForm"
       :teacher-options="teacherOptions"
       :classes="referenceStore.classes"
@@ -182,6 +248,37 @@ const {
   savingRuleVersion,
   savingRuleItems,
   savingQuant,
+  uploadingQuantAttachments,
+  importingEvaluation,
+  evaluationActionError,
+  topActionsDisabled,
+  templateActionsDisabled,
+  evaluationImportDisabled,
+  batchActionsDisabled,
+  evaluationOverviewControlsDisabled,
+  ruleActionsDisabled,
+  ruleItemControlsDisabled,
+  quantControlsDisabled,
+  createQuantRecordDisabled,
+  quantRowActionsDisabled,
+  loadingTeacherOptions,
+  loadingTemplates,
+  loadingBatches,
+  loadingEvaluationOverview,
+  loadingEvaluationComparison,
+  loadingTeacherDetail,
+  loadingRuleVersions,
+  loadingRuleItems,
+  loadingQuantData,
+  teacherOptionsError,
+  templatesError,
+  batchesError,
+  evaluationOverviewError,
+  evaluationComparisonError,
+  teacherDetailError,
+  ruleVersionsError,
+  ruleItemsError,
+  quantDataError,
   evaluationImportForm,
   quantFilters,
   templateForm,
@@ -197,6 +294,7 @@ const {
   currentBatchLabel,
   currentRuleVersionLabel,
   guideCards,
+  evaluationLoadErrorItems,
   compareBatchOptions,
   trendDeltaScore,
   trendRankDelta,
@@ -220,6 +318,7 @@ const {
   reloadQuantData,
   openCreateQuantRecord,
   resetQuantFilters,
+  retryEvaluationLoadItem,
   openEditQuantRecord,
   handleTemplateDialogClosed,
   handleRuleVersionDialogClosed,
@@ -231,6 +330,7 @@ const {
   handleQuantAttachmentUpload,
   removeQuantAttachment,
   saveQuantRecord,
+  clearEvaluationActionError,
 } = useEvaluationQuantPage();
 
 const pageMeta = computed<PageMetaItem[]>(() => [
@@ -240,40 +340,59 @@ const pageMeta = computed<PageMetaItem[]>(() => [
   { label: "量化记录", value: quantRecords.value.length },
 ]);
 
-const pageStatCards = computed<StatCardItem[]>(() => [
-  {
-    label: "评教模板",
-    value: templates.value.length,
-    help: templates.value.length
-      ? "模板就绪，可继续导入评教数据。"
-      : "建议先创建评教模板。",
-    tone: templates.value.length ? "primary" : "neutral",
-  },
-  {
-    label: "评教批次",
-    value: batches.value.length,
-    help: batches.value.length
-      ? "可查看批次概览、对比和教师趋势。"
-      : "暂无评教批次。",
-    tone: batches.value.length ? "success" : "neutral",
-  },
-  {
-    label: "量化规则版本",
-    value: ruleVersions.value.length,
-    help: selectedRuleVersionMeta.value
-      ? `当前：${currentRuleVersionLabel.value}`
-      : "请选择或创建量化规则版本。",
-    tone: selectedRuleVersionMeta.value ? "primary" : "warning",
-  },
-  {
-    label: "量化记录",
-    value: quantRecords.value.length,
-    help: quantRecords.value.length
-      ? "可按学期、教师和规则版本继续筛选。"
-      : "可从当前规则版本开始新增记录。",
-    tone: quantRecords.value.length ? "warning" : "neutral",
-  },
-]);
+const pageStatCards = computed<StatCardItem[]>(() => {
+  const templatesFailed = Boolean(templatesError.value && !templates.value.length);
+  const batchesFailed = Boolean(batchesError.value && !batches.value.length);
+  const ruleVersionsFailed = Boolean(ruleVersionsError.value && !ruleVersions.value.length);
+  const quantRecordsFailed = Boolean(quantDataError.value && !quantRecords.value.length);
+
+  return [
+    {
+      label: "评教模板",
+      value: templatesFailed ? "加载失败" : templates.value.length,
+      help: templatesFailed
+        ? "请重新加载评教模板。"
+        : templates.value.length
+          ? "模板就绪，可继续导入评教数据。"
+          : "建议先创建评教模板。",
+      tone: templatesFailed ? "danger" : templates.value.length ? "primary" : "neutral",
+      loading: loadingTemplates.value,
+    },
+    {
+      label: "评教批次",
+      value: batchesFailed ? "加载失败" : batches.value.length,
+      help: batchesFailed
+        ? "请重新加载评教批次。"
+        : batches.value.length
+          ? "可查看批次概览、对比和教师趋势。"
+          : "暂无评教批次。",
+      tone: batchesFailed ? "danger" : batches.value.length ? "success" : "neutral",
+      loading: loadingBatches.value,
+    },
+    {
+      label: "量化规则版本",
+      value: ruleVersionsFailed ? "加载失败" : ruleVersions.value.length,
+      help: ruleVersionsFailed
+        ? "请重新加载量化规则版本。"
+        : selectedRuleVersionMeta.value
+          ? `当前：${currentRuleVersionLabel.value}`
+          : "请选择或创建量化规则版本。",
+      tone: ruleVersionsFailed ? "danger" : selectedRuleVersionMeta.value ? "primary" : "warning",
+      loading: loadingRuleVersions.value,
+    },
+    {
+      label: "量化记录",
+      value: quantRecordsFailed ? "加载失败" : quantRecords.value.length,
+      help: quantRecordsFailed
+        ? "请重新查询量化记录。"
+        : quantRecords.value.length
+          ? "可按学期、教师和规则版本继续筛选。"
+          : "可从当前规则版本开始新增记录。",
+      tone: quantRecordsFailed ? "danger" : quantRecords.value.length ? "warning" : "neutral",
+      loading: loadingQuantData.value,
+    },
+  ];
+});
 </script>
 
 <style scoped>
@@ -281,6 +400,37 @@ const pageStatCards = computed<StatCardItem[]>(() => [
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
+}
+
+.evaluation-page-alert {
+  margin-top: 16px;
+}
+
+.evaluation-load-error-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.evaluation-load-error-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff7ed;
+}
+
+.evaluation-load-error-item strong {
+  display: block;
+  color: #7c3f00;
+}
+
+.evaluation-load-error-item p {
+  margin: 4px 0 0;
+  color: #8a5d19;
+  line-height: 1.5;
 }
 
 .guide-card {
@@ -330,6 +480,10 @@ const pageStatCards = computed<StatCardItem[]>(() => [
 @media (max-width: 1080px) {
   .guide-grid {
     grid-template-columns: 1fr;
+  }
+
+  .evaluation-load-error-item {
+    display: grid;
   }
 }
 </style>

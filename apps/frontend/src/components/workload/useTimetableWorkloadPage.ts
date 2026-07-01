@@ -27,8 +27,25 @@ import type {
   WorkloadResultItem,
 } from "./types";
 
-function reportError(error: unknown): void {
-  ElMessage.error(formatUserActionError("处理课表工作量", error, "先确认已选择学期、批次和规则版本；如果仍失败，请刷新页面数据后重试。"));
+type WorkloadLoadKey =
+  | "reference"
+  | "teachers"
+  | "ruleVersions"
+  | "ruleItems"
+  | "batches"
+  | "entries"
+  | "extras"
+  | "results";
+
+interface WorkloadLoadErrorItem {
+  key: WorkloadLoadKey;
+  label: string;
+  message: string;
+  loading: boolean;
+}
+
+function buildLoadError(action: string, error: unknown): string {
+  return formatUserActionError(action, error, "可先重试当前区块；如果仍失败，再刷新页面或检查本地后端服务。");
 }
 
 export function useTimetableWorkloadPage() {
@@ -60,6 +77,25 @@ export function useTimetableWorkloadPage() {
   const savingRuleItems = ref(false);
   const savingExtra = ref(false);
   const calculating = ref(false);
+
+  const loadingReference = ref(false);
+  const loadingTeacherOptions = ref(false);
+  const loadingRuleVersions = ref(false);
+  const loadingRuleItems = ref(false);
+  const loadingBatches = ref(false);
+  const loadingEntries = ref(false);
+  const loadingExtras = ref(false);
+  const loadingResults = ref(false);
+
+  const referenceError = ref("");
+  const teacherOptionsError = ref("");
+  const ruleVersionsError = ref("");
+  const ruleItemsError = ref("");
+  const batchesError = ref("");
+  const entriesError = ref("");
+  const extrasError = ref("");
+  const resultsError = ref("");
+  const workloadActionError = ref("");
 
   const entryDialogVisible = ref(false);
   const ruleDialogVisible = ref(false);
@@ -120,26 +156,149 @@ export function useTimetableWorkloadPage() {
     }),
   );
   const workloadResultReviewCards = computed(() => buildWorkloadResultReviewCards(results.value));
+  const workloadWriteBusy = computed(() =>
+    importing.value
+    || savingEntry.value
+    || creatingRuleVersion.value
+    || savingRuleItems.value
+    || savingExtra.value
+    || calculating.value,
+  );
+  const workloadRefreshBusy = computed(() =>
+    loadingReference.value
+    || loadingTeacherOptions.value
+    || loadingRuleVersions.value
+    || loadingRuleItems.value
+    || loadingBatches.value
+    || loadingEntries.value
+    || loadingExtras.value
+    || loadingResults.value,
+  );
+  const workloadSelectionDisabled = computed(() => workloadWriteBusy.value);
+  const calculateDisabled = computed(() =>
+    (workloadWriteBusy.value && !calculating.value)
+    || loadingReference.value
+    || loadingRuleVersions.value
+    || loadingRuleItems.value
+    || loadingBatches.value
+    || loadingEntries.value
+    || !selectedSemesterId.value
+    || !selectedRuleVersionId.value,
+  );
+  const exportResultsDisabled = computed(() =>
+    !results.value.length
+    || loadingResults.value
+    || Boolean(resultsError.value)
+    || workloadWriteBusy.value,
+  );
+  const timetableImportDisabled = computed(() =>
+    !selectedSemesterId.value
+    || !selectedTimetableFile.value
+    || workloadWriteBusy.value
+    || loadingReference.value
+    || Boolean(referenceError.value),
+  );
+  const timetablePanelActionsDisabled = computed(() =>
+    workloadWriteBusy.value
+    || loadingBatches.value
+    || loadingEntries.value,
+  );
+  const ruleActionsDisabled = computed(() =>
+    importing.value
+    || savingEntry.value
+    || creatingRuleVersion.value
+    || calculating.value
+    || loadingRuleVersions.value
+    || Boolean(ruleVersionsError.value),
+  );
+  const ruleItemControlsDisabled = computed(() =>
+    ruleActionsDisabled.value
+    || savingRuleItems.value
+    || loadingRuleItems.value
+    || Boolean(ruleItemsError.value),
+  );
+  const extraControlsDisabled = computed(() =>
+    workloadWriteBusy.value
+    || loadingTeacherOptions.value
+    || loadingExtras.value
+    || Boolean(teacherOptionsError.value)
+    || Boolean(extrasError.value)
+    || !selectedSemesterId.value,
+  );
   const overviewCards = computed<StatusCard[]>(() => [
     {
       label: "课表批次",
-      value: timetableBatches.value.length,
-      help: "当前学期可用的课表导入批次数量。",
-      tone: "tone-blue",
+      value: batchesError.value ? "加载失败" : timetableBatches.value.length,
+      help: batchesError.value ? "课表批次暂时不可用，请重试当前区块。" : "当前学期可用的课表导入批次数量。",
+      tone: batchesError.value ? "tone-red" : "tone-blue",
     },
     {
       label: "规则项",
-      value: ruleItems.value.length,
-      help: "当前规则版本下的有效规则项数量。",
-      tone: "tone-amber",
+      value: ruleItemsError.value ? "加载失败" : ruleItems.value.length,
+      help: ruleItemsError.value ? "规则项暂时不可用，请重试当前区块。" : "当前规则版本下的有效规则项数量。",
+      tone: ruleItemsError.value ? "tone-red" : "tone-amber",
     },
     {
       label: "附加项",
-      value: extras.value.length,
-      help: "当前学期已补录的附加量化项数量。",
-      tone: "tone-slate",
+      value: extrasError.value ? "加载失败" : extras.value.length,
+      help: extrasError.value ? "附加项暂时不可用，请重试当前区块。" : "当前学期已补录的附加量化项数量。",
+      tone: extrasError.value ? "tone-red" : "tone-slate",
     },
   ]);
+
+  const workloadLoadErrorItems = computed<WorkloadLoadErrorItem[]>(() => {
+    const items: WorkloadLoadErrorItem[] = [
+      {
+        key: "reference",
+        label: "基础选项",
+        message: referenceError.value,
+        loading: loadingReference.value,
+      },
+      {
+        key: "teachers",
+        label: "教师候选",
+        message: teacherOptionsError.value,
+        loading: loadingTeacherOptions.value,
+      },
+      {
+        key: "ruleVersions",
+        label: "规则版本",
+        message: ruleVersionsError.value,
+        loading: loadingRuleVersions.value,
+      },
+      {
+        key: "ruleItems",
+        label: "规则项",
+        message: ruleItemsError.value,
+        loading: loadingRuleItems.value,
+      },
+      {
+        key: "batches",
+        label: "课表批次",
+        message: batchesError.value,
+        loading: loadingBatches.value,
+      },
+      {
+        key: "entries",
+        label: "课表条目",
+        message: entriesError.value,
+        loading: loadingEntries.value,
+      },
+      {
+        key: "extras",
+        label: "附加项",
+        message: extrasError.value,
+        loading: loadingExtras.value,
+      },
+      {
+        key: "results",
+        label: "工作量结果",
+        message: resultsError.value,
+        loading: loadingResults.value,
+      },
+    ];
+    return items.filter((item) => item.message);
+  });
 
   const processCards = computed<StatusCard[]>(() => [
     {
@@ -203,89 +362,192 @@ export function useTimetableWorkloadPage() {
     };
   }
 
+  function clearWorkloadActionError(): void {
+    workloadActionError.value = "";
+  }
+
+  function setWorkloadActionError(action: string, error: unknown, nextStep: string): void {
+    const message = formatUserActionError(action, error, nextStep);
+    workloadActionError.value = message;
+    ElMessage.error(message);
+  }
+
+  function setWorkloadActionWarning(message: string): void {
+    workloadActionError.value = message;
+    ElMessage.warning(message);
+  }
+
+  async function loadReferenceOptions(): Promise<void> {
+    try {
+      loadingReference.value = true;
+      referenceError.value = "";
+      await referenceStore.loadAll();
+      const currentSemester = semesterOptions.value.find((item) => item.is_current) ?? semesterOptions.value[0];
+      if (!selectedSemesterId.value || !semesterOptions.value.some((item) => item.id === selectedSemesterId.value)) {
+        selectedSemesterId.value = currentSemester?.id ?? null;
+      }
+    } catch (error) {
+      referenceError.value = buildLoadError("加载基础选项", error);
+    } finally {
+      loadingReference.value = false;
+    }
+  }
+
   async function loadTeachers(): Promise<void> {
-    const payload = await apiRequest<{ items: TeacherOption[] }>("/api/teachers?page=1&page_size=200");
-    teacherOptions.value = payload.items;
+    try {
+      loadingTeacherOptions.value = true;
+      teacherOptionsError.value = "";
+      const payload = await apiRequest<{ items: TeacherOption[] }>("/api/teachers?page=1&page_size=200");
+      teacherOptions.value = payload.items;
+    } catch (error) {
+      teacherOptionsError.value = buildLoadError("加载教师候选", error);
+      teacherOptions.value = [];
+    } finally {
+      loadingTeacherOptions.value = false;
+    }
   }
 
   async function loadRuleVersions(): Promise<void> {
-    const payload = await apiRequest<RuleVersionItem[]>("/api/workload/rules");
-    ruleVersions.value = payload;
-    if (!payload.length) {
+    try {
+      loadingRuleVersions.value = true;
+      ruleVersionsError.value = "";
+      const payload = await apiRequest<RuleVersionItem[]>("/api/workload/rules");
+      ruleVersions.value = payload;
+      if (!payload.length) {
+        selectedRuleVersionId.value = null;
+        return;
+      }
+      const exists = payload.some((item) => item.id === selectedRuleVersionId.value);
+      if (exists) return;
+      selectedRuleVersionId.value = payload.find((item) => item.is_default)?.id ?? payload[0].id;
+    } catch (error) {
+      ruleVersionsError.value = buildLoadError("加载规则版本", error);
+      ruleVersions.value = [];
       selectedRuleVersionId.value = null;
-      return;
+      ruleItems.value = [];
+      results.value = [];
+    } finally {
+      loadingRuleVersions.value = false;
     }
-    const exists = payload.some((item) => item.id === selectedRuleVersionId.value);
-    if (exists) return;
-    selectedRuleVersionId.value = payload.find((item) => item.is_default)?.id ?? payload[0].id;
   }
 
   async function loadRuleItems(): Promise<void> {
     if (!selectedRuleVersionId.value) {
       ruleItems.value = [];
+      ruleItemsError.value = "";
       return;
     }
-    ruleItems.value = await apiRequest<RuleItem[]>(`/api/workload/rules/${selectedRuleVersionId.value}/items`);
+    try {
+      loadingRuleItems.value = true;
+      ruleItemsError.value = "";
+      ruleItems.value = await apiRequest<RuleItem[]>(`/api/workload/rules/${selectedRuleVersionId.value}/items`);
+    } catch (error) {
+      ruleItemsError.value = buildLoadError("加载规则项", error);
+      ruleItems.value = [];
+    } finally {
+      loadingRuleItems.value = false;
+    }
   }
 
   async function loadBatches(): Promise<void> {
     if (!selectedSemesterId.value) {
       timetableBatches.value = [];
       selectedBatchId.value = null;
+      batchesError.value = "";
       return;
     }
-    const payload = await apiRequest<TimetableBatchItem[]>(
-      `/api/timetable/batches?semester_id=${selectedSemesterId.value}`,
-    );
-    timetableBatches.value = payload;
-    if (!payload.length) {
+    try {
+      loadingBatches.value = true;
+      batchesError.value = "";
+      const payload = await apiRequest<TimetableBatchItem[]>(
+        `/api/timetable/batches?semester_id=${selectedSemesterId.value}`,
+      );
+      timetableBatches.value = payload;
+      if (!payload.length) {
+        selectedBatchId.value = null;
+        timetableEntries.value = [];
+        return;
+      }
+      const exists = payload.some((item) => item.id === selectedBatchId.value);
+      if (!exists) {
+        selectedBatchId.value = payload[0].id;
+      }
+    } catch (error) {
+      batchesError.value = buildLoadError("加载课表批次", error);
+      timetableBatches.value = [];
       selectedBatchId.value = null;
       timetableEntries.value = [];
-      return;
-    }
-    const exists = payload.some((item) => item.id === selectedBatchId.value);
-    if (!exists) {
-      selectedBatchId.value = payload[0].id;
+    } finally {
+      loadingBatches.value = false;
     }
   }
 
   async function loadEntries(): Promise<void> {
     if (!selectedBatchId.value) {
       timetableEntries.value = [];
+      entriesError.value = "";
       return;
     }
-    timetableEntries.value = await apiRequest<TimetableEntryItem[]>(
-      `/api/timetable/batches/${selectedBatchId.value}/entries?unresolved_only=${unresolvedOnly.value}`,
-    );
+    try {
+      loadingEntries.value = true;
+      entriesError.value = "";
+      timetableEntries.value = await apiRequest<TimetableEntryItem[]>(
+        `/api/timetable/batches/${selectedBatchId.value}/entries?unresolved_only=${unresolvedOnly.value}`,
+      );
+    } catch (error) {
+      entriesError.value = buildLoadError("加载课表条目", error);
+      timetableEntries.value = [];
+    } finally {
+      loadingEntries.value = false;
+    }
   }
 
   async function loadExtras(): Promise<void> {
     if (!selectedSemesterId.value) {
       extras.value = [];
+      extrasError.value = "";
       return;
     }
-    extras.value = await apiRequest<ExtraItem[]>(`/api/workload/extras?semester_id=${selectedSemesterId.value}`);
+    try {
+      loadingExtras.value = true;
+      extrasError.value = "";
+      extras.value = await apiRequest<ExtraItem[]>(`/api/workload/extras?semester_id=${selectedSemesterId.value}`);
+    } catch (error) {
+      extrasError.value = buildLoadError("加载附加项", error);
+      extras.value = [];
+    } finally {
+      loadingExtras.value = false;
+    }
   }
 
   async function loadResults(): Promise<void> {
     if (!selectedSemesterId.value || !selectedRuleVersionId.value) {
       results.value = [];
+      resultsError.value = "";
       return;
     }
-    results.value = await apiRequest<WorkloadResultItem[]>(
-      `/api/workload/results?semester_id=${selectedSemesterId.value}&rule_version_id=${selectedRuleVersionId.value}`,
-    );
+    try {
+      loadingResults.value = true;
+      resultsError.value = "";
+      results.value = await apiRequest<WorkloadResultItem[]>(
+        `/api/workload/results?semester_id=${selectedSemesterId.value}&rule_version_id=${selectedRuleVersionId.value}`,
+      );
+    } catch (error) {
+      resultsError.value = buildLoadError("加载工作量结果", error);
+      results.value = [];
+      activeResult.value = null;
+      resultDrawerVisible.value = false;
+    } finally {
+      loadingResults.value = false;
+    }
   }
 
   async function refreshAll(): Promise<void> {
-    try {
-      await loadTeachers();
-      await loadRuleVersions();
-      await Promise.all([loadBatches(), loadExtras(), loadResults()]);
-      await loadEntries();
-    } catch (error) {
-      reportError(error);
-    }
+    clearWorkloadActionError();
+    await loadReferenceOptions();
+    await Promise.all([loadTeachers(), loadRuleVersions()]);
+    await Promise.all([loadBatches(), loadExtras(), loadResults()]);
+    await Promise.all([loadRuleItems(), loadEntries()]);
   }
 
   function handleTimetableFileChange(event: Event): void {
@@ -294,8 +556,12 @@ export function useTimetableWorkloadPage() {
   }
 
   async function importTimetable(): Promise<void> {
-    if (!selectedSemesterId.value || !selectedTimetableFile.value) return;
+    if (!selectedSemesterId.value || !selectedTimetableFile.value) {
+      setWorkloadActionWarning("请先选择学期和课表文件。");
+      return;
+    }
     try {
+      clearWorkloadActionError();
       importing.value = true;
       const payload = await uploadFile<ImportFeedbackResult & { batch_id: number; unresolved_rows: number }>(
         "/api/timetable/import",
@@ -317,7 +583,7 @@ export function useTimetableWorkloadPage() {
       await Promise.all([loadBatches(), loadResults()]);
       await loadEntries();
     } catch (error) {
-      reportError(error);
+      setWorkloadActionError("导入课表", error, "请下载最新课表模板，确认学期、表头和教师/班级/学科信息后重新导入。");
     } finally {
       importing.value = false;
     }
@@ -346,8 +612,12 @@ export function useTimetableWorkloadPage() {
   }
 
   async function saveEntry(): Promise<void> {
-    if (!entryForm.value.id) return;
+    if (!entryForm.value.id) {
+      setWorkloadActionWarning("当前课表条目无效，请重新选择条目后再修正。");
+      return;
+    }
     try {
+      clearWorkloadActionError();
       savingEntry.value = true;
       await apiRequest<TimetableEntryItem>(`/api/timetable/entries/${entryForm.value.id}`, {
         method: "PUT",
@@ -364,7 +634,7 @@ export function useTimetableWorkloadPage() {
       ElMessage.success("课表条目已更新");
       await Promise.all([loadBatches(), loadEntries()]);
     } catch (error) {
-      reportError(error);
+      setWorkloadActionError("保存课表条目修正", error, "请确认教师、班级、学科和课程类型仍在基础数据中，再重新保存。");
     } finally {
       savingEntry.value = false;
     }
@@ -386,8 +656,12 @@ export function useTimetableWorkloadPage() {
   }
 
   async function saveRuleItems(): Promise<void> {
-    if (!selectedRuleVersionId.value) return;
+    if (!selectedRuleVersionId.value) {
+      setWorkloadActionWarning("请先选择规则版本。");
+      return;
+    }
     try {
+      clearWorkloadActionError();
       savingRuleItems.value = true;
       const payload = ruleItems.value.map((item) => ({
         dimension_type: item.dimension_type,
@@ -409,7 +683,7 @@ export function useTimetableWorkloadPage() {
       );
       ElMessage.success("规则项已保存");
     } catch (error) {
-      reportError(error);
+      setWorkloadActionError("保存工作量规则项", error, "请确认每条规则都有维度和匹配值，系数或固定量填写有效后再保存。");
     } finally {
       savingRuleItems.value = false;
     }
@@ -417,10 +691,11 @@ export function useTimetableWorkloadPage() {
 
   async function createRuleVersion(): Promise<void> {
     if (!newRuleForm.value.name.trim()) {
-      ElMessage.warning("请填写规则名称");
+      setWorkloadActionWarning("请填写规则名称。");
       return;
     }
     try {
+      clearWorkloadActionError();
       creatingRuleVersion.value = true;
       const payload = await apiRequest<RuleVersionItem>("/api/workload/rules", {
         method: "POST",
@@ -439,7 +714,7 @@ export function useTimetableWorkloadPage() {
       selectedRuleVersionId.value = payload.id;
       ElMessage.success("规则版本已创建");
     } catch (error) {
-      reportError(error);
+      setWorkloadActionError("创建工作量规则版本", error, "请确认规则名称未重复，适用学期和状态填写有效后重试。");
     } finally {
       creatingRuleVersion.value = false;
     }
@@ -456,14 +731,15 @@ export function useTimetableWorkloadPage() {
 
   async function createExtra(): Promise<void> {
     if (!selectedSemesterId.value) {
-      ElMessage.warning("请先选择学期");
+      setWorkloadActionWarning("请先选择学期。");
       return;
     }
     if (!extraForm.value.teacher_id || !extraForm.value.item_name.trim()) {
-      ElMessage.warning("请填写教师和项目名称");
+      setWorkloadActionWarning("请填写教师和项目名称。");
       return;
     }
     try {
+      clearWorkloadActionError();
       savingExtra.value = true;
       await apiRequest<ExtraItem>("/api/workload/extras", {
         method: "POST",
@@ -482,7 +758,7 @@ export function useTimetableWorkloadPage() {
       await Promise.all([loadExtras(), loadResults()]);
       ElMessage.success("附加项已新增");
     } catch (error) {
-      reportError(error);
+      setWorkloadActionError("新增工作量附加项", error, "请确认教师、数量、系数或固定量填写有效后重试。");
     } finally {
       savingExtra.value = false;
     }
@@ -490,7 +766,7 @@ export function useTimetableWorkloadPage() {
 
   async function calculateWorkload(): Promise<void> {
     if (!selectedSemesterId.value || !selectedRuleVersionId.value) {
-      ElMessage.warning("请先选择学期和规则版本");
+      setWorkloadActionWarning("请先选择学期和规则版本。");
       return;
     }
     try {
@@ -498,9 +774,10 @@ export function useTimetableWorkloadPage() {
         item.includes("请选择") || item.includes("没有规则项"),
       );
       if (blockingMessages.length) {
-        ElMessage.warning(blockingMessages.join("；"));
+        setWorkloadActionWarning(blockingMessages.join("；"));
         return;
       }
+      clearWorkloadActionError();
       if (currentBatch.value?.unresolved_count) {
         await ElMessageBox.confirm(
           "当前批次仍有未匹配条目，未修正条目不会参与课时统计。是否继续计算？",
@@ -522,7 +799,7 @@ export function useTimetableWorkloadPage() {
       ElMessage.success(`${payload.message}，共生成 ${payload.result_count} 位教师结果`);
     } catch (error) {
       if (error === "cancel" || error === "close") return;
-      reportError(error);
+      setWorkloadActionError("计算教师工作量", error, "请确认课表批次、规则项和附加项数据完整，再重新计算。");
     } finally {
       calculating.value = false;
     }
@@ -547,47 +824,58 @@ export function useTimetableWorkloadPage() {
   }
 
   watch(selectedBatchId, async () => {
-    try {
-      await loadEntries();
-    } catch (error) {
-      reportError(error);
-    }
+    await loadEntries();
   });
 
   watch(unresolvedOnly, async () => {
-    try {
-      await loadEntries();
-    } catch (error) {
-      reportError(error);
-    }
+    await loadEntries();
   });
 
   watch(selectedSemesterId, async () => {
-    try {
-      await Promise.all([loadBatches(), loadExtras(), loadResults()]);
-    } catch (error) {
-      reportError(error);
-    }
+    await Promise.all([loadBatches(), loadExtras(), loadResults()]);
   });
 
   watch(selectedRuleVersionId, async () => {
-    try {
-      await Promise.all([loadRuleItems(), loadResults()]);
-    } catch (error) {
-      reportError(error);
-    }
+    await Promise.all([loadRuleItems(), loadResults()]);
   });
 
   onMounted(async () => {
-    try {
-      await referenceStore.loadAll();
-      const currentSemester = semesterOptions.value.find((item) => item.is_current) ?? semesterOptions.value[0];
-      selectedSemesterId.value = currentSemester?.id ?? null;
-      await refreshAll();
-    } catch (error) {
-      reportError(error);
-    }
+    await refreshAll();
   });
+
+  async function retryWorkloadLoadItem(key: WorkloadLoadKey): Promise<void> {
+    if (key === "reference") {
+      await loadReferenceOptions();
+      return;
+    }
+    if (key === "teachers") {
+      await loadTeachers();
+      return;
+    }
+    if (key === "ruleVersions") {
+      await loadRuleVersions();
+      await Promise.all([loadRuleItems(), loadResults()]);
+      return;
+    }
+    if (key === "ruleItems") {
+      await loadRuleItems();
+      return;
+    }
+    if (key === "batches") {
+      await loadBatches();
+      await loadEntries();
+      return;
+    }
+    if (key === "entries") {
+      await loadEntries();
+      return;
+    }
+    if (key === "extras") {
+      await loadExtras();
+      return;
+    }
+    await loadResults();
+  }
 
   return {
     referenceStore,
@@ -614,6 +902,33 @@ export function useTimetableWorkloadPage() {
     savingRuleItems,
     savingExtra,
     calculating,
+    loadingReference,
+    loadingTeacherOptions,
+    loadingRuleVersions,
+    loadingRuleItems,
+    loadingBatches,
+    loadingEntries,
+    loadingExtras,
+    loadingResults,
+    workloadActionError,
+    workloadWriteBusy,
+    workloadRefreshBusy,
+    workloadSelectionDisabled,
+    calculateDisabled,
+    exportResultsDisabled,
+    timetableImportDisabled,
+    timetablePanelActionsDisabled,
+    ruleActionsDisabled,
+    ruleItemControlsDisabled,
+    extraControlsDisabled,
+    referenceError,
+    teacherOptionsError,
+    ruleVersionsError,
+    ruleItemsError,
+    batchesError,
+    entriesError,
+    extrasError,
+    resultsError,
     entryDialogVisible,
     ruleDialogVisible,
     resultDrawerVisible,
@@ -631,6 +946,7 @@ export function useTimetableWorkloadPage() {
     timetableReviewCards,
     workloadPrecheckMessages,
     workloadResultReviewCards,
+    workloadLoadErrorItems,
     overviewCards,
     processCards,
     refreshAll,
@@ -651,5 +967,7 @@ export function useTimetableWorkloadPage() {
     downloadTimetableTemplate,
     exportResults,
     openResultDrawer,
+    retryWorkloadLoadItem,
+    clearWorkloadActionError,
   };
 }

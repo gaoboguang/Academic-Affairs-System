@@ -21,6 +21,7 @@ handoffs/*
 !handoffs/README.md
 playwright-report/
 test-results/
+.playwright-cli/
 .specstory/
 .superpowers/
 .tmp/

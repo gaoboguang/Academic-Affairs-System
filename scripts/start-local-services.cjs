@@ -104,7 +104,7 @@ function readPidInfo(service) {
   const pidPath = pidPathFor(service);
   if (!fs.existsSync(pidPath)) return null;
   try {
-    const data = JSON.parse(fs.readFileSync(pidPath, "utf8"));
+    const data = JSON.parse(fs.readFileSync(pidPath, "utf8").replace(/^\uFEFF/, ""));
     const pid = Number(data.pid);
     if (!Number.isInteger(pid) || pid <= 0) return null;
     return { ...data, pid, pidPath };
@@ -170,7 +170,10 @@ function startDetachedService(service) {
   const err = fs.openSync(logPath, "a");
   fs.appendFileSync(logPath, `\n\n===== ${new Date().toISOString()} start ${service.name} =====\n`);
 
-  const child = spawn(npmCommand, service.startArgs, {
+  const command = isWindows ? (process.env.ComSpec || "cmd.exe") : npmCommand;
+  const args = isWindows ? ["/d", "/s", "/c", npmCommand, ...service.startArgs] : service.startArgs;
+
+  const child = spawn(command, args, {
     cwd: rootDir,
     detached: true,
     stdio: ["ignore", out, err],
@@ -184,7 +187,7 @@ function startDetachedService(service) {
     JSON.stringify(
       {
         pid: child.pid,
-        command: `${npmCommand} ${service.startArgs.join(" ")}`,
+        command: `${command} ${args.join(" ")}`,
         url: service.url,
         log: logPath,
         startedAt: new Date().toISOString(),

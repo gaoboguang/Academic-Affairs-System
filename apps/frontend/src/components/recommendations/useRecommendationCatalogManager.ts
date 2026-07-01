@@ -40,6 +40,13 @@ export function useRecommendationCatalogManager() {
   const collegePagination = reactive<PaginationState>({ page: 1, page_size: 50, total: 0 });
   const majorPagination = reactive<PaginationState>({ page: 1, page_size: 50, total: 0 });
   const admissionPagination = reactive<PaginationState>({ page: 1, page_size: 50, total: 0 });
+  const loadingColleges = ref(false);
+  const collegesLoadError = ref("");
+  const loadingMajors = ref(false);
+  const majorsLoadError = ref("");
+  const loadingAdmissions = ref(false);
+  const admissionsLoadError = ref("");
+  const importingAdmissions = ref(false);
 
   const collegeDialogVisible = ref(false);
   const majorDialogVisible = ref(false);
@@ -107,6 +114,8 @@ export function useRecommendationCatalogManager() {
   }
 
   async function loadColleges(options: { resetPage?: boolean } = {}): Promise<void> {
+    loadingColleges.value = true;
+    collegesLoadError.value = "";
     try {
       if (options.resetPage) collegePagination.page = 1;
       const query = new URLSearchParams();
@@ -121,11 +130,21 @@ export function useRecommendationCatalogManager() {
       collegePagination.page = response.page;
       collegePagination.page_size = response.page_size;
     } catch (error) {
-      reportError(error);
+      colleges.value = [];
+      collegePagination.total = 0;
+      collegesLoadError.value = formatUserActionError(
+        "加载院校库",
+        error,
+        "检查筛选条件或本地服务后重新加载院校库",
+      );
+    } finally {
+      loadingColleges.value = false;
     }
   }
 
   async function loadMajors(options: { resetPage?: boolean } = {}): Promise<void> {
+    loadingMajors.value = true;
+    majorsLoadError.value = "";
     try {
       if (options.resetPage) majorPagination.page = 1;
       const query = new URLSearchParams();
@@ -139,11 +158,21 @@ export function useRecommendationCatalogManager() {
       majorPagination.page = response.page;
       majorPagination.page_size = response.page_size;
     } catch (error) {
-      reportError(error);
+      majors.value = [];
+      majorPagination.total = 0;
+      majorsLoadError.value = formatUserActionError(
+        "加载专业库",
+        error,
+        "检查筛选条件或本地服务后重新加载专业库",
+      );
+    } finally {
+      loadingMajors.value = false;
     }
   }
 
   async function loadAdmissions(options: { resetPage?: boolean } = {}): Promise<void> {
+    loadingAdmissions.value = true;
+    admissionsLoadError.value = "";
     try {
       if (options.resetPage) admissionPagination.page = 1;
       const query = new URLSearchParams();
@@ -159,7 +188,15 @@ export function useRecommendationCatalogManager() {
       admissionPagination.page = response.page;
       admissionPagination.page_size = response.page_size;
     } catch (error) {
-      reportError(error);
+      admissions.value = [];
+      admissionPagination.total = 0;
+      admissionsLoadError.value = formatUserActionError(
+        "加载历年录取数据",
+        error,
+        "检查筛选条件或本地服务后重新加载录取库",
+      );
+    } finally {
+      loadingAdmissions.value = false;
     }
   }
 
@@ -320,7 +357,9 @@ export function useRecommendationCatalogManager() {
 
   async function handleAdmissionImport(uploadFileItem: UploadFile): Promise<void> {
     if (!uploadFileItem.raw) return;
+    importingAdmissions.value = true;
     try {
+      admissionImportResult.value = null;
       admissionImportResult.value = await uploadFile<AdmissionImportResponse>("/api/admissions/import", uploadFileItem.raw);
       await Promise.all([loadCollegeDirectory(), loadMajorDirectory(), loadAdmissions({ resetPage: true })]);
       ElMessage({
@@ -329,6 +368,8 @@ export function useRecommendationCatalogManager() {
       });
     } catch (error) {
       reportError(error);
+    } finally {
+      importingAdmissions.value = false;
     }
   }
 
@@ -337,6 +378,7 @@ export function useRecommendationCatalogManager() {
     admissionImportResult,
     admissionPagination,
     admissionYearOptions,
+    admissionsLoadError,
     admissions,
     recommendationStudentTypeOptions,
     collegeDialogTitle,
@@ -345,6 +387,7 @@ export function useRecommendationCatalogManager() {
     collegeFilters,
     collegeForm,
     collegePagination,
+    collegesLoadError,
     colleges,
     downloadAdmissionTemplate,
     handleAdmissionImport,
@@ -356,17 +399,22 @@ export function useRecommendationCatalogManager() {
     handleMajorPageChange,
     handleMajorPageSizeChange,
     handleMajorDialogClosed,
+    importingAdmissions,
     loadAdmissions,
     loadCollegeDirectory,
     loadColleges,
     loadMajorDirectory,
     loadMajors,
+    loadingColleges,
+    loadingAdmissions,
+    loadingMajors,
     majorDialogTitle,
     majorDialogVisible,
     majorDirectory,
     majorFilters,
     majorForm,
     majorPagination,
+    majorsLoadError,
     majors,
     openCreateCollege,
     openCreateMajor,

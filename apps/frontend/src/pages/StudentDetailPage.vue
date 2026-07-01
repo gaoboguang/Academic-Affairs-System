@@ -1,35 +1,36 @@
 <template>
-  <div class="page-shell">
-    <header class="page-header">
-      <div>
-        <div class="page-eyebrow">学生详情</div>
-        <h2 class="page-title">
-          {{ profile?.student.name ?? "学生详情" }}
-          <span v-if="profile" class="title-meta">{{ profile.student.student_no }}</span>
-        </h2>
-        <p class="page-subtitle">
-          把学籍、成绩、成长档案、教师评语、推荐记录和附件归到同一页，减少来回切换。
-        </p>
-        <div v-if="profile" class="page-chip-row">
-          <span class="page-chip"><strong>当前班级</strong>{{ currentClassLabel }}</span>
-          <span class="page-chip"><strong>学生状态</strong>{{ profile.student.status ?? "未标注" }}</span>
-          <span class="page-chip"><strong>学生类别</strong>{{ formatStudentType(profile.student.student_type) }}</span>
-          <span class="page-chip"><strong>生源地</strong>{{ profile.student.origin_province ?? "未维护" }}</span>
-          <span class="page-chip"><strong>艺体方向</strong>{{ profile.student.art_track ?? "普通方向" }}</span>
-        </div>
-      </div>
-      <div class="action-row">
-        <el-button @click="router.push('/students')">返回列表</el-button>
-        <el-button @click="router.push(`/growth-archive?student_id=${studentId}`)">成长档案</el-button>
-        <el-button @click="router.push(`/gaokao-pathways?student_id=${studentId}`)">升学方案</el-button>
-        <el-button @click="openStudentGrowthReport">打印成长摘要</el-button>
-        <el-button :disabled="!latestExamId" @click="openStudentAnalysisReport">打印成绩报告</el-button>
-        <el-button :loading="exportingFollowupPackage" @click="exportStudentFollowupPackage">生成跟进包</el-button>
-        <el-button type="primary" @click="router.push('/recommendations')">升学推荐</el-button>
-      </div>
-    </header>
+  <AppPage
+    :title="profile?.student.name ?? '学生详情'"
+    eyebrow="学生中心 / 学生档案"
+    description="把学籍、成绩、成长档案、教师评语、推荐记录和附件归到同一页，减少来回切换。"
+    :meta="pageMeta"
+  >
+    <template #actions>
+      <el-button @click="router.push('/students')">返回列表</el-button>
+      <el-button :disabled="!profile" @click="router.push(`/growth-archive?student_id=${studentId}`)">成长档案</el-button>
+      <el-button :disabled="!profile" @click="router.push(`/gaokao-pathways?student_id=${studentId}`)">升学方案</el-button>
+      <el-button :disabled="!profile" @click="openStudentGrowthReport">打印成长摘要</el-button>
+      <el-button :disabled="!latestExamId" @click="openStudentAnalysisReport">打印成绩报告</el-button>
+      <el-button :disabled="!profile" :loading="exportingFollowupPackage" @click="exportStudentFollowupPackage">生成跟进包</el-button>
+      <el-button type="primary" @click="router.push('/recommendations')">升学推荐</el-button>
+    </template>
 
-    <template v-if="profile">
+    <el-alert
+      v-if="profileLoadError"
+      class="student-detail-alert"
+      type="error"
+      show-icon
+      :closable="false"
+      title="学生档案加载失败"
+      :description="profileLoadError"
+    >
+      <template #default>
+        <el-button size="small" type="primary" plain @click="loadDetailWithFeedback">重新加载学生档案</el-button>
+      </template>
+    </el-alert>
+
+    <div v-loading="profileLoading" class="student-detail-body">
+      <template v-if="profile">
       <section class="profile-hero-grid">
         <article class="soft-card hero-summary-card">
           <div class="hero-kicker">综合画像</div>
@@ -67,24 +68,7 @@
         </article>
       </section>
 
-      <section class="metric-grid">
-        <article class="soft-card stat-card">
-          <span>当前班级</span>
-          <strong>{{ currentClassLabel }}</strong>
-        </article>
-        <article class="soft-card stat-card">
-          <span>最近考试总分{{ profile.performance_summary.latest_score_value_label ? `（${profile.performance_summary.latest_score_value_label}）` : "" }}</span>
-          <strong>{{ profile.performance_summary.latest_total_score ?? "-" }}</strong>
-        </article>
-        <article class="soft-card stat-card">
-          <span>最近校内名次</span>
-          <strong>{{ profile.performance_summary.latest_grade_rank ?? "-" }}</strong>
-        </article>
-        <article class="soft-card stat-card">
-          <span>考试次数</span>
-          <strong>{{ profile.performance_summary.exam_count }}</strong>
-        </article>
-      </section>
+      <AppStatGrid :items="studentMetricCards" :columns="4" />
 
       <section class="soft-card panorama-card">
         <div class="section-head compact">
@@ -119,6 +103,18 @@
             <strong>{{ studentRisk ? formatStudentPlanningSummary(studentRisk.planning_summary) : "未加载" }}</strong>
           </article>
         </div>
+        <el-alert
+          v-if="studentRiskLoadError"
+          class="section-alert"
+          type="error"
+          :title="studentRiskLoadError"
+          show-icon
+          :closable="false"
+        >
+          <template #default>
+            <el-button size="small" :loading="studentRiskLoading" @click="loadStudentRiskWithFeedback">重新加载风险概览</el-button>
+          </template>
+        </el-alert>
         <div class="action-card-grid">
           <article v-for="item in student360Actions" :key="item.label" class="action-card" @click="router.push(item.path)">
             <strong>{{ item.label }}</strong>
@@ -196,9 +192,11 @@
                 <el-table-column label="开始日期" prop="start_date" min-width="140" />
                 <el-table-column label="结束日期" prop="end_date" min-width="140" />
                 <el-table-column label="原因" prop="reason" min-width="160" />
+                <template #empty>
+                  <el-empty description="暂无班级变动历史" />
+                </template>
               </el-table>
             </div>
-            <el-empty v-if="!profile.class_histories.length" description="暂无班级变动历史" />
             <div class="section-split"></div>
             <div class="section-head compact">
               <div>
@@ -207,7 +205,21 @@
               </div>
             </div>
             <div class="table-shell">
-              <el-table :data="classTransferHistory" stripe>
+              <el-alert
+                v-if="classTransferLoadError"
+                class="section-alert"
+                type="error"
+                :title="classTransferLoadError"
+                show-icon
+                :closable="false"
+              >
+                <template #default>
+                  <el-button size="small" :loading="classTransferLoading" @click="loadClassTransferHistoryWithFeedback">
+                    重新加载调班记录
+                  </el-button>
+                </template>
+              </el-alert>
+              <el-table v-loading="classTransferLoading" :data="classTransferHistory" stripe>
                 <el-table-column label="生效日期" prop="effective_on" width="120" />
                 <el-table-column label="班级调整" min-width="240">
                   <template #default="{ row }">
@@ -217,9 +229,21 @@
                 <el-table-column label="原因" prop="reason" min-width="160" />
                 <el-table-column label="备注" prop="note" min-width="180" />
                 <el-table-column label="操作人" prop="operator_name" width="120" />
+                <template #empty>
+                  <el-empty :description="classTransferLoadError ? '调班记录加载失败，请重试' : '暂无调班记录'">
+                    <el-button
+                      v-if="classTransferLoadError"
+                      type="primary"
+                      plain
+                      :loading="classTransferLoading"
+                      @click="loadClassTransferHistoryWithFeedback"
+                    >
+                      重新加载调班记录
+                    </el-button>
+                  </el-empty>
+                </template>
               </el-table>
             </div>
-            <el-empty v-if="!classTransferHistory.length" description="暂无调班记录" />
           </section>
         </el-tab-pane>
 
@@ -287,14 +311,30 @@
                 <el-table-column label="校内名" prop="grade_rank" width="90" />
                 <el-table-column label="班百分位" prop="class_percentile" width="110" />
                 <el-table-column label="校内百分位" prop="grade_percentile" width="120" />
+                <template #empty>
+                  <el-empty description="暂无考试趋势数据" />
+                </template>
               </el-table>
             </div>
-            <el-empty v-if="!profile.exam_trends.length" description="暂无考试趋势数据" />
           </section>
         </el-tab-pane>
 
         <el-tab-pane label="成长档案" name="growth">
           <section class="soft-card detail-card">
+            <el-alert
+              v-if="classTransferLoadError"
+              class="section-alert"
+              type="error"
+              :title="classTransferLoadError"
+              show-icon
+              :closable="false"
+            >
+              <template #default>
+                <el-button size="small" :loading="classTransferLoading" @click="loadClassTransferHistoryWithFeedback">
+                  重新加载系统调班事件
+                </el-button>
+              </template>
+            </el-alert>
             <div v-if="classTransferHistory.length" class="system-event-list">
               <article v-for="item in classTransferHistory" :key="item.item_id" class="system-event-card">
                 <el-tag type="info" effect="light">班级调整</el-tag>
@@ -312,12 +352,13 @@
                 <el-table-column label="标题" prop="title" min-width="220" />
                 <el-table-column label="责任人" prop="owner_name" width="120" />
                 <el-table-column label="附件数" prop="attachment_count" width="100" />
+                <template #empty>
+                  <el-empty
+                    :description="classTransferHistory.length ? '暂无成长档案记录，已显示系统事件' : '暂无成长记录或系统事件'"
+                  />
+                </template>
               </el-table>
             </div>
-            <el-empty
-              v-if="!profile.recent_growth_records.length && !classTransferHistory.length"
-              description="暂无成长记录或系统事件"
-            />
           </section>
         </el-tab-pane>
 
@@ -326,14 +367,34 @@
             <div class="section-head compact">
               <div>
                 <h3>教师评语</h3>
-                <p>{{ teacherComments.items.length }} 条留言</p>
+                <p>{{ teacherCommentsLoading ? "正在加载评语" : `${teacherComments.items.length} 条留言` }}</p>
               </div>
             </div>
+            <el-alert
+              v-if="teacherCommentsLoadError"
+              class="section-alert"
+              type="error"
+              :title="teacherCommentsLoadError"
+              show-icon
+              :closable="false"
+            >
+              <template #default>
+                <el-button size="small" :loading="teacherCommentsLoading" @click="loadTeacherCommentsWithFeedback">重新加载教师评语</el-button>
+              </template>
+            </el-alert>
+            <el-alert
+              v-if="teacherCommentActionError"
+              class="section-alert"
+              type="error"
+              :title="teacherCommentActionError"
+              show-icon
+              :closable="false"
+            />
             <div v-if="teacherComments.can_comment" class="teacher-comment-editor">
               <el-select
                 v-model="teacherCommentDraft.subjectId"
                 placeholder="评价科目"
-                :disabled="teacherComments.available_subjects.length <= 1"
+                :disabled="teacherCommentFormDisabled || teacherComments.available_subjects.length <= 1"
               >
                 <el-option
                   v-for="item in teacherComments.available_subjects"
@@ -352,8 +413,14 @@
                 maxlength="2000"
                 show-word-limit
                 placeholder="写下课堂表现、学习习惯或接手建议"
+                :disabled="teacherCommentFormDisabled"
               />
-              <el-button type="primary" :loading="submittingTeacherComment" @click="submitTeacherComment">
+              <el-button
+                type="primary"
+                :loading="submittingTeacherComment"
+                :disabled="teacherCommentFormDisabled"
+                @click="submitTeacherComment"
+              >
                 发布评语
               </el-button>
             </div>
@@ -361,7 +428,7 @@
               <el-tag type="info" effect="light">只读</el-tag>
               <span>当前账号没有该生任课评价权限</span>
             </div>
-            <div v-if="teacherComments.items.length" class="teacher-comment-list">
+            <div v-loading="teacherCommentsLoading" v-if="teacherComments.items.length" class="teacher-comment-list">
               <article v-for="item in teacherComments.items" :key="item.id" class="teacher-comment-card">
                 <div class="teacher-comment-card-head">
                   <strong>{{ item.subject_name ?? "教师评语" }}</strong>
@@ -372,7 +439,17 @@
                 <p>{{ item.content }}</p>
               </article>
             </div>
-            <el-empty v-else description="暂无教师评语" />
+            <el-empty v-else :description="teacherCommentsLoadError ? '教师评语加载失败，请重试' : '暂无教师评语'">
+              <el-button
+                v-if="teacherCommentsLoadError"
+                type="primary"
+                plain
+                :loading="teacherCommentsLoading"
+                @click="loadTeacherCommentsWithFeedback"
+              >
+                重新加载教师评语
+              </el-button>
+            </el-empty>
           </section>
         </el-tab-pane>
 
@@ -388,9 +465,11 @@
                 <el-table-column label="稳" prop="steady_count" width="70" />
                 <el-table-column label="保" prop="safe_count" width="70" />
                 <el-table-column label="关注" prop="watch_count" width="76" />
+                <template #empty>
+                  <el-empty description="暂无推荐历史" />
+                </template>
               </el-table>
             </div>
-            <el-empty v-if="!profile.recommendation_history.length" description="暂无推荐历史" />
           </section>
         </el-tab-pane>
 
@@ -414,12 +493,20 @@
                 <p>支持独立挂接学生附件，也保留成长档案里的引用附件视图。</p>
               </div>
             </div>
+            <el-alert
+              v-if="attachmentActionError"
+              class="section-alert"
+              type="error"
+              :title="attachmentActionError"
+              show-icon
+              :closable="false"
+            />
             <div class="attachment-toolbar">
-              <el-input v-model="attachmentDraft.title" placeholder="附件标题，可选" />
-              <el-input v-model="attachmentDraft.attachment_type" placeholder="附件类型，如证件/照片/证明" />
-              <el-input v-model="attachmentDraft.note" placeholder="备注，可选" />
-              <el-upload :show-file-list="false" :auto-upload="false" :on-change="handleAttachmentUpload">
-                <el-button type="primary" :loading="uploadingAttachment">上传并挂接</el-button>
+              <el-input v-model="attachmentDraft.title" placeholder="附件标题，可选" :disabled="attachmentFormDisabled" />
+              <el-input v-model="attachmentDraft.attachment_type" placeholder="附件类型，如证件/照片/证明" :disabled="attachmentFormDisabled" />
+              <el-input v-model="attachmentDraft.note" placeholder="备注，可选" :disabled="attachmentFormDisabled" />
+              <el-upload :show-file-list="false" :auto-upload="false" :disabled="attachmentFormDisabled" :on-change="handleAttachmentUpload">
+                <el-button type="primary" :loading="uploadingAttachment" :disabled="attachmentFormDisabled">上传并挂接</el-button>
               </el-upload>
             </div>
             <div class="table-shell">
@@ -436,28 +523,45 @@
                 <el-table-column label="上传时间" prop="created_at" min-width="180" />
                 <el-table-column label="操作" width="150" fixed="right">
                   <template #default="{ row }">
-                    <el-button link type="primary" @click="openFile(row.download_url)">下载</el-button>
-                    <el-button v-if="row.id" link type="danger" @click="removeAttachment(row.id)">删除</el-button>
+                    <el-button link type="primary" :disabled="attachmentFormDisabled" @click="openFile(row.download_url)">下载</el-button>
+                    <el-button
+                      v-if="row.id"
+                      link
+                      type="danger"
+                      :loading="deletingAttachmentId === row.id"
+                      :disabled="uploadingAttachment || (deletingAttachmentId !== null && deletingAttachmentId !== row.id)"
+                      @click="removeAttachment(row.id)"
+                    >
+                      删除
+                    </el-button>
                   </template>
                 </el-table-column>
+                <template #empty>
+                  <el-empty description="暂无附件" />
+                </template>
               </el-table>
             </div>
-            <el-empty v-if="!profile.attachments.length" description="暂无附件" />
           </section>
         </el-tab-pane>
       </el-tabs>
-    </template>
-  </div>
+      </template>
+
+      <el-empty v-else :description="studentDetailEmptyDescription">
+        <el-button v-if="profileLoadError" type="primary" @click="loadDetailWithFeedback">重新加载学生档案</el-button>
+      </el-empty>
+    </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import ElMessage from "element-plus/es/components/message/index";
 import ElMessageBox from "element-plus/es/components/message-box/index";
 import type { UploadFile } from "element-plus";
 import { useRoute, useRouter } from "vue-router";
 
 import { apiRequest, openFile, uploadFile } from "../api/client";
+import { AppPage, AppStatGrid, type PageMetaItem, type StatCardItem } from "../components/ui";
 import StudentPathwayProfilePanel from "../components/students/StudentPathwayProfilePanel.vue";
 import StudentPlanningPanel from "../components/students/StudentPlanningPanel.vue";
 import {
@@ -478,6 +582,7 @@ import {
   growthSummaryPrintPreviewPath,
   studentAnalysisPrintPreviewPath,
 } from "../utils/print";
+import { formatUserActionError, getErrorMessage } from "../utils/userFeedback";
 
 interface GuardianItem {
   id: number;
@@ -651,7 +756,18 @@ const teacherComments = ref<TeacherCommentListResponse>({
 const studentRisk = ref<StudentRiskSummary | null>(null);
 const studentId = computed(() => Number(route.params.studentId));
 const activeProfileTab = ref(String(route.query.tab || "basic"));
+const profileLoading = ref(false);
+const profileLoadError = ref("");
+const classTransferLoading = ref(false);
+const classTransferLoadError = ref("");
+const teacherCommentsLoading = ref(false);
+const teacherCommentsLoadError = ref("");
+const teacherCommentActionError = ref("");
+const studentRiskLoading = ref(false);
+const studentRiskLoadError = ref("");
+const attachmentActionError = ref("");
 const uploadingAttachment = ref(false);
+const deletingAttachmentId = ref<number | null>(null);
 const exportingFollowupPackage = ref(false);
 const submittingTeacherComment = ref(false);
 const attachmentDraft = reactive({
@@ -663,10 +779,29 @@ const teacherCommentDraft = reactive({
   subjectId: null as number | null,
   content: "",
 });
+const teacherCommentFormDisabled = computed(
+  () => submittingTeacherComment.value || teacherCommentsLoading.value || profileLoading.value,
+);
+const attachmentFormDisabled = computed(
+  () => uploadingAttachment.value || profileLoading.value || deletingAttachmentId.value !== null,
+);
 
 const currentClassLabel = computed(() => {
   if (!profile.value) return "-";
   return [profile.value.student.current_grade_name, profile.value.student.current_class_name].filter(Boolean).join(" ") || "未分班";
+});
+
+const pageMeta = computed<PageMetaItem[]>(() => {
+  if (!profile.value) {
+    return [{ label: "学生 ID", value: Number.isFinite(studentId.value) ? studentId.value : "-" }];
+  }
+  return [
+    { label: "学号", value: profile.value.student.student_no },
+    { label: "当前班级", value: currentClassLabel.value },
+    { label: "学生状态", value: profile.value.student.status ?? "未标注" },
+    { label: "学生类别", value: formatStudentType(profile.value.student.student_type) },
+    { label: "生源地", value: profile.value.student.origin_province ?? "未维护" },
+  ];
 });
 
 const latestExamName = computed(
@@ -725,6 +860,37 @@ const studentHeroCards = computed(() => {
   ];
 });
 
+const studentMetricCards = computed<StatCardItem[]>(() => {
+  if (!profile.value) return [];
+  const scoreLabel = profile.value.performance_summary.latest_score_value_label;
+  return [
+    {
+      label: "当前班级",
+      value: currentClassLabel.value,
+      help: "来自学生当前学籍档案。",
+      tone: "primary",
+    },
+    {
+      label: scoreLabel ? `最近考试总分（${scoreLabel}）` : "最近考试总分",
+      value: profile.value.performance_summary.latest_total_score ?? "-",
+      help: latestExamName.value,
+      tone: "success",
+    },
+    {
+      label: "最近校内名次",
+      value: profile.value.performance_summary.latest_grade_rank ?? "-",
+      help: "校内名次只作校内分析参考。",
+      tone: "warning",
+    },
+    {
+      label: "考试次数",
+      value: profile.value.performance_summary.exam_count,
+      help: "已纳入学生详情的考试趋势记录。",
+      tone: "info",
+    },
+  ];
+});
+
 const studentRiskTags = computed(() => {
   if (!profile.value) return [];
   return buildStudent360RiskTags({
@@ -739,6 +905,31 @@ const studentRiskTags = computed(() => {
 });
 
 const student360Actions = computed(() => buildStudent360Actions(studentId.value));
+
+const studentDetailEmptyDescription = computed(() => {
+  if (profileLoading.value) return "正在加载学生档案";
+  if (profileLoadError.value) return "学生档案加载失败，请检查本地服务或学生记录后重试";
+  return "暂无学生档案";
+});
+
+function resetDetailState(): void {
+  profile.value = null;
+  classTransferHistory.value = [];
+  teacherComments.value = {
+    items: [],
+    can_comment: false,
+    available_subjects: [],
+  };
+  studentRisk.value = null;
+  classTransferLoadError.value = "";
+  teacherCommentsLoadError.value = "";
+  teacherCommentActionError.value = "";
+  studentRiskLoadError.value = "";
+  attachmentActionError.value = "";
+  deletingAttachmentId.value = null;
+  teacherCommentDraft.subjectId = null;
+  teacherCommentDraft.content = "";
+}
 
 function resetAttachmentDraft(): void {
   attachmentDraft.title = "";
@@ -796,81 +987,128 @@ async function exportStudentFollowupPackage(): Promise<void> {
     openFile(result.download_url);
     ElMessage.success("学生跟进包已生成");
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    ElMessage.error(formatUserActionError("生成学生跟进包", error, "请确认学生档案和报表服务可用后重试"));
   } finally {
     exportingFollowupPackage.value = false;
   }
 }
 
 async function loadProfile(): Promise<void> {
-  try {
-    profile.value = await apiRequest<StudentProfile>(`/api/students/${route.params.studentId}/profile`);
-  } catch (error) {
-    ElMessage.error((error as Error).message);
-  }
+  profile.value = await apiRequest<StudentProfile>(`/api/students/${studentId.value}/profile`);
 }
 
 async function loadClassTransferHistory(): Promise<void> {
-  try {
-    classTransferHistory.value = await apiRequest<ClassTransferHistoryItem[]>(
-      `/api/students/${studentId.value}/class-transfer-history`,
-    );
-  } catch (error) {
-    ElMessage.error((error as Error).message);
-  }
+  classTransferHistory.value = await apiRequest<ClassTransferHistoryItem[]>(
+    `/api/students/${studentId.value}/class-transfer-history`,
+  );
 }
 
 async function loadTeacherComments(): Promise<void> {
-  try {
-    teacherComments.value = await apiRequest<TeacherCommentListResponse>(
-      `/api/students/${studentId.value}/teacher-comments`,
-    );
-    const optionIds = teacherComments.value.available_subjects.map((item) => item.subject_id);
-    if (!teacherCommentDraft.subjectId || !optionIds.includes(teacherCommentDraft.subjectId)) {
-      teacherCommentDraft.subjectId = optionIds[0] ?? null;
-    }
-  } catch (error) {
-    ElMessage.error((error as Error).message);
+  teacherComments.value = await apiRequest<TeacherCommentListResponse>(
+    `/api/students/${studentId.value}/teacher-comments`,
+  );
+  const optionIds = teacherComments.value.available_subjects.map((item) => item.subject_id);
+  if (!teacherCommentDraft.subjectId || !optionIds.includes(teacherCommentDraft.subjectId)) {
+    teacherCommentDraft.subjectId = optionIds[0] ?? null;
   }
 }
 
 async function loadStudentRisk(): Promise<void> {
+  const query = new URLSearchParams();
+  if (latestExamId.value) query.set("exam_id", String(latestExamId.value));
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  studentRisk.value = await apiRequest<StudentRiskSummary>(`/api/analytics/student-risk/${studentId.value}${suffix}`);
+}
+
+async function loadClassTransferHistoryWithFeedback(): Promise<void> {
   try {
-    const query = new URLSearchParams();
-    if (latestExamId.value) query.set("exam_id", String(latestExamId.value));
-    const suffix = query.toString() ? `?${query.toString()}` : "";
-    studentRisk.value = await apiRequest<StudentRiskSummary>(`/api/analytics/student-risk/${studentId.value}${suffix}`);
+    classTransferLoading.value = true;
+    classTransferLoadError.value = "";
+    await loadClassTransferHistory();
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    classTransferHistory.value = [];
+    classTransferLoadError.value = formatUserActionError("加载调班记录", error, "请稍后重试，学生主档仍可继续查看");
+    ElMessage.error(classTransferLoadError.value);
+  } finally {
+    classTransferLoading.value = false;
   }
 }
 
-async function loadDetail(): Promise<void> {
-  await Promise.all([loadProfile(), loadClassTransferHistory(), loadTeacherComments()]);
-  await loadStudentRisk();
+async function loadTeacherCommentsWithFeedback(): Promise<void> {
+  try {
+    teacherCommentsLoading.value = true;
+    teacherCommentsLoadError.value = "";
+    await loadTeacherComments();
+  } catch (error) {
+    teacherComments.value = {
+      items: [],
+      can_comment: false,
+      available_subjects: [],
+    };
+    teacherCommentDraft.subjectId = null;
+    teacherCommentsLoadError.value = formatUserActionError("加载教师评语", error, "请稍后重试，学生主档仍可继续查看");
+    ElMessage.error(teacherCommentsLoadError.value);
+  } finally {
+    teacherCommentsLoading.value = false;
+  }
+}
+
+async function loadStudentRiskWithFeedback(): Promise<void> {
+  try {
+    studentRiskLoading.value = true;
+    studentRiskLoadError.value = "";
+    await loadStudentRisk();
+  } catch (error) {
+    studentRisk.value = null;
+    studentRiskLoadError.value = formatUserActionError("加载学生风险概览", error, "请稍后重试，学生主档仍可继续查看");
+    ElMessage.error(studentRiskLoadError.value);
+  } finally {
+    studentRiskLoading.value = false;
+  }
+}
+
+async function loadDetailWithFeedback(): Promise<void> {
+  profileLoading.value = true;
+  profileLoadError.value = "";
+  try {
+    await loadProfile();
+    await Promise.all([loadClassTransferHistoryWithFeedback(), loadTeacherCommentsWithFeedback()]);
+    await loadStudentRiskWithFeedback();
+  } catch (error) {
+    profile.value = null;
+    studentRisk.value = null;
+    profileLoadError.value = getErrorMessage(error);
+    ElMessage.error(formatUserActionError("加载学生档案", error, "请确认学生是否存在，或稍后重新加载"));
+  } finally {
+    profileLoading.value = false;
+  }
 }
 
 async function submitTeacherComment(): Promise<void> {
   const request = buildTeacherCommentRequest(teacherCommentDraft);
   if (!request) {
-    ElMessage.warning("请填写教师评语");
+    teacherCommentActionError.value = "请填写教师评语";
+    ElMessage.warning(teacherCommentActionError.value);
     return;
   }
   if (teacherComments.value.available_subjects.length && !request.subject_id) {
-    ElMessage.warning("请选择评价科目");
+    teacherCommentActionError.value = "请选择评价科目";
+    ElMessage.warning(teacherCommentActionError.value);
     return;
   }
   try {
     submittingTeacherComment.value = true;
+    teacherCommentActionError.value = "";
     await apiRequest(`/api/students/${studentId.value}/teacher-comments`, {
       method: "POST",
       body: JSON.stringify(request),
     });
     teacherCommentDraft.content = "";
     ElMessage.success("教师评语已发布");
-    await loadTeacherComments();
+    await loadTeacherCommentsWithFeedback();
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    teacherCommentActionError.value = formatUserActionError("发布教师评语", error, "请确认任教权限和评语内容后重试");
+    ElMessage.error(teacherCommentActionError.value);
   } finally {
     submittingTeacherComment.value = false;
   }
@@ -880,10 +1118,11 @@ async function handleAttachmentUpload(uploadFileItem: UploadFile): Promise<void>
   if (!uploadFileItem.raw) return;
   try {
     uploadingAttachment.value = true;
+    attachmentActionError.value = "";
     const uploaded = await uploadFile<{ id: number }>("/api/files/upload", uploadFileItem.raw, {
       category: "student_attachment",
     });
-    await apiRequest(`/api/students/${route.params.studentId}/attachments`, {
+    await apiRequest(`/api/students/${studentId.value}/attachments`, {
       method: "POST",
       body: JSON.stringify({
         stored_file_id: uploaded.id,
@@ -895,9 +1134,10 @@ async function handleAttachmentUpload(uploadFileItem: UploadFile): Promise<void>
     });
     resetAttachmentDraft();
     ElMessage.success("学生附件已上传");
-    await loadProfile();
+    await loadDetailWithFeedback();
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    attachmentActionError.value = formatUserActionError("上传学生附件", error, "请确认文件可访问且本地服务正常后重试");
+    ElMessage.error(attachmentActionError.value);
   } finally {
     uploadingAttachment.value = false;
   }
@@ -910,21 +1150,56 @@ async function removeAttachment(attachmentId: number): Promise<void> {
       "删除学生附件",
       { type: "warning" },
     );
-    await apiRequest(`/api/students/${route.params.studentId}/attachments/${attachmentId}`, {
+    deletingAttachmentId.value = attachmentId;
+    attachmentActionError.value = "";
+    await apiRequest(`/api/students/${studentId.value}/attachments/${attachmentId}`, {
       method: "DELETE",
     });
     ElMessage.success("学生附件已删除");
-    await loadProfile();
+    await loadDetailWithFeedback();
   } catch (error) {
     if (error === "cancel" || error === "close") return;
-    ElMessage.error((error as Error).message);
+    attachmentActionError.value = formatUserActionError("删除学生附件", error, "请确认附件记录仍存在后重试");
+    ElMessage.error(attachmentActionError.value);
+  } finally {
+    if (deletingAttachmentId.value === attachmentId) {
+      deletingAttachmentId.value = null;
+    }
   }
 }
 
-onMounted(loadDetail);
+watch(studentId, () => {
+  resetDetailState();
+  void loadDetailWithFeedback();
+});
+
+watch(
+  () => route.query.tab,
+  (tab) => {
+    if (typeof tab === "string" && tab) {
+      activeProfileTab.value = tab;
+    }
+  },
+);
+
+onMounted(loadDetailWithFeedback);
 </script>
 
 <style scoped>
+.student-detail-alert {
+  margin-bottom: 16px;
+}
+
+.section-alert {
+  margin-bottom: 14px;
+}
+
+.student-detail-body {
+  display: grid;
+  gap: 16px;
+  min-height: 260px;
+}
+
 .profile-hero-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) repeat(2, minmax(0, 0.8fr));
@@ -933,7 +1208,6 @@ onMounted(loadDetail);
 
 .hero-summary-card,
 .hero-mini-card,
-.stat-card,
 .detail-card {
   padding: 24px;
 }
@@ -1143,19 +1417,6 @@ onMounted(loadDetail);
 
 .tone-green {
   box-shadow: inset 0 4px 0 rgba(69, 141, 105, 0.8);
-}
-
-.stat-card span {
-  display: block;
-  color: #6d8092;
-  font-size: 13px;
-}
-
-.stat-card strong {
-  display: block;
-  margin-top: 10px;
-  color: #1f3245;
-  font-size: 28px;
 }
 
 .profile-tabs :deep(.el-tabs__item) {

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, File, Form, Request, Response, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db_session, get_settings, require_admin
 from app.core.config import Settings
 from app.schemas.auth import (
+    AdminUserBatchImportResponse,
     AdminUserCreatePayload,
     AdminUserCreateResponse,
     AdminUserResetPasswordResponse,
@@ -95,6 +97,34 @@ def create_user(
     session: Session = Depends(get_db_session),
 ) -> AdminUserCreateResponse:
     return service.create_user(session, payload, current_user)
+
+
+@router.get("/admin/users/import-template")
+def download_teacher_account_import_template(
+    _: AuthContext = Depends(require_admin),
+    settings: Settings = Depends(get_settings),
+) -> FileResponse:
+    path = settings.templates_dir / "teacher_accounts_import_template.xlsx"
+    return FileResponse(path, filename=path.name)
+
+
+@router.post("/admin/users/import", response_model=AdminUserBatchImportResponse)
+async def import_teacher_accounts(
+    file: UploadFile = File(...),
+    strategy: str = Form(default="skip_existing"),
+    current_user: AuthContext = Depends(require_admin),
+    session: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+) -> AdminUserBatchImportResponse:
+    content = await file.read()
+    return service.import_teacher_accounts(
+        session,
+        settings,
+        filename=file.filename,
+        content=content,
+        strategy=strategy,
+        context=current_user,
+    )
 
 
 @router.put("/admin/users/{user_id}", response_model=AppUserRead)

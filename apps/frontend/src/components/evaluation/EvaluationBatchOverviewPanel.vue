@@ -1,6 +1,27 @@
 <template>
   <div class="page-shell">
-    <section v-if="evaluationOverview" class="soft-card panel-block">
+    <section
+      v-if="evaluationOverview || loadingEvaluationOverview || evaluationOverviewError"
+      class="soft-card panel-block"
+      v-loading="loadingEvaluationOverview"
+    >
+      <el-alert
+        v-if="evaluationOverviewError"
+        class="panel-alert"
+        type="error"
+        show-icon
+        :closable="false"
+        title="评教批次总览加载失败"
+      >
+        <template #default>{{ evaluationOverviewError }}</template>
+      </el-alert>
+
+      <el-empty
+        v-if="!evaluationOverview && !loadingEvaluationOverview"
+        :description="evaluationOverviewError ? '当前批次总览暂时加载失败。' : '请选择一个评教批次查看总览。'"
+      />
+
+      <template v-if="evaluationOverview">
       <div class="section-head">
         <div>
           <h3>批次总览</h3>
@@ -29,6 +50,7 @@
             :model-value="selectedCompareBatchId ?? undefined"
             clearable
             filterable
+            :disabled="controlsDisabled || loadingEvaluationComparison"
             placeholder="选择对比批次"
             @change="emit('change-compare-batch', $event)"
           >
@@ -41,6 +63,17 @@
           </el-select>
         </div>
       </div>
+
+      <el-alert
+        v-if="evaluationComparisonError"
+        class="panel-alert"
+        type="error"
+        show-icon
+        :closable="false"
+        title="批次对比加载失败"
+      >
+        <template #default>{{ evaluationComparisonError }}</template>
+      </el-alert>
 
       <section v-if="evaluationComparison" class="comparison-metric-grid">
         <div class="soft-card stat-card">
@@ -67,6 +100,7 @@
         v-if="evaluationComparison"
         :data="evaluationComparison.teacher_deltas"
         stripe
+        v-loading="loadingEvaluationComparison"
         style="margin-bottom: 16px"
       >
         <el-table-column label="教师" prop="teacher_name" min-width="120" />
@@ -89,6 +123,9 @@
             {{ formatSignedValue(row.response_count_delta, 0) }}
           </template>
         </el-table-column>
+        <template #empty>
+          <el-empty description="当前两个批次没有可对比的共同教师。" />
+        </template>
       </el-table>
 
       <el-table :data="evaluationOverview.teacher_summaries" stripe>
@@ -103,13 +140,33 @@
         </el-table-column>
         <el-table-column label="操作" width="100" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="emit('load-teacher-detail', row.teacher_id)">查看</el-button>
+            <el-button link type="primary" :disabled="controlsDisabled" @click="emit('load-teacher-detail', row.teacher_id)">查看</el-button>
           </template>
         </el-table-column>
+        <template #empty>
+          <el-empty description="当前批次暂无教师评教汇总。请检查导入数据是否包含可匹配教师。" />
+        </template>
       </el-table>
+      </template>
     </section>
 
-    <section v-if="evaluationDetail" class="soft-card panel-block">
+    <section
+      v-if="evaluationDetail || loadingTeacherDetail || teacherDetailError"
+      class="soft-card panel-block"
+      v-loading="loadingTeacherDetail"
+    >
+      <el-alert
+        v-if="teacherDetailError"
+        class="panel-alert"
+        type="error"
+        show-icon
+        :closable="false"
+        title="教师评教详情加载失败"
+      >
+        <template #default>{{ teacherDetailError }}</template>
+      </el-alert>
+
+      <template v-if="evaluationDetail">
       <div class="section-head">
         <div>
           <h3>教师评教详情</h3>
@@ -168,6 +225,9 @@
             <el-table-column label="维度" prop="dimension_name" min-width="140" />
             <el-table-column label="平均分" prop="avg_score" width="100" />
             <el-table-column label="样本数" prop="response_count" width="90" />
+            <template #empty>
+              <el-empty description="当前教师暂无维度得分。"/>
+            </template>
           </el-table>
         </div>
         <div class="soft-card inner-card">
@@ -177,9 +237,13 @@
             <el-table-column label="题目" prop="question_text" min-width="220" />
             <el-table-column label="平均分" prop="avg_score" width="100" />
             <el-table-column label="样本数" prop="response_count" width="90" />
+            <template #empty>
+              <el-empty description="当前教师暂无题目明细。"/>
+            </template>
           </el-table>
         </div>
       </div>
+      </template>
     </section>
   </div>
 </template>
@@ -204,6 +268,13 @@ defineProps<{
   trendDeltaScore: number | null;
   trendRankDelta: number | null;
   trendPeakScore: string;
+  loadingEvaluationOverview: boolean;
+  evaluationOverviewError: string;
+  loadingEvaluationComparison: boolean;
+  evaluationComparisonError: string;
+  loadingTeacherDetail: boolean;
+  teacherDetailError: string;
+  controlsDisabled: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -215,6 +286,10 @@ const emit = defineEmits<{
 <style scoped>
 .stat-card {
   padding: 18px 20px;
+}
+
+.panel-alert {
+  margin-bottom: 14px;
 }
 
 .metric-label {

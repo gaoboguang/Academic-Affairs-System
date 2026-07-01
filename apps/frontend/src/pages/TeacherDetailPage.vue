@@ -1,31 +1,47 @@
 <template>
-  <div class="page-shell">
-    <header class="page-header">
-      <div>
-        <div class="page-eyebrow">教师详情</div>
-        <h2 class="page-title">
-          {{ profile?.teacher.name ?? "教师详情" }}
-          <span v-if="profile" class="title-meta">{{ profile.teacher.teacher_no }}</span>
-        </h2>
-        <p class="page-subtitle">
-          在一个页面里看教师基础信息、职称历史、任教安排、考试趋势和同学科横向对比。
-        </p>
-        <div v-if="profile" class="page-chip-row">
-          <span class="page-chip"><strong>当前学科</strong>{{ profile.teacher.subject_name ?? "未设置" }}</span>
-          <span class="page-chip"><strong>当前职称</strong>{{ resolveTitle(profile.teacher.title_code) }}</span>
-          <span class="page-chip"><strong>任教状态</strong>{{ resolveStatus(profile.teacher.employment_status) }}</span>
-          <span class="page-chip"><strong>班主任</strong>{{ profile.teacher.is_head_teacher ? "是" : "否" }}</span>
-        </div>
-      </div>
-      <div class="action-row">
+  <AppPage
+    :title="profile?.teacher.name ?? '教师详情'"
+    eyebrow="教师中心 / 教师档案"
+    description="在一个页面里看教师基础信息、职称历史、任教安排、考试趋势和同学科横向对比。"
+    :meta="pageMeta"
+  >
+    <template #actions>
         <el-button @click="router.push('/teachers')">返回列表</el-button>
         <el-button @click="router.push('/analytics')">分析中心</el-button>
-        <el-button :disabled="!latestTrend?.exam_id" @click="openTeacherAnalysisReport">打印教师分析</el-button>
+        <el-button :disabled="!latestTrend?.exam_id || profileLoading || savingHistory" @click="openTeacherAnalysisReport">
+          打印教师分析
+        </el-button>
         <el-button type="primary" @click="router.push('/reports')">报表中心</el-button>
-      </div>
-    </header>
+    </template>
 
-    <template v-if="profile">
+    <el-alert
+      v-if="optionsLoadError"
+      class="teacher-detail-alert"
+      type="error"
+      :title="optionsLoadError"
+      show-icon
+      :closable="false"
+    >
+      <template #default>
+        <el-button size="small" :loading="optionsLoading" @click="loadOptionsWithFeedback">重新加载基础选项</el-button>
+      </template>
+    </el-alert>
+
+    <el-alert
+      v-if="profileLoadError"
+      class="teacher-detail-alert"
+      type="error"
+      :title="profileLoadError"
+      show-icon
+      :closable="false"
+    >
+      <template #default>
+        <el-button size="small" :loading="profileLoading" @click="loadProfileWithFeedback">重新加载教师档案</el-button>
+      </template>
+    </el-alert>
+
+    <div v-loading="loading || profileLoading" class="teacher-detail-body">
+      <template v-if="profile">
       <section class="profile-hero-grid">
         <article class="soft-card hero-summary-card">
           <div class="hero-kicker">教学画像</div>
@@ -63,24 +79,7 @@
         </article>
       </section>
 
-      <section class="metric-grid">
-        <article class="soft-card stat-card">
-          <span>当前学科</span>
-          <strong>{{ profile.teacher.subject_name ?? "-" }}</strong>
-        </article>
-        <article class="soft-card stat-card">
-          <span>当前职称</span>
-          <strong>{{ resolveTitle(profile.teacher.title_code) }}</strong>
-        </article>
-        <article class="soft-card stat-card">
-          <span>最近考试均分</span>
-          <strong>{{ latestTrend?.overall_average ?? "-" }}</strong>
-        </article>
-        <article class="soft-card stat-card">
-          <span>在用任教关系</span>
-          <strong>{{ activeAssignmentCount }}</strong>
-        </article>
-      </section>
+      <AppStatGrid :items="teacherMetricCards" :columns="4" />
 
       <section class="soft-card panorama-card">
         <div class="section-head compact">
@@ -148,14 +147,22 @@
                 <p>保留历史，不覆盖旧记录；保存后会同步当前职称。</p>
               </div>
               <div class="action-row">
-                <el-button @click="addHistoryRow">新增一条</el-button>
-                <el-button type="primary" :loading="savingHistory" @click="saveHistories">保存历史</el-button>
+                <el-button :disabled="historyEditingDisabled" @click="addHistoryRow">新增一条</el-button>
+                <el-button type="primary" :loading="savingHistory" :disabled="optionsLoading" @click="saveHistories">保存历史</el-button>
               </div>
             </div>
+            <el-alert
+              v-if="historyActionError"
+              class="history-action-alert"
+              type="error"
+              :title="historyActionError"
+              show-icon
+              :closable="false"
+            />
             <div v-if="titleHistories.length" class="history-list">
               <article v-for="(item, index) in titleHistories" :key="index" class="history-row">
                 <div class="history-grid">
-                  <el-select v-model="item.title_code" placeholder="选择职称">
+                  <el-select v-model="item.title_code" placeholder="选择职称" :loading="optionsLoading" :disabled="historyEditingDisabled">
                     <el-option
                       v-for="option in referenceStore.dicts.teacher_title ?? []"
                       :key="String(option.code)"
@@ -169,6 +176,7 @@
                     value-format="YYYY-MM-DD"
                     format="YYYY-MM-DD"
                     placeholder="开始日期"
+                    :disabled="historyEditingDisabled"
                   />
                   <el-date-picker
                     v-model="item.end_date"
@@ -176,22 +184,28 @@
                     value-format="YYYY-MM-DD"
                     format="YYYY-MM-DD"
                     placeholder="结束日期"
+                    :disabled="historyEditingDisabled"
                   />
-                  <el-input v-model="item.note" placeholder="备注" />
+                  <el-input v-model="item.note" placeholder="备注" :disabled="historyEditingDisabled" />
                 </div>
                 <div class="history-actions">
-                  <el-button link type="danger" @click="removeHistoryRow(index)">移除</el-button>
+                  <el-button link type="danger" :disabled="historyEditingDisabled" @click="removeHistoryRow(index)">移除</el-button>
                 </div>
               </article>
             </div>
-            <el-empty v-else description="暂无职称历史" />
+            <el-empty v-else description="暂无职称历史">
+              <el-button type="primary" plain :disabled="historyEditingDisabled" @click="addHistoryRow">新增职称历史</el-button>
+            </el-empty>
           </section>
         </el-tab-pane>
 
         <el-tab-pane label="任教安排">
           <section class="soft-card detail-card">
             <div class="table-shell">
-              <el-table :data="profile.assignments" stripe>
+              <el-table v-loading="profileLoading" :data="profile.assignments" stripe>
+                <template #empty>
+                  <el-empty description="暂无任教安排" />
+                </template>
                 <el-table-column label="学期" prop="semester_name" min-width="180" />
                 <el-table-column label="年级" prop="grade_name" width="100" />
                 <el-table-column label="班级" prop="class_name" width="100" />
@@ -200,14 +214,16 @@
                 <el-table-column label="周课时" prop="weekly_periods_manual" width="100" />
               </el-table>
             </div>
-            <el-empty v-if="!profile.assignments.length" description="暂无任教安排" />
           </section>
         </el-tab-pane>
 
         <el-tab-pane label="考试趋势">
           <section class="soft-card detail-card">
             <div class="table-shell">
-              <el-table :data="profile.recent_exam_trends" stripe>
+              <el-table v-loading="profileLoading" :data="profile.recent_exam_trends" stripe>
+                <template #empty>
+                  <el-empty description="暂无考试趋势数据" />
+                </template>
                 <el-table-column label="考试" prop="exam_name" min-width="220" />
                 <el-table-column label="时间" prop="exam_date" width="120" />
                 <el-table-column label="学期" prop="semester_name" min-width="160" />
@@ -219,14 +235,16 @@
                 <el-table-column label="班级数" prop="class_count" width="90" />
               </el-table>
             </div>
-            <el-empty v-if="!profile.recent_exam_trends.length" description="暂无考试趋势数据" />
           </section>
         </el-tab-pane>
 
         <el-tab-pane label="同科对比">
           <section class="soft-card detail-card">
             <div class="table-shell">
-              <el-table :data="profile.peer_comparisons" stripe>
+              <el-table v-loading="profileLoading" :data="profile.peer_comparisons" stripe>
+                <template #empty>
+                  <el-empty description="暂无同学科横向对比数据" />
+                </template>
                 <el-table-column label="排名" prop="rank" width="80" />
                 <el-table-column label="教师" prop="teacher_name" min-width="140" />
                 <el-table-column label="学科" prop="subject_name" width="120" />
@@ -236,25 +254,32 @@
                 <el-table-column label="任教关系数" prop="assignment_count" width="110" />
               </el-table>
             </div>
-            <el-empty v-if="!profile.peer_comparisons.length" description="暂无同学科横向对比数据" />
           </section>
         </el-tab-pane>
       </el-tabs>
-    </template>
-  </div>
+      </template>
+      <el-empty v-else :description="teacherDetailEmptyDescription">
+        <el-button v-if="profileLoadError" type="primary" plain :loading="profileLoading" @click="loadProfileWithFeedback">
+          重新加载教师档案
+        </el-button>
+      </el-empty>
+    </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import ElMessage from "element-plus/es/components/message/index";
 import { useRoute, useRouter } from "vue-router";
 
 import { apiRequest, openFile } from "../api/client";
+import { AppPage, AppStatGrid, type PageMetaItem, type StatCardItem } from "../components/ui";
 import { useReferenceStore } from "../stores/reference";
 import {
   buildTeacher360Actions,
   buildTeacher360RiskTags,
 } from "../utils/profile360";
+import { formatUserActionError } from "../utils/userFeedback";
 import { teacherAnalysisPrintPreviewPath } from "../utils/print";
 
 interface TeacherTrendItem {
@@ -326,9 +351,17 @@ interface TitleHistoryPayload {
 const route = useRoute();
 const router = useRouter();
 const referenceStore = useReferenceStore();
+const teacherId = computed(() => Number(route.params.teacherId));
+const loading = ref(false);
+const optionsLoading = ref(false);
+const profileLoading = ref(false);
 const profile = ref<TeacherProfile | null>(null);
 const titleHistories = ref<TitleHistoryPayload[]>([]);
+const optionsLoadError = ref("");
+const profileLoadError = ref("");
 const savingHistory = ref(false);
+const historyActionError = ref("");
+const historyEditingDisabled = computed(() => savingHistory.value || optionsLoading.value || profileLoading.value);
 
 const activeAssignmentCount = computed(
   () => profile.value?.assignments.filter((item) => item.is_active).length ?? 0,
@@ -337,6 +370,14 @@ const activeAssignmentCount = computed(
 const latestTrend = computed(() => profile.value?.recent_exam_trends[0] ?? null);
 
 const heroHeadline = computed(() => latestTrend.value?.exam_name ?? "暂无最近考试画像");
+
+const pageMeta = computed<PageMetaItem[]>(() => [
+  { label: "工号", value: profile.value?.teacher.teacher_no ?? "-" },
+  { label: "当前学科", value: profile.value?.teacher.subject_name ?? "未设置" },
+  { label: "当前职称", value: resolveTitle(profile.value?.teacher.title_code) },
+  { label: "任教状态", value: resolveStatus(profile.value?.teacher.employment_status) },
+  { label: "班主任", value: profile.value?.teacher.is_head_teacher ? "是" : "否" },
+]);
 
 const teacherNarrative = computed(() => {
   if (!profile.value) return "暂无教师画像";
@@ -374,6 +415,37 @@ const teacherHeroCards = computed(() => {
   ];
 });
 
+const teacherMetricCards = computed<StatCardItem[]>(() => [
+  {
+    label: "当前学科",
+    value: profile.value?.teacher.subject_name ?? "-",
+    help: "教师当前主学科，用于任教分析和同科对比。",
+    tone: "primary",
+    loading: profileLoading.value,
+  },
+  {
+    label: "当前职称",
+    value: resolveTitle(profile.value?.teacher.title_code),
+    help: "来自教师职称字典和职称历史。",
+    tone: "neutral",
+    loading: profileLoading.value,
+  },
+  {
+    label: "最近考试均分",
+    value: latestTrend.value?.overall_average ?? "-",
+    help: "最近考试中该教师任教班级的聚合均分。",
+    tone: "warning",
+    loading: profileLoading.value,
+  },
+  {
+    label: "在用任教关系",
+    value: activeAssignmentCount.value,
+    help: "当前仍有效的任教关系数量。",
+    tone: "success",
+    loading: profileLoading.value,
+  },
+]);
+
 const teacherRiskTags = computed(() => {
   if (!profile.value) return [];
   return buildTeacher360RiskTags({
@@ -385,6 +457,12 @@ const teacherRiskTags = computed(() => {
 });
 
 const teacher360Actions = computed(() => buildTeacher360Actions());
+
+const teacherDetailEmptyDescription = computed(() => {
+  if (profileLoadError.value) return "教师档案加载失败，请重新加载。";
+  if (loading.value || profileLoading.value) return "正在加载教师档案。";
+  return "教师不存在或已停用。";
+});
 
 function resolveDictName(dictCode: string, code?: string | null): string {
   if (!code) return "-";
@@ -407,10 +485,11 @@ function resolveStatus(code?: string | null): string {
 
 function openTeacherAnalysisReport(): void {
   if (!latestTrend.value?.exam_id) return;
-  openFile(teacherAnalysisPrintPreviewPath(Number(route.params.teacherId), latestTrend.value.exam_id));
+  openFile(teacherAnalysisPrintPreviewPath(teacherId.value, latestTrend.value.exam_id));
 }
 
 function addHistoryRow(): void {
+  historyActionError.value = "";
   titleHistories.value.unshift({
     title_code: "",
     start_date: null,
@@ -421,46 +500,95 @@ function addHistoryRow(): void {
 }
 
 function removeHistoryRow(index: number): void {
+  historyActionError.value = "";
   titleHistories.value.splice(index, 1);
 }
 
 async function loadProfile(): Promise<void> {
+  profile.value = await apiRequest<TeacherProfile>(`/api/teachers/${teacherId.value}/profile`);
+  titleHistories.value = profile.value.title_histories.map((item) => ({
+    title_code: item.title_code,
+    start_date: item.start_date ?? null,
+    end_date: item.end_date ?? null,
+    note: item.note ?? "",
+    is_active: true,
+  }));
+}
+
+async function loadOptionsWithFeedback(): Promise<void> {
   try {
-    profile.value = await apiRequest<TeacherProfile>(`/api/teachers/${route.params.teacherId}/profile`);
-    titleHistories.value = profile.value.title_histories.map((item) => ({
-      title_code: item.title_code,
-      start_date: item.start_date ?? null,
-      end_date: item.end_date ?? null,
-      note: item.note ?? "",
-      is_active: true,
-    }));
+    optionsLoading.value = true;
+    optionsLoadError.value = "";
+    await referenceStore.loadAll();
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    optionsLoadError.value = formatUserActionError(
+      "加载教师基础选项",
+      error,
+      "确认本地后端服务正常运行后，点击重新加载基础选项。",
+    );
+    ElMessage.error(optionsLoadError.value);
+  } finally {
+    optionsLoading.value = false;
   }
 }
 
+async function loadProfileWithFeedback(): Promise<void> {
+  try {
+    profileLoading.value = true;
+    profileLoadError.value = "";
+    await loadProfile();
+    historyActionError.value = "";
+  } catch (error) {
+    profile.value = null;
+    titleHistories.value = [];
+    profileLoadError.value = formatUserActionError(
+      "加载教师档案",
+      error,
+      "确认教师档案仍然启用且本地后端服务正常运行后，点击重新加载教师档案。",
+    );
+    ElMessage.error(profileLoadError.value);
+  } finally {
+    profileLoading.value = false;
+  }
+}
+
+async function reloadAll(): Promise<void> {
+  loading.value = true;
+  await Promise.all([loadOptionsWithFeedback(), loadProfileWithFeedback()]);
+  loading.value = false;
+}
+
 async function saveHistories(): Promise<void> {
+  const invalidHistory = titleHistories.value.find((item) => !item.title_code.trim());
+  if (invalidHistory) {
+    historyActionError.value = "请先补全职称，或移除空白职称历史。";
+    ElMessage.warning(historyActionError.value);
+    return;
+  }
   try {
     savingHistory.value = true;
-    await apiRequest(`/api/teachers/${route.params.teacherId}/title-histories`, {
+    historyActionError.value = "";
+    await apiRequest(`/api/teachers/${teacherId.value}/title-histories`, {
       method: "PUT",
-      body: JSON.stringify(
-        titleHistories.value.filter((item) => item.title_code.trim()),
-      ),
+      body: JSON.stringify(titleHistories.value),
     });
     ElMessage.success("职称历史已保存");
-    await loadProfile();
+    await loadProfileWithFeedback();
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    historyActionError.value = formatUserActionError("保存职称历史", error, "检查职称、日期和备注后重试。");
+    ElMessage.error(historyActionError.value);
   } finally {
     savingHistory.value = false;
   }
 }
 
-onMounted(async () => {
-  await referenceStore.loadAll();
-  await loadProfile();
+watch(teacherId, () => {
+  profile.value = null;
+  titleHistories.value = [];
+  void reloadAll();
 });
+
+onMounted(reloadAll);
 </script>
 
 <style scoped>
@@ -472,9 +600,22 @@ onMounted(async () => {
 
 .hero-summary-card,
 .hero-mini-card,
-.stat-card,
 .detail-card {
   padding: 24px;
+}
+
+.teacher-detail-alert {
+  margin-top: -4px;
+}
+
+.history-action-alert {
+  margin-bottom: 14px;
+}
+
+.teacher-detail-body {
+  display: grid;
+  gap: 16px;
+  min-height: 320px;
 }
 
 .hero-summary-card {
@@ -573,19 +714,6 @@ onMounted(async () => {
 
 .tone-green {
   box-shadow: inset 0 4px 0 rgba(69, 141, 105, 0.8);
-}
-
-.stat-card span {
-  display: block;
-  color: #6d8092;
-  font-size: 13px;
-}
-
-.stat-card strong {
-  display: block;
-  margin-top: 10px;
-  color: #1f3245;
-  font-size: 28px;
 }
 
 .profile-tabs :deep(.el-tabs__item) {

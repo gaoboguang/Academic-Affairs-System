@@ -7,8 +7,8 @@
   >
     <template #actions>
       <div class="action-row">
-        <el-button @click="downloadTemplate">成绩模板下载</el-button>
-        <el-button type="primary" @click="openCreate">新建考试</el-button>
+        <el-button :disabled="templateActionsDisabled" @click="downloadTemplate">成绩模板下载</el-button>
+        <el-button type="primary" :disabled="examCreateDisabled" @click="openCreate">新建考试</el-button>
       </div>
     </template>
 
@@ -24,14 +24,74 @@
 
     <AppStatGrid :items="examStatCards" :columns="4" />
 
+    <section
+      v-if="referenceLoadError || scoreReadinessLoadError || examActionError"
+      class="exam-status-stack"
+    >
+      <el-alert
+        v-if="referenceLoadError"
+        type="warning"
+        title="考试中心基础选项加载失败"
+        show-icon
+        :closable="false"
+      >
+        <template #default>
+          <div class="exam-alert-body">
+            <span>{{ referenceLoadError }}</span>
+            <el-button link type="primary" :loading="referenceLoading" @click="loadReferenceOptions">
+              重新加载基础选项
+            </el-button>
+          </div>
+        </template>
+      </el-alert>
+      <el-alert
+        v-if="scoreReadinessLoadError"
+        type="warning"
+        title="成绩状态加载失败"
+        show-icon
+        :closable="false"
+      >
+        <template #default>
+          <div class="exam-alert-body">
+            <span>{{ scoreReadinessLoadError }}</span>
+            <el-button link type="primary" @click="loadScoreReadiness">
+              重新加载成绩状态
+            </el-button>
+          </div>
+        </template>
+      </el-alert>
+      <el-alert
+        v-if="examActionError"
+        type="error"
+        title="考试操作失败"
+        show-icon
+        :closable="false"
+      >
+        <template #default>
+          <div class="exam-alert-body">
+            <span>{{ examActionError }}</span>
+            <el-button link type="primary" :loading="examsLoading" @click="loadExams">
+              重新加载考试列表
+            </el-button>
+          </div>
+        </template>
+      </el-alert>
+    </section>
+
     <AppFilterBar
       title="全局筛选"
       description="按考试名称和学期快速定位，查询结果会同步到下方考试列表。"
       sticky
     >
       <div class="filter-grid">
-        <el-input v-model="filters.name" placeholder="按考试名称筛选" />
-        <el-select v-model="filters.semester_id" clearable placeholder="选择学期">
+        <el-input v-model="filters.name" placeholder="按考试名称筛选" :disabled="filterControlsDisabled" />
+        <el-select
+          v-model="filters.semester_id"
+          clearable
+          placeholder="选择学期"
+          :loading="referenceLoading"
+          :disabled="filterControlsDisabled || referenceLoading"
+        >
           <el-option
             v-for="semester in referenceStore.semesters"
             :key="semester.id"
@@ -41,8 +101,15 @@
         </el-select>
       </div>
       <template #actions>
-        <el-button type="primary" @click="loadExams">查询</el-button>
-        <el-button @click="resetFilters">重置</el-button>
+        <el-button
+          type="primary"
+          :loading="examsLoading"
+          :disabled="filterControlsDisabled"
+          @click="loadExams"
+        >
+          查询
+        </el-button>
+        <el-button :disabled="filterControlsDisabled" @click="resetFilters">重置</el-button>
       </template>
     </AppFilterBar>
 
@@ -50,35 +117,91 @@
       title="考试列表"
       description="每场考试的科目配置、成绩导入和快照重建都从这里进入。"
     >
-      <el-table :data="exams.items" stripe>
-        <el-table-column label="考试名称" prop="name" min-width="180" />
-        <el-table-column label="类型" prop="exam_type" width="100" />
-        <el-table-column label="考试日期" prop="exam_date" width="120" />
-        <el-table-column label="学期" prop="semester_name" min-width="180" />
-        <el-table-column label="年级范围" min-width="140">
-          <template #default="{ row }">
-            {{ (row.grade_scope_names ?? []).join(" / ") || "未设置" }}
+      <template #actions>
+        <span class="panel-caption">{{ examTableCountText }}</span>
+      </template>
+      <el-alert
+        v-if="examsLoadError"
+        class="exam-page-alert"
+        type="error"
+        :title="examsLoadError"
+        show-icon
+        :closable="false"
+      >
+        <template #default>
+          <el-button size="small" @click="loadExams">重新加载</el-button>
+        </template>
+      </el-alert>
+      <div v-loading="examsLoading" class="exam-table-body">
+        <el-table :data="exams.items" stripe>
+          <el-table-column label="考试名称" prop="name" min-width="180" />
+          <el-table-column label="类型" prop="exam_type" width="100" />
+          <el-table-column label="考试日期" prop="exam_date" width="120" />
+          <el-table-column label="学期" prop="semester_name" min-width="180" />
+          <el-table-column label="年级范围" min-width="140">
+            <template #default="{ row }">
+              {{ (row.grade_scope_names ?? []).join(" / ") || "未设置" }}
+            </template>
+          </el-table-column>
+          <el-table-column label="科目数" prop="subject_count" width="90" />
+          <el-table-column label="状态" width="100">
+            <template #default="{ row }">
+              <el-tag :type="examStatusType(row.status)" effect="light">
+                {{ formatExamStatus(row.status) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" min-width="240" fixed="right">
+            <template #default="{ row }">
+              <div class="action-row compact-actions">
+                <el-button
+                  link
+                  type="primary"
+                  :loading="editingExamLoadingId === row.id"
+                  :disabled="examRowActionsDisabled"
+                  @click="openEdit(row)"
+                >
+                  编辑
+                </el-button>
+                <el-button
+                  link
+                  type="primary"
+                  :loading="subjectsExamLoadingId === row.id"
+                  :disabled="examRowActionsDisabled"
+                  @click="openSubjects(row)"
+                >
+                  科目配置
+                </el-button>
+                <el-button
+                  link
+                  type="primary"
+                  :loading="importExamLoadingId === row.id"
+                  :disabled="examRowActionsDisabled"
+                  @click="openImport(row)"
+                >
+                  导入成绩
+                </el-button>
+                <el-button
+                  link
+                  type="primary"
+                  :loading="rebuildingExamId === row.id"
+                  :disabled="examRowActionsDisabled && rebuildingExamId !== row.id"
+                  @click="rebuild(row.id)"
+                >
+                  重建
+                </el-button>
+              </div>
+            </template>
+          </el-table-column>
+          <template #empty>
+            <el-empty :description="examEmptyDescription">
+              <el-button v-if="examsLoadError" type="primary" plain :loading="examsLoading" @click="loadExams">
+                重新加载考试列表
+              </el-button>
+            </el-empty>
           </template>
-        </el-table-column>
-        <el-table-column label="科目数" prop="subject_count" width="90" />
-        <el-table-column label="状态" width="100">
-          <template #default="{ row }">
-            <el-tag :type="examStatusType(row.status)" effect="light">
-              {{ formatExamStatus(row.status) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" min-width="240" fixed="right">
-          <template #default="{ row }">
-            <div class="action-row compact-actions">
-              <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
-              <el-button link type="primary" @click="openSubjects(row)">科目配置</el-button>
-              <el-button link type="primary" @click="openImport(row)">导入成绩</el-button>
-              <el-button link type="primary" @click="rebuild(row.id)">重建</el-button>
-            </div>
-          </template>
-        </el-table-column>
-      </el-table>
+        </el-table>
+      </div>
     </AppTableShell>
 
     <el-dialog
@@ -89,7 +212,29 @@
       :close-on-click-modal="false"
       @closed="handleExamDialogClosed"
     >
-      <el-form label-width="110px">
+      <el-form label-width="110px" :disabled="examFormDisabled">
+        <el-alert
+          v-if="referenceLoadError"
+          class="exam-page-alert"
+          type="warning"
+          show-icon
+          :closable="false"
+          title="基础选项加载失败，学期和年级范围可能不完整。"
+        >
+          <template #default>
+            <el-button link type="primary" :loading="referenceLoading" @click="loadReferenceOptions">
+              重新加载基础选项
+            </el-button>
+          </template>
+        </el-alert>
+        <el-alert
+          v-if="examFormActionError"
+          class="exam-page-alert"
+          type="error"
+          show-icon
+          :closable="false"
+          :title="examFormActionError"
+        />
         <div class="form-grid">
           <el-form-item label="考试名称">
             <el-input v-model="examForm.name" />
@@ -107,7 +252,13 @@
             />
           </el-form-item>
           <el-form-item label="学期">
-            <el-select v-model="examForm.semester_id" filterable style="width: 100%">
+            <el-select
+              v-model="examForm.semester_id"
+              filterable
+              style="width: 100%"
+              :loading="referenceLoading"
+              :disabled="referenceLoading"
+            >
               <el-option
                 v-for="semester in referenceStore.semesters"
                 :key="semester.id"
@@ -133,6 +284,8 @@
               collapse-tags
               filterable
               style="width: 100%"
+              :loading="referenceLoading"
+              :disabled="referenceLoading"
             >
               <el-option
                 v-for="grade in referenceStore.grades"
@@ -148,7 +301,7 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button :disabled="savingExam" @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="savingExam" @click="submitExam">保存</el-button>
       </template>
     </el-dialog>
@@ -161,6 +314,28 @@
       :close-on-click-modal="false"
       @closed="handleSubjectsDialogClosed"
     >
+      <el-alert
+        v-if="referenceLoadError"
+        class="exam-page-alert"
+        type="warning"
+        show-icon
+        :closable="false"
+        title="基础选项加载失败，学科清单可能不完整。"
+      >
+        <template #default>
+          <el-button link type="primary" :loading="referenceLoading" @click="loadReferenceOptions">
+            重新加载基础选项
+          </el-button>
+        </template>
+      </el-alert>
+      <el-alert
+        v-if="subjectFormActionError"
+        class="exam-page-alert"
+        type="error"
+        show-icon
+        :closable="false"
+        :title="subjectFormActionError"
+      />
       <div class="assignment-toolbar">
         <div>
           <strong>勾选本次考试涉及的科目</strong>
@@ -169,8 +344,13 @@
           </p>
         </div>
         <div class="action-row compact-actions">
-          <el-button @click="selectStandardSubjects">常规九科</el-button>
-          <el-button @click="clearSelectedSubjects">清空</el-button>
+          <el-button
+            :disabled="subjectFormDisabled || referenceLoading || !referenceStore.subjects.length"
+            @click="selectStandardSubjects"
+          >
+            常规九科
+          </el-button>
+          <el-button :disabled="subjectFormDisabled" @click="clearSelectedSubjects">清空</el-button>
         </div>
       </div>
       <el-checkbox-group
@@ -182,6 +362,7 @@
           v-for="subject in subjectOptions"
           :key="subject.id"
           :label="subject.id"
+          :disabled="subjectFormDisabled || referenceLoading"
         >
           {{ formatSubjectOptionLabel(subject) }}
         </el-checkbox-button>
@@ -200,37 +381,68 @@
         </el-table-column>
         <el-table-column label="满分" width="110">
           <template #default="{ row }">
-            <el-input-number v-model="row.full_score" :min="0" :max="300" style="width: 100%" />
+            <el-input-number
+              v-model="row.full_score"
+              :min="0"
+              :max="300"
+              :disabled="subjectFormDisabled"
+              style="width: 100%"
+            />
           </template>
         </el-table-column>
         <el-table-column label="优秀线" width="110">
           <template #default="{ row }">
-            <el-input-number v-model="row.excellent_line" :min="0" :max="300" style="width: 100%" />
+            <el-input-number
+              v-model="row.excellent_line"
+              :min="0"
+              :max="300"
+              :disabled="subjectFormDisabled"
+              style="width: 100%"
+            />
           </template>
         </el-table-column>
         <el-table-column label="及格线" width="110">
           <template #default="{ row }">
-            <el-input-number v-model="row.pass_line" :min="0" :max="300" style="width: 100%" />
+            <el-input-number
+              v-model="row.pass_line"
+              :min="0"
+              :max="300"
+              :disabled="subjectFormDisabled"
+              style="width: 100%"
+            />
           </template>
         </el-table-column>
         <el-table-column label="总分" width="90">
           <template #default="{ row }">
-            <el-switch v-model="row.is_in_total" />
+            <el-switch v-model="row.is_in_total" :disabled="subjectFormDisabled" />
           </template>
         </el-table-column>
         <el-table-column label="排序" width="100">
           <template #default="{ row }">
-            <el-input-number v-model="row.sort_order" :min="0" :max="99" style="width: 100%" />
+            <el-input-number
+              v-model="row.sort_order"
+              :min="0"
+              :max="99"
+              :disabled="subjectFormDisabled"
+              style="width: 100%"
+            />
           </template>
         </el-table-column>
         <el-table-column label="操作" width="90">
           <template #default="{ row }">
-            <el-button link type="danger" @click="removeSelectedSubject(row.subject_id)">移除</el-button>
+            <el-button
+              link
+              type="danger"
+              :disabled="subjectFormDisabled"
+              @click="removeSelectedSubject(row.subject_id)"
+            >
+              移除
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
       <template #footer>
-        <el-button @click="subjectsDialogVisible = false">取消</el-button>
+        <el-button :disabled="savingSubjects" @click="subjectsDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="savingSubjects" @click="saveSubjects">保存科目配置</el-button>
       </template>
     </el-dialog>
@@ -250,7 +462,7 @@
       </el-steps>
 
       <div class="action-row import-row">
-        <el-select v-model="importStrategy" style="width: 180px">
+        <el-select v-model="importStrategy" style="width: 180px" :disabled="importControlsDisabled">
           <el-option label="覆盖已有成绩" value="overwrite" />
           <el-option label="跳过已有成绩" value="skip_existing" />
         </el-select>
@@ -260,6 +472,8 @@
           filterable
           placeholder="选择平台模板"
           style="width: 220px"
+          :loading="scoreProfilesLoading"
+          :disabled="importControlsDisabled || scoreProfilesLoading"
         >
           <el-option
             v-for="profile in scoreProfiles"
@@ -268,14 +482,61 @@
             :value="profile.id"
           />
         </el-select>
-        <el-upload :show-file-list="false" :auto-upload="false" :on-change="handleScorePreview">
+        <el-upload
+          :show-file-list="false"
+          :auto-upload="false"
+          :disabled="importControlsDisabled"
+          :on-change="handleScorePreview"
+          accept=".xlsx,.xls"
+        >
           <el-button type="primary" :loading="previewLoading">上传并识别</el-button>
         </el-upload>
-        <el-upload :show-file-list="false" :auto-upload="false" :on-change="handleStandardImport">
+        <el-upload
+          :show-file-list="false"
+          :auto-upload="false"
+          :disabled="importControlsDisabled"
+          :on-change="handleStandardImport"
+          accept=".xlsx,.xls"
+        >
           <el-button plain :loading="importingScores">按统一模板导入</el-button>
         </el-upload>
-        <el-button @click="reloadBatches">刷新批次</el-button>
+        <el-button
+          :loading="scoreBatchesLoading"
+          :disabled="importControlsDisabled"
+          @click="reloadBatches"
+        >
+          刷新批次
+        </el-button>
       </div>
+      <el-alert
+        v-if="scoreProfilesLoadError"
+        class="exam-page-alert"
+        type="warning"
+        :title="scoreProfilesLoadError"
+        show-icon
+        :closable="false"
+      >
+        <template #default>
+          <el-button size="small" :loading="scoreProfilesLoading" @click="loadScoreProfiles">
+            重新加载平台模板
+          </el-button>
+        </template>
+      </el-alert>
+      <el-alert
+        v-if="importActionError"
+        class="exam-page-alert"
+        type="error"
+        show-icon
+        :closable="false"
+        :title="importActionError"
+      >
+        <template #default>
+          <div class="exam-alert-body">
+            <span>可重新上传成绩文件，或先下载统一模板核对表头。</span>
+            <el-button link type="primary" @click="downloadTemplate">重新下载成绩模板</el-button>
+          </div>
+        </template>
+      </el-alert>
       <el-alert
         class="import-tip"
         type="info"
@@ -311,17 +572,21 @@
         <el-form label-width="110px" class="mapping-form">
           <div class="form-grid">
             <el-form-item label="板式">
-              <el-select v-model="editableScoreMapping.layout_type" style="width: 100%">
+              <el-select
+                v-model="editableScoreMapping.layout_type"
+                style="width: 100%"
+                :disabled="importControlsDisabled"
+              >
                 <el-option label="宽表：一行一个学生，多科成绩列" value="wide" />
                 <el-option label="长表：一行一个学生一科" value="long" />
               </el-select>
             </el-form-item>
             <el-form-item label="保存模板">
               <div class="profile-save-row">
-                <el-switch v-model="saveScoreProfile" />
+                <el-switch v-model="saveScoreProfile" :disabled="importControlsDisabled" />
                 <el-input
                   v-model="scoreProfileName"
-                  :disabled="!saveScoreProfile"
+                  :disabled="importControlsDisabled || !saveScoreProfile"
                   placeholder="如：七天网络成绩导出"
                 />
               </div>
@@ -337,6 +602,7 @@
                 filterable
                 placeholder="选择列"
                 style="width: 100%"
+                :disabled="importControlsDisabled"
                 @change="updateScoreFieldMapping(field.value, $event)"
               >
                 <el-option
@@ -369,6 +635,8 @@
                   filterable
                   placeholder="忽略或选择科目"
                   style="width: 100%"
+                  :loading="referenceLoading"
+                  :disabled="importControlsDisabled || referenceLoading"
                   @change="updateScoreSubjectMapping(row, $event)"
                 >
                   <el-option
@@ -384,7 +652,7 @@
               <template #default="{ row }">
                 <el-select
                   :model-value="editableScoreMapping.subject_score_types[row] ?? 'original'"
-                  :disabled="!editableScoreMapping.subject_mapping[row]"
+                  :disabled="importControlsDisabled || !editableScoreMapping.subject_mapping[row]"
                   style="width: 100%"
                   @change="updateScoreSubjectScoreType(row, $event)"
                 >
@@ -415,7 +683,7 @@
         <div class="action-row import-row">
           <el-button
             type="primary"
-            :disabled="!pendingImportFile || !editableScoreMapping"
+            :disabled="importControlsDisabled || !pendingImportFile || !editableScoreMapping"
             :loading="importingScores"
             @click="executeSmartImport"
           >
@@ -426,25 +694,52 @@
 
       <ImportFeedbackPanel :result="importResult" />
       <AppTableShell class="score-batch-shell" title="最近导入批次">
-        <el-table :data="scoreBatches" stripe>
-          <el-table-column label="批次 ID" prop="id" width="90" />
-          <el-table-column label="来源文件" prop="source_filename" min-width="180" />
-          <el-table-column label="导入时间" prop="import_time" min-width="160" />
-          <el-table-column label="成功" prop="success_rows" width="90" />
-          <el-table-column label="失败" prop="failed_rows" width="90" />
-          <el-table-column label="识别方式" min-width="140">
-            <template #default="{ row }">
-              {{ formatScoreBatchImportMode(row) }}
+        <el-alert
+          v-if="scoreBatchesLoadError"
+          class="exam-page-alert"
+          type="error"
+          :title="scoreBatchesLoadError"
+          show-icon
+          :closable="false"
+        >
+          <template #default>
+            <el-button size="small" @click="reloadBatches">重新加载</el-button>
+          </template>
+        </el-alert>
+        <div v-loading="scoreBatchesLoading" class="score-batch-table-body">
+          <el-table :data="scoreBatches" stripe>
+            <el-table-column label="批次 ID" prop="id" width="90" />
+            <el-table-column label="来源文件" prop="source_filename" min-width="180" />
+            <el-table-column label="导入时间" prop="import_time" min-width="160" />
+            <el-table-column label="成功" prop="success_rows" width="90" />
+            <el-table-column label="失败" prop="failed_rows" width="90" />
+            <el-table-column label="识别方式" min-width="140">
+              <template #default="{ row }">
+                {{ formatScoreBatchImportMode(row) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" width="110">
+              <template #default="{ row }">
+                <el-tag :type="scoreBatchStatusType(row.status)" effect="light">
+                  {{ formatScoreBatchStatus(row.status) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <template #empty>
+              <el-empty :description="scoreBatchEmptyDescription">
+                <el-button
+                  v-if="scoreBatchesLoadError"
+                  type="primary"
+                  plain
+                  :loading="scoreBatchesLoading"
+                  @click="reloadBatches"
+                >
+                  重新加载导入批次
+                </el-button>
+              </el-empty>
             </template>
-          </el-table-column>
-          <el-table-column label="状态" width="110">
-            <template #default="{ row }">
-              <el-tag :type="scoreBatchStatusType(row.status)" effect="light">
-                {{ formatScoreBatchStatus(row.status) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-        </el-table>
+          </el-table>
+        </div>
       </AppTableShell>
     </el-dialog>
   </AppPage>
@@ -545,8 +840,25 @@ const subjectsExamId = ref<number | null>(null);
 const importExamId = ref<number | null>(null);
 const savingExam = ref(false);
 const savingSubjects = ref(false);
+const referenceLoading = ref(false);
+const referenceLoadError = ref("");
+const examsLoading = ref(false);
+const examsLoadError = ref("");
+const scoreReadinessLoadError = ref("");
+const examActionError = ref("");
+const examFormActionError = ref("");
+const subjectFormActionError = ref("");
+const importActionError = ref("");
+const editingExamLoadingId = ref<number | null>(null);
+const subjectsExamLoadingId = ref<number | null>(null);
+const importExamLoadingId = ref<number | null>(null);
+const rebuildingExamId = ref<number | null>(null);
 const previewLoading = ref(false);
 const importingScores = ref(false);
+const scoreProfilesLoading = ref(false);
+const scoreProfilesLoadError = ref("");
+const scoreBatchesLoading = ref(false);
+const scoreBatchesLoadError = ref("");
 const importStrategy = ref("overwrite");
 const importResult = ref<(ImportFeedbackResult & { batch_id: number }) | null>(null);
 const scoreRecordTotal = ref(0);
@@ -589,6 +901,32 @@ const scoreImportHeaders = computed(() => getScoreImportHeaders(scorePreview.val
 const scoreSubjectColumns = computed(() =>
   editableScoreMapping.value ? getUnassignedScoreColumns(scorePreview.value, editableScoreMapping.value) : [],
 );
+const activeFilterCount = computed(() => [filters.name, filters.semester_id].filter(Boolean).length);
+const examsLoadFailed = computed(() => Boolean(examsLoadError.value && !exams.items.length));
+const scoreReadinessLoadFailed = computed(() => Boolean(scoreReadinessLoadError.value));
+const filterControlsDisabled = computed(() => examsLoading.value || previewLoading.value || importingScores.value);
+const templateActionsDisabled = computed(() => previewLoading.value || importingScores.value);
+const examCreateDisabled = computed(
+  () =>
+    referenceLoading.value ||
+    examsLoading.value ||
+    savingExam.value ||
+    savingSubjects.value ||
+    previewLoading.value ||
+    importingScores.value,
+);
+const examRowActionsDisabled = computed(
+  () =>
+    examsLoading.value ||
+    savingExam.value ||
+    savingSubjects.value ||
+    previewLoading.value ||
+    importingScores.value ||
+    Boolean(rebuildingExamId.value),
+);
+const examFormDisabled = computed(() => savingExam.value);
+const subjectFormDisabled = computed(() => savingSubjects.value);
+const importControlsDisabled = computed(() => previewLoading.value || importingScores.value);
 const selectedSubjectIds = computed(() =>
   subjectRows.value
     .map((item) => item.subject_id)
@@ -604,45 +942,66 @@ const importDialogTitle = computed(() => {
   const current = exams.items.find((item) => item.id === importExamId.value);
   return current ? `导入成绩 - ${current.name}` : "导入成绩";
 });
+const examEmptyDescription = computed(() => {
+  if (examsLoading.value) return "正在加载考试列表";
+  if (examsLoadError.value) return "考试列表加载失败，请重新加载。";
+  return activeFilterCount.value ? "没有找到符合当前筛选条件的考试" : "暂无考试记录，可以先新建考试";
+});
+const examTableCountText = computed(() => (examsLoadFailed.value ? "加载失败" : `共 ${exams.total} 场`));
+const scoreBatchEmptyDescription = computed(() => {
+  if (scoreBatchesLoading.value) return "正在加载成绩导入批次";
+  if (scoreBatchesLoadError.value) return "成绩导入批次加载失败，请重新加载。";
+  return "暂无成绩导入批次，可以先上传成绩表或按统一模板导入";
+});
 const scoreReadinessMessages = computed(() =>
-  buildScoreReadinessMessages({
-    examCount: exams.items.length,
-    scoreRecordTotal: scoreRecordTotal.value,
-  }),
+  scoreReadinessLoadFailed.value || examsLoadFailed.value
+    ? []
+    : buildScoreReadinessMessages({
+        examCount: exams.items.length,
+        scoreRecordTotal: scoreRecordTotal.value,
+      }),
 );
 const publishedExamCount = computed(() => exams.items.filter((item) => item.status === "published").length);
 const configuredSubjectCount = computed(() =>
   exams.items.reduce((total, item) => total + (item.subject_count > 0 ? 1 : 0), 0),
 );
 const examPageMeta = computed<PageMetaItem[]>(() => [
-  { label: "考试", value: exams.total },
-  { label: "已发布", value: publishedExamCount.value },
-  { label: "成绩记录", value: scoreRecordTotal.value },
+  { label: "考试", value: examsLoadFailed.value ? "加载失败" : exams.total },
+  { label: "已发布", value: examsLoadFailed.value ? "加载失败" : publishedExamCount.value },
+  { label: "成绩记录", value: scoreReadinessLoadFailed.value ? "加载失败" : scoreRecordTotal.value },
+  { label: "启用筛选", value: activeFilterCount.value },
 ]);
 const examStatCards = computed<StatCardItem[]>(() => [
   {
     label: "考试总数",
-    value: exams.total,
+    value: examsLoadFailed.value ? "加载失败" : exams.total,
     help: "当前考试成绩中心维护的考试数量。",
-    tone: "primary",
+    tone: examsLoadFailed.value ? "danger" : "primary",
+    loading: examsLoading.value,
   },
   {
     label: "已发布考试",
-    value: publishedExamCount.value,
+    value: examsLoadFailed.value ? "加载失败" : publishedExamCount.value,
     help: "可用于正式分析与报表输出的考试。",
-    tone: "success",
+    tone: examsLoadFailed.value ? "danger" : "success",
+    loading: examsLoading.value,
   },
   {
     label: "已配科目考试",
-    value: configuredSubjectCount.value,
+    value: examsLoadFailed.value ? "加载失败" : configuredSubjectCount.value,
     help: "至少配置过一个考试科目的考试。",
-    tone: configuredSubjectCount.value === exams.items.length && exams.items.length ? "success" : "warning",
+    tone: examsLoadFailed.value
+      ? "danger"
+      : configuredSubjectCount.value === exams.items.length && exams.items.length
+        ? "success"
+        : "warning",
+    loading: examsLoading.value,
   },
   {
     label: "成绩记录",
-    value: scoreRecordTotal.value,
+    value: scoreReadinessLoadFailed.value ? "加载失败" : scoreRecordTotal.value,
     help: "系统当前已保存的成绩明细记录。",
-    tone: scoreRecordTotal.value ? "info" : "neutral",
+    tone: scoreReadinessLoadFailed.value ? "danger" : scoreRecordTotal.value ? "info" : "neutral",
   },
 ]);
 const scoreImportStepActive = computed(() => {
@@ -699,7 +1058,22 @@ function resetExamForm(): void {
   });
 }
 
+async function loadReferenceOptions(): Promise<void> {
+  referenceLoading.value = true;
+  referenceLoadError.value = "";
+  try {
+    await referenceStore.loadCore();
+  } catch (error) {
+    referenceLoadError.value = (error as Error).message || "基础选项加载失败";
+  } finally {
+    referenceLoading.value = false;
+  }
+}
+
 async function loadExams(): Promise<void> {
+  examsLoading.value = true;
+  examsLoadError.value = "";
+  examActionError.value = "";
   try {
     const payload = await api.get("/api/exams", {
       query: {
@@ -711,16 +1085,28 @@ async function loadExams(): Promise<void> {
     });
     Object.assign(exams, payload);
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    const message = (error as Error).message || "考试列表加载失败";
+    examsLoadError.value = message;
+    Object.assign(exams, {
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 100,
+    });
+    ElMessage.error(message);
+  } finally {
+    examsLoading.value = false;
   }
 }
 
 async function loadScoreReadiness(): Promise<void> {
+  scoreReadinessLoadError.value = "";
   try {
     const payload = await apiRequest<{ score_record_total?: number }>("/api/dashboard/summary");
     scoreRecordTotal.value = payload.score_record_total ?? 0;
-  } catch {
+  } catch (error) {
     scoreRecordTotal.value = 0;
+    scoreReadinessLoadError.value = (error as Error).message || "成绩记录状态加载失败";
   }
 }
 
@@ -735,8 +1121,11 @@ function downloadTemplate(): void {
 }
 
 function openCreate(): void {
+  examActionError.value = "";
+  examFormActionError.value = "";
   if (!referenceStore.semesters.length) {
-    ElMessage.warning("请先维护学期数据");
+    examActionError.value = "请先维护学期数据，再新建考试。";
+    ElMessage.warning(examActionError.value);
     return;
   }
   editingExamId.value = null;
@@ -745,6 +1134,9 @@ function openCreate(): void {
 }
 
 async function openEdit(row: ExamItem): Promise<void> {
+  editingExamLoadingId.value = row.id;
+  examActionError.value = "";
+  examFormActionError.value = "";
   try {
     const detail = await api.get("/api/exams/{exam_id}", {
       path: { exam_id: row.id },
@@ -754,13 +1146,18 @@ async function openEdit(row: ExamItem): Promise<void> {
     Object.assign(examForm, detail);
     dialogVisible.value = true;
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    examActionError.value = (error as Error).message || "考试详情加载失败";
+    ElMessage.error(examActionError.value);
+  } finally {
+    editingExamLoadingId.value = null;
   }
 }
 
 async function submitExam(): Promise<void> {
+  examFormActionError.value = "";
   if (!examForm.name.trim() || !examForm.exam_date || !examForm.semester_id) {
-    ElMessage.warning("考试名称、考试日期和学期不能为空");
+    examFormActionError.value = "考试名称、考试日期和学期不能为空";
+    ElMessage.warning(examFormActionError.value);
     return;
   }
   try {
@@ -777,7 +1174,8 @@ async function submitExam(): Promise<void> {
     dialogVisible.value = false;
     await loadExams();
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    examFormActionError.value = (error as Error).message || "考试保存失败";
+    ElMessage.error(examFormActionError.value);
   } finally {
     savingExam.value = false;
   }
@@ -797,6 +1195,7 @@ function resolveSubjectDefaultScore(subjectId: number | null): number {
 }
 
 function handleSubjectSelectionChange(values: Array<string | number>): void {
+  subjectFormActionError.value = "";
   const selectedIds = values
     .map((item) => Number(item))
     .filter((item) => Number.isInteger(item) && item > 0);
@@ -808,6 +1207,7 @@ function selectStandardSubjects(): void {
 }
 
 function clearSelectedSubjects(): void {
+  subjectFormActionError.value = "";
   subjectRows.value = [];
 }
 
@@ -819,6 +1219,9 @@ function removeSelectedSubject(subjectId: number | null): void {
 }
 
 async function openSubjects(row: ExamItem): Promise<void> {
+  subjectsExamLoadingId.value = row.id;
+  examActionError.value = "";
+  subjectFormActionError.value = "";
   try {
     subjectsExamId.value = row.id;
     const items = await apiRequest<ExamSubjectRow[]>(`/api/exams/${row.id}/subjects`);
@@ -833,23 +1236,30 @@ async function openSubjects(row: ExamItem): Promise<void> {
     }));
     subjectsDialogVisible.value = true;
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    examActionError.value = (error as Error).message || "考试科目配置加载失败";
+    ElMessage.error(examActionError.value);
+  } finally {
+    subjectsExamLoadingId.value = null;
   }
 }
 
 async function saveSubjects(): Promise<void> {
   if (!subjectsExamId.value) return;
+  subjectFormActionError.value = "";
   if (!subjectRows.value.length) {
-    ElMessage.warning("请至少配置一个考试科目");
+    subjectFormActionError.value = "请至少配置一个考试科目";
+    ElMessage.warning(subjectFormActionError.value);
     return;
   }
   if (subjectRows.value.some((item) => !item.subject_id)) {
-    ElMessage.warning("考试科目不能为空");
+    subjectFormActionError.value = "考试科目不能为空";
+    ElMessage.warning(subjectFormActionError.value);
     return;
   }
   const subjectIds = subjectRows.value.map((item) => item.subject_id);
   if (new Set(subjectIds).size !== subjectIds.length) {
-    ElMessage.warning("考试科目不能重复");
+    subjectFormActionError.value = "考试科目不能重复";
+    ElMessage.warning(subjectFormActionError.value);
     return;
   }
   try {
@@ -862,15 +1272,18 @@ async function saveSubjects(): Promise<void> {
     subjectsDialogVisible.value = false;
     await loadExams();
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    subjectFormActionError.value = (error as Error).message || "考试科目保存失败";
+    ElMessage.error(subjectFormActionError.value);
   } finally {
     savingSubjects.value = false;
   }
 }
 
 async function openImport(row: ExamItem): Promise<void> {
+  importExamLoadingId.value = row.id;
   importExamId.value = row.id;
   importResult.value = null;
+  importActionError.value = "";
   scoreBatches.value = [];
   pendingImportFile.value = null;
   scorePreview.value = null;
@@ -878,14 +1291,25 @@ async function openImport(row: ExamItem): Promise<void> {
   saveScoreProfile.value = false;
   scoreProfileName.value = "";
   importDialogVisible.value = true;
-  await Promise.all([reloadBatches(), loadScoreProfiles()]);
+  try {
+    await Promise.all([reloadBatches(), loadScoreProfiles()]);
+  } finally {
+    importExamLoadingId.value = null;
+  }
 }
 
 async function loadScoreProfiles(): Promise<void> {
+  scoreProfilesLoading.value = true;
+  scoreProfilesLoadError.value = "";
   try {
     scoreProfiles.value = await apiRequest<ScoreImportProfile[]>("/api/exams/score-import-profiles");
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    const message = (error as Error).message || "平台模板加载失败";
+    scoreProfiles.value = [];
+    scoreProfilesLoadError.value = message;
+    ElMessage.error(message);
+  } finally {
+    scoreProfilesLoading.value = false;
   }
 }
 
@@ -893,6 +1317,7 @@ async function handleScorePreview(uploadFileItem: UploadFile): Promise<void> {
   if (!uploadFileItem.raw || !importExamId.value) return;
   pendingImportFile.value = uploadFileItem.raw;
   importResult.value = null;
+  importActionError.value = "";
   try {
     previewLoading.value = true;
     const fields: Record<string, string> = {};
@@ -912,7 +1337,10 @@ async function handleScorePreview(uploadFileItem: UploadFile): Promise<void> {
       message: scorePreview.value.import_ready ? "成绩单识别完成，请确认映射后导入" : "成绩单已识别，请先补齐必要字段",
     });
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    importActionError.value = (error as Error).message || "成绩单识别失败";
+    scorePreview.value = null;
+    editableScoreMapping.value = null;
+    ElMessage.error(importActionError.value);
   } finally {
     previewLoading.value = false;
   }
@@ -920,6 +1348,8 @@ async function handleScorePreview(uploadFileItem: UploadFile): Promise<void> {
 
 async function handleStandardImport(uploadFileItem: UploadFile): Promise<void> {
   if (!uploadFileItem.raw || !importExamId.value) return;
+  importActionError.value = "";
+  importResult.value = null;
   try {
     importingScores.value = true;
     importResult.value = await uploadFile<ImportFeedbackResult & { batch_id: number }>(
@@ -937,15 +1367,18 @@ async function handleStandardImport(uploadFileItem: UploadFile): Promise<void> {
     await reloadBatches();
     await loadScoreReadiness();
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    importActionError.value = (error as Error).message || "成绩导入失败";
+    ElMessage.error(importActionError.value);
   } finally {
     importingScores.value = false;
   }
 }
 
 async function executeSmartImport(): Promise<void> {
+  importActionError.value = "";
   if (!pendingImportFile.value || !importExamId.value || !editableScoreMapping.value) {
-    ElMessage.warning("请先上传成绩文件并完成识别");
+    importActionError.value = "请先上传成绩文件并完成识别";
+    ElMessage.warning(importActionError.value);
     return;
   }
   try {
@@ -970,7 +1403,8 @@ async function executeSmartImport(): Promise<void> {
     });
     await Promise.all([reloadBatches(), loadScoreReadiness(), loadScoreProfiles()]);
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    importActionError.value = (error as Error).message || "成绩导入失败";
+    ElMessage.error(importActionError.value);
   } finally {
     importingScores.value = false;
   }
@@ -1013,38 +1447,56 @@ function updateScoreSubjectScoreType(
 
 async function reloadBatches(): Promise<void> {
   if (!importExamId.value) return;
+  scoreBatchesLoading.value = true;
+  scoreBatchesLoadError.value = "";
   try {
     scoreBatches.value = await apiRequest<ScoreBatch[]>(`/api/exams/${importExamId.value}/score-batches`);
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    const message = (error as Error).message || "成绩导入批次加载失败";
+    scoreBatches.value = [];
+    scoreBatchesLoadError.value = message;
+    ElMessage.error(message);
+  } finally {
+    scoreBatchesLoading.value = false;
   }
 }
 
 async function rebuild(examId: number): Promise<void> {
+  rebuildingExamId.value = examId;
+  examActionError.value = "";
   try {
     const payload = await apiRequest<{ message: string }>(`/api/exams/${examId}/rebuild`, {
       method: "POST",
     });
     ElMessage.success(payload.message);
+    await loadScoreReadiness();
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    examActionError.value = (error as Error).message || "成绩快照重建失败";
+    ElMessage.error(examActionError.value);
+  } finally {
+    rebuildingExamId.value = null;
   }
 }
 
 function handleExamDialogClosed(): void {
   editingExamId.value = null;
+  examFormActionError.value = "";
   resetExamForm();
 }
 
 function handleSubjectsDialogClosed(): void {
   subjectsExamId.value = null;
+  subjectFormActionError.value = "";
   subjectRows.value = [];
 }
 
 function handleImportDialogClosed(): void {
   importExamId.value = null;
   importResult.value = null;
+  importActionError.value = "";
   scoreBatches.value = [];
+  scoreBatchesLoadError.value = "";
+  scoreProfilesLoadError.value = "";
   selectedProfileId.value = null;
   pendingImportFile.value = null;
   scorePreview.value = null;
@@ -1054,14 +1506,39 @@ function handleImportDialogClosed(): void {
 }
 
 onMounted(async () => {
-  await referenceStore.loadCore();
-  await Promise.all([loadExams(), loadScoreReadiness()]);
+  await Promise.all([loadReferenceOptions(), loadExams(), loadScoreReadiness()]);
 });
 </script>
 
 <style scoped>
 .page-alert {
   margin-top: -4px;
+}
+
+.exam-page-alert {
+  margin-bottom: 14px;
+}
+
+.exam-status-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.exam-alert-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+}
+
+.panel-caption {
+  color: #6d8194;
+  font-size: 13px;
+}
+
+.exam-table-body,
+.score-batch-table-body {
+  min-height: 220px;
 }
 
 .import-tip {

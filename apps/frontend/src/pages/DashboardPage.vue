@@ -1,180 +1,220 @@
 <template>
   <AppPage
     title="工作台"
-    hide-header
+    eyebrow="本地教务工具 / 今日概览"
+    description="汇总学生、教师、考试、导入、数据质量和待处理事项，进入系统后先确认这里的关键状态。"
+    :meta="pageMeta"
   >
-    <section class="metric-grid">
-      <button
-        v-for="card in statusCards"
-        :key="card.label"
-        type="button"
-        class="metric-button"
-        @click="router.push(card.path)"
+    <template #actions>
+      <el-button type="primary" plain :loading="loading" @click="reload">刷新工作台</el-button>
+    </template>
+
+    <div v-if="loadError" class="dashboard-alert">
+      <el-alert
+        type="error"
+        show-icon
+        :closable="false"
+        title="工作台数据加载失败"
+        :description="loadError"
+      />
+      <el-button type="primary" :loading="loading" @click="reload">重新加载</el-button>
+    </div>
+
+    <div v-if="hasDashboardShell" v-loading="loading" class="dashboard-body">
+      <section class="status-card-grid" aria-label="工作台关键指标">
+        <button
+          v-for="card in statusCards"
+          :key="card.label"
+          type="button"
+          class="status-card-button"
+          :disabled="dashboardActionsDisabled"
+          @click="router.push(card.path)"
+        >
+          <AppStatCard
+            :label="card.label"
+            :value="card.value"
+            :help="card.help"
+            :tone="card.tone"
+            :loading="card.loading"
+          />
+        </button>
+      </section>
+
+      <template v-if="hasLoaded">
+      <AppSectionCard
+        title="待处理事项"
+        description="根据当前学生、教师、考试和升学任务整理优先动作，点进对应页面继续处理。"
       >
-        <MetricCard :label="card.label" :value="card.value" :help-text="card.helpText" />
-      </button>
-    </section>
-
-    <section class="soft-card panel-block">
-      <div class="section-head">
-        <div>
-          <h3>待处理事项</h3>
-          <p>根据当前学生、教师、考试和升学任务整理，点进去就能继续处理。</p>
+        <div v-if="nextSteps.length" class="next-step-grid">
+          <article v-for="step in nextSteps" :key="step.code" class="next-step-card">
+            <div class="next-step-head">
+              <el-tag :type="step.severity" effect="light">{{ severityLabel(step.severity) }}</el-tag>
+              <el-button link type="primary" :disabled="dashboardActionsDisabled" @click="router.push(step.path)">
+                {{ step.actionLabel }}
+              </el-button>
+            </div>
+            <h3>{{ step.title }}</h3>
+            <p>{{ step.detail }}</p>
+          </article>
         </div>
-      </div>
-      <div class="next-step-grid">
-        <article v-for="step in nextSteps" :key="step.code" class="next-step-card">
-          <div class="next-step-head">
-            <el-tag :type="step.severity" effect="light">{{ severityLabel(step.severity) }}</el-tag>
-            <el-button link type="primary" @click="router.push(step.path)">{{ step.actionLabel }}</el-button>
-          </div>
-          <h4>{{ step.title }}</h4>
-          <p>{{ step.detail }}</p>
-        </article>
-      </div>
-    </section>
+        <el-empty v-else description="当前没有需要优先处理的事项" />
+      </AppSectionCard>
 
-    <section class="dashboard-grid">
-      <article class="soft-card panel-block">
-        <div class="section-head compact">
-          <div>
-            <h3>最近考试与成绩状态</h3>
-            <p>查看最近一次考试是否已经有成绩，方便继续做分析和报表。</p>
+      <section class="dashboard-grid">
+        <AppSectionCard
+          title="最近考试与成绩状态"
+          description="查看最近一次考试是否已有成绩，便于继续做分析和报表。"
+        >
+          <template #actions>
+            <el-button v-if="summary.recent_exam" type="primary" plain :disabled="dashboardActionsDisabled" @click="openAnalytics">
+              进入分析中心
+            </el-button>
+          </template>
+
+          <div v-if="summary.recent_exam" class="exam-summary">
+            <div class="exam-summary-main">
+              <strong>{{ summary.recent_exam.exam_name }}</strong>
+              <span>{{ summary.recent_exam.exam_date }}</span>
+              <p v-if="summary.recent_exam.participant_count > 0">
+                已形成成绩快照，可进入分析中心查看学生、班级、年级和教师分析结果。
+              </p>
+              <p v-else>
+                这场考试还没有可用成绩记录，请先在考试成绩页导入成绩，再查看分析和报表。
+              </p>
+            </div>
+            <div class="exam-summary-metrics">
+              <div class="exam-metric">
+                <span>参与人数</span>
+                <strong>{{ summary.recent_exam.participant_count }}</strong>
+              </div>
+              <div class="exam-metric">
+                <span>总分均分</span>
+                <strong>{{ formatNumber(summary.recent_exam.average_score) }}</strong>
+              </div>
+              <div class="exam-metric">
+                <span>优秀率</span>
+                <strong>{{ formatPercent(summary.recent_exam.excellent_rate) }}</strong>
+              </div>
+            </div>
           </div>
-          <el-button v-if="summary.recent_exam" type="primary" plain @click="openAnalytics">
-            进入分析中心
+          <div v-else class="empty-action">
+            <el-empty description="暂无可用考试数据" />
+            <p>先创建考试并配置科目，再导入成绩，后续分析中心和报表中心才有可靠数据。</p>
+            <el-button type="primary" :disabled="dashboardActionsDisabled" @click="router.push('/exams')">创建考试</el-button>
+          </div>
+        </AppSectionCard>
+
+        <AppSectionCard title="快捷入口" description="入口全部指向现有业务页面，避免重复创建孤立流程。">
+          <div class="quick-grid">
+            <button
+              v-for="item in quickActions"
+              :key="item.label"
+              type="button"
+              class="quick-action"
+              :disabled="dashboardActionsDisabled"
+              @click="router.push(item.path)"
+            >
+              <strong>{{ item.label }}</strong>
+              <span>{{ item.help }}</span>
+            </button>
+          </div>
+        </AppSectionCard>
+      </section>
+
+      <AppSectionCard
+        title="基础数据修复提醒"
+        description="展示学生、班级、成绩等日常数据里需要补齐或修正的事项。"
+      >
+        <template #actions>
+          <el-button link type="primary" :disabled="dashboardActionsDisabled" @click="router.push('/system-tools')">
+            处理数据问题
           </el-button>
-        </div>
+        </template>
 
-        <div v-if="summary.recent_exam" class="exam-summary">
-          <div class="exam-summary-main">
-            <strong>{{ summary.recent_exam.exam_name }}</strong>
-            <span>{{ summary.recent_exam.exam_date }}</span>
-            <p v-if="summary.recent_exam.participant_count > 0">
-              已形成成绩快照，可进入分析中心查看学生、班级、年级和教师分析结果。
-            </p>
-            <p v-else>
-              这场考试还没有可用成绩记录。请先在考试成绩页导入成绩，再查看分析和报表。
-            </p>
-          </div>
-          <div class="exam-summary-metrics">
-            <div class="exam-metric">
-              <span>参与人数</span>
-              <strong>{{ summary.recent_exam.participant_count }}</strong>
+        <div v-if="summary.data_quality_issues.length" class="quality-grid">
+          <article v-for="issue in summary.data_quality_issues" :key="issue.code" class="quality-card">
+            <div class="quality-head">
+              <el-tag :type="issue.severity === 'error' ? 'danger' : 'warning'" effect="light">
+                {{ issue.severity === "error" ? "高风险" : "提醒" }}
+              </el-tag>
+              <strong>{{ issue.count }}</strong>
             </div>
-            <div class="exam-metric">
-              <span>总分均分</span>
-              <strong>{{ formatNumber(summary.recent_exam.average_score) }}</strong>
+            <h3>{{ issue.title }}</h3>
+            <p>{{ issue.summary }}</p>
+            <div v-if="issue.samples.length" class="quality-samples">
+              <span v-for="sample in issue.samples" :key="sample">{{ sample }}</span>
             </div>
-            <div class="exam-metric">
-              <span>优秀率</span>
-              <strong>{{ formatPercent(summary.recent_exam.excellent_rate) }}</strong>
-            </div>
-          </div>
+          </article>
         </div>
-        <div v-else class="empty-action">
-          <el-empty description="暂无可用考试数据" />
-          <p>先创建考试并配置科目，再导入成绩，后续分析中心和报表中心才有可靠数据。</p>
-          <el-button type="primary" @click="router.push('/exams')">创建考试</el-button>
-        </div>
-      </article>
+        <el-empty v-else description="当前没有需要提醒的基础数据修复问题" />
+      </AppSectionCard>
 
-      <article class="soft-card panel-block">
-        <div class="section-head compact">
-          <div>
-            <h3>快捷入口</h3>
-            <p>入口全部指向现有业务页面，不新造孤立流程。</p>
-          </div>
-        </div>
+      <AppSectionCard
+        title="最近导入"
+        description="展示最近几次导入的类型、状态和来源文件，便于回看最近操作。"
+      >
+        <template #actions>
+          <el-button link type="primary" :disabled="dashboardActionsDisabled" @click="router.push('/import-center')">
+            查看导入中心
+          </el-button>
+        </template>
 
-        <div class="quick-grid">
-          <button
-            v-for="item in quickActions"
-            :key="item.label"
-            type="button"
-            class="quick-action"
-            @click="router.push(item.path)"
-          >
-            <strong>{{ item.label }}</strong>
-            <span>{{ item.help }}</span>
-          </button>
-        </div>
-      </article>
-    </section>
-
-    <section class="soft-card panel-block">
-      <div class="section-head">
-        <div>
-          <h3>基础数据修复提醒</h3>
-          <p>这里展示学生、班级、成绩等日常数据里需要补齐或修正的事项。</p>
-        </div>
-        <el-button link type="primary" @click="router.push('/system-tools')">处理数据问题</el-button>
-      </div>
-      <div v-if="summary.data_quality_issues.length" class="quality-grid">
-        <article v-for="issue in summary.data_quality_issues" :key="issue.code" class="quality-card">
-          <div class="quality-head">
-            <el-tag :type="issue.severity === 'error' ? 'danger' : 'warning'" effect="light">
-              {{ issue.severity === "error" ? "高风险" : "提醒" }}
-            </el-tag>
-            <strong>{{ issue.count }}</strong>
-          </div>
-          <h4>{{ issue.title }}</h4>
-          <p>{{ issue.summary }}</p>
-          <div v-if="issue.samples.length" class="quality-samples">
-            <span v-for="sample in issue.samples" :key="sample">{{ sample }}</span>
-          </div>
-        </article>
-      </div>
-      <el-empty v-else description="当前没有需要提醒的基础数据修复问题" />
-    </section>
-
-    <section class="soft-card panel-block">
-      <div class="section-head">
-        <div>
-          <h3>最近导入</h3>
-          <p>展示最近几次导入的类型、状态和来源文件，便于回看最近操作。</p>
-        </div>
-        <el-button link type="primary" @click="router.push('/import-center')">
-          查看导入中心
-        </el-button>
-      </div>
-      <div class="table-shell">
-        <el-table :data="recentImportRows" stripe>
-          <el-table-column label="批次 ID" prop="id" width="90" />
-          <el-table-column label="类型" min-width="140">
-            <template #default="{ row }">
-              {{ row.job_type_label }}
+        <div class="table-shell">
+          <el-table :data="recentImportRows" stripe v-loading="loading">
+            <el-table-column label="批次 ID" prop="id" width="90" />
+            <el-table-column label="类型" min-width="140">
+              <template #default="{ row }">
+                {{ row.job_type_label }}
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" width="120">
+              <template #default="{ row }">
+                <el-tag :type="row.status_type" effect="light">{{ row.status_label }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="来源文件" prop="source_filename" min-width="180" />
+            <el-table-column label="开始时间" prop="started_at" min-width="180" />
+            <el-table-column label="结束时间" prop="finished_at" min-width="180" />
+            <template #empty>
+              <el-empty :description="loading ? '正在加载最近导入记录' : '暂无导入记录'" />
             </template>
-          </el-table-column>
-          <el-table-column label="状态" width="110">
-            <template #default="{ row }">
-              <el-tag :type="row.status_type" effect="light">{{ row.status_label }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="来源文件" prop="source_filename" min-width="180" />
-          <el-table-column label="开始时间" prop="started_at" min-width="180" />
-          <el-table-column label="结束时间" prop="finished_at" min-width="180" />
-        </el-table>
-      </div>
-      <el-empty v-if="!summary.recent_imports.length" description="暂无导入记录" />
-    </section>
+          </el-table>
+        </div>
+      </AppSectionCard>
+      </template>
+
+      <el-empty v-else class="dashboard-shell-empty" :description="dashboardBodyEmptyDescription">
+        <el-button v-if="loadError" type="primary" :loading="loading" @click="reload">重新加载工作台数据</el-button>
+      </el-empty>
+    </div>
+
+    <el-empty
+      v-else
+      class="dashboard-empty"
+      :description="loading ? '正在加载工作台数据' : '工作台数据暂未加载'"
+    >
+      <el-button v-if="!loading" type="primary" @click="reload">重新加载</el-button>
+    </el-empty>
   </AppPage>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import ElMessage from "element-plus/es/components/message/index";
 import { useRouter } from "vue-router";
 
 import { apiRequest } from "../api/client";
 import {
   buildDashboardNextSteps,
+  formatDashboardBackupLabel,
+  formatDataHealthCardValue,
   type DashboardBackupSummary,
   type DashboardDataHealthSummary,
+  type DashboardNextStep,
 } from "../components/dashboard/dashboardDecisions";
-import MetricCard from "../components/MetricCard.vue";
-import { AppPage } from "../components/ui";
+import { AppPage, AppSectionCard, AppStatCard, type PageMetaItem, type StatCardItem } from "../components/ui";
 import { formatImportStatus as formatUnifiedImportStatus, importStatusTagType } from "../utils/importFeedback";
+import { formatUserActionError } from "../utils/userFeedback";
 
 interface ImportJob {
   id: number;
@@ -226,7 +266,22 @@ interface DashboardSummary {
   } | null;
 }
 
+interface DashboardStatusCard extends StatCardItem {
+  path: string;
+}
+
 const router = useRouter();
+
+const loading = ref(false);
+const hasLoaded = ref(false);
+const loadError = ref("");
+const dashboardLoadFailed = computed(() => Boolean(loadError.value && !hasLoaded.value));
+const hasDashboardShell = computed(() => hasLoaded.value || loading.value || dashboardLoadFailed.value);
+const dashboardBodyEmptyDescription = computed(() => {
+  if (loading.value) return "正在加载工作台数据";
+  if (dashboardLoadFailed.value) return "工作台数据加载失败，请重新加载。";
+  return "工作台数据暂未加载";
+});
 
 const quickActions = [
   { label: "学生导入", help: "补齐学生主档和班级信息。", path: "/students" },
@@ -268,30 +323,149 @@ const importStatusLabels: Record<string, string> = {
   rolled_back: "已回滚",
 };
 
-const summary = reactive<DashboardSummary>({
-  student_total: 0,
-  teacher_total: 0,
-  exam_total: 0,
-  score_record_total: 0,
-  grade_total: 0,
-  class_total: 0,
-  recent_imports: [],
-  latest_backup_time: null,
-  latest_backup: null,
-  recent_exam: null,
-  data_health: null,
-  data_quality_issues: [],
-  planning_summary: null,
-});
+const summary = reactive<DashboardSummary>(createEmptyDashboardSummary());
 
 const latestImport = computed(() => summary.recent_imports[0] ?? null);
-const statusCards = computed(() => [
-  { label: "学生总数", value: summary.student_total, helpText: "查看学生名单、画像和详情。", path: "/students" },
-  { label: "教师总数", value: summary.teacher_total, helpText: "维护教师台账和任教关系。", path: "/teachers" },
-  { label: "考试数量", value: summary.exam_total, helpText: "进入考试成绩页继续处理。", path: "/exams" },
-  { label: "成绩记录", value: summary.score_record_total, helpText: "查看已导入的成绩明细。", path: "/exams" },
-  { label: "最近导入", value: latestImport.value ? formatImportJobType(latestImport.value.job_type) : "暂无", helpText: "查看最近导入批次和错误报告。", path: "/import-center" },
-]);
+const latestImportLabel = computed(() =>
+  latestImport.value ? formatImportJobType(latestImport.value.job_type) : "暂无",
+);
+const backupLabel = computed(() => formatDashboardBackupLabel(summary.latest_backup));
+
+const pageMeta = computed<PageMetaItem[]>(() => {
+  if (dashboardLoadFailed.value) {
+    return [
+      { label: "数据状态", value: "加载失败" },
+      { label: "最近考试", value: "加载失败" },
+      { label: "最近导入", value: "加载失败" },
+      { label: "最近备份", value: "加载失败" },
+    ];
+  }
+
+  return [
+    { label: "数据状态", value: hasLoaded.value ? "已加载" : "待加载" },
+    { label: "最近考试", value: summary.recent_exam?.exam_name ?? "暂无" },
+    { label: "最近导入", value: latestImportLabel.value },
+    { label: "最近备份", value: backupLabel.value },
+  ];
+});
+const dashboardActionsDisabled = computed(() => loading.value || dashboardLoadFailed.value);
+
+const failedStatusCards: DashboardStatusCard[] = [
+  {
+    label: "学生总数",
+    value: "加载失败",
+    help: "工作台概览暂时无法读取，请重新加载。",
+    path: "/students",
+    tone: "danger",
+  },
+  {
+    label: "教师总数",
+    value: "加载失败",
+    help: "工作台概览暂时无法读取，请重新加载。",
+    path: "/teachers",
+    tone: "danger",
+  },
+  {
+    label: "考试数量",
+    value: "加载失败",
+    help: "工作台概览暂时无法读取，请重新加载。",
+    path: "/exams",
+    tone: "danger",
+  },
+  {
+    label: "成绩记录",
+    value: "加载失败",
+    help: "工作台概览暂时无法读取，请重新加载。",
+    path: "/exams",
+    tone: "danger",
+  },
+  {
+    label: "数据健康",
+    value: "加载失败",
+    help: "工作台概览暂时无法读取，请重新加载。",
+    path: "/gaokao-data",
+    tone: "danger",
+  },
+  {
+    label: "最近备份",
+    value: "加载失败",
+    help: "工作台概览暂时无法读取，请重新加载。",
+    path: "/system-tools",
+    tone: "danger",
+  },
+  {
+    label: "最近导入",
+    value: "加载失败",
+    help: "工作台概览暂时无法读取，请重新加载。",
+    path: "/import-center",
+    tone: "danger",
+  },
+];
+
+const statusCards = computed<DashboardStatusCard[]>(() => {
+  if (dashboardLoadFailed.value) {
+    return failedStatusCards.map((card) => ({ ...card, loading: loading.value }));
+  }
+
+  return [
+    {
+      label: "学生总数",
+      value: summary.student_total,
+      help: "查看学生名单、画像和详情。",
+      path: "/students",
+      tone: "primary",
+      loading: loading.value,
+    },
+    {
+      label: "教师总数",
+      value: summary.teacher_total,
+      help: "维护教师台账和任教关系。",
+      path: "/teachers",
+      tone: "info",
+      loading: loading.value,
+    },
+    {
+      label: "考试数量",
+      value: summary.exam_total,
+      help: "进入考试成绩页继续处理。",
+      path: "/exams",
+      tone: "warning",
+      loading: loading.value,
+    },
+    {
+      label: "成绩记录",
+      value: summary.score_record_total,
+      help: "查看已导入的成绩明细。",
+      path: "/exams",
+      tone: "success",
+      loading: loading.value,
+    },
+    {
+      label: "数据健康",
+      value: formatDataHealthCardValue(summary.data_health),
+      help: "查看基础数据和高考数据缺口。",
+      path: "/gaokao-data",
+      tone: summary.data_health?.p0_gap_count ? "danger" : "neutral",
+      loading: loading.value,
+    },
+    {
+      label: "最近备份",
+      value: backupLabel.value,
+      help: "进入系统工具查看备份与恢复。",
+      path: "/system-tools",
+      tone: "neutral",
+      loading: loading.value,
+    },
+    {
+      label: "最近导入",
+      value: latestImportLabel.value,
+      help: "查看最近导入批次和错误报告。",
+      path: "/import-center",
+      tone: "neutral",
+      loading: loading.value,
+    },
+  ];
+});
 
 const nextSteps = computed(() => buildDashboardNextSteps(summary));
 
@@ -326,12 +500,46 @@ function formatImportStatusType(status: string): "success" | "warning" | "danger
   return importStatusTagType(status);
 }
 
+function createEmptyDashboardSummary(): DashboardSummary {
+  return {
+    student_total: 0,
+    teacher_total: 0,
+    exam_total: 0,
+    score_record_total: 0,
+    grade_total: 0,
+    class_total: 0,
+    recent_imports: [],
+    latest_backup_time: null,
+    latest_backup: null,
+    recent_exam: null,
+    data_health: null,
+    data_quality_issues: [],
+    planning_summary: null,
+  };
+}
+
+function resetSummary(): void {
+  Object.assign(summary, createEmptyDashboardSummary());
+}
+
 async function reload(): Promise<void> {
+  loading.value = true;
+  loadError.value = "";
   try {
     const payload = await apiRequest<DashboardSummary>("/api/dashboard/summary");
-    Object.assign(summary, payload);
+    Object.assign(summary, {
+      ...payload,
+      recent_imports: payload.recent_imports ?? [],
+      data_quality_issues: payload.data_quality_issues ?? [],
+    });
+    hasLoaded.value = true;
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    resetSummary();
+    hasLoaded.value = false;
+    loadError.value = formatUserActionError("加载工作台数据", error, "确认本地后端服务正常后重试");
+    ElMessage.error(loadError.value);
+  } finally {
+    loading.value = false;
   }
 }
 
@@ -339,25 +547,54 @@ function openAnalytics(): void {
   void router.push("/analytics");
 }
 
-function severityLabel(severity: "danger" | "warning" | "info"): string {
+function severityLabel(severity: DashboardNextStep["severity"]): string {
   if (severity === "danger") return "高风险";
   if (severity === "warning") return "建议处理";
   return "提醒";
 }
 
-onMounted(reload);
+onMounted(() => {
+  void reload();
+});
 </script>
 
 <style scoped>
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
-  gap: 18px;
+.dashboard-alert {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
-.metric-button {
+.dashboard-alert .el-alert {
+  flex: 1;
+}
+
+.dashboard-body {
+  display: grid;
+  gap: 18px;
+  min-height: 360px;
+}
+
+.dashboard-empty {
+  padding: 72px 0;
+}
+
+.dashboard-shell-empty {
+  padding: 40px 0 32px;
+}
+
+.status-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.status-card-button {
   display: block;
+  min-width: 0;
   width: 100%;
+  height: 100%;
   padding: 0;
   border: 0;
   background: transparent;
@@ -365,14 +602,30 @@ onMounted(reload);
   cursor: pointer;
 }
 
-.metric-button:focus-visible {
+.status-card-button:disabled,
+.quick-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.status-card-button:focus-visible {
   outline: 2px solid rgba(31, 108, 152, 0.55);
   outline-offset: 4px;
 }
 
-.metric-button :deep(.metric-value) {
+.status-card-button :deep(.app-stat-card) {
+  height: 100%;
+}
+
+.status-card-button :deep(.app-stat-value strong) {
   overflow-wrap: anywhere;
   line-height: 1.18;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  gap: 18px;
 }
 
 .next-step-grid {
@@ -397,13 +650,16 @@ onMounted(reload);
   gap: 12px;
 }
 
-.next-step-card h4 {
+.next-step-card h3,
+.quality-card h3 {
   margin: 0;
   color: #1f3346;
   font-size: 16px;
+  letter-spacing: 0;
 }
 
-.next-step-card p {
+.next-step-card p,
+.quality-card p {
   margin: 0;
   color: #647789;
   line-height: 1.6;
@@ -443,7 +699,7 @@ onMounted(reload);
 
 .exam-metric {
   padding: 18px;
-  border-radius: 18px;
+  border-radius: 8px;
   background: rgba(245, 249, 252, 0.84);
   border: 1px solid rgba(120, 138, 156, 0.12);
 }
@@ -485,7 +741,7 @@ onMounted(reload);
 .quick-action {
   padding: 18px;
   border: 1px solid rgba(114, 132, 150, 0.14);
-  border-radius: 18px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.86);
   text-align: left;
   cursor: pointer;
@@ -496,6 +752,12 @@ onMounted(reload);
   transform: translateY(-1px);
   box-shadow: 0 16px 28px rgba(37, 57, 81, 0.08);
   border-color: rgba(31, 108, 152, 0.24);
+}
+
+.quick-action:disabled:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: rgba(114, 132, 150, 0.14);
 }
 
 .quick-action strong {
@@ -519,7 +781,7 @@ onMounted(reload);
 
 .quality-card {
   padding: 18px;
-  border-radius: 18px;
+  border-radius: 8px;
   background: rgba(250, 252, 255, 0.92);
   border: 1px solid rgba(120, 138, 156, 0.14);
 }
@@ -530,15 +792,9 @@ onMounted(reload);
   justify-content: space-between;
 }
 
-.quality-card h4 {
-  margin: 14px 0 8px;
-  font-size: 16px;
-}
-
-.quality-card p {
-  margin: 0;
-  color: #647789;
-  line-height: 1.6;
+.quality-card h3 {
+  margin-top: 14px;
+  margin-bottom: 8px;
 }
 
 .quality-samples {
@@ -549,15 +805,10 @@ onMounted(reload);
 
 .quality-samples span {
   padding: 10px 12px;
-  border-radius: 12px;
+  border-radius: 8px;
   background: rgba(242, 247, 252, 0.82);
   color: #5f7385;
   font-size: 12px;
-}
-
-.panel-caption {
-  color: #7d8d98;
-  font-size: 13px;
 }
 
 @media (max-width: 1100px) {
@@ -567,6 +818,10 @@ onMounted(reload);
 }
 
 @media (max-width: 900px) {
+  .dashboard-alert {
+    display: grid;
+  }
+
   .exam-summary-metrics {
     grid-template-columns: 1fr;
   }

@@ -37,6 +37,19 @@
         </div>
       </div>
 
+      <el-alert
+        v-if="volunteerGuideOptionsError"
+        class="guide-state-alert"
+        type="warning"
+        show-icon
+        :closable="false"
+        :title="volunteerGuideOptionsError"
+      >
+        <template #default>
+          当前会暂时使用本地兜底选项，省份、批次、考生类别和艺术综合分公式可能不完整。
+        </template>
+      </el-alert>
+
       <div class="filter-grid candidate-filter-grid">
         <el-select v-model="form.student_id" filterable placeholder="选择学生">
           <el-option
@@ -193,6 +206,19 @@
         </div>
       </div>
 
+      <el-alert
+        v-if="studentProfileError"
+        class="guide-state-alert"
+        type="warning"
+        show-icon
+        :closable="false"
+        :title="studentProfileError"
+      >
+        <template #default>
+          仍可手工填写地区、院校层级、专业方向和职业偏好，但不会自动带入该学生已维护的升学画像。
+        </template>
+      </el-alert>
+
       <div class="career-grid">
         <el-select
           v-model="form.target_regions_json"
@@ -330,6 +356,19 @@
         </div>
         <el-tag :type="guideReadinessTagType" effect="plain">{{ guideReadinessStatusLabel }}</el-tag>
       </div>
+
+      <el-alert
+        v-if="workbenchPreviewError"
+        class="guide-state-alert"
+        type="warning"
+        show-icon
+        :closable="false"
+        :title="workbenchPreviewError"
+      >
+        <template #default>
+          请检查学生、考试、分数/位次、批次和省份规则后重新生成智能筛选。
+        </template>
+      </el-alert>
 
       <section v-if="guidePreview" class="guide-summary-panel">
         <div class="section-head compact">
@@ -1045,7 +1084,7 @@
         </div>
         <div v-else class="comparison-placeholder">从左侧智能筛选加入计划后，这里会形成可排序的志愿表草稿。</div>
 
-        <div class="saved-drafts-panel">
+        <div class="saved-drafts-panel" v-loading="loadingSavedDrafts">
           <div class="section-head compact">
             <div>
               <h3>已保存草稿</h3>
@@ -1053,6 +1092,15 @@
             </div>
             <el-button text :loading="loadingSavedDrafts" @click="emit('reload-drafts')">刷新</el-button>
           </div>
+
+          <el-alert
+            v-if="volunteerDraftsError"
+            class="guide-state-alert"
+            type="warning"
+            show-icon
+            :closable="false"
+            :title="volunteerDraftsError"
+          />
 
           <div v-if="savedDrafts.length" class="saved-draft-list">
             <article
@@ -1082,7 +1130,7 @@
               </div>
             </article>
           </div>
-          <div v-else class="comparison-placeholder inner">当前学生/考试下还没有保存过草稿。</div>
+          <div v-else class="comparison-placeholder inner">{{ savedDraftsEmptyDescription }}</div>
         </div>
 
         <div class="draft-comparison-panel">
@@ -1107,6 +1155,15 @@
               </el-select>
             </div>
           </div>
+
+          <el-alert
+            v-if="compareVolunteerDraftError"
+            class="guide-state-alert"
+            type="warning"
+            show-icon
+            :closable="false"
+            :title="compareVolunteerDraftError"
+          />
 
           <div v-if="compareDraftLoading" class="comparison-placeholder inner">正在加载对比草稿...</div>
           <template v-else-if="selectedCompareDraft && draftComparison">
@@ -1303,14 +1360,17 @@ const props = defineProps<{
   draft: VolunteerDraftItem[];
   draftName: string;
   loading: boolean;
+  workbenchPreviewError: string;
   savingDraft: boolean;
   exportingDraftId: number | null;
   loadingSavedDrafts: boolean;
+  volunteerDraftsError: string;
   deletingDraftId: number | null;
   currentDraftId?: number;
   savedDrafts: VolunteerDraftSummary[];
   compareDraftId?: number;
   compareDraftLoading: boolean;
+  compareVolunteerDraftError: string;
   draftComparison: VolunteerDraftComparisonSummary | null;
   selectedPlanIds: Set<number>;
   selectedRule: ProvinceVolunteerRule | null;
@@ -1321,6 +1381,8 @@ const props = defineProps<{
   examScoreAutofillNotice: VolunteerExamScoreAutofillNotice | null;
   loadingExamScoreAutofill: boolean;
   loadingVolunteerGuideOptions: boolean;
+  volunteerGuideOptionsError: string;
+  studentProfileError: string;
   guideOptions: VolunteerGuideOptions | null;
   artComprehensiveScorePreview: number | null;
 }>();
@@ -1447,6 +1509,11 @@ const compareableSavedDrafts = computed(() => props.savedDrafts.filter((item) =>
 const selectedCompareDraft = computed(
   () => compareableSavedDrafts.value.find((item) => item.id === props.compareDraftId) ?? null,
 );
+const savedDraftsEmptyDescription = computed(() => {
+  if (props.volunteerDraftsError) return "历史草稿加载失败，请点击“刷新”重试。";
+  if (!props.form.student_id) return "请先选择学生后查看已保存草稿。";
+  return "当前学生/考试下还没有保存过草稿。";
+});
 const selectedDirectionIds = computed(() =>
   [props.form.primary_direction_id, props.form.secondary_direction_id, props.form.alternative_direction_id].filter(
     (item): item is number => typeof item === "number",
@@ -1676,6 +1743,10 @@ function employmentProfile(candidate: VolunteerWorkbenchCandidate) {
 
 .candidate-filter-grid {
   margin-top: 14px;
+}
+
+.guide-state-alert {
+  margin-top: 12px;
 }
 
 .batch-rule-tip,

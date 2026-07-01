@@ -1,49 +1,74 @@
 <template>
-  <div class="page-shell">
-    <header class="page-header">
-      <div>
-        <div class="page-eyebrow">学生中心 / 成长档案</div>
-        <h2 class="page-title">成长档案</h2>
-        <p class="page-subtitle">
-          以时间线方式维护学生成长记录，并展示批量调班生成的班级调整系统事件。
-        </p>
-        <div class="page-chip-row">
-          <span class="page-chip"><strong>当前学生</strong>{{ selectedStudentName }}</span>
-          <span class="page-chip"><strong>时间线条目</strong>{{ timelineTotal }}</span>
-          <span class="page-chip"><strong>班级调整</strong>{{ classTransferRecords.length }}</span>
-          <span class="page-chip"><strong>附件数</strong>{{ attachmentCount }}</span>
-          <span class="page-chip"><strong>筛选类型</strong>{{ selectedRecordTypeLabel }}</span>
-        </div>
-      </div>
+  <AppPage
+    title="成长档案"
+    eyebrow="学生中心 / 成长档案"
+    description="以时间线方式维护学生成长记录，并展示批量调班生成的班级调整系统事件。"
+    :meta="growthPageMeta"
+  >
+    <template #actions>
       <div class="action-row">
+        <el-button :disabled="!selectedStudentId" :loading="recordsLoading" @click="loadRecords">刷新时间线</el-button>
         <el-button :disabled="!selectedStudentId" @click="exportSummary">导出档案摘要</el-button>
         <el-button :disabled="!selectedStudentId" @click="openPrintPreview">打印预览</el-button>
         <el-button type="primary" :disabled="!selectedStudentId" @click="openCreateDialog">新增记录</el-button>
       </div>
-    </header>
+    </template>
 
-    <section class="overview-grid">
-      <article class="soft-card overview-panel">
-        <div class="overview-kicker">时间线视图</div>
-        <h3>{{ selectedStudentName }}</h3>
-        <p>奖励、处分、活动、谈话、家校沟通和班级调整都收在同一条时间线里，人工记录仍可继续挂接附件。</p>
-      </article>
-      <article v-for="item in overviewCards" :key="item.label" class="soft-card overview-card" :class="item.tone">
-        <span>{{ item.label }}</span>
-        <strong>{{ item.value }}</strong>
-        <p>{{ item.help }}</p>
-      </article>
-    </section>
+    <AppStatGrid :items="overviewCards" :columns="3" />
 
-    <section class="soft-card panel-block">
-      <div class="section-head compact">
-        <div>
-          <h3>学生与筛选条件</h3>
-          <p>先锁定学生，再按记录类型和时间范围筛选，避免把不同学生的成长信息混在一起看。</p>
-        </div>
-      </div>
+    <el-alert
+      v-if="studentsLoadError"
+      class="growth-page-alert"
+      type="error"
+      :title="studentsLoadError"
+      show-icon
+      :closable="false"
+    >
+      <template #default>
+        <el-button size="small" :loading="studentsLoading" @click="loadStudentsAndRecords">重新加载学生</el-button>
+      </template>
+    </el-alert>
+
+    <el-alert
+      v-if="recordsLoadError"
+      class="growth-page-alert"
+      type="error"
+      :title="recordsLoadError"
+      show-icon
+      :closable="false"
+    >
+      <template #default>
+        <el-button size="small" :loading="recordsLoading" @click="loadRecords">重新加载时间线</el-button>
+      </template>
+    </el-alert>
+
+    <el-alert
+      v-if="recordActionError"
+      class="growth-page-alert"
+      type="error"
+      :title="recordActionError"
+      show-icon
+      :closable="false"
+    >
+      <template #default>
+        <el-button size="small" :loading="recordsLoading" @click="loadRecords">刷新时间线</el-button>
+      </template>
+    </el-alert>
+
+    <AppFilterBar
+      title="学生与筛选条件"
+      description="先锁定学生，再按记录类型和时间范围筛选，避免把不同学生的成长信息混在一起看。"
+      sticky
+    >
       <div class="filter-grid">
-        <el-select v-model="selectedStudentId" filterable placeholder="选择学生">
+        <el-select
+          v-model="selectedStudentId"
+          filterable
+          placeholder="选择学生"
+          :loading="studentsLoading"
+          :disabled="studentsLoading || recordsLoading"
+          @change="() => loadRecords()"
+        >
           <el-option
             v-for="student in studentOptions"
             :key="student.id"
@@ -51,7 +76,7 @@
             :value="student.id"
           />
         </el-select>
-        <el-select v-model="selectedTimelineType" placeholder="时间线类型">
+        <el-select v-model="selectedTimelineType" placeholder="时间线类型" :disabled="!selectedStudentId || recordsLoading">
           <el-option
             v-for="item in timelineTypeOptions"
             :key="item.value"
@@ -63,7 +88,7 @@
           v-model="selectedRecordType"
           clearable
           placeholder="记录类型"
-          :disabled="selectedTimelineType === 'class_transfer'"
+          :disabled="!selectedStudentId || recordsLoading || selectedTimelineType === 'class_transfer'"
         >
           <el-option
             v-for="item in recordTypeOptions"
@@ -78,34 +103,24 @@
           value-format="YYYY-MM-DD"
           start-placeholder="开始日期"
           end-placeholder="结束日期"
+          :disabled="!selectedStudentId || recordsLoading"
         />
       </div>
-      <div class="action-row toolbar-row">
-        <el-button @click="loadRecords">查询</el-button>
-        <el-button @click="resetFilters">重置</el-button>
-      </div>
-    </section>
+      <template #actions>
+        <el-button :disabled="!selectedStudentId" :loading="recordsLoading" @click="loadRecords">查询</el-button>
+        <el-button :disabled="recordsLoading" @click="resetFilters">重置</el-button>
+      </template>
+    </AppFilterBar>
 
-    <section class="metric-grid">
-      <div class="soft-card stat-card">
-        <div class="metric-label">当前时间线条目</div>
-        <div class="metric-value">{{ timelineTotal }}</div>
-      </div>
-      <div class="soft-card stat-card">
-        <div class="metric-label">已上传附件数</div>
-        <div class="metric-value">{{ attachmentCount }}</div>
-      </div>
-    </section>
-
-    <section class="soft-card panel-block">
-      <div class="section-head">
-        <div>
-          <h3>成长时间线</h3>
-          <p>人工成长记录可以编辑和删除；班级调整来自调班批次，只作为系统事件展示。</p>
-        </div>
-      </div>
+    <AppTableShell
+      title="成长时间线"
+      description="人工成长记录可以编辑和删除；班级调整来自调班批次，只作为系统事件展示。"
+    >
+      <template #actions>
+        <span class="panel-caption">共 {{ timelineTotal }} 条</span>
+      </template>
       <el-empty v-if="!selectedStudentId" description="请先选择学生" />
-      <div v-else class="table-shell">
+      <div v-else v-loading="recordsLoading" class="growth-table-body">
         <el-table :data="timelineRecords" stripe>
           <el-table-column label="日期" prop="occurred_on" width="120" />
           <el-table-column label="类型" min-width="120">
@@ -139,16 +154,20 @@
           <el-table-column label="操作" width="130" fixed="right">
             <template #default="{ row }">
               <template v-if="row.kind === 'growth_record'">
-                <el-button link type="primary" @click="openEditDialog(row)">编辑</el-button>
-                <el-button link type="danger" @click="deleteRecord(row.id)">删除</el-button>
+                <el-button link type="primary" :disabled="recordsLoading || deletingRecordId === row.id" @click="openEditDialog(row)">编辑</el-button>
+                <el-button link type="danger" :loading="deletingRecordId === row.id" :disabled="recordsLoading" @click="deleteRecord(row.id)">删除</el-button>
               </template>
               <span v-else class="system-event-label">系统事件</span>
             </template>
           </el-table-column>
+          <template #empty>
+            <el-empty :description="timelineEmptyDescription">
+              <el-button v-if="recordsLoadError" type="primary" plain :loading="recordsLoading" @click="loadRecords">重新加载时间线</el-button>
+            </el-empty>
+          </template>
         </el-table>
-        <el-empty v-if="!timelineRecords.length" description="当前筛选条件下暂无时间线记录" />
       </div>
-    </section>
+    </AppTableShell>
 
     <el-dialog
       v-model="dialogVisible"
@@ -164,8 +183,9 @@
           type="date"
           value-format="YYYY-MM-DD"
           placeholder="发生日期"
+          :disabled="saving || attachmentUploading"
         />
-        <el-select v-model="form.record_type" placeholder="记录类型">
+        <el-select v-model="form.record_type" placeholder="记录类型" :disabled="saving || attachmentUploading">
           <el-option
             v-for="item in recordTypeOptions"
             :key="item.value"
@@ -173,8 +193,8 @@
             :value="item.value"
           />
         </el-select>
-        <el-input v-model="form.title" placeholder="标题" />
-        <el-input v-model="form.owner_name" placeholder="责任人" />
+        <el-input v-model="form.title" placeholder="标题" :disabled="saving || attachmentUploading" />
+        <el-input v-model="form.owner_name" placeholder="责任人" :disabled="saving || attachmentUploading" />
       </div>
       <div class="editor-grid">
         <el-input
@@ -182,14 +202,24 @@
           type="textarea"
           :rows="4"
           placeholder="记录内容"
+          :disabled="saving || attachmentUploading"
         />
         <el-input
           v-model="form.note"
           type="textarea"
           :rows="3"
           placeholder="备注"
+          :disabled="saving || attachmentUploading"
         />
       </div>
+      <el-alert
+        v-if="formActionError"
+        class="dialog-alert"
+        type="error"
+        show-icon
+        :closable="false"
+        :title="formActionError"
+      />
       <div class="section-head sub-head">
         <div>
           <h3>附件</h3>
@@ -202,14 +232,23 @@
           class="file-input"
           type="file"
           multiple
+          :disabled="attachmentUploading || saving"
           @change="handleAttachmentUpload"
         />
       </div>
+      <el-alert
+        v-if="attachmentUploadError"
+        class="dialog-alert"
+        type="error"
+        show-icon
+        :closable="false"
+        :title="attachmentUploadError"
+      />
       <div class="attachment-tags">
         <el-tag
           v-for="item in form.attachments"
           :key="item.id"
-          closable
+          :closable="!saving && !attachmentUploading"
           @close="removeAttachment(item.id)"
         >
           {{ item.original_filename }}
@@ -217,11 +256,11 @@
         <span v-if="!form.attachments.length" class="hint-text">暂无附件</span>
       </div>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="saveRecord">保存</el-button>
+        <el-button :disabled="saving || attachmentUploading" @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="saving" :disabled="attachmentUploading" @click="saveRecord">保存</el-button>
       </template>
     </el-dialog>
-  </div>
+  </AppPage>
 </template>
 
 <script setup lang="ts">
@@ -232,10 +271,19 @@ import { useRoute } from "vue-router";
 
 import { apiRequest, openFile, uploadFile } from "../api/client";
 import {
+  AppFilterBar,
+  AppPage,
+  AppStatGrid,
+  AppTableShell,
+  type PageMetaItem,
+  type StatCardItem,
+} from "../components/ui";
+import {
   formatClassTransferEventSummary,
   type ClassTransferHistoryItem,
 } from "../components/students/studentClassTransfer";
 import { growthSummaryPrintPreviewPath } from "../utils/print";
+import { formatUserActionError } from "../utils/userFeedback";
 
 interface StudentOption {
   id: number;
@@ -332,9 +380,18 @@ const classTransferRecords = ref<ClassTransferTimelineRecord[]>([]);
 const selectedStudentId = ref<number | null>(null);
 const selectedTimelineType = ref<"all" | "growth_record" | "class_transfer">("all");
 const selectedRecordType = ref<string | null>(null);
-const selectedDateRange = ref<string[]>([]);
+const selectedDateRange = ref<string[] | null>([]);
 const dialogVisible = ref(false);
 const saving = ref(false);
+const studentsLoading = ref(false);
+const recordsLoading = ref(false);
+const attachmentUploading = ref(false);
+const deletingRecordId = ref<number | null>(null);
+const studentsLoadError = ref("");
+const recordsLoadError = ref("");
+const recordActionError = ref("");
+const formActionError = ref("");
+const attachmentUploadError = ref("");
 const attachmentInputRef = ref<HTMLInputElement | null>(null);
 
 const form = ref<FormState>({
@@ -377,26 +434,48 @@ const selectedRecordTypeLabel = computed(
     return recordLabel ? `${timelineLabel} / ${recordLabel}` : timelineLabel;
   },
 );
-const overviewCards = computed(() => [
+const activeFilterCount = computed(() => {
+  let count = 0;
+  if (selectedTimelineType.value !== "all") count += 1;
+  if (selectedRecordType.value) count += 1;
+  if (selectedDateRange.value?.[0] || selectedDateRange.value?.[1]) count += 1;
+  return count;
+});
+const growthPageMeta = computed<PageMetaItem[]>(() => [
+  { label: "当前学生", value: selectedStudentName.value },
+  { label: "时间线条目", value: timelineTotal.value },
+  { label: "班级调整", value: classTransferRecords.value.length },
+  { label: "附件数", value: attachmentCount.value },
+  { label: "筛选类型", value: selectedRecordTypeLabel.value },
+]);
+const overviewCards = computed<StatCardItem[]>(() => [
   {
     label: "时间线条目",
     value: timelineTotal.value,
     help: "当前学生在当前筛选条件下的记录总数。",
-    tone: "tone-blue",
+    tone: "primary",
+    loading: recordsLoading.value,
   },
   {
     label: "附件关联",
     value: attachmentCount.value,
     help: "已上传并挂接到成长记录的附件数量。",
-    tone: "tone-amber",
+    tone: "warning",
+    loading: recordsLoading.value,
   },
   {
     label: "班级调整",
     value: classTransferRecords.value.length,
     help: "批量调班生成的系统事件数量。",
-    tone: "tone-slate",
+    tone: "info",
+    loading: recordsLoading.value,
   },
 ]);
+const timelineEmptyDescription = computed(() => {
+  if (recordsLoadError.value) return "时间线加载失败，请点击重新加载";
+  if (activeFilterCount.value) return "当前筛选条件下暂无时间线记录";
+  return "暂无成长记录，可以先新增记录或查看调班后生成的系统事件";
+});
 
 function typeLabel(value: string): string {
   if (value === "class_transfer") return "班级调整";
@@ -414,20 +493,40 @@ function resetForm(): void {
     note: "",
     attachments: [],
   };
+  formActionError.value = "";
+  attachmentUploadError.value = "";
   if (attachmentInputRef.value) {
     attachmentInputRef.value.value = "";
   }
 }
 
 async function loadStudents(): Promise<void> {
-  const payload = await apiRequest<{ items: StudentOption[] }>("/api/students?page=1&page_size=200");
-  studentOptions.value = payload.items;
-  const queryStudentId = Number(route.query.student_id);
-  if (!selectedStudentId.value && Number.isFinite(queryStudentId) && queryStudentId > 0) {
-    selectedStudentId.value = queryStudentId;
-  }
-  if (!selectedStudentId.value && payload.items.length) {
-    selectedStudentId.value = payload.items[0].id;
+  try {
+    studentsLoading.value = true;
+    studentsLoadError.value = "";
+    const payload = await apiRequest<{ items: StudentOption[] }>("/api/students?page=1&page_size=200");
+    studentOptions.value = payload.items;
+    const queryStudentId = Number(route.query.student_id);
+    if (!selectedStudentId.value && Number.isFinite(queryStudentId) && queryStudentId > 0) {
+      selectedStudentId.value = queryStudentId;
+    }
+    if (!selectedStudentId.value && payload.items.length) {
+      selectedStudentId.value = payload.items[0].id;
+    }
+  } catch (error) {
+    studentOptions.value = [];
+    selectedStudentId.value = null;
+    growthRecords.value = [];
+    classTransferRecords.value = [];
+    recordActionError.value = "";
+    studentsLoadError.value = formatUserActionError(
+      "加载学生列表",
+      error,
+      "确认本地服务已启动，再点击“重新加载学生”；也可以回到学生中心检查学生数据。",
+    );
+    ElMessage.error(studentsLoadError.value);
+  } finally {
+    studentsLoading.value = false;
   }
 }
 
@@ -435,42 +534,65 @@ async function loadRecords(): Promise<void> {
   if (!selectedStudentId.value) {
     growthRecords.value = [];
     classTransferRecords.value = [];
+    recordsLoadError.value = "";
+    recordActionError.value = "";
     return;
   }
-  const shouldLoadGrowth = selectedTimelineType.value !== "class_transfer";
-  const shouldLoadClassTransfer =
-    selectedTimelineType.value === "class_transfer" ||
-    (selectedTimelineType.value === "all" && !selectedRecordType.value);
-  const params = new URLSearchParams();
-  if (selectedRecordType.value) params.set("record_type", selectedRecordType.value);
-  if (selectedDateRange.value[0]) params.set("start_date", selectedDateRange.value[0]);
-  if (selectedDateRange.value[1]) params.set("end_date", selectedDateRange.value[1]);
-  const query = params.toString();
-  if (shouldLoadGrowth) {
-    const payload = await apiRequest<GrowthListResponse>(
-      `/api/archives/students/${selectedStudentId.value}/records${query ? `?${query}` : ""}`,
-    );
-    growthRecords.value = payload.items.map((item) => ({ ...item, kind: "growth_record" }));
-  } else {
+  try {
+    recordsLoading.value = true;
+    recordsLoadError.value = "";
+    recordActionError.value = "";
+    const shouldLoadGrowth = selectedTimelineType.value !== "class_transfer";
+    const shouldLoadClassTransfer =
+      selectedTimelineType.value === "class_transfer" ||
+      (selectedTimelineType.value === "all" && !selectedRecordType.value);
+    const params = new URLSearchParams();
+    if (selectedRecordType.value) params.set("record_type", selectedRecordType.value);
+    if (selectedDateRange.value?.[0]) params.set("start_date", selectedDateRange.value[0]);
+    if (selectedDateRange.value?.[1]) params.set("end_date", selectedDateRange.value[1]);
+    const query = params.toString();
+    let nextGrowthRecords: GrowthTimelineRecord[] = [];
+    let nextClassTransferRecords: ClassTransferTimelineRecord[] = [];
+    if (shouldLoadGrowth) {
+      const payload = await apiRequest<GrowthListResponse>(
+        `/api/archives/students/${selectedStudentId.value}/records${query ? `?${query}` : ""}`,
+      );
+      nextGrowthRecords = payload.items.map((item) => ({ ...item, kind: "growth_record" }));
+    }
+    if (shouldLoadClassTransfer) {
+      const history = await apiRequest<ClassTransferHistoryItem[]>(
+        `/api/students/${selectedStudentId.value}/class-transfer-history`,
+      );
+      nextClassTransferRecords = history
+        .filter((item) => isWithinDateRange(item.effective_on))
+        .map(mapClassTransferToTimelineRecord);
+    }
+    growthRecords.value = nextGrowthRecords;
+    classTransferRecords.value = nextClassTransferRecords;
+  } catch (error) {
     growthRecords.value = [];
-  }
-  if (shouldLoadClassTransfer) {
-    const history = await apiRequest<ClassTransferHistoryItem[]>(
-      `/api/students/${selectedStudentId.value}/class-transfer-history`,
-    );
-    classTransferRecords.value = history
-      .filter((item) => isWithinDateRange(item.effective_on))
-      .map(mapClassTransferToTimelineRecord);
-  } else {
     classTransferRecords.value = [];
+    recordsLoadError.value = formatUserActionError(
+      "加载成长时间线",
+      error,
+      "确认本地服务已启动，再点击“重新加载时间线”；如果刚切换过学生，请先回到学生中心确认该学生仍可访问。",
+    );
+    ElMessage.error(recordsLoadError.value);
+  } finally {
+    recordsLoading.value = false;
   }
+}
+
+async function loadStudentsAndRecords(): Promise<void> {
+  await loadStudents();
+  await loadRecords();
 }
 
 function resetFilters(): void {
   selectedTimelineType.value = "all";
   selectedRecordType.value = null;
   selectedDateRange.value = [];
-  loadRecords().catch((error) => ElMessage.error((error as Error).message));
+  void loadRecords();
 }
 
 function openCreateDialog(): void {
@@ -479,10 +601,14 @@ function openCreateDialog(): void {
     return;
   }
   resetForm();
+  formActionError.value = "";
+  attachmentUploadError.value = "";
   dialogVisible.value = true;
 }
 
 function openEditDialog(row: GrowthTimelineRecord): void {
+  formActionError.value = "";
+  attachmentUploadError.value = "";
   form.value = {
     id: row.id,
     occurred_on: row.occurred_on,
@@ -497,8 +623,8 @@ function openEditDialog(row: GrowthTimelineRecord): void {
 }
 
 function isWithinDateRange(value: string): boolean {
-  if (selectedDateRange.value[0] && value < selectedDateRange.value[0]) return false;
-  if (selectedDateRange.value[1] && value > selectedDateRange.value[1]) return false;
+  if (selectedDateRange.value?.[0] && value < selectedDateRange.value[0]) return false;
+  if (selectedDateRange.value?.[1] && value > selectedDateRange.value[1]) return false;
   return true;
 }
 
@@ -524,14 +650,22 @@ async function handleAttachmentUpload(event: Event): Promise<void> {
   const files = Array.from(input.files ?? []);
   if (!files.length) return;
   try {
+    attachmentUploading.value = true;
+    attachmentUploadError.value = "";
     const uploaded = await Promise.all(
       files.map((file) => uploadFile<UploadedAttachment>("/api/files/upload", file, { category: "growth_archive" })),
     );
     form.value.attachments.push(...uploaded);
     ElMessage.success(`已上传 ${uploaded.length} 个附件`);
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    attachmentUploadError.value = formatUserActionError(
+      "上传成长档案附件",
+      error,
+      "确认文件仍在本机可访问，再重新选择上传。",
+    );
+    ElMessage.error(attachmentUploadError.value);
   } finally {
+    attachmentUploading.value = false;
     if (attachmentInputRef.value) {
       attachmentInputRef.value.value = "";
     }
@@ -539,6 +673,7 @@ async function handleAttachmentUpload(event: Event): Promise<void> {
 }
 
 function removeAttachment(fileId: number): void {
+  attachmentUploadError.value = "";
   form.value.attachments = form.value.attachments.filter((item) => item.id !== fileId);
 }
 
@@ -548,8 +683,10 @@ function handleDialogClosed(): void {
 
 async function saveRecord(): Promise<void> {
   if (!selectedStudentId.value) return;
+  formActionError.value = "";
   if (!form.value.occurred_on || !form.value.record_type || !form.value.title.trim()) {
-    ElMessage.warning("日期、类型、标题不能为空");
+    formActionError.value = "日期、类型、标题不能为空";
+    ElMessage.warning(formActionError.value);
     return;
   }
   try {
@@ -579,7 +716,12 @@ async function saveRecord(): Promise<void> {
     await loadRecords();
     ElMessage.success("成长记录已保存");
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    formActionError.value = formatUserActionError(
+      "保存成长记录",
+      error,
+      "请检查日期、类型、标题和附件是否有效，然后重新保存。",
+    );
+    ElMessage.error(formActionError.value);
   } finally {
     saving.value = false;
   }
@@ -590,12 +732,23 @@ async function deleteRecord(recordId: number): Promise<void> {
     await ElMessageBox.confirm("删除后仍可从数据库日志追溯，但记录本身将不再显示。是否继续？", "删除记录", {
       type: "warning",
     });
+    deletingRecordId.value = recordId;
+    recordActionError.value = "";
     await apiRequest(`/api/archives/records/${recordId}`, { method: "DELETE" });
     await loadRecords();
     ElMessage.success("成长记录已删除");
   } catch (error) {
     if (error === "cancel" || error === "close") return;
-    ElMessage.error((error as Error).message);
+    recordActionError.value = formatUserActionError(
+      "删除成长记录",
+      error,
+      "刷新时间线后确认记录状态，再重新删除。",
+    );
+    ElMessage.error(recordActionError.value);
+  } finally {
+    if (deletingRecordId.value === recordId) {
+      deletingRecordId.value = null;
+    }
   }
 }
 
@@ -609,113 +762,21 @@ function openPrintPreview(): void {
   openFile(growthSummaryPrintPreviewPath(selectedStudentId.value));
 }
 
-onMounted(async () => {
-  try {
-    await loadStudents();
-    await loadRecords();
-  } catch (error) {
-    ElMessage.error((error as Error).message);
-  }
-});
+onMounted(loadStudentsAndRecords);
 </script>
 
 <style scoped>
-.overview-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.25fr) repeat(3, minmax(0, 0.75fr));
-  gap: 16px;
+.growth-page-alert {
+  margin-top: -4px;
 }
 
-.overview-panel,
-.overview-card {
-  padding: 24px;
-}
-
-.overview-panel {
-  background:
-    radial-gradient(circle at top left, rgba(180, 219, 243, 0.32), transparent 28%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.99), rgba(244, 248, 252, 0.94));
-}
-
-.overview-kicker {
-  display: inline-flex;
-  padding: 7px 10px;
-  border-radius: 999px;
-  background: rgba(31, 108, 152, 0.1);
-  color: #1f6c98;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.overview-panel h3 {
-  margin: 14px 0 0;
-  color: #1f3448;
-  font-size: 28px;
-  line-height: 1.25;
-}
-
-.overview-panel p {
-  margin: 12px 0 0;
-  color: #62788c;
-  line-height: 1.7;
-}
-
-.overview-card {
-  display: grid;
-  align-content: end;
-  gap: 10px;
-}
-
-.overview-card span {
-  color: #6d8194;
+.panel-caption {
+  color: #6c8194;
   font-size: 13px;
 }
 
-.overview-card strong {
-  color: #1f3245;
-  font-size: 30px;
-  font-weight: 760;
-}
-
-.overview-card p {
-  margin: 0;
-  color: #73879b;
-  line-height: 1.55;
-  font-size: 13px;
-}
-
-.tone-blue {
-  box-shadow: inset 0 4px 0 rgba(31, 108, 152, 0.78);
-}
-
-.tone-amber {
-  box-shadow: inset 0 4px 0 rgba(209, 141, 72, 0.84);
-}
-
-.tone-slate {
-  box-shadow: inset 0 4px 0 rgba(92, 111, 129, 0.74);
-}
-
-.toolbar-row {
-  margin-top: 14px;
-}
-
-.stat-card {
-  padding: 18px 20px;
-}
-
-.metric-label {
-  color: #60748a;
-  font-size: 13px;
-}
-
-.metric-value {
-  margin-top: 10px;
-  font-size: 30px;
-  font-weight: 700;
-  color: #244560;
+.growth-table-body {
+  min-height: 260px;
 }
 
 .section-head {
@@ -736,6 +797,10 @@ onMounted(async () => {
 .editor-grid {
   display: grid;
   gap: 12px;
+  margin-top: 12px;
+}
+
+.dialog-alert {
   margin-top: 12px;
 }
 
@@ -760,6 +825,11 @@ onMounted(async () => {
   min-width: 260px;
 }
 
+.file-input[disabled] {
+  cursor: not-allowed;
+  opacity: 0.64;
+}
+
 .hint-text {
   color: #60748a;
   font-size: 13px;
@@ -768,11 +838,5 @@ onMounted(async () => {
 .system-event-label {
   color: #6d8194;
   font-size: 13px;
-}
-
-@media (max-width: 1180px) {
-  .overview-grid {
-    grid-template-columns: 1fr;
-  }
 }
 </style>

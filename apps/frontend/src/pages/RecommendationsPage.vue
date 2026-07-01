@@ -36,6 +36,34 @@
       </div>
     </template>
 
+    <div
+      v-if="recommendationLoadBannerVisible"
+      class="recommendation-load-banner"
+      :class="{ 'tone-warning': recommendationLoadBannerTone === 'warning' }"
+    >
+      <div>
+        <strong>{{ recommendationLoadBannerTitle }}</strong>
+        <p>{{ recommendationLoadBannerDescription }}</p>
+      </div>
+      <div class="action-row">
+        <el-button
+          v-if="recommendationPageLoadError"
+          :loading="recommendationPageLoading"
+          @click="retryRecommendationPageLoad"
+        >
+          重新加载推荐中心
+        </el-button>
+        <el-button
+          v-if="activeRecommendationTabLoadError"
+          type="primary"
+          :loading="activeRecommendationTabLoading"
+          @click="reloadActiveRecommendationTab"
+        >
+          重新加载当前页签
+        </el-button>
+      </div>
+    </div>
+
     <section
       v-if="activePrimarySection === 'workbench'"
       class="recommendation-section-stack"
@@ -85,14 +113,17 @@
         :draft="volunteerDraft"
         v-model:draft-name="volunteerDraftName"
         :loading="workbenchLoading"
+        :workbench-preview-error="workbenchPreviewError"
         :saving-draft="savingVolunteerDraft"
         :exporting-draft-id="exportingVolunteerDraftId"
         :loading-saved-drafts="loadingVolunteerDrafts"
+        :volunteer-drafts-error="volunteerDraftsError"
         :deleting-draft-id="deletingVolunteerDraftId"
         :current-draft-id="currentVolunteerDraftId"
         :saved-drafts="savedVolunteerDrafts"
         :compare-draft-id="compareVolunteerDraftId"
         :compare-draft-loading="compareVolunteerDraftLoading"
+        :compare-volunteer-draft-error="compareVolunteerDraftError"
         :draft-comparison="volunteerDraftComparison"
         :selected-plan-ids="selectedDraftPlanIds"
         :selected-rule="selectedVolunteerRule"
@@ -106,6 +137,8 @@
         :exam-score-autofill-notice="examScoreAutofillNotice"
         :loading-exam-score-autofill="loadingExamScoreAutofill"
         :loading-volunteer-guide-options="loadingVolunteerGuideOptions"
+        :volunteer-guide-options-error="volunteerGuideOptionsError"
+        :student-profile-error="studentProfileError"
         :art-comprehensive-score-preview="volunteerSelectedArtFormula"
         @load-preview="loadVolunteerWorkbenchPreview"
         @reset="resetVolunteerWorkbench"
@@ -289,6 +322,8 @@
             :filters="collegeFilters"
             :pagination="collegePagination"
             :province-options="provinceOptions"
+            :loading="loadingColleges"
+            :load-error="collegesLoadError"
             @load="loadColleges({ resetPage: true })"
             @reset="resetCollegeFilters"
             @page-change="handleCollegePageChange"
@@ -304,6 +339,8 @@
             :majors="majors"
             :filters="majorFilters"
             :pagination="majorPagination"
+            :loading="loadingMajors"
+            :load-error="majorsLoadError"
             @load="loadMajors({ resetPage: true })"
             @reset="resetMajorFilters"
             @page-change="handleMajorPageChange"
@@ -319,6 +356,8 @@
             :directions="employmentDirections"
             :filters="employmentDirectionFilters"
             :category-options="employmentDirectionCategoryFilterOptions"
+            :loading="loadingEmploymentDirections"
+            :load-error="employmentDirectionsLoadError"
             @load="loadEmploymentDirections"
             @reset="resetEmploymentDirectionFilters"
             @create="openCreateEmploymentDirection"
@@ -334,6 +373,8 @@
             :direction-options="employmentDirectionOptions"
             :strength-options="employmentMappingStrengthOptions"
             :pagination="majorEmploymentMappingPagination"
+            :loading="loadingMajorEmploymentMappings"
+            :load-error="majorEmploymentMappingsLoadError"
             @load="loadMajorEmploymentMappings({ resetPage: true })"
             @reset="resetMajorEmploymentMappingFilters"
             @page-change="handleMajorEmploymentMappingPageChange"
@@ -354,6 +395,9 @@
             :student-type-options="recommendationStudentTypeOptions"
             :enrollment-plan-import-result="enrollmentPlanImportResult"
             :pagination="enrollmentPlanPagination"
+            :loading="loadingEnrollmentPlans"
+            :load-error="enrollmentPlansLoadError"
+            :importing="importingEnrollmentPlans"
             @download-template="downloadEnrollmentPlanTemplate"
             @import="handleEnrollmentPlanImport"
             @load="loadEnrollmentPlans({ resetPage: true })"
@@ -373,6 +417,9 @@
             :student-type-options="recommendationStudentTypeOptions"
             :admission-import-result="admissionImportResult"
             :pagination="admissionPagination"
+            :loading="loadingAdmissions"
+            :load-error="admissionsLoadError"
+            :importing="importingAdmissions"
             @download-template="downloadAdmissionTemplate"
             @import="handleAdmissionImport"
             @load="loadAdmissions({ resetPage: true })"
@@ -387,6 +434,8 @@
             :rules="provinceVolunteerRules"
             :filters="volunteerRuleFilters"
             :bootstrapping="bootstrappingVolunteerRules"
+            :loading="loadingVolunteerRules"
+            :load-error="volunteerRulesLoadError"
             :year-options="ruleYearOptions"
             :province-options="provinceOptions"
             :exam-mode-options="examModeOptions"
@@ -404,6 +453,8 @@
             :rules="specialTypeRules"
             :filters="specialTypeRuleFilters"
             :bootstrapping="bootstrappingSpecialTypeRules"
+            :loading="loadingSpecialTypeRules"
+            :load-error="specialTypeRulesLoadError"
             :year-options="specialTypeRuleYearOptions"
             :province-options="provinceOptions"
             :student-type-options="recommendationStudentTypeOptions"
@@ -418,6 +469,8 @@
             :rules="provinceScoreTransformRules"
             :filters="scoreTransformRuleFilters"
             :bootstrapping="bootstrappingScoreTransformRules"
+            :loading="loadingScoreTransformRules"
+            :load-error="scoreTransformRulesLoadError"
             :year-options="scoreTransformRuleYearOptions"
             :province-options="provinceOptions"
             :exam-mode-options="examModeOptions"
@@ -432,6 +485,8 @@
             :dicts="subjectRequirementDicts"
             :filters="subjectRequirementDictFilters"
             :bootstrapping="bootstrappingSubjectRequirementDicts"
+            :loading="loadingSubjectRequirementDicts"
+            :load-error="subjectRequirementDictsLoadError"
             :year-options="subjectRequirementDictYearOptions"
             :province-options="provinceOptions"
             :exam-mode-options="examModeOptions"
@@ -626,11 +681,14 @@ const router = useRouter();
 
 const {
   activeTab,
+  activeRecommendationTabLoadError,
+  activeRecommendationTabLoading,
   addVolunteerCandidate,
   admissionFilters,
   admissionImportResult,
   admissionPagination,
   admissionYearOptions,
+  admissionsLoadError,
   admissions,
   applyCurrentExamScoreToWorkbench,
   applyStrategyPresetWithConfirm,
@@ -644,12 +702,14 @@ const {
   collegeFilters,
   collegeForm,
   collegePagination,
+  collegesLoadError,
   colleges,
   compareHistoryOptions,
   compareSchemeId,
   compareSchemeError,
   compareSchemeResults,
   compareVolunteerDraftId,
+  compareVolunteerDraftError,
   compareVolunteerDraftLoading,
   comparingScheme,
   currentVolunteerDraftId,
@@ -666,10 +726,12 @@ const {
   employmentDirectionForm,
   employmentDirectionOptions,
   employmentDirections,
+  employmentDirectionsLoadError,
   employmentMappingStrengthOptions,
   enrollmentPlanFilters,
   enrollmentPlanImportResult,
   enrollmentPlanPagination,
+  enrollmentPlansLoadError,
   enrollmentPlans,
   examScoreAutofillNotice,
   exportShandongRecommendationReport,
@@ -707,6 +769,8 @@ const {
   handleMajorPageSizeChange,
   handleMajorEmploymentMappingPageChange,
   handleMajorEmploymentMappingPageSizeChange,
+  importingAdmissions,
+  importingEnrollmentPlans,
   historyLoadError,
   historyFilters,
   historyItems,
@@ -730,11 +794,21 @@ const {
   loadingExamScoreAutofill,
   loadingVolunteerGuideOptions,
   loadingVolunteerDrafts,
+  loadingAdmissions,
+  loadingEnrollmentPlans,
   loadingStudentCareerPreference,
   loadingHistory,
+  loadingEmploymentDirections,
+  loadingColleges,
+  loadingMajorEmploymentMappings,
+  loadingMajors,
+  loadingScoreTransformRules,
   loadingShandongDataHealth,
   loadingSelectedScheme,
+  loadingSpecialTypeRules,
   loadVolunteerWorkbenchPreview,
+  loadingSubjectRequirementDicts,
+  loadingVolunteerRules,
   majorDialogTitle,
   majorDialogVisible,
   majorDirectory,
@@ -745,8 +819,10 @@ const {
   majorEmploymentMappingDialogVisible,
   majorEmploymentMappingFilters,
   majorEmploymentMappingForm,
+  majorEmploymentMappingsLoadError,
   majorEmploymentMappingPagination,
   majorEmploymentMappings,
+  majorsLoadError,
   majors,
   moveVolunteerCandidate,
   multiCompareSchemeIds,
@@ -777,6 +853,8 @@ const {
   recommendationForm,
   recommendationModeHint,
   recommendationModeLabel,
+  recommendationPageLoadError,
+  recommendationPageLoading,
   recommendationStudentTypeOptions,
   recommendationSettings,
   resetAdmissionFilters,
@@ -794,6 +872,7 @@ const {
   resetVolunteerWorkbench,
   resetVolunteerRuleFilters,
   remainingVolunteerSlots,
+  reloadActiveRecommendationTab,
   removeVolunteerCandidate,
   reorderVolunteerCandidate,
   ruleYearOptions,
@@ -823,14 +902,18 @@ const {
   shandongRecommendationResult,
   shandongResultGroups,
   scoreTransformRuleFilters,
+  scoreTransformRulesLoadError,
   scoreTransformRuleYearOptions,
   specialRuleOptions,
   specialTypeRuleFilters,
+  specialTypeRulesLoadError,
   specialTypeRuleYearOptions,
   specialTypeRules,
   studentOptions,
   studentCareerPreference,
+  studentProfileError,
   subjectRequirementDictFilters,
+  subjectRequirementDictsLoadError,
   subjectRequirementDictYearOptions,
   subjectRequirementDicts,
   subjectRequirementModeOptions,
@@ -845,6 +928,7 @@ const {
   summaryCards,
   syncShandongRecommendationFromRecommendation,
   targetRegionOptions,
+  retryRecommendationPageLoad,
   syncVolunteerWorkbenchFromRecommendation,
   applyStudentCareerPreference,
   viewScheme,
@@ -852,12 +936,15 @@ const {
   volunteerRuleDialogVisible,
   volunteerRuleFilters,
   volunteerRuleForm,
+  volunteerRulesLoadError,
   volunteerUnitTypeOptions,
   volunteerDraft,
+  volunteerDraftsError,
   volunteerDraftComparison,
   volunteerDraftChecks,
   volunteerGuideGroups,
   volunteerGuideOptions,
+  volunteerGuideOptionsError,
   volunteerGuidePreview,
   volunteerSelectedArtFormula,
   volunteerDraftName,
@@ -870,6 +957,7 @@ const {
   workbenchExamModeOptions,
   workbenchLoading,
   workbenchPreview,
+  workbenchPreviewError,
   workbenchYearOptions,
   savingStudentCareerPreference,
   savedVolunteerDrafts,
@@ -904,6 +992,24 @@ const dataRuleTabs = new Set([
   "subject-requirements",
 ]);
 
+const recommendationTabLabels: Record<string, string> = {
+  "volunteer-workbench": "推荐向导",
+  recommendations: "推荐中心",
+  "shandong-workbench": "山东普通类推荐",
+  history: "历史方案",
+  colleges: "院校库",
+  majors: "专业库",
+  "employment-directions": "就业方向库",
+  "major-employment-maps": "专业就业映射",
+  "enrollment-plans": "招生计划库",
+  admissions: "录取库",
+  "volunteer-rules": "省份规则",
+  "special-type-rules": "特殊类型规则",
+  "score-transform-rules": "赋分规则",
+  "subject-requirements": "选科字典",
+  "data-health": "数据健康",
+};
+
 const pageMeta = computed<PageMetaItem[]>(() =>
   summaryCards.value.slice(0, 4).map((item) => ({
     label: item.label,
@@ -918,6 +1024,30 @@ const activePrimarySection = computed<PrimarySectionKey>(() => {
   if (activeTab.value === "recommendations") return "legacy-recommendations";
   if (activeTab.value === "shandong-workbench") return "shandong-workbench";
   return "workbench";
+});
+
+const activeRecommendationTabLabel = computed(() => recommendationTabLabels[activeTab.value] ?? "当前页签");
+const recommendationLoadBannerVisible = computed(
+  () =>
+    Boolean(recommendationPageLoadError.value)
+    || Boolean(activeRecommendationTabLoadError.value)
+    || recommendationPageLoading.value
+    || activeRecommendationTabLoading.value,
+);
+const recommendationLoadBannerTone = computed(() =>
+  recommendationPageLoadError.value || activeRecommendationTabLoadError.value ? "warning" : "info",
+);
+const recommendationLoadBannerTitle = computed(() => {
+  if (recommendationPageLoadError.value) return "推荐中心基础数据加载失败";
+  if (activeRecommendationTabLoadError.value) return `${activeRecommendationTabLabel.value}加载失败`;
+  if (recommendationPageLoading.value) return "正在加载推荐中心基础数据";
+  return `正在加载${activeRecommendationTabLabel.value}`;
+});
+const recommendationLoadBannerDescription = computed(() => {
+  if (recommendationPageLoadError.value) return recommendationPageLoadError.value;
+  if (activeRecommendationTabLoadError.value) return activeRecommendationTabLoadError.value;
+  if (recommendationPageLoading.value) return "正在读取学生、考试、策略、历史方案和就业方向数据。";
+  return "正在读取当前页签所需数据，完成后会保留已加载的可用区块。";
 });
 
 const selectedStudentName = computed(() => {
@@ -991,6 +1121,35 @@ function openMajorDetail(majorId: number): void {
   padding-left: 18px;
   color: #7a4c0f;
   line-height: 1.7;
+}
+
+.recommendation-load-banner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(37, 115, 161, 0.2);
+  border-radius: 8px;
+  background: #f4f9fd;
+  color: #21394f;
+}
+
+.recommendation-load-banner.tone-warning {
+  border-color: rgba(201, 121, 45, 0.28);
+  background: #fff8ed;
+}
+
+.recommendation-load-banner strong {
+  display: block;
+  color: #20364b;
+}
+
+.recommendation-load-banner p {
+  margin: 5px 0 0;
+  color: #667b8e;
+  line-height: 1.55;
 }
 
 .guide-status-strip {
